@@ -20,6 +20,8 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlin.math.max
 import android.app.AlertDialog
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.widget.TextView
 import android.view.WindowManager
@@ -416,14 +418,20 @@ class TrackingService : Service() {
     }
 
     private fun showSaveNotification(message: String?) {
-        // Standard AlertDialog inside the app context
-        AlertDialog.Builder(this)
-            .setTitle("Track Saved")
-            .setMessage(message)
-            .setPositiveButton("OK") { dialog, _ ->
-                dialog.dismiss()
+        Handler(Looper.getMainLooper()).post {
+            try {
+                AlertDialog.Builder(this)
+                    .setTitle("Track Saved")
+                    .setMessage(message)
+                    .setPositiveButton("OK") { dialog, _ ->
+                        dialog.dismiss()
+                    }
+                    .show()
             }
-            .show()
+             catch (e: Exception) {
+                 android.util.Log.e("MYTAG", "Could not shovv dialog: ${e.message}")
+             }
+        }
     }
     companion object {
         const val ACTION_START_MONITORING = "com.example.geigergpx.START_MONITORING"
