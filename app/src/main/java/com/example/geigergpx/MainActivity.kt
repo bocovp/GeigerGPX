@@ -119,7 +119,7 @@ class MainActivity : AppCompatActivity() {
             val trackCounts = viewModel.trackCounts.value ?: 0
             val isTracking = viewModel.isTracking.value ?: false
             
-            if (isTracking && trackCounts > 0) {
+            if (isTracking) {
                 binding.textTotalCounts.text = "Total counts: $trackCounts / $totalCounts"
             } else {
                 binding.textTotalCounts.text = "Total counts: $totalCounts"

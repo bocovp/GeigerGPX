@@ -407,6 +407,8 @@ class TrackingService : Service() {
     private fun showSaveNotification(savedFile: java.io.File?) {
         val channelId = "geigergpx_channel"
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        
+        // Create notification channel if needed (same as main notification)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val ch = NotificationChannel(
                 channelId,
@@ -427,9 +429,11 @@ class TrackingService : Service() {
             .setContentText(message)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
 
-        NotificationManagerCompat.from(this).notify(NOTIF_ID + 1, notification)
+        // Use system NotificationManager directly for better reliability
+        nm.notify(NOTIF_ID + 1, notification)
     }
 
     companion object {
