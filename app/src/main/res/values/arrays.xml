@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="dose_tag_entries">
+        <item>Elevation tag (&lt;ele&gt;)</item>
+        <item>Comment tag (&lt;cmt&gt;)</item>
+    </string-array>
+
+    <string-array name="dose_tag_values">
+        <item>ele</item>
+        <item>cmt</item>
+    </string-array>
+</resources>
+
