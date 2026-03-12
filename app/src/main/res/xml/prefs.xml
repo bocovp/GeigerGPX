@@ -39,6 +39,11 @@
         android:dialogTitle="CPS to μSv/h coefficient" />
 
     <Preference
+        android:key="threshold_calibration"
+        android:title="Threshold (press to calibrate)"
+        android:summary="Not calibrated" />
+
+    <Preference
         android:key="gpx_folder_picker"
         android:title="Choose save folder"
         android:summary="Not set (uses app folder)" />

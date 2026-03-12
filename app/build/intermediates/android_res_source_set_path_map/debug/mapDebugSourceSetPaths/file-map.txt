@@ -1,7 +1,7 @@
-com.example.geigergpx.app-pngs-0 D:\github\GeigerGPX\app\build\generated\res\pngs\debug
-com.example.geigergpx.app-updated_navigation_xml-1 D:\github\GeigerGPX\app\build\generated\updated_navigation_xml\debug
-com.example.geigergpx.app-packageDebugResources-2 D:\github\GeigerGPX\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
-com.example.geigergpx.app-packageDebugResources-3 D:\github\GeigerGPX\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
-com.example.geigergpx.app-debug-4 D:\github\GeigerGPX\app\build\intermediates\merged_res\debug\mergeDebugResources
-com.example.geigergpx.app-debug-5 D:\github\GeigerGPX\app\src\debug\res
-com.example.geigergpx.app-main-6 D:\github\GeigerGPX\app\src\main\res
+com.example.geigergpx.app-pngs-0 C:\Users\bp\Documents\GitHub\GeigerGPX\app\build\generated\res\pngs\debug
+com.example.geigergpx.app-updated_navigation_xml-1 C:\Users\bp\Documents\GitHub\GeigerGPX\app\build\generated\updated_navigation_xml\debug
+com.example.geigergpx.app-packageDebugResources-2 C:\Users\bp\Documents\GitHub\GeigerGPX\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+com.example.geigergpx.app-packageDebugResources-3 C:\Users\bp\Documents\GitHub\GeigerGPX\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+com.example.geigergpx.app-debug-4 C:\Users\bp\Documents\GitHub\GeigerGPX\app\build\intermediates\merged_res\debug\mergeDebugResources
+com.example.geigergpx.app-debug-5 C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\debug\res
+com.example.geigergpx.app-main-6 C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\res

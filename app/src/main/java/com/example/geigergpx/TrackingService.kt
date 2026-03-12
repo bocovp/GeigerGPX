@@ -10,6 +10,7 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.app.PendingIntent
+import android.content.pm.ServiceInfo
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
@@ -29,6 +30,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
+import java.util.concurrent.atomic.AtomicInteger
 
 class TrackingService : Service() {
 
@@ -46,11 +48,10 @@ class TrackingService : Service() {
     private var lastWrittenLocation: Location? = null
     private var lastWrittenTime: Long = 0L
 
-    @Volatile
-    private var beepCountSinceLastPoint: Int = 0
 
-    @Volatile
-    private var trackBeepCount: Int = 0
+    private val beepCountSinceLastPoint = AtomicInteger(0)
+
+    private val trackBeepCount = AtomicInteger(0)
 
     @Volatile
     private var lastGpsFixMillis: Long = 0L
@@ -140,8 +141,8 @@ class TrackingService : Service() {
         writtenPoints.clear()
         lastWrittenLocation = null
         lastWrittenTime = 0L
-        beepCountSinceLastPoint = 0
-        trackBeepCount = 0
+        beepCountSinceLastPoint.set(0)
+        trackBeepCount.set(0)
         lastGpsFixMillis = 0L
         gpsSpoofingActive = false
 
@@ -152,8 +153,15 @@ class TrackingService : Service() {
             nm.notify(NOTIF_ID, buildNotification("Tracking..."))
         } else {
             // Not monitoring: start GPS and audio now.
-            startForeground(NOTIF_ID, buildNotification("Tracking..."))
-
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIF_ID,
+                    buildNotification("Tracking..."),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                )
+            } else {
+                startForeground(NOTIF_ID, buildNotification("Tracking..."))
+            }
             if (ActivityCompatHelper.hasLocationAndAudioPermissions(this)) {
                 fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
                 startBeepDetector()
@@ -197,8 +205,8 @@ class TrackingService : Service() {
         startTimeMillis = 0L
         lastWrittenLocation = null
         lastWrittenTime = 0L
-        beepCountSinceLastPoint = 0
-        trackBeepCount = 0
+        beepCountSinceLastPoint.set(0)
+        trackBeepCount.set(0)
 
         if (isMonitoring) {
             // Stay in monitoring mode: keep GPS and audio running, downgrade notification.
@@ -238,6 +246,10 @@ class TrackingService : Service() {
             }
             stopSelf()
         }
+
+        // Ensure any ongoing tracking notification is removed when tracking stops
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.cancel(NOTIF_ID)
     }
 
     // -------------------------------------------------------------------------
@@ -266,87 +278,89 @@ class TrackingService : Service() {
         val now = System.currentTimeMillis()
         lastGpsFixMillis = now
 
+        // 1. If not recording a track, just update the "Waiting/Working" UI status and exit
         if (startTimeMillis == 0L) {
-            // Monitoring only (not recording): just update GPS status
             updateMonitoringStats()
             return
         }
 
-        // Recording a track
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val maxSpeedKmh = prefs.getString("max_speed_kmh", "30.0")!!.toDoubleOrNull() ?: 30.0
-        val spacingM = prefs.getString("point_spacing_m", "5.0")!!.toDoubleOrNull() ?: 5.0
-        val minCountsPerPoint = prefs.getString("min_counts_per_point", "0")!!.toIntOrNull() ?: 0
-        val maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")!!.toDoubleOrNull() ?: 1.0
-
-        val elapsedSec = max(0L, (now - startTimeMillis) / 1000L)
-
+        // 2. Handle the very first GPS fix (The Anchor)
         val lastLoc = lastWrittenLocation
-        if (lastLoc != null) {
-            val distance = lastLoc.distanceTo(loc).toDouble()
-            val timeDeltaSec = max(1.0, (now - lastWrittenTime) / 1000.0)
-            val speedMps = distance / timeDeltaSec
-            val speedKmh = speedMps * 3.6
-
-            if (speedKmh > maxSpeedKmh) {
-                gpsSpoofingActive = true
-                updateStats(elapsedSec, lastCps = currentCps())
-                return
-            }
-            gpsSpoofingActive = false
-
-            if (distance < spacingM) {
-                updateStats(elapsedSec, lastCps = currentCps())
-                return
-            }
-
-            val beeps = beepCountSinceLastPoint
-            val cps = beeps / timeDeltaSec
-
-            if (lastWrittenTime == 0L) {
-                // First candidate point: do NOT write to GPX, just set anchor and reset beeps
-                lastWrittenLocation = loc
-                lastWrittenTime = now
-                beepCountSinceLastPoint = 0
-                updateStats(elapsedSec, lastCps = cps)
-                return
-            }
-
-            val timeSinceLastPointSec = (now - lastWrittenTime) / 1000.0
-            val timedOut = maxTimeWithoutCountsS > 0.0 && timeSinceLastPointSec > maxTimeWithoutCountsS
-            if (minCountsPerPoint > 0 && beeps <= minCountsPerPoint && !timedOut) {
-                updateStats(elapsedSec, lastCps = cps)
-                return
-            }
-
-            val point = TrackPoint(
-                latitude = loc.latitude,
-                longitude = loc.longitude,
-                timeMillis = now,
-                distanceFromLast = distance,
-                cps = cps
-            )
-            writtenPoints += point
-            totalDistance += distance
+        if (lastLoc == null) {
             lastWrittenLocation = loc
             lastWrittenTime = now
-            beepCountSinceLastPoint = 0
-
-            updateStats(elapsedSec, lastCps = cps)
-        } else {
-            // First fix: set anchor without writing
-            lastWrittenLocation = loc
-            lastWrittenTime = now
-            beepCountSinceLastPoint = 0
-            updateStats(elapsedSec, lastCps = 0.0)
+            beepCountSinceLastPoint.set(0) // Start counting from this exact moment/spot
+            updateStats(0, lastCps = 0.0)
+            return
         }
+
+
+        // 3. Load user preferences for filtering
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val maxSpeedKmh = prefs.getString("max_speed_kmh", "30.0")?.toDoubleOrNull() ?: 30.0
+        val spacingM = prefs.getString("point_spacing_m", "5.0")?.toDoubleOrNull() ?: 5.0
+        val minCountsPerPoint = prefs.getString("min_counts_per_point", "0")?.toIntOrNull() ?: 0
+        val maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")?.toDoubleOrNull() ?: 1.0
+
+
+        // 4. Calculate movement statistics
+        val elapsedSec = max(0L, (now - startTimeMillis) / 1000L)
+        val distance = lastLoc.distanceTo(loc).toDouble()
+        val timeDeltaSec = max(0.1, (now - lastWrittenTime) / 1000.0)
+        val speedMps = distance / timeDeltaSec
+        val speedKmh = speedMps * 3.6
+
+        // 5. GPS Quality / Spoofing Filter
+
+        if (speedKmh > maxSpeedKmh) {
+            gpsSpoofingActive = true
+            updateStats(elapsedSec, lastCps = currentCps())
+            return
+        }
+        gpsSpoofingActive = false
+
+        // 6. Distance Filter (Wait until we've moved far enough)
+        if (distance < spacingM) {
+            updateStats(elapsedSec, lastCps = currentCps())
+            return
+        }
+
+        // 7. Geiger Logic: Check if we should "commit" this point to the track
+        val currentBeeps = beepCountSinceLastPoint.get() // PEEK: do not reset yet!
+        val timedOut = maxTimeWithoutCountsS > 0.0 && timeDeltaSec >= maxTimeWithoutCountsS
+
+        // If we haven't hit the minimum count requirement AND we haven't timed out, wait for more data
+        if (minCountsPerPoint > 0 && currentBeeps < minCountsPerPoint && !timedOut) {
+            updateStats(elapsedSec, lastCps = currentBeeps.toDouble() / timeDeltaSec)
+            return
+        }
+
+        // 8. COMMIT: Everything looks good, finalize this point
+        // We reset the counter ATOMICALLY here only because we are saving the data
+        val finalBeeps = beepCountSinceLastPoint.getAndSet(0)
+        val finalCps = finalBeeps.toDouble() / timeDeltaSec
+
+        val point = TrackPoint(
+            latitude = loc.latitude,
+            longitude = loc.longitude,
+            timeMillis = now,
+            distanceFromLast = distance,
+            cps = finalCps
+        )
+
+        writtenPoints.add(point)
+        totalDistance += distance
+        lastWrittenLocation = loc
+        lastWrittenTime = now
+
+        updateStats(elapsedSec, lastCps = finalCps)
     }
 
     private fun currentCps(): Double {
         val now = System.currentTimeMillis()
         val lastTime = lastWrittenTime.takeIf { it != 0L } ?: startTimeMillis
         val dt = max(1.0, (now - lastTime) / 1000.0)
-        return beepCountSinceLastPoint / dt
+        return beepCountSinceLastPoint.get().toDouble() / dt
     }
 
     private fun updateStats(elapsedSec: Long, lastCps: Double) {
@@ -362,7 +376,7 @@ class TrackingService : Service() {
             distance = totalDistance,
             points = writtenPoints.size,
             cps = lastCps,
-            trackCounts = trackBeepCount,
+            trackCounts = trackBeepCount.get(),
             gpsStatus = gpsStatus
         )
     }
@@ -381,10 +395,10 @@ class TrackingService : Service() {
     // -------------------------------------------------------------------------
 
     private fun startBeepDetector() {
-        audioBeepDetector = AudioBeepDetector {
+        audioBeepDetector = AudioBeepDetector.createWithPrefs(this) {
             if (startTimeMillis != 0L) {
-                beepCountSinceLastPoint++
-                trackBeepCount++
+                beepCountSinceLastPoint.incrementAndGet()
+                trackBeepCount.incrementAndGet()
             }
             repo.incrementTotalCounts()
         }.also { it.start() }

@@ -25,6 +25,7 @@ class TrackingRepository {
     private val _currentCps = MutableLiveData(0.0)
     val currentCps: LiveData<Double> = _currentCps
 
+    private val totalCounter = java.util.concurrent.atomic.AtomicInteger(0)
     private val _totalCounts = MutableLiveData(0)
     val totalCounts: LiveData<Int> = _totalCounts
 
@@ -57,7 +58,7 @@ class TrackingRepository {
     }
 
     fun incrementTotalCounts() {
-        _totalCounts.postValue((_totalCounts.value ?: 0) + 1)
+        _totalCounts.postValue(totalCounter.incrementAndGet())
     }
 
     private fun formatDuration(sec: Long): String {

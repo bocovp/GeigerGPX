@@ -3,13 +3,15 @@ package com.example.geigergpx
 import android.content.Intent
 import android.os.Bundle
 import android.provider.DocumentsContract
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.documentfile.provider.DocumentFile
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.documentfile.provider.DocumentFile
 
 class SettingsFragment : PreferenceFragmentCompat() {
 
@@ -26,6 +28,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
             updateFolderSummary()
         }
     }
+
+    private var calibrationDetector: AudioBeepDetector? = null
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.prefs, rootKey)
@@ -74,6 +78,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
 
         updateFolderSummary()
+
+        val thresholdPref = findPreference<Preference>("threshold_calibration")
+        thresholdPref?.summary = buildThresholdSummary()
+        thresholdPref?.setOnPreferenceClickListener {
+            startCalibrationDialog(thresholdPref)
+            true
+        }
     }
 
     private fun updateFolderSummary() {
@@ -89,8 +100,58 @@ class SettingsFragment : PreferenceFragmentCompat() {
         chooseFolder.summary = doc?.name ?: uriStr
     }
 
+    private fun buildThresholdSummary(): String {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        val value = prefs.getFloat(KEY_AUDIO_THRESHOLD, Float.NaN)
+        return if (value.isNaN()) {
+            "Not calibrated"
+        } else {
+            "Current threshold: %.2e".format(value)
+        }
+    }
+
+    private fun startCalibrationDialog(thresholdPref: Preference) {
+        val total = 10
+        val activity = requireActivity()
+
+        val dialog = AlertDialog.Builder(activity)
+            .setTitle("Calibration")
+            .setMessage("Calibrating... 0/$total")
+            .setNegativeButton("Cancel") { d, _ ->
+                calibrationDetector?.stop()
+                calibrationDetector = null
+                d.dismiss()
+            }
+            .setCancelable(false)
+            .create()
+
+        dialog.show()
+
+        calibrationDetector = AudioBeepDetector.startCalibration(
+            requireContext(),
+            onProgress = { current, totalCount ->
+                activity.runOnUiThread {
+                    dialog.setMessage("Calibrating... $current/$totalCount")
+                }
+            },
+            onFinished = { _ ->
+                activity.runOnUiThread {
+                    calibrationDetector = null
+                    dialog.dismiss()
+                    thresholdPref.summary = buildThresholdSummary()
+                    Toast.makeText(
+                        requireContext(),
+                        "Calibration finished.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        )
+    }
+
     companion object {
         const val KEY_GPX_TREE_URI = "gpx_tree_uri"
+        const val KEY_AUDIO_THRESHOLD = "audio_threshold"
     }
 }
 

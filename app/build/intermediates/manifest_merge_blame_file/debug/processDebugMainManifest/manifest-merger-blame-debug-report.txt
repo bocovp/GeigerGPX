@@ -12,20 +12,20 @@
 9-->INJECTED
 10
 11    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-11-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:5:5-79
-11-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:5:22-76
+11-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:5:5-79
+11-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:5:22-76
 12    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-12-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:6:5-81
-12-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:6:22-78
+12-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:6:5-81
+12-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:6:22-78
 13    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
-13-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:7:5-85
-13-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:7:22-82
+13-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:7:5-85
+13-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:7:22-82
 14    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-14-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:8:5-71
-14-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:8:22-68
+14-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:8:5-71
+14-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:8:22-68
 15    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-15-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:9:5-77
-15-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:9:22-74
+15-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:9:5-77
+15-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:9:22-74
 16
 17    <permission
 17-->[androidx.core:core:1.13.1] C:\Users\bp\.gradle\caches\9.3.1\transforms\0f484ff9cf2d673ec3011e48dff6aa54\workspace\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
@@ -39,59 +39,59 @@
 21-->[androidx.core:core:1.13.1] C:\Users\bp\.gradle\caches\9.3.1\transforms\0f484ff9cf2d673ec3011e48dff6aa54\workspace\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
 22
 23    <application
-23-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:11:5-38:19
+23-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:11:5-38:19
 24        android:name="com.example.geigergpx.GeigerGpxApp"
-24-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:12:9-37
+24-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:12:9-37
 25        android:allowBackup="true"
-25-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:13:9-35
+25-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:13:9-35
 26        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
 26-->[androidx.core:core:1.13.1] C:\Users\bp\.gradle\caches\9.3.1\transforms\0f484ff9cf2d673ec3011e48dff6aa54\workspace\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 27        android:debuggable="true"
 28        android:extractNativeLibs="false"
 28-->INJECTED
 29        android:icon="@mipmap/ic_launcher"
-29-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:15:9-43
+29-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:15:9-43
 30        android:label="Geiger GPX"
-30-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:14:9-35
+30-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:14:9-35
 31        android:roundIcon="@mipmap/ic_launcher_round"
-31-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:16:9-54
+31-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:16:9-54
 32        android:supportsRtl="true"
-32-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:17:9-35
+32-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:17:9-35
 33        android:testOnly="true"
 34        android:theme="@style/Theme.GeigerGpx" >
-34-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:18:9-47
+34-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:18:9-47
 35        <activity
-35-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:20:9-22:40
+35-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:20:9-22:40
 36            android:name="com.example.geigergpx.SettingsActivity"
-36-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:21:13-45
+36-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:21:13-45
 37            android:exported="false" />
-37-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:22:13-37
+37-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:22:13-37
 38        <activity
-38-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:24:9-31:20
+38-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:24:9-31:20
 39            android:name="com.example.geigergpx.MainActivity"
-39-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:25:13-41
+39-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:25:13-41
 40            android:exported="true" >
-40-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:26:13-36
+40-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:26:13-36
 41            <intent-filter>
-41-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:27:13-30:29
+41-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:27:13-30:29
 42                <action android:name="android.intent.action.MAIN" />
-42-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:28:17-69
-42-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:28:25-66
+42-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:28:17-69
+42-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:28:25-66
 43
 44                <category android:name="android.intent.category.LAUNCHER" />
-44-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:29:17-77
-44-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:29:27-74
+44-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:29:17-77
+44-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:29:27-74
 45            </intent-filter>
 46        </activity>
 47
 48        <service
-48-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:33:9-36:67
+48-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:33:9-36:67
 49            android:name="com.example.geigergpx.TrackingService"
-49-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:34:13-44
+49-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:34:13-44
 50            android:exported="false"
-50-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:35:13-37
+50-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:35:13-37
 51            android:foregroundServiceType="location|microphone" />
-51-->D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:36:13-64
+51-->C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:36:13-64
 52
 53        <provider
 53-->[androidx.emoji2:emoji2:1.3.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\ecfe4194a77566203ab7abf6b1c5c088\workspace\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
