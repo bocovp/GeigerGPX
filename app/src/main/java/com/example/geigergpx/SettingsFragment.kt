@@ -44,6 +44,18 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
         spacing?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
 
+        val minCounts = findPreference<EditTextPreference>("min_counts_per_point")
+        minCounts?.setOnBindEditTextListener { edit ->
+            edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
+        minCounts?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
+
+        val maxTime = findPreference<EditTextPreference>("max_time_without_counts_s")
+        maxTime?.setOnBindEditTextListener { edit ->
+            edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
+        maxTime?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
+
         val coeff = findPreference<EditTextPreference>("cps_to_usvh")
         coeff?.setOnBindEditTextListener { edit ->
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or

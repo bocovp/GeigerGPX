@@ -9,14 +9,16 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.Observer
 import androidx.preference.PreferenceManager
 import com.example.geigergpx.databinding.ActivityMainBinding
+import android.widget.Toast
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val viewModel: TrackingViewModel by lazy { TrackingViewModel.getInstance(application) }
+    private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var lastCps: Double = 0.0
 
     private val permissionLauncher = registerForActivityResult(
@@ -44,6 +46,15 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        val restoredName = GpxWriter.restoreBackupIfPresent(this)
+        if (restoredName != null) {
+            Toast.makeText(
+                this,
+                "Backup file was restored and saved as $restoredName",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
 
         binding.buttonStart.setOnClickListener {
             if (ensurePermissions()) {

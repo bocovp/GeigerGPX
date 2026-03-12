@@ -22,7 +22,7 @@
     <EditTextPreference
         android:key="max_time_without_counts_s"
         android:title="Max time without counts (s)"
-        android:defaultValue="1"
+        android:defaultValue="10"
         android:dialogTitle="Max time without counts (s)" />
 
     <ListPreference

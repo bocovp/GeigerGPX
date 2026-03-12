@@ -19,12 +19,16 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlin.math.max
-import android.app.AlertDialog
+import android.widget.Toast
 import android.os.Handler
 import android.os.Looper
-import android.view.LayoutInflater
-import android.widget.TextView
-import android.view.WindowManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 
 class TrackingService : Service() {
 
@@ -32,7 +36,7 @@ class TrackingService : Service() {
     private lateinit var locationRequest: LocationRequest
     private lateinit var locationCallback: LocationCallback
 
-    private val viewModel by lazy { TrackingViewModel.getInstance(application) }
+    private val repo by lazy { (application as GeigerGpxApp).trackingRepository }
 
     // Track recording state
     private var startTimeMillis: Long = 0L
@@ -59,12 +63,21 @@ class TrackingService : Service() {
     // Monitoring state (GPS + audio active, but not recording a track)
     private var isMonitoring: Boolean = false
 
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var backupJob: kotlinx.coroutines.Job? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         setupLocationRequest()
         setupLocationCallback()
+    }
+
+    override fun onDestroy() {
+        stopBackupLoop()
+        serviceScope.cancel()
+        super.onDestroy()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -85,12 +98,10 @@ class TrackingService : Service() {
         if (isMonitoring || startTimeMillis != 0L) return  // already monitoring or tracking
         isMonitoring = true
 
-        startForeground(NOTIF_ID, buildNotification("Monitoring..."))
-
         if (ActivityCompatHelper.hasLocationAndAudioPermissions(this)) {
             fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
             startBeepDetector()
-            viewModel.updateMonitoringStatus(gpsStatus = "Waiting")
+            repo.updateMonitoringStatus(gpsStatus = "Waiting")
         } else {
             isMonitoring = false
             stopSelf()
@@ -109,12 +120,6 @@ class TrackingService : Service() {
 
         // Only stop foreground and self-destruct if not tracking
         if (startTimeMillis == 0L) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-            } else {
-                @Suppress("DEPRECATION")
-                stopForeground(true)
-            }
             stopSelf()
         } else {
             // Still tracking: downgrade notification to indicate background tracking
@@ -159,7 +164,9 @@ class TrackingService : Service() {
             }
         }
 
-        viewModel.updateStatus(
+        startBackupLoop()
+
+        repo.updateStatus(
             tracking = true,
             durationSeconds = 0,
             distance = 0.0,
@@ -173,13 +180,15 @@ class TrackingService : Service() {
     private fun stopTracking() {
         if (startTimeMillis == 0L) return
 
+        stopBackupLoop()
+
         val copy = writtenPoints.toList()
         if (copy.isNotEmpty()) {
-            val file = GpxWriter.saveTrack(this, copy)
-            if (file != null) {
-                showSaveNotification(file.absolutePath)
+            val filename = GpxWriter.saveTrack(this, copy)
+            if (filename != null) {
+                showSaveNotification(filename)
             } else {
-                showSaveNotification("File not saved")
+                showSaveNotification("File not saved (error)")
             }
         }
         else {
@@ -193,22 +202,26 @@ class TrackingService : Service() {
 
         if (isMonitoring) {
             // Stay in monitoring mode: keep GPS and audio running, downgrade notification.
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(NOTIF_ID, buildNotification("Monitoring..."))
-            viewModel.updateStatus(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            repo.updateStatus(
                 tracking = false,
                 durationSeconds = 0,
                 distance = 0.0,
                 points = 0,
                 cps = 0.0,
                 trackCounts = 0,
-                gpsStatus = viewModel.gpsStatus.value ?: "Waiting"
+                gpsStatus = repo.gpsStatus.value ?: "Waiting"
             )
         } else {
             // Not monitoring: stop GPS and audio.
             fusedLocation.removeLocationUpdates(locationCallback)
             stopBeepDetector()
-            viewModel.updateStatus(
+            repo.updateStatus(
                 tracking = false,
                 durationSeconds = 0,
                 distance = 0.0,
@@ -343,7 +356,7 @@ class TrackingService : Service() {
             gpsSpoofingActive -> "Spoofing detected"
             else -> "Working"
         }
-        viewModel.updateStatus(
+        repo.updateStatus(
             tracking = true,
             durationSeconds = elapsedSec,
             distance = totalDistance,
@@ -360,7 +373,7 @@ class TrackingService : Service() {
             !gpsOk || lastGpsFixMillis == 0L -> "Waiting"
             else -> "Working"
         }
-        viewModel.updateMonitoringStatus(gpsStatus = gpsStatus)
+        repo.updateMonitoringStatus(gpsStatus = gpsStatus)
     }
 
     // -------------------------------------------------------------------------
@@ -373,7 +386,7 @@ class TrackingService : Service() {
                 beepCountSinceLastPoint++
                 trackBeepCount++
             }
-            viewModel.incrementTotalCounts()
+            repo.incrementTotalCounts()
         }.also { it.start() }
     }
 
@@ -420,17 +433,10 @@ class TrackingService : Service() {
     private fun showSaveNotification(message: String?) {
         Handler(Looper.getMainLooper()).post {
             try {
-                AlertDialog.Builder(this)
-                    .setTitle("Track Saved")
-                    .setMessage(message)
-                    .setPositiveButton("OK") { dialog, _ ->
-                        dialog.dismiss()
-                    }
-                    .show()
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                android.util.Log.e("MYTAG", "Could not show toast: ${e.message}")
             }
-             catch (e: Exception) {
-                 android.util.Log.e("MYTAG", "Could not shovv dialog: ${e.message}")
-             }
         }
     }
     companion object {
@@ -439,5 +445,32 @@ class TrackingService : Service() {
         const val ACTION_START = "com.example.geigergpx.START"
         const val ACTION_STOP  = "com.example.geigergpx.STOP"
         const val NOTIF_ID = 1001
+
+        // 10 minutes
+        private const val BACKUP_INTERVAL_MS = 10 * 60 * 1000L
+    }
+
+    private fun startBackupLoop() {
+        backupJob?.cancel()
+        backupJob = serviceScope.launch {
+            while (isActive && startTimeMillis != 0L) {
+                delay(BACKUP_INTERVAL_MS)
+                if (startTimeMillis == 0L) break
+                val snapshot = writtenPoints.toList()
+                if (snapshot.isEmpty()) continue
+                launch(Dispatchers.IO) {
+                    try {
+                        GpxWriter.saveBackup(this@TrackingService, snapshot)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopBackupLoop() {
+        backupJob?.cancel()
+        backupJob = null
     }
 }

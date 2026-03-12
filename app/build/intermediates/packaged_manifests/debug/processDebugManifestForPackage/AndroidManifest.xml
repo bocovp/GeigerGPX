@@ -21,6 +21,7 @@
     <uses-permission android:name="com.example.geigergpx.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
 
     <application
+        android:name="com.example.geigergpx.GeigerGpxApp"
         android:allowBackup="true"
         android:appComponentFactory="androidx.core.app.CoreComponentFactory"
         android:debuggable="true"
