@@ -1,0 +1,40 @@
+# Build files
+build/
+.gradle/
+.gradle-wrapper/
+out/
+bin/
+obj/
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# APK files
+*.apk
+*.aab
+
+# Local configuration files
+local.properties
+gradle.properties
+
+# Generated files
+generated/
