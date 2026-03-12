@@ -19,6 +19,10 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlin.math.max
+import android.app.AlertDialog
+import android.view.LayoutInflater
+import android.widget.TextView
+import android.view.WindowManager
 
 class TrackingService : Service() {
 
@@ -405,35 +409,28 @@ class TrackingService : Service() {
     }
 
     private fun showSaveNotification(savedFile: java.io.File?) {
-        val channelId = "geigergpx_channel"
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        
-        // Create notification channel if needed (same as main notification)
+        // Create a simple dialog to show the saved file path
+        val dialog = AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle("Track Saved")
+            .setMessage(if (savedFile != null) {
+                "Track saved to:\n${savedFile.absolutePath}"
+            } else {
+                "Track saved (location not available)"
+            })
+            .setPositiveButton("OK") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .create()
+
+        // Make dialog appear on top of other apps (requires SYSTEM_ALERT_WINDOW permission)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ch = NotificationChannel(
-                channelId,
-                "Geiger GPX Tracking",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-            nm.createNotificationChannel(ch)
-        }
-
-        val message = if (savedFile != null) {
-            "Track saved to ${savedFile.absolutePath}"
+            dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         } else {
-            "Track saved (location not available)"
+            @Suppress("DEPRECATION")
+            dialog.window?.setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT)
         }
 
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Geiger GPX")
-            .setContentText(message)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
-
-        // Use system NotificationManager directly for better reliability
-        nm.notify(NOTIF_ID + 1, notification)
+        dialog.show()
     }
 
     companion object {
