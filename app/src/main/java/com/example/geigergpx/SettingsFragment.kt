@@ -52,12 +52,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
         coeff?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
 
-        val dir = findPreference<EditTextPreference>("gpx_subdir")
-        dir?.setOnBindEditTextListener { edit ->
-            edit.inputType = android.text.InputType.TYPE_CLASS_TEXT
-        }
-        dir?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
-
         val tagType = findPreference<ListPreference>("dose_tag_type")
         tagType?.summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
 

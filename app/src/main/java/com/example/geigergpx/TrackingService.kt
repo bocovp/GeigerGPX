@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.app.PendingIntent
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -27,6 +28,7 @@ class TrackingService : Service() {
 
     private val viewModel by lazy { TrackingViewModel.getInstance(application) }
 
+    // Track recording state
     private var startTimeMillis: Long = 0L
     private var totalDistance: Double = 0.0
     private val writtenPoints = mutableListOf<TrackPoint>()
@@ -38,7 +40,7 @@ class TrackingService : Service() {
     private var beepCountSinceLastPoint: Int = 0
 
     @Volatile
-    private var totalBeepCount: Int = 0
+    private var trackBeepCount: Int = 0
 
     @Volatile
     private var lastGpsFixMillis: Long = 0L
@@ -47,6 +49,9 @@ class TrackingService : Service() {
     private var gpsSpoofingActive: Boolean = false
 
     private var audioBeepDetector: AudioBeepDetector? = null
+
+    // Monitoring state (GPS + audio active, but not recording a track)
+    private var isMonitoring: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -58,14 +63,66 @@ class TrackingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_START_MONITORING -> startMonitoring()
+            ACTION_STOP_MONITORING -> stopMonitoring()
             ACTION_START -> startTracking()
             ACTION_STOP -> stopTracking()
         }
         return START_STICKY
     }
 
+    // -------------------------------------------------------------------------
+    // Monitoring (foreground-only, no track recording)
+    // -------------------------------------------------------------------------
+
+    private fun startMonitoring() {
+        if (isMonitoring || startTimeMillis != 0L) return  // already monitoring or tracking
+        isMonitoring = true
+
+        startForeground(NOTIF_ID, buildNotification("Monitoring..."))
+
+        if (ActivityCompatHelper.hasLocationAndAudioPermissions(this)) {
+            fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
+            startBeepDetector()
+            viewModel.updateMonitoringStatus(gpsStatus = "Waiting")
+        } else {
+            isMonitoring = false
+            stopSelf()
+        }
+    }
+
+    private fun stopMonitoring() {
+        if (!isMonitoring) return
+        isMonitoring = false
+
+        // Only remove location updates and stop beep detector if not tracking
+        if (startTimeMillis == 0L) {
+            fusedLocation.removeLocationUpdates(locationCallback)
+            stopBeepDetector()
+        }
+
+        // Only stop foreground and self-destruct if not tracking
+        if (startTimeMillis == 0L) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            stopSelf()
+        } else {
+            // Still tracking: downgrade notification to indicate background tracking
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(NOTIF_ID, buildNotification("Tracking (background)..."))
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Track recording
+    // -------------------------------------------------------------------------
+
     private fun startTracking() {
-        if (startTimeMillis != 0L) return
+        if (startTimeMillis != 0L) return  // already tracking
 
         startTimeMillis = System.currentTimeMillis()
         totalDistance = 0.0
@@ -73,54 +130,93 @@ class TrackingService : Service() {
         lastWrittenLocation = null
         lastWrittenTime = 0L
         beepCountSinceLastPoint = 0
-        totalBeepCount = 0
+        trackBeepCount = 0
         lastGpsFixMillis = 0L
         gpsSpoofingActive = false
 
-        startForeground(NOTIF_ID, buildNotification("Tracking..."))
-
-        if (ActivityCompatHelper.hasLocationAndAudioPermissions(this)) {
-            fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
-            startBeepDetector()
-            viewModel.updateStatus(
-                tracking = true,
-                durationSeconds = 0,
-                distance = 0.0,
-                points = 0,
-                cps = 0.0,
-                totalCounts = 0,
-                gpsStatus = "Waiting"
-            )
+        if (isMonitoring) {
+            // Already monitoring: GPS and audio are already running.
+            // Just upgrade the notification.
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(NOTIF_ID, buildNotification("Tracking..."))
         } else {
-            stopSelf()
-        }
-    }
+            // Not monitoring: start GPS and audio now.
+            startForeground(NOTIF_ID, buildNotification("Tracking..."))
 
-    private fun stopTracking() {
-        fusedLocation.removeLocationUpdates(locationCallback)
-        stopBeepDetector()
-        val copy = writtenPoints.toList()
-        if (copy.isNotEmpty()) {
-            GpxWriter.saveTrack(this, copy)
+            if (ActivityCompatHelper.hasLocationAndAudioPermissions(this)) {
+                fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
+                startBeepDetector()
+            } else {
+                startTimeMillis = 0L
+                stopSelf()
+                return
+            }
         }
-        startTimeMillis = 0L
+
         viewModel.updateStatus(
-            tracking = false,
+            tracking = true,
             durationSeconds = 0,
             distance = 0.0,
             points = 0,
             cps = 0.0,
-            totalCounts = 0,
+            trackCounts = 0,
             gpsStatus = "Waiting"
         )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
-        stopSelf()
     }
+
+    private fun stopTracking() {
+        if (startTimeMillis == 0L) return
+
+        val copy = writtenPoints.toList()
+        if (copy.isNotEmpty()) {
+            val savedFile = GpxWriter.saveTrack(this, copy)
+            showSaveNotification(savedFile)
+        }
+        startTimeMillis = 0L
+        lastWrittenLocation = null
+        lastWrittenTime = 0L
+        beepCountSinceLastPoint = 0
+        trackBeepCount = 0
+
+        if (isMonitoring) {
+            // Stay in monitoring mode: keep GPS and audio running, downgrade notification.
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(NOTIF_ID, buildNotification("Monitoring..."))
+            viewModel.updateStatus(
+                tracking = false,
+                durationSeconds = 0,
+                distance = 0.0,
+                points = 0,
+                cps = 0.0,
+                trackCounts = 0,
+                gpsStatus = viewModel.gpsStatus.value ?: "Waiting"
+            )
+        } else {
+            // Not monitoring: stop GPS and audio.
+            fusedLocation.removeLocationUpdates(locationCallback)
+            stopBeepDetector()
+            viewModel.updateStatus(
+                tracking = false,
+                durationSeconds = 0,
+                distance = 0.0,
+                points = 0,
+                cps = 0.0,
+                trackCounts = 0,
+                gpsStatus = "Waiting"
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            stopSelf()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Location / GPS
+    // -------------------------------------------------------------------------
 
     private fun setupLocationRequest() {
         locationRequest = LocationRequest.Builder(
@@ -141,13 +237,23 @@ class TrackingService : Service() {
     }
 
     private fun handleLocation(loc: Location) {
+        val now = System.currentTimeMillis()
+        lastGpsFixMillis = now
+
+        if (startTimeMillis == 0L) {
+            // Monitoring only (not recording): just update GPS status
+            updateMonitoringStats()
+            return
+        }
+
+        // Recording a track
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val maxSpeedKmh = prefs.getString("max_speed_kmh", "30.0")!!.toDoubleOrNull() ?: 30.0
         val spacingM = prefs.getString("point_spacing_m", "5.0")!!.toDoubleOrNull() ?: 5.0
+        val minCountsPerPoint = prefs.getString("min_counts_per_point", "0")!!.toIntOrNull() ?: 0
+        val maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")!!.toDoubleOrNull() ?: 1.0
 
-        val now = System.currentTimeMillis()
         val elapsedSec = max(0L, (now - startTimeMillis) / 1000L)
-        lastGpsFixMillis = now
 
         val lastLoc = lastWrittenLocation
         if (lastLoc != null) {
@@ -176,6 +282,13 @@ class TrackingService : Service() {
                 lastWrittenLocation = loc
                 lastWrittenTime = now
                 beepCountSinceLastPoint = 0
+                updateStats(elapsedSec, lastCps = cps)
+                return
+            }
+
+            val timeSinceLastPointSec = (now - lastWrittenTime) / 1000.0
+            val timedOut = maxTimeWithoutCountsS > 0.0 && timeSinceLastPointSec > maxTimeWithoutCountsS
+            if (minCountsPerPoint > 0 && beeps <= minCountsPerPoint && !timedOut) {
                 updateStats(elapsedSec, lastCps = cps)
                 return
             }
@@ -223,15 +336,31 @@ class TrackingService : Service() {
             distance = totalDistance,
             points = writtenPoints.size,
             cps = lastCps,
-            totalCounts = totalBeepCount,
+            trackCounts = trackBeepCount,
             gpsStatus = gpsStatus
         )
     }
 
+    private fun updateMonitoringStats() {
+        val gpsOk = (System.currentTimeMillis() - lastGpsFixMillis) <= 5000L
+        val gpsStatus = when {
+            !gpsOk || lastGpsFixMillis == 0L -> "Waiting"
+            else -> "Working"
+        }
+        viewModel.updateMonitoringStatus(gpsStatus = gpsStatus)
+    }
+
+    // -------------------------------------------------------------------------
+    // Audio
+    // -------------------------------------------------------------------------
+
     private fun startBeepDetector() {
         audioBeepDetector = AudioBeepDetector {
-            beepCountSinceLastPoint++
-            totalBeepCount++
+            if (startTimeMillis != 0L) {
+                beepCountSinceLastPoint++
+                trackBeepCount++
+            }
+            viewModel.incrementTotalCounts()
         }.also { it.start() }
     }
 
@@ -239,6 +368,10 @@ class TrackingService : Service() {
         audioBeepDetector?.stop()
         audioBeepDetector = null
     }
+
+    // -------------------------------------------------------------------------
+    // Notifications
+    // -------------------------------------------------------------------------
 
     private fun buildNotification(text: String): Notification {
         val channelId = "geigergpx_channel"
@@ -271,10 +404,39 @@ class TrackingService : Service() {
             .build()
     }
 
+    private fun showSaveNotification(savedFile: java.io.File?) {
+        val channelId = "geigergpx_channel"
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = NotificationChannel(
+                channelId,
+                "Geiger GPX Tracking",
+                NotificationManager.IMPORTANCE_DEFAULT
+            )
+            nm.createNotificationChannel(ch)
+        }
+
+        val message = if (savedFile != null) {
+            "Track saved to ${savedFile.absolutePath}"
+        } else {
+            "Track saved (location not available)"
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Geiger GPX")
+            .setContentText(message)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat.from(this).notify(NOTIF_ID + 1, notification)
+    }
+
     companion object {
+        const val ACTION_START_MONITORING = "com.example.geigergpx.START_MONITORING"
+        const val ACTION_STOP_MONITORING  = "com.example.geigergpx.STOP_MONITORING"
         const val ACTION_START = "com.example.geigergpx.START"
-        const val ACTION_STOP = "com.example.geigergpx.STOP"
+        const val ACTION_STOP  = "com.example.geigergpx.STOP"
         const val NOTIF_ID = 1001
     }
 }
-

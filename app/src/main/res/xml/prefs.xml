@@ -13,6 +13,18 @@
         android:defaultValue="5.0"
         android:dialogTitle="Distance between points (m)" />
 
+    <EditTextPreference
+        android:key="min_counts_per_point"
+        android:title="Min counts per point"
+        android:defaultValue="0"
+        android:dialogTitle="Min counts per point" />
+
+    <EditTextPreference
+        android:key="max_time_without_counts_s"
+        android:title="Max time without counts (s)"
+        android:defaultValue="1"
+        android:dialogTitle="Max time without counts (s)" />
+
     <ListPreference
         android:key="dose_tag_type"
         android:title="Tag for dose rate"
@@ -26,16 +38,9 @@
         android:defaultValue="1.0"
         android:dialogTitle="CPS to μSv/h coefficient" />
 
-    <EditTextPreference
-        android:key="gpx_subdir"
-        android:title="GPX subdirectory name"
-        android:defaultValue="GeigerGPX"
-        android:dialogTitle="GPX subdirectory name" />
-
     <Preference
         android:key="gpx_folder_picker"
         android:title="Choose save folder"
         android:summary="Not set (uses app folder)" />
 
 </PreferenceScreen>
-

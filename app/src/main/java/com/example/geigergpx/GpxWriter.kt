@@ -18,7 +18,6 @@ object GpxWriter {
 
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val tagType = prefs.getString("dose_tag_type", "ele") ?: "ele"
-        val subdirName = prefs.getString("gpx_subdir", "GeigerGPX") ?: "GeigerGPX"
         val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
@@ -43,9 +42,8 @@ object GpxWriter {
 
         // Fallback: app-specific external Documents folder (always writable).
         val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
-        val dir = File(root, subdirName)
-        if (!dir.exists()) dir.mkdirs()
-        val file = File(dir, fileName)
+        if (!root.exists()) root.mkdirs()
+        val file = File(root, fileName)
         FileOutputStream(file).use { out -> out.write(xml.toByteArray(Charsets.UTF_8)) }
         return file
     }

@@ -25,6 +25,9 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
     private val _totalCounts = MutableLiveData(0)
     val totalCounts: LiveData<Int> = _totalCounts
 
+    private val _trackCounts = MutableLiveData(0)
+    val trackCounts: LiveData<Int> = _trackCounts
+
     private val _gpsStatus = MutableLiveData("unknown")
     val gpsStatus: LiveData<String> = _gpsStatus
 
@@ -34,7 +37,7 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
         distance: Double,
         points: Int,
         cps: Double,
-        totalCounts: Int,
+        trackCounts: Int,
         gpsStatus: String
     ) {
         _isTracking.postValue(tracking)
@@ -42,8 +45,16 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
         _distanceMeters.postValue(distance)
         _pointCount.postValue(points)
         _currentCps.postValue(cps)
-        _totalCounts.postValue(totalCounts)
+        _trackCounts.postValue(trackCounts)
         _gpsStatus.postValue(gpsStatus)
+    }
+
+    fun updateMonitoringStatus(gpsStatus: String) {
+        _gpsStatus.postValue(gpsStatus)
+    }
+
+    fun incrementTotalCounts() {
+        _totalCounts.postValue(_totalCounts.value?.plus(1) ?: 1)
     }
 
     private fun formatDuration(sec: Long): String {

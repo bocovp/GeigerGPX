@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -24,6 +25,21 @@ class MainActivity : AppCompatActivity() {
         // User can press Start again after granting permissions
     }
 
+    private val folderPickerForStop = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            contentResolver.takePersistableUriPermission(uri, flags)
+            PreferenceManager.getDefaultSharedPreferences(this)
+                .edit()
+                .putString(SettingsFragment.KEY_GPX_TREE_URI, uri.toString())
+                .apply()
+        }
+        // Stop tracking regardless of whether a folder was chosen or cancelled
+        stopTracking()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -36,7 +52,22 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.buttonStop.setOnClickListener {
-            stopTracking()
+            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+            val treeUri = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+            if (treeUri.isNullOrBlank()) {
+                AlertDialog.Builder(this)
+                    .setTitle("Choose save folder")
+                    .setMessage("No save folder is set. Please choose a folder where the GPX file will be saved.")
+                    .setPositiveButton("Choose folder") { _, _ ->
+                        folderPickerForStop.launch(null)
+                    }
+                    .setNegativeButton("Use app folder") { _, _ ->
+                        stopTracking()
+                    }
+                    .show()
+            } else {
+                stopTracking()
+            }
         }
 
         binding.buttonSettings.setOnClickListener {
@@ -49,6 +80,16 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateCpsOrDoseLine()
+        startMonitoring()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Only stop monitoring if tracking is not active
+        // If tracking is active, keep GPS and audio running in background
+        if (!viewModel.isTracking.value!!) {
+            stopMonitoring()
+        }
     }
 
     private fun observeViewModel() {
@@ -74,8 +115,15 @@ class MainActivity : AppCompatActivity() {
             updateCpsOrDoseLine()
         })
 
-        viewModel.totalCounts.observe(this, Observer { counts ->
-            binding.textTotalCounts.text = "Total counts: $counts"
+        viewModel.totalCounts.observe(this, Observer { totalCounts ->
+            val trackCounts = viewModel.trackCounts.value ?: 0
+            val isTracking = viewModel.isTracking.value ?: false
+            
+            if (isTracking && trackCounts > 0) {
+                binding.textTotalCounts.text = "Total counts: $trackCounts / $totalCounts"
+            } else {
+                binding.textTotalCounts.text = "Total counts: $totalCounts"
+            }
         })
 
         viewModel.gpsStatus.observe(this, Observer { status ->
@@ -133,6 +181,22 @@ class MainActivity : AppCompatActivity() {
         } else {
             true
         }
+    }
+
+    private fun startMonitoring() {
+        if (ensurePermissions()) {
+            val intent = Intent(this, TrackingService::class.java).apply {
+                action = TrackingService.ACTION_START_MONITORING
+            }
+            startService(intent)
+        }
+    }
+
+    private fun stopMonitoring() {
+        val intent = Intent(this, TrackingService::class.java).apply {
+            action = TrackingService.ACTION_STOP_MONITORING
+        }
+        startService(intent)
     }
 }
 
