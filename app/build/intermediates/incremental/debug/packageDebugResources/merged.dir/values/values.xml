@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:ns1="http://schemas.android.com/tools">
+    <string-array name="dose_tag_entries">
+        <item>Elevation tag (&lt;ele>)</item>
+        <item>Comment tag (&lt;cmt>)</item>
+    </string-array>
+    <string-array name="dose_tag_values">
+        <item>ele</item>
+        <item>cmt</item>
+    </string-array>
+    <color name="black">#000000</color>
+    <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="purple_500">#03A9F4</color>
+    <color name="purple_700">#0288D1</color>
+    <color name="status_spoofing">#C62828</color>
+    <color name="status_waiting">#808080</color>
+    <color name="status_working">#2E7D32</color>
+    <color name="teal_200">#40C4FF</color>
+    <color name="white">#FFFFFF</color>
+    <string name="app_name">Geiger GPX</string>
+    <style name="Theme.GeigerGpx" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorPrimaryVariant">@color/purple_700</item>
+        <item name="colorAccent">@color/teal_200</item>
+        <item name="android:statusBarColor" ns1:targetApi="l">?attr/colorPrimaryVariant</item>
+    </style>
+</resources>

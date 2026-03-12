@@ -98,6 +98,10 @@ class AudioBeepDetector(
                 {
                     val read = ar.read(audioBuf, 0, audioBuf.size)
                     if (read <= 0) continue
+                    if (audioBuf.sum() ==0)
+                    {
+                        Log.d("MYTAG", "Error: empty audioBuff")
+                    }
 
                     var pos = 0
 
@@ -131,7 +135,6 @@ class AudioBeepDetector(
                             val high = (q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh) // / WINDOW_SIZE
 
                             if (main > low * 1.2f && main > high * 1.2f) {
-                                //                  Log.d("MYTAG", "detected")
 
                                 detected = true
                             }

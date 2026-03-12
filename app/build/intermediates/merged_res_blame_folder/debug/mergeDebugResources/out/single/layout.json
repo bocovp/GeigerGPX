@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "com.example.geigergpx.app-mergeDebugResources-41:/layout/dummy_for_viewbinding.xml",
+        "source": "com.example.geigergpx.app-main-44:/layout/dummy_for_viewbinding.xml"
+    },
+    {
+        "merged": "com.example.geigergpx.app-mergeDebugResources-41:/layout/activity_main.xml",
+        "source": "com.example.geigergpx.app-main-44:/layout/activity_main.xml"
+    }
+]

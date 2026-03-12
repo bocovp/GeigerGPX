@@ -42,7 +42,9 @@ object GpxWriter {
 
         // Fallback: app-specific external Documents folder (always writable).
         val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
-        if (!root.exists()) root.mkdirs()
+        root?.let {
+            if (!it.exists()) it.mkdirs()
+        }
         val file = File(root, fileName)
         FileOutputStream(file).use { out -> out.write(xml.toByteArray(Charsets.UTF_8)) }
         return file

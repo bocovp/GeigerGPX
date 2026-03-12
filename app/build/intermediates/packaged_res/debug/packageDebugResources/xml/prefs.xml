@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <EditTextPreference
+        android:key="max_speed_kmh"
+        android:title="Max speed (km/h)"
+        android:defaultValue="30.0"
+        android:dialogTitle="Max speed (km/h)" />
+
+    <EditTextPreference
+        android:key="point_spacing_m"
+        android:title="Distance between points (m)"
+        android:defaultValue="5.0"
+        android:dialogTitle="Distance between points (m)" />
+
+    <EditTextPreference
+        android:key="min_counts_per_point"
+        android:title="Min counts per point"
+        android:defaultValue="0"
+        android:dialogTitle="Min counts per point" />
+
+    <EditTextPreference
+        android:key="max_time_without_counts_s"
+        android:title="Max time without counts (s)"
+        android:defaultValue="1"
+        android:dialogTitle="Max time without counts (s)" />
+
+    <ListPreference
+        android:key="dose_tag_type"
+        android:title="Tag for dose rate"
+        android:entries="@array/dose_tag_entries"
+        android:entryValues="@array/dose_tag_values"
+        android:defaultValue="ele" />
+
+    <EditTextPreference
+        android:key="cps_to_usvh"
+        android:title="CPS to μSv/h coefficient"
+        android:defaultValue="1.0"
+        android:dialogTitle="CPS to μSv/h coefficient" />
+
+    <Preference
+        android:key="gpx_folder_picker"
+        android:title="Choose save folder"
+        android:summary="Not set (uses app folder)" />
+
+</PreferenceScreen>
