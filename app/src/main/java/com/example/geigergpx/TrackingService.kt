@@ -173,8 +173,15 @@ class TrackingService : Service() {
 
         val copy = writtenPoints.toList()
         if (copy.isNotEmpty()) {
-            val savedFile = GpxWriter.saveTrack(this, copy)
-            showSaveNotification(savedFile)
+            val file = GpxWriter.saveTrack(this, copy)
+            if (file != null) {
+                showSaveNotification(file.absolutePath)
+            } else {
+                showSaveNotification("File not saved")
+            }
+        }
+        else {
+            showSaveNotification("Nothing to save")
         }
         startTimeMillis = 0L
         lastWrittenLocation = null
@@ -408,31 +415,16 @@ class TrackingService : Service() {
             .build()
     }
 
-    private fun showSaveNotification(savedFile: java.io.File?) {
-        // Create a simple dialog to show the saved file path
-        val dialog = AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+    private fun showSaveNotification(message: String?) {
+        // Standard AlertDialog inside the app context
+        AlertDialog.Builder(this)
             .setTitle("Track Saved")
-            .setMessage(if (savedFile != null) {
-                "Track saved to:\n${savedFile.absolutePath}"
-            } else {
-                "Track saved (location not available)"
-            })
+            .setMessage(message)
             .setPositiveButton("OK") { dialog, _ ->
                 dialog.dismiss()
             }
-            .create()
-
-        // Make dialog appear on top of other apps (requires SYSTEM_ALERT_WINDOW permission)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
-        } else {
-            @Suppress("DEPRECATION")
-            dialog.window?.setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT)
-        }
-
-        dialog.show()
+            .show()
     }
-
     companion object {
         const val ACTION_START_MONITORING = "com.example.geigergpx.START_MONITORING"
         const val ACTION_STOP_MONITORING  = "com.example.geigergpx.STOP_MONITORING"
