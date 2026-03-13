@@ -108,51 +108,47 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateCountDisplay(
+        isTracking: Boolean = viewModel.isTracking.value ?: false,
+        totalCounts: Long = viewModel.totalCounts.value ?: 0,
+        trackCounts: Long = viewModel.trackCounts.value ?: 0) {
+        binding.textTotalCounts.text = if (isTracking) {
+            "Total counts: $trackCounts / $totalCounts"
+        } else {
+            "Total counts: $totalCounts"
+        }
+    }
+
     private fun observeViewModel() {
-        viewModel.isTracking.observe(this, Observer { tracking ->
+        viewModel.isTracking.observe(this) { tracking ->
             binding.buttonStart.isEnabled = !tracking
             binding.buttonStop.isEnabled = tracking
-            
-            // Update total counts formatting immediately when tracking state changes
-            val totalCounts = viewModel.totalCounts.value ?: 0
-            val trackCounts = viewModel.trackCounts.value ?: 0
-            
-            if (tracking) {
-                binding.textTotalCounts.text = "Total counts: $trackCounts / $totalCounts"
-            } else {
-                binding.textTotalCounts.text = "Total counts: $totalCounts"
-            }
-        })
 
-        viewModel.durationText.observe(this, Observer {
+            updateCountDisplay(isTracking = tracking) 
+        }
+
+        viewModel.durationText.observe(this) {
             binding.textDuration.text = "Duration: $it"
-        })
+        }
 
-        viewModel.distanceMeters.observe(this, Observer { dist ->
+        viewModel.distanceMeters.observe(this) { dist ->
             binding.textDistance.text = "Distance: %.1f m".format(dist)
-        })
+        }
 
-        viewModel.pointCount.observe(this, Observer { count ->
+        viewModel.pointCount.observe(this) { count ->
             binding.textPoints.text = "Points: $count"
-        })
+        }
 
-        viewModel.currentCps.observe(this, Observer { cps ->
+        viewModel.currentCps.observe(this) { cps ->
             lastCps = cps
             updateCpsOrDoseLine()
-        })
+        }
 
-        viewModel.totalCounts.observe(this, Observer { totalCounts ->
-            val trackCounts = viewModel.trackCounts.value ?: 0
-            val isTracking = viewModel.isTracking.value ?: false
-            
-            if (isTracking) {
-                binding.textTotalCounts.text = "Total counts: $trackCounts / $totalCounts"
-            } else {
-                binding.textTotalCounts.text = "Total counts: $totalCounts"
-            }
-        })
+        viewModel.totalCounts.observe(this) { totalCounts ->
+            updateCountDisplay(totalCounts = totalCounts)
+        }
 
-        viewModel.gpsStatus.observe(this, Observer { status ->
+        viewModel.gpsStatus.observe(this) { status ->
             binding.textGpsStatus.text = "GPS status: $status"
             val color = when (status) {
                 "Waiting" -> R.color.status_waiting
@@ -161,9 +157,9 @@ class MainActivity : AppCompatActivity() {
                 else -> R.color.status_waiting
             }
             binding.textGpsStatus.setTextColor(ContextCompat.getColor(this, color))
-        })
+        }
 
-        viewModel.audioStatus.observe(this, Observer { status ->
+        viewModel.audioStatus.observe(this) { status ->
             binding.textAudioStatus.text = "Audio status: $status"
             val color = when (status) {
                 "Working" -> R.color.status_working
@@ -171,7 +167,7 @@ class MainActivity : AppCompatActivity() {
                 else -> R.color.status_waiting
             }
             binding.textAudioStatus.setTextColor(ContextCompat.getColor(this, color))
-        })
+        }
     }
 
     private fun updateCpsOrDoseLine() {
