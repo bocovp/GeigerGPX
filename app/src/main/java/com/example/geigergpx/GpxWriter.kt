@@ -160,7 +160,7 @@ object GpxWriter {
 
         for (p in points) {
             val timeStr = iso.format(Date(p.timeMillis))
-            val doseStr = "%.3f".format(p.cps * coeff)
+            val doseStr = "%.3f".format(Locale.US, p.cps * coeff)
             val tag = if (tagType == "ele") "ele" else "cmt"
 
             writer.write("\t\t\t<trkpt lat=\"${p.latitude}\" lon=\"${p.longitude}\">\n")
