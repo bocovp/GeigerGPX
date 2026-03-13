@@ -65,8 +65,8 @@ class TrackingRepository {
     }
 
     /** Increment and return the global total beep count in a thread-safe way. */
-    fun incrementTotalCounts(): Int {
-        val newValue = totalCounter.incrementAndGet()
+    fun incrementTotalCounts(amount: Int): Int {
+        val newValue = totalCounter.addAndGet(amount.toLong())
         _totalCounts.postValue(newValue)
         return newValue
     }

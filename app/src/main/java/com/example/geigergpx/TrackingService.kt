@@ -464,7 +464,7 @@ class TrackingService : Service() {
         audioBeepDetector = AudioBeepDetector.createWithPrefs(
             context = this,
             onBeep = { _, count ->
-                repeat(count) { repo.incrementTotalCounts() }
+                repo.incrementTotalCounts(count)
             },
             onAudioHealth = { healthy ->
                 repo.updateAudioStatus(if (healthy) "Working" else "Error")
