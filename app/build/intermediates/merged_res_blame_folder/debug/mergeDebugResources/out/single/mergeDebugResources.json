@@ -36,6 +36,10 @@
         "source": "C:\\Users\\bp\\.gradle\\daemon\\9.3.1\\com.example.geigergpx.app-main-44:\\mipmap-xxhdpi\\ic_launcher.webp"
     },
     {
+        "merged": "com.example.geigergpx.app-debug-42:/layout_activity_main.xml.flat",
+        "source": "com.example.geigergpx.app-main-44:/layout/activity_main.xml"
+    },
+    {
         "merged": "C:\\Users\\bp\\.gradle\\daemon\\9.3.1\\com.example.geigergpx.app-debug-42:\\mipmap-mdpi_ic_launcher_round.webp.flat",
         "source": "C:\\Users\\bp\\.gradle\\daemon\\9.3.1\\com.example.geigergpx.app-main-44:\\mipmap-mdpi\\ic_launcher_round.webp"
     },
@@ -54,10 +58,6 @@
     {
         "merged": "C:\\Users\\bp\\.gradle\\daemon\\9.3.1\\com.example.geigergpx.app-debug-42:\\mipmap-xhdpi_ic_launcher_round.webp.flat",
         "source": "C:\\Users\\bp\\.gradle\\daemon\\9.3.1\\com.example.geigergpx.app-main-44:\\mipmap-xhdpi\\ic_launcher_round.webp"
-    },
-    {
-        "merged": "com.example.geigergpx.app-debug-42:/xml_prefs.xml.flat",
-        "source": "com.example.geigergpx.app-main-44:/xml/prefs.xml"
     },
     {
         "merged": "C:\\Users\\bp\\.gradle\\daemon\\9.3.1\\com.example.geigergpx.app-debug-42:\\mipmap-mdpi_ic_launcher.webp.flat",

@@ -24,5 +24,7 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
     val trackCounts: LiveData<Int> = repo.trackCounts
 
     val gpsStatus: LiveData<String> = repo.gpsStatus
+
+    val audioStatus: LiveData<String> = repo.audioStatus
 }
 

@@ -147,6 +147,16 @@ class MainActivity : AppCompatActivity() {
             }
             binding.textGpsStatus.setTextColor(ContextCompat.getColor(this, color))
         })
+
+        viewModel.audioStatus.observe(this, Observer { status ->
+            binding.textAudioStatus.text = "Audio status: $status"
+            val color = when (status) {
+                "Working" -> R.color.status_working
+                "Error" -> R.color.status_spoofing
+                else -> R.color.status_waiting
+            }
+            binding.textAudioStatus.setTextColor(ContextCompat.getColor(this, color))
+        })
     }
 
     private fun updateCpsOrDoseLine() {

@@ -30,6 +30,9 @@ public final class ActivityMainBinding implements ViewBinding {
   public final Button buttonStop;
 
   @NonNull
+  public final TextView textAudioStatus;
+
+  @NonNull
   public final TextView textCps;
 
   @NonNull
@@ -48,14 +51,15 @@ public final class ActivityMainBinding implements ViewBinding {
   public final TextView textTotalCounts;
 
   private ActivityMainBinding(@NonNull ConstraintLayout rootView, @NonNull Button buttonSettings,
-      @NonNull Button buttonStart, @NonNull Button buttonStop, @NonNull TextView textCps,
-      @NonNull TextView textDistance, @NonNull TextView textDuration,
+      @NonNull Button buttonStart, @NonNull Button buttonStop, @NonNull TextView textAudioStatus,
+      @NonNull TextView textCps, @NonNull TextView textDistance, @NonNull TextView textDuration,
       @NonNull TextView textGpsStatus, @NonNull TextView textPoints,
       @NonNull TextView textTotalCounts) {
     this.rootView = rootView;
     this.buttonSettings = buttonSettings;
     this.buttonStart = buttonStart;
     this.buttonStop = buttonStop;
+    this.textAudioStatus = textAudioStatus;
     this.textCps = textCps;
     this.textDistance = textDistance;
     this.textDuration = textDuration;
@@ -109,6 +113,12 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.textAudioStatus;
+      TextView textAudioStatus = ViewBindings.findChildViewById(rootView, id);
+      if (textAudioStatus == null) {
+        break missingId;
+      }
+
       id = R.id.textCps;
       TextView textCps = ViewBindings.findChildViewById(rootView, id);
       if (textCps == null) {
@@ -146,8 +156,8 @@ public final class ActivityMainBinding implements ViewBinding {
       }
 
       return new ActivityMainBinding((ConstraintLayout) rootView, buttonSettings, buttonStart,
-          buttonStop, textCps, textDistance, textDuration, textGpsStatus, textPoints,
-          textTotalCounts);
+          buttonStop, textAudioStatus, textCps, textDistance, textDuration, textGpsStatus,
+          textPoints, textTotalCounts);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

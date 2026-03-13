@@ -15,6 +15,7 @@ drawable ic_launcher_foreground
 id buttonSettings
 id buttonStart
 id buttonStop
+id textAudioStatus
 id textCps
 id textDistance
 id textDuration

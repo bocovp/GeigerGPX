@@ -41,12 +41,18 @@ class TrackingService : Service() {
     private val repo by lazy { (application as GeigerGpxApp).trackingRepository }
 
     // Track recording state
+    @Volatile
     private var startTimeMillis: Long = 0L
     private var totalDistance: Double = 0.0
     private val writtenPoints = mutableListOf<TrackPoint>()
 
     private var lastWrittenLocation: Location? = null
     private var lastWrittenTime: Long = 0L
+
+    // GPS averaging (simple running average between committed points)
+    private var latSum: Double = 0.0
+    private var lonSum: Double = 0.0
+    private var nAv: Int = 0
 
 
     private val beepCountSinceLastPoint = AtomicInteger(0)
@@ -101,6 +107,7 @@ class TrackingService : Service() {
 
         if (ActivityCompatHelper.hasLocationAndAudioPermissions(this)) {
             fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
+            repo.updateAudioStatus("Working")
             startBeepDetector()
             repo.updateMonitoringStatus(gpsStatus = "Waiting")
         } else {
@@ -141,6 +148,9 @@ class TrackingService : Service() {
         writtenPoints.clear()
         lastWrittenLocation = null
         lastWrittenTime = 0L
+        latSum = 0.0
+        lonSum = 0.0
+        nAv = 0
         beepCountSinceLastPoint.set(0)
         trackBeepCount.set(0)
         lastGpsFixMillis = 0L
@@ -183,6 +193,7 @@ class TrackingService : Service() {
             trackCounts = 0,
             gpsStatus = "Waiting"
         )
+        repo.updateAudioStatus("Working")
     }
 
     private fun stopTracking() {
@@ -205,6 +216,9 @@ class TrackingService : Service() {
         startTimeMillis = 0L
         lastWrittenLocation = null
         lastWrittenTime = 0L
+        latSum = 0.0
+        lonSum = 0.0
+        nAv = 0
         beepCountSinceLastPoint.set(0)
         trackBeepCount.set(0)
 
@@ -289,11 +303,13 @@ class TrackingService : Service() {
         if (lastLoc == null) {
             lastWrittenLocation = loc
             lastWrittenTime = now
+            latSum = loc.latitude
+            lonSum = loc.longitude
+            nAv = 1
             beepCountSinceLastPoint.set(0) // Start counting from this exact moment/spot
             updateStats(0, lastCps = 0.0)
             return
         }
-
 
         // 3. Load user preferences for filtering
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
@@ -319,6 +335,11 @@ class TrackingService : Service() {
         }
         gpsSpoofingActive = false
 
+        // Accumulate raw GPS points for averaging (only if not spoofing)
+        latSum += loc.latitude
+        lonSum += loc.longitude
+        nAv += 1
+
         // 6. Distance Filter (Wait until we've moved far enough)
         if (distance < spacingM) {
             updateStats(elapsedSec, lastCps = currentCps())
@@ -340,10 +361,14 @@ class TrackingService : Service() {
         val finalBeeps = beepCountSinceLastPoint.getAndSet(0)
         val finalCps = finalBeeps.toDouble() / timeDeltaSec
 
+        val avgLat = if (nAv > 0) latSum / nAv.toDouble() else loc.latitude
+        val avgLon = if (nAv > 0) lonSum / nAv.toDouble() else loc.longitude
+        val avgTimeMillis = ((lastWrittenTime + now) / 2L)
+
         val point = TrackPoint(
-            latitude = loc.latitude,
-            longitude = loc.longitude,
-            timeMillis = now,
+            latitude = avgLat,
+            longitude = avgLon,
+            timeMillis = avgTimeMillis,
             distanceFromLast = distance,
             cps = finalCps
         )
@@ -352,6 +377,9 @@ class TrackingService : Service() {
         totalDistance += distance
         lastWrittenLocation = loc
         lastWrittenTime = now
+        latSum = 0.0
+        lonSum = 0.0
+        nAv = 0
 
         updateStats(elapsedSec, lastCps = finalCps)
     }
@@ -395,13 +423,19 @@ class TrackingService : Service() {
     // -------------------------------------------------------------------------
 
     private fun startBeepDetector() {
-        audioBeepDetector = AudioBeepDetector.createWithPrefs(this) {
+        audioBeepDetector = AudioBeepDetector.createWithPrefs(
+            context = this,
+            onBeep = {
             if (startTimeMillis != 0L) {
                 beepCountSinceLastPoint.incrementAndGet()
                 trackBeepCount.incrementAndGet()
             }
             repo.incrementTotalCounts()
-        }.also { it.start() }
+            },
+            onAudioHealth = { healthy ->
+                repo.updateAudioStatus(if (healthy) "Working" else "Error")
+            }
+        ).also { it.start() }
     }
 
     private fun stopBeepDetector() {

@@ -35,6 +35,9 @@ class TrackingRepository {
     private val _gpsStatus = MutableLiveData("unknown")
     val gpsStatus: LiveData<String> = _gpsStatus
 
+    private val _audioStatus = MutableLiveData("unknown")
+    val audioStatus: LiveData<String> = _audioStatus
+
     fun updateStatus(
         tracking: Boolean,
         durationSeconds: Long,
@@ -55,6 +58,10 @@ class TrackingRepository {
 
     fun updateMonitoringStatus(gpsStatus: String) {
         _gpsStatus.postValue(gpsStatus)
+    }
+
+    fun updateAudioStatus(audioStatus: String) {
+        _audioStatus.postValue(audioStatus)
     }
 
     fun incrementTotalCounts() {

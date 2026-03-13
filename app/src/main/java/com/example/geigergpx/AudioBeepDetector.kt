@@ -12,7 +12,8 @@ import kotlin.math.cos
 
 class AudioBeepDetector(
     private val magThreshold: Float = DEFAULT_MAG_THRESHOLD,
-    private val onBeep: (Float) -> Unit
+    private val onBeep: (Float) -> Unit,
+    private val onAudioHealth: (Boolean) -> Unit = {}
 ) {
 
     @Volatile
@@ -90,6 +91,7 @@ class AudioBeepDetector(
             val processingBuf = ShortArray(bufferSize + WINDOW_SIZE)
             var leftoverSamples = 0
             var totalSamplesProcessed: Long = 0 // Используем обработанные сэмплы для точности
+            var audioHealthy = true
 
             var isBeeping = false
             var beepStartSample: Long = 0
@@ -102,9 +104,16 @@ class AudioBeepDetector(
                 {
                     val read = ar.read(audioBuf, 0, audioBuf.size)
                     if (read <= 0) continue
-                    if (audioBuf.sum() == 0)
-                    {
-                        Log.d("MYTAG", "Error: empty audioBuff")
+                    val isZero = audioBuf.sum() == 0
+                    if (isZero) {
+                        if (audioHealthy) {
+                            Log.d("MYTAG", "Error: empty audioBuff")
+                            audioHealthy = false
+                            onAudioHealth(false)
+                        }
+                    } else if (!audioHealthy) {
+                        audioHealthy = true
+                        onAudioHealth(true)
                     }
 
                     System.arraycopy(audioBuf, 0, processingBuf, leftoverSamples, read)
@@ -233,6 +242,17 @@ class AudioBeepDetector(
             val stored = prefs.getFloat(SettingsFragment.KEY_AUDIO_THRESHOLD, Float.NaN)
             val threshold = if (!stored.isNaN() && stored > 0f) stored else DEFAULT_MAG_THRESHOLD
             return AudioBeepDetector(threshold, onBeep)
+        }
+
+        fun createWithPrefs(
+            context: Context,
+            onBeep: (Float) -> Unit,
+            onAudioHealth: (Boolean) -> Unit
+        ): AudioBeepDetector {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val stored = prefs.getFloat(SettingsFragment.KEY_AUDIO_THRESHOLD, Float.NaN)
+            val threshold = if (!stored.isNaN() && stored > 0f) stored else DEFAULT_MAG_THRESHOLD
+            return AudioBeepDetector(threshold, onBeep, onAudioHealth)
         }
 
         fun startCalibration(

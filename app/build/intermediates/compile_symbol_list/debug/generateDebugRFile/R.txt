@@ -13,6 +13,7 @@ int drawable ic_launcher_foreground 0x0
 int id buttonSettings 0x0
 int id buttonStart 0x0
 int id buttonStop 0x0
+int id textAudioStatus 0x0
 int id textCps 0x0
 int id textDistance 0x0
 int id textDuration 0x0
