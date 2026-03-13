@@ -112,6 +112,16 @@ class MainActivity : AppCompatActivity() {
         viewModel.isTracking.observe(this, Observer { tracking ->
             binding.buttonStart.isEnabled = !tracking
             binding.buttonStop.isEnabled = tracking
+            
+            // Update total counts formatting immediately when tracking state changes
+            val totalCounts = viewModel.totalCounts.value ?: 0
+            val trackCounts = viewModel.trackCounts.value ?: 0
+            
+            if (tracking) {
+                binding.textTotalCounts.text = "Total counts: $trackCounts / $totalCounts"
+            } else {
+                binding.textTotalCounts.text = "Total counts: $totalCounts"
+            }
         })
 
         viewModel.durationText.observe(this, Observer {

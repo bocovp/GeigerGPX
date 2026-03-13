@@ -235,12 +235,13 @@ class TrackingService : Service() {
         if (copy.isNotEmpty()) {
             val filename = GpxWriter.saveTrack(this, copy)
             if (filename != null) {
+                // Final save succeeded: remove any leftover backup file
+                GpxWriter.deleteBackupIfExists(this)
                 showSaveNotification(filename)
             } else {
                 showSaveNotification("File not saved (error)")
             }
-        }
-        else {
+        } else {
             showSaveNotification("Nothing to save")
         }
         startTimeMillis = 0L

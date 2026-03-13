@@ -31,6 +31,37 @@ object GpxWriter {
         // Force overwrite for backup to keep only the latest state
         return writeGpxFile(context, points, "Backup.gpx")
     }
+
+    /**
+     * Delete the Backup.gpx file (if it exists) in either the configured GPX folder
+     * or the app-specific documents directory.
+     */
+    fun deleteBackupIfExists(context: Context) {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+
+        // 1) SAF folder, if configured
+        if (!treeUriStr.isNullOrBlank()) {
+            try {
+                val treeUri = Uri.parse(treeUriStr)
+                val dirDoc = DocumentFile.fromTreeUri(context, treeUri)
+                dirDoc?.findFile("Backup.gpx")?.delete()
+            } catch (_: Exception) {
+                // Ignore delete errors; this is best-effort cleanup
+            }
+        } else {
+            // 2) Fallback: app-specific external Documents folder
+            try {
+                val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
+                val backupFile = File(root, "Backup.gpx")
+                if (backupFile.exists()) {
+                    backupFile.delete()
+                }
+            } catch (_: Exception) {
+                // Ignore delete errors; this is best-effort cleanup
+            }
+        }
+    }
     /**
      * If a stale "Backup.gpx" exists in the currently configured save location (or
      * in the app default directory when no save folder is configured), rename it
@@ -42,7 +73,8 @@ object GpxWriter {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
 
-        val newName = defaultTimestampFileName()
+        // Use a distinct name for restored files to make their origin clear
+        val newName = defaultRestoredFileName()
 
         // 1) SAF folder, if configured
         if (!treeUriStr.isNullOrBlank()) {
@@ -92,6 +124,11 @@ object GpxWriter {
     private fun defaultTimestampFileName(): String {
         val sdf = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US)
         return "${sdf.format(Date())}.gpx"
+    }
+
+    private fun defaultRestoredFileName(): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US)
+        return "${sdf.format(Date())}-restored.gpx"
     }
 
     /**
