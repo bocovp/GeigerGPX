@@ -14,6 +14,10 @@ import androidx.lifecycle.Observer
 import androidx.preference.PreferenceManager
 import com.example.geigergpx.databinding.ActivityMainBinding
 import android.widget.Toast
+import android.os.PowerManager
+import android.provider.Settings
+import android.net.Uri
+import android.content.Context
 
 class MainActivity : AppCompatActivity() {
 
@@ -58,6 +62,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.buttonStart.setOnClickListener {
             if (ensurePermissions()) {
+                checkBatteryOptimizations()
                 startTracking()
             }
         }
@@ -98,7 +103,7 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
         // Only stop monitoring if tracking is not active
         // If tracking is active, keep GPS and audio running in background
-        if (!viewModel.isTracking.value!!) {
+        if (viewModel.isTracking.value != true) {
             stopMonitoring()
         }
     }
@@ -218,6 +223,26 @@ class MainActivity : AppCompatActivity() {
             action = TrackingService.ACTION_STOP_MONITORING
         }
         startService(intent)
+    }
+
+    private fun checkBatteryOptimizations() {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val packageName = packageName
+
+        // Check if the app is already "Unrestricted" (ignored by battery optimizations)
+        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+            AlertDialog.Builder(this)
+                .setTitle("Background Battery Usage")
+                .setMessage("To record radiation in the background, battery usage must be set to 'Unrestricted'. Otherwise, Android will stop the app after 10 minutes.")
+                .setPositiveButton("Set to Unrestricted") { _, _ ->
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                }
+                .setNegativeButton("Ignore") { dialog, _ -> dialog.dismiss() }
+                .show()
+        }
     }
 }
 

@@ -16,15 +16,7 @@ object GpxWriter {
 
     fun saveTrack(context: Context, points: List<TrackPoint>): String? {
         if (points.isEmpty()) return null
-
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val tagType = prefs.getString("dose_tag_type", "ele") ?: "ele"
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-
-        val fileName = defaultTimestampFileName()
-        val xml = buildGpx(points, tagType, coeff)
-
-        return writeGpxFile(context, xml, fileName)
+        return writeGpxFile(context, points, defaultTimestampFileName())
     }
 
     /**
@@ -36,17 +28,9 @@ object GpxWriter {
      */
     fun saveBackup(context: Context, points: List<TrackPoint>): String? {
         if (points.isEmpty()) return null
-
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val tagType = prefs.getString("dose_tag_type", "ele") ?: "ele"
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-
-        val fileName = "Backup.gpx"
-        val xml = buildGpx(points, tagType, coeff)
-
-        return writeGpxFile(context, xml, fileName)
+        // Force overwrite for backup to keep only the latest state
+        return writeGpxFile(context, points, "Backup.gpx")
     }
-
     /**
      * If a stale "Backup.gpx" exists in the currently configured save location (or
      * in the app default directory when no save folder is configured), rename it
@@ -118,96 +102,73 @@ object GpxWriter {
      * so that the new file effectively overwrites it. For the fallback, the regular
      * File API already overwrites existing files.
      */
-    private fun writeGpxFile(
-        context: Context,
-        xml: String,
-        fileName: String,
-        treeUriStrOverride: String? = null
-    ): String? {
+    private fun writeGpxFile(context: Context, points: List<TrackPoint>, fileName: String): String? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val treeUriStr = treeUriStrOverride ?: prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+        val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+        val tagType = prefs.getString("dose_tag_type", "ele") ?: "ele"
+        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
-        // 1. Storage Access Framework (SAF)
-        if (!treeUriStr.isNullOrBlank()) {
-            try {
-                val treeUri = Uri.parse(treeUriStr)
-                val dirDoc = DocumentFile.fromTreeUri(context, treeUri)
-
-                // If a file with this name already exists, delete it so we can recreate it.
-                val existing = dirDoc?.findFile(fileName)
-                if (existing != null) {
-                    existing.delete()
-                }
-
-                val outDoc = dirDoc?.createFile("application/gpx+xml", fileName)
-
-                if (outDoc != null) {
-                    context.contentResolver.openOutputStream(outDoc.uri)?.use { out ->
-                        out.write(xml.toByteArray(Charsets.UTF_8))
-                    }
-
-                    // Get Document ID (e.g., "primary:Documents/MyTracks/file.gpx")
-                    val docId = DocumentsContract.getDocumentId(outDoc.uri)
-                    // Split by ':' and return the path part (e.g., "Documents/MyTracks/file.gpx")
-                    return docId.split(":").getOrElse(1) { docId }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-
-        // 2. Fallback: App-specific external Documents folder
-        val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
-        if (!root.exists()) root.mkdirs()
-
-        val file = File(root, fileName)
         try {
-            file.outputStream().use { out ->
-                out.write(xml.toByteArray(Charsets.UTF_8))
+            if (!treeUriStr.isNullOrBlank()) {
+                // --- SAF LOGIC ---
+                val treeUri = Uri.parse(treeUriStr)
+                val dirDoc = DocumentFile.fromTreeUri(context, treeUri) ?: throw Exception("Folder access failed")
+
+                // Delete existing to prevent "(1)" duplicates
+                dirDoc.findFile(fileName)?.delete()
+
+                val outDoc = dirDoc.createFile("application/gpx+xml", fileName) ?: throw Exception("File creation failed")
+
+                context.contentResolver.openOutputStream(outDoc.uri)?.use { out ->
+                    out.bufferedWriter().use { writer ->
+                        writeXmlToStream(writer, points, tagType, coeff)
+                    }
+                }
+
+                // SUCCESS: Return the formatted path like "Documents/MyTracks/file.gpx"
+                val docId = DocumentsContract.getDocumentId(outDoc.uri)
+                return docId.split(":").getOrElse(1) { docId }
+
+            } else {
+                // --- FALLBACK LOGIC ---
+                val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
+                if (!root.exists()) root.mkdirs()
+                val file = File(root, fileName)
+
+                file.outputStream().use { out ->
+                    out.bufferedWriter().use { writer ->
+                        writeXmlToStream(writer, points, tagType, coeff)
+                    }
+                }
+                // Return absolute path for fallback files
+                return file.absolutePath
             }
-            // For consistency, we can return the path relative to the storage root if possible,
-            // but usually absolutePath is safest for local files.
-            return file.absolutePath
         } catch (e: Exception) {
             e.printStackTrace()
             return null
         }
     }
 
-    private fun buildGpx(points: List<TrackPoint>, tagType: String, coeff: Double): String {
-        val sb = StringBuilder()
-        sb.append("""<?xml version="1.0" encoding="UTF-8"?>""").append('\n')
-        sb.append("""<gpx version="1.1" creator="GeigerGPX" xmlns="http://www.topografix.com/GPX/1/1">""").append('\n')
-
-        sb.append("\t<trk>\n")
-        sb.append("\t\t<trkseg>\n")
-
-        val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-        iso.timeZone = java.util.TimeZone.getTimeZone("UTC")
-
-        for (p in points) {
-            sb.append("\t\t\t<trkpt lat=\"${p.latitude}\" lon=\"${p.longitude}\">\n")
-
-            val timeStr = iso.format(Date(p.timeMillis))
-            sb.append("\t\t\t\t<time>$timeStr</time>\n")
-
-            val outValue = p.cps * coeff
-            val doseStr = "%.3f".format(outValue)
-
-            if (tagType == "ele") {
-                sb.append("\t\t\t\t<ele>$doseStr</ele>\n")
-            } else {
-                sb.append("\t\t\t\t<cmt>$doseStr</cmt>\n")
-            }
-
-            sb.append("\t\t\t</trkpt>\n")
+    private fun writeXmlToStream(writer: java.io.BufferedWriter, points: List<TrackPoint>, tagType: String, coeff: Double) {
+        val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
         }
 
-        sb.append("\t\t</trkseg>\n")
-        sb.append("\t</trk>\n")
-        sb.append("</gpx>\n")
+        writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+        writer.write("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"http://www.topografix.com\">\n")
+        writer.write("\t<trk>\n\t\t<trkseg>\n")
 
-        return sb.toString()
+        for (p in points) {
+            val timeStr = iso.format(Date(p.timeMillis))
+            val doseStr = "%.3f".format(p.cps * coeff)
+            val tag = if (tagType == "ele") "ele" else "cmt"
+
+            writer.write("\t\t\t<trkpt lat=\"${p.latitude}\" lon=\"${p.longitude}\">\n")
+            writer.write("\t\t\t\t<time>$timeStr</time>\n")
+            writer.write("\t\t\t\t<$tag>$doseStr</$tag>\n")
+            writer.write("\t\t\t</trkpt>\n")
+        }
+        writer.write("\t\t</trkseg>\n\t</trk>\n</gpx>\n")
     }
 }
 

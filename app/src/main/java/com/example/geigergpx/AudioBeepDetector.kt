@@ -48,19 +48,21 @@ class AudioBeepDetector(
             AudioFormat.ENCODING_PCM_16BIT
         )
 
-        val bufferSize = maxOf(minBuffer, WINDOW_SIZE * 8)
+        // 64*128/44100. = 0.18 seconds
+        val bufferSize = maxOf(minBuffer, WINDOW_SIZE * 64)
 
         val ar = AudioRecord(
             MediaRecorder.AudioSource.VOICE_RECOGNITION,
             SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
-            bufferSize
+            bufferSize*2// Double it for safety/internal headroom
         )
 
         if (ar.state != AudioRecord.STATE_INITIALIZED)
         {
             running = false
+            ar.release() // Release immediately if failed
             return
         }
 
@@ -88,7 +90,7 @@ class AudioBeepDetector(
 
 
             val audioBuf = ShortArray(bufferSize)
-            val processingBuf = ShortArray(bufferSize + WINDOW_SIZE)
+            val processingBuf = ShortArray(bufferSize + WINDOW_SIZE * 2)
             var leftoverSamples = 0
             var totalSamplesProcessed: Long = 0 // Используем обработанные сэмплы для точности
             var audioHealthy = true
@@ -102,9 +104,12 @@ class AudioBeepDetector(
             {
                 while (running)
                 {
-                    val read = ar.read(audioBuf, 0, audioBuf.size)
+                    val currentAr  = audioRecord ?: break
+
+                    if (currentAr.state != AudioRecord.STATE_INITIALIZED) break
+                    val read = currentAr.read(audioBuf, 0, audioBuf.size)
                     if (read <= 0) continue
-                    val isZero = audioBuf.sum() == 0
+                    val isZero = audioBuf.all { it == 0.toShort() }
                     if (isZero) {
                         if (audioHealthy) {
                             Log.d("MYTAG", "Error: empty audioBuff")
@@ -114,6 +119,11 @@ class AudioBeepDetector(
                     } else if (!audioHealthy) {
                         audioHealthy = true
                         onAudioHealth(true)
+                    }
+
+                    // FIX: Bounds check to prevent crash if read is unexpectedly large
+                    if (leftoverSamples + read > processingBuf.size) {
+                        leftoverSamples = 0
                     }
 
                     System.arraycopy(audioBuf, 0, processingBuf, leftoverSamples, read)
@@ -143,7 +153,6 @@ class AudioBeepDetector(
                             q2H = q1H; q1H = q0H
                         }
 
-                        // Hanning compensation might be here; not required
                         val main =  (q1M*q1M + q2M*q2M - q1M*q2M*coeffMain) // / WINDOW_SIZE
 
                         var detected = false
@@ -151,9 +160,7 @@ class AudioBeepDetector(
                             val low = (q1L * q1L + q2L * q2L - q1L * q2L * coeffLow) // / WINDOW_SIZE
                             val high = (q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh) // / WINDOW_SIZE
 
-                            if (main > low * 1.2f && main > high * 1.2f) {
-                                detected = true
-                            }
+                            if (main > low * 1.2f && main > high * 1.2f) detected = true
                         }
 
                         if (detected) {
@@ -162,16 +169,13 @@ class AudioBeepDetector(
                                 isBeeping = true
                                 beepStartSample = currentWindowGlobalSample
                                 currentBeepMaxMain = main
-                            } else {
-                                if (main > currentBeepMaxMain) {
+                            } else if (main > currentBeepMaxMain) {
                                     currentBeepMaxMain = main
-                                }
                             }
                         } else if (isBeeping) {
                             silenceWindows++
                             if (silenceWindows > SILENCE_WINDOWS_LIMIT) {
-                                val beepEndSample = currentWindowGlobalSample
-                                val duration = (beepEndSample - beepStartSample).toDouble() / SAMPLE_RATE
+                                val duration = (currentWindowGlobalSample  - beepStartSample).toDouble() / SAMPLE_RATE
                                 processBeep(duration, currentBeepMaxMain)
                                 isBeeping = false
                                 currentBeepMaxMain = 0f
@@ -182,7 +186,6 @@ class AudioBeepDetector(
                     // 3. Prepare for next hardware read
                     // Save unprocessed samples (the "tail") to the start of the buffer
                     leftoverSamples = totalInBuf - pos
-                    if (leftoverSamples > WINDOW_SIZE) leftoverSamples = WINDOW_SIZE
                     if (leftoverSamples > 0) {
                         System.arraycopy(processingBuf, pos, processingBuf, 0, leftoverSamples)
                     }
@@ -192,8 +195,11 @@ class AudioBeepDetector(
             } catch (e: Exception) {
                 Log.e("AudioBeepDetector", "Thread error", e)
             } finally {
-                ar.stop()
-                ar.release()
+                // NOTE: Do NOT call ar.release() here.
+                // Let the stop() function handle cleanup to avoid race conditions.
+                try {
+                    if (ar.state == AudioRecord.STATE_INITIALIZED) ar.stop()
+                } catch (e: Exception) {}
             }
         }
     }
@@ -212,24 +218,30 @@ class AudioBeepDetector(
         }
     }
 
-    fun stop()
-    {
+    fun stop() {
         running = false
-
-        try
-        {
-            audioRecord?.stop()
-        } catch(_:Exception){}
-
-        workerThread?.join(500)
+        // Join the thread first to ensure it's done using the audioRecord
+        try {
+            workerThread?.join(500)
+        } catch (e: Exception) {
+            Log.e("AudioBeepDetector", "Error joining thread: ${e.message}")
+        }
         workerThread = null
 
-        try
-        {
-            audioRecord?.release()
-        } catch(_:Exception){}
-
-        audioRecord = null
+        // Release ONLY here after the thread is dead
+        synchronized(this) {
+            try {
+                audioRecord?.let {
+                    if (it.state == AudioRecord.STATE_INITIALIZED) {
+                        it.stop()
+                    }
+                    it.release()
+                }
+            } catch (e: Exception) {
+                Log.e("AudioBeepDetector", "Error releasing AudioRecord: ${e.message}")
+            }
+            audioRecord = null
+        }
     }
 
     companion object {
@@ -266,14 +278,12 @@ class AudioBeepDetector(
             var detector: AudioBeepDetector? = null
 
             val callback: (Float) -> Unit = { peakMain ->
-                if (!peakMain.isFinite() || peaks.size >= totalBeepCount) {
-                    // Ignore invalid or extra peaks
-                } else {
+                if (peakMain.isFinite() && peaks.size < totalBeepCount) {
                     peaks.add(peakMain)
                     onProgress(peaks.size, totalBeepCount)
 
                     if (peaks.size == totalBeepCount) {
-                        val avg = peaks.map { it.toDouble() }.average().toFloat()
+                        val avg = peaks.average().toFloat()
                         val rawThreshold = avg / 2f
                         val threshold = if (rawThreshold > 0f) rawThreshold else DEFAULT_MAG_THRESHOLD
 
@@ -283,7 +293,9 @@ class AudioBeepDetector(
                             .apply()
 
                         onFinished(threshold)
-                        detector?.stop()
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            detector?.stop()
+                        }
                     }
                 }
             }

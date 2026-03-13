@@ -77,6 +77,7 @@ class TrackingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        createNotificationChannel()
         setupLocationRequest()
         setupLocationCallback()
     }
@@ -88,6 +89,19 @@ class TrackingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // 2. Immediately satisfy the system's foreground requirement
+        when (intent?.action) {
+            ACTION_START_MONITORING, ACTION_START -> {
+                val notification = buildNotification("Initializing...")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(NOTIF_ID, notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+                } else {
+                    startForeground(NOTIF_ID, notification)
+                }
+            }
+        }
+
         when (intent?.action) {
             ACTION_START_MONITORING -> startMonitoring()
             ACTION_STOP_MONITORING -> stopMonitoring()
@@ -95,6 +109,15 @@ class TrackingService : Service() {
             ACTION_STOP -> stopTracking()
         }
         return START_STICKY
+    }
+
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val ch = NotificationChannel("geigergpx_channel", "Tracking", NotificationManager.IMPORTANCE_LOW)
+            nm.createNotificationChannel(ch)
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -145,7 +168,9 @@ class TrackingService : Service() {
 
         startTimeMillis = System.currentTimeMillis()
         totalDistance = 0.0
-        writtenPoints.clear()
+        synchronized(writtenPoints) {
+            writtenPoints.clear()
+        }
         lastWrittenLocation = null
         lastWrittenTime = 0L
         latSum = 0.0
@@ -201,7 +226,9 @@ class TrackingService : Service() {
 
         stopBackupLoop()
 
-        val copy = writtenPoints.toList()
+        val copy = synchronized(writtenPoints) {
+            writtenPoints.toList()
+        }
         if (copy.isNotEmpty()) {
             val filename = GpxWriter.saveTrack(this, copy)
             if (filename != null) {
@@ -373,7 +400,9 @@ class TrackingService : Service() {
             cps = finalCps
         )
 
-        writtenPoints.add(point)
+        synchronized(writtenPoints) {
+            writtenPoints.add(point)
+        }
         totalDistance += distance
         lastWrittenLocation = loc
         lastWrittenTime = now
@@ -398,11 +427,12 @@ class TrackingService : Service() {
             gpsSpoofingActive -> "Spoofing detected"
             else -> "Working"
         }
+        val currentSize = synchronized(writtenPoints) { writtenPoints.size }
         repo.updateStatus(
             tracking = true,
             durationSeconds = elapsedSec,
             distance = totalDistance,
-            points = writtenPoints.size,
+            points = currentSize,
             cps = lastCps,
             trackCounts = trackBeepCount.get(),
             gpsStatus = gpsStatus
@@ -504,7 +534,9 @@ class TrackingService : Service() {
             while (isActive && startTimeMillis != 0L) {
                 delay(BACKUP_INTERVAL_MS)
                 if (startTimeMillis == 0L) break
-                val snapshot = writtenPoints.toList()
+                val snapshot = synchronized(writtenPoints) {
+                    writtenPoints.toList()
+                }
                 if (snapshot.isEmpty()) continue
                 launch(Dispatchers.IO) {
                     try {
