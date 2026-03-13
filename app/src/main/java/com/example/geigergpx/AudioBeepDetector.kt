@@ -12,7 +12,7 @@ import kotlin.math.cos
 
 class AudioBeepDetector(
     private val magThreshold: Float = DEFAULT_MAG_THRESHOLD,
-    private val onBeep: (Float) -> Unit,
+    private val onBeep: (Float, Int) -> Unit,
     private val onAudioHealth: (Boolean) -> Unit = {}
 ) {
 
@@ -204,16 +204,18 @@ class AudioBeepDetector(
         }
     }
 
-    private fun processBeep(duration: Double, peakMain: Float)
-    {
-        when
-        {
+    private fun processBeep(duration: Double, peakMain: Float) {
+        when {
             duration >= ONE_BEEP_MIN && duration <= ONE_BEEP_MAX -> {
-                onBeep(peakMain)
+                Log.e("AudioBeepDetector", "SINGLE duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
+                onBeep(peakMain, 1)
             }
             duration > ONE_BEEP_MAX && duration <= TWO_BEEP_MAX -> {
-                onBeep(peakMain)
-                onBeep(peakMain)
+                Log.e("AudioBeepDetector", "DOUBLE duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
+                onBeep(peakMain, 2)
+            }
+            else -> {
+                Log.e("AudioBeepDetector", "       duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
             }
         }
     }
@@ -249,7 +251,7 @@ class AudioBeepDetector(
         private const val BASE_MAG = 1e6f
         private val DEFAULT_MAG_THRESHOLD = (BASE_MAG * WINDOW_SIZE_STATIC).toFloat()
 
-        fun createWithPrefs(context: Context, onBeep: (Float) -> Unit): AudioBeepDetector {
+        fun createWithPrefs(context: Context, onBeep: (Float, Int) -> Unit): AudioBeepDetector {
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val stored = prefs.getFloat(SettingsFragment.KEY_AUDIO_THRESHOLD, Float.NaN)
             val threshold = if (!stored.isNaN() && stored > 0f) stored else DEFAULT_MAG_THRESHOLD
@@ -258,7 +260,7 @@ class AudioBeepDetector(
 
         fun createWithPrefs(
             context: Context,
-            onBeep: (Float) -> Unit,
+            onBeep: (Float, Int) -> Unit,
             onAudioHealth: (Boolean) -> Unit
         ): AudioBeepDetector {
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
@@ -277,7 +279,7 @@ class AudioBeepDetector(
 
             var detector: AudioBeepDetector? = null
 
-            val callback: (Float) -> Unit = { peakMain ->
+            val callback: (Float, Int) -> Unit = { peakMain, _ ->
                 if (peakMain.isFinite() && peaks.size < totalBeepCount) {
                     peaks.add(peakMain)
                     onProgress(peaks.size, totalBeepCount)
