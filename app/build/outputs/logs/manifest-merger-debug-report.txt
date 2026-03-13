@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:2:1-43:12
-INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:2:1-43:12
-INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:2:1-43:12
-INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:2:1-43:12
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:2:1-43:12
+INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:2:1-43:12
+INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:2:1-43:12
+INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:2:1-43:12
 MERGED from [androidx.databinding:viewbinding:9.1.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\f21f0774a3ec186e953150166ec57617\workspace\transformed\viewbinding-9.1.0\AndroidManifest.xml:2:1-7:12
 MERGED from [com.google.android.material:material:1.12.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\dc9f62976890e7fcb872311971de45d7\workspace\transformed\material-1.12.0\AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.constraintlayout:constraintlayout:2.2.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\270ec74b66774c7e2874370362655239\workspace\transformed\constraintlayout-2.2.0\AndroidManifest.xml:2:1-9:12
@@ -63,49 +63,49 @@ MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\bp\.gradle\caches\9
 MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\80f949564423b4496899f28e5c80aaa1\workspace\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.print:print:1.0.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\1a1014734349dd7a21c176a362361606\workspace\transformed\print-1.0.0\AndroidManifest.xml:17:1-22:12
 	package
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:3:5-36
-		INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:3:5-36
+		INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml
 	android:versionName
-		INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml
+		INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml
 	android:versionCode
-		INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml
+		INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml
 	xmlns:android
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:2:11-69
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:2:11-69
 uses-permission#android.permission.ACCESS_FINE_LOCATION
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:5:5-79
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:5:5-79
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:5:22-76
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:5:22-76
 uses-permission#android.permission.ACCESS_COARSE_LOCATION
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:6:5-81
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:6:5-81
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:6:22-78
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:6:22-78
 uses-permission#android.permission.ACCESS_BACKGROUND_LOCATION
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:7:5-85
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:7:5-85
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:7:22-82
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:7:22-82
 uses-permission#android.permission.RECORD_AUDIO
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:8:5-71
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:8:5-71
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:8:22-68
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:8:22-68
 uses-permission#android.permission.FOREGROUND_SERVICE
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:9:5-77
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:9:5-77
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:9:22-74
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:9:22-74
 uses-permission#android.permission.FOREGROUND_SERVICE_LOCATION
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:10:5-86
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:10:5-86
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:10:22-83
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:10:22-83
 uses-permission#android.permission.FOREGROUND_SERVICE_MICROPHONE
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:11:5-88
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:11:5-88
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:11:22-85
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:11:22-85
 uses-permission#android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:12:5-95
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:12:5-95
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:12:22-92
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:12:22-92
 application
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:14:5-41:19
-INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:14:5-41:19
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:14:5-41:19
+INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:14:5-41:19
 MERGED from [com.google.android.material:material:1.12.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\dc9f62976890e7fcb872311971de45d7\workspace\transformed\material-1.12.0\AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.12.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\dc9f62976890e7fcb872311971de45d7\workspace\transformed\material-1.12.0\AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.2.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\270ec74b66774c7e2874370362655239\workspace\transformed\constraintlayout-2.2.0\AndroidManifest.xml:7:5-20
@@ -133,57 +133,57 @@ MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\bp
 MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\bp\.gradle\caches\9.3.1\transforms\67f48a0e8f37888e4dacf1df7dba6938\workspace\transformed\startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
 MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\bp\.gradle\caches\9.3.1\transforms\67f48a0e8f37888e4dacf1df7dba6938\workspace\transformed\startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
 	android:extractNativeLibs
-		INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml
+		INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.13.1] C:\Users\bp\.gradle\caches\9.3.1\transforms\0f484ff9cf2d673ec3011e48dff6aa54\workspace\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:20:9-35
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:20:9-35
 	android:label
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:17:9-35
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:17:9-35
 	android:roundIcon
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:19:9-54
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:19:9-54
 	android:icon
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:18:9-43
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:18:9-43
 	android:allowBackup
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:16:9-35
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:16:9-35
 	android:theme
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:21:9-47
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:21:9-47
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:15:9-37
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:15:9-37
 activity#com.example.geigergpx.SettingsActivity
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:23:9-25:40
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:23:9-25:40
 	android:exported
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:25:13-37
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:25:13-37
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:24:13-45
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:24:13-45
 activity#com.example.geigergpx.MainActivity
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:27:9-34:20
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:27:9-34:20
 	android:exported
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:29:13-36
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:29:13-36
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:28:13-41
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:28:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:30:13-33:29
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:30:13-33:29
 action#android.intent.action.MAIN
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:31:17-69
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:31:17-69
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:31:25-66
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:31:25-66
 category#android.intent.category.LAUNCHER
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:32:17-77
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:32:17-77
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:32:27-74
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:32:27-74
 service#com.example.geigergpx.TrackingService
-ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:36:9-39:67
+ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:36:9-39:67
 	android:exported
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:38:13-37
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:38:13-37
 	android:foregroundServiceType
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:39:13-64
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:39:13-64
 	android:name
-		ADDED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml:37:13-44
+		ADDED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml:37:13-44
 uses-sdk
-INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
-INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml
-INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml
+INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml
+INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml
 MERGED from [androidx.databinding:viewbinding:9.1.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\f21f0774a3ec186e953150166ec57617\workspace\transformed\viewbinding-9.1.0\AndroidManifest.xml:5:5-44
 MERGED from [androidx.databinding:viewbinding:9.1.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\f21f0774a3ec186e953150166ec57617\workspace\transformed\viewbinding-9.1.0\AndroidManifest.xml:5:5-44
 MERGED from [com.google.android.material:material:1.12.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\dc9f62976890e7fcb872311971de45d7\workspace\transformed\material-1.12.0\AndroidManifest.xml:20:5-44
@@ -301,9 +301,9 @@ MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\User
 MERGED from [androidx.print:print:1.0.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\1a1014734349dd7a21c176a362361606\workspace\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.print:print:1.0.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\1a1014734349dd7a21c176a362361606\workspace\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
 	android:targetSdkVersion
-		INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml
+		INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml
 	android:minSdkVersion
-		INJECTED from D:\github\GeigerGPX\app\src\main\AndroidManifest.xml
+		INJECTED from C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\AndroidManifest.xml
 provider#androidx.startup.InitializationProvider
 ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\bp\.gradle\caches\9.3.1\transforms\ecfe4194a77566203ab7abf6b1c5c088\workspace\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
 MERGED from [androidx.lifecycle:lifecycle-process:2.8.6] C:\Users\bp\.gradle\caches\9.3.1\transforms\bec393f7d566c6deaffec6122fe220ee\workspace\transformed\lifecycle-process-2.8.6\AndroidManifest.xml:24:9-32:20

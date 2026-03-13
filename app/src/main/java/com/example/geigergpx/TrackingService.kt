@@ -455,12 +455,12 @@ class TrackingService : Service() {
     private fun startBeepDetector() {
         audioBeepDetector = AudioBeepDetector.createWithPrefs(
             context = this,
-            onBeep = {
-            if (startTimeMillis != 0L) {
-                beepCountSinceLastPoint.incrementAndGet()
-                trackBeepCount.incrementAndGet()
-            }
-            repo.incrementTotalCounts()
+            onBeep = { _, count ->
+                if (startTimeMillis != 0L) {
+                    beepCountSinceLastPoint.addAndGet(count)
+                    trackBeepCount.addAndGet(count)
+                }
+                repeat(count) { repo.incrementTotalCounts() }
             },
             onAudioHealth = { healthy ->
                 repo.updateAudioStatus(if (healthy) "Working" else "Error")
