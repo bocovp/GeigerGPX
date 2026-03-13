@@ -64,9 +64,15 @@ class TrackingRepository {
         _audioStatus.postValue(audioStatus)
     }
 
-    fun incrementTotalCounts() {
-        _totalCounts.postValue(totalCounter.incrementAndGet())
+    /** Increment and return the global total beep count in a thread-safe way. */
+    fun incrementTotalCounts(): Int {
+        val newValue = totalCounter.incrementAndGet()
+        _totalCounts.postValue(newValue)
+        return newValue
     }
+
+    /** Get the latest global total beep count. */
+    fun getTotalCounts(): Int = totalCounter.get()
 
     private fun formatDuration(sec: Long): String {
         val h = sec / 3600

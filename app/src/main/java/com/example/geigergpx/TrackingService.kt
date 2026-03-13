@@ -30,7 +30,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
-import java.util.concurrent.atomic.AtomicInteger
 
 class TrackingService : Service() {
 
@@ -55,9 +54,11 @@ class TrackingService : Service() {
     private var nAv: Int = 0
 
 
-    private val beepCountSinceLastPoint = AtomicInteger(0)
-
-    private val trackBeepCount = AtomicInteger(0)
+    // Global beep counter since app start (only updated from audio thread)
+    // Snapshot at the moment the current track started
+    private var trackStartTotalBeeps: Int = 0
+    // Snapshot at the last committed (or anchor) point
+    private var lastPointTotalBeeps: Int = 0
 
     @Volatile
     private var lastGpsFixMillis: Long = 0L
@@ -176,8 +177,10 @@ class TrackingService : Service() {
         latSum = 0.0
         lonSum = 0.0
         nAv = 0
-        beepCountSinceLastPoint.set(0)
-        trackBeepCount.set(0)
+        // Snapshots for derived beep counts
+        val currentTotal = repo.getTotalCounts()
+        trackStartTotalBeeps = currentTotal
+        lastPointTotalBeeps = currentTotal
         lastGpsFixMillis = 0L
         gpsSpoofingActive = false
 
@@ -246,8 +249,8 @@ class TrackingService : Service() {
         latSum = 0.0
         lonSum = 0.0
         nAv = 0
-        beepCountSinceLastPoint.set(0)
-        trackBeepCount.set(0)
+        trackStartTotalBeeps = 0
+        lastPointTotalBeeps = 0
 
         if (isMonitoring) {
             // Stay in monitoring mode: keep GPS and audio running, downgrade notification.
@@ -333,7 +336,8 @@ class TrackingService : Service() {
             latSum = loc.latitude
             lonSum = loc.longitude
             nAv = 1
-            beepCountSinceLastPoint.set(0) // Start counting from this exact moment/spot
+            // Start counting from this exact moment/spot
+            lastPointTotalBeeps = repo.getTotalCounts()
             updateStats(0, lastCps = 0.0)
             return
         }
@@ -374,7 +378,7 @@ class TrackingService : Service() {
         }
 
         // 7. Geiger Logic: Check if we should "commit" this point to the track
-        val currentBeeps = beepCountSinceLastPoint.get() // PEEK: do not reset yet!
+        val currentBeeps = repo.getTotalCounts() - lastPointTotalBeeps // PEEK: do not reset yet!
         val timedOut = maxTimeWithoutCountsS > 0.0 && timeDeltaSec >= maxTimeWithoutCountsS
 
         // If we haven't hit the minimum count requirement AND we haven't timed out, wait for more data
@@ -384,8 +388,8 @@ class TrackingService : Service() {
         }
 
         // 8. COMMIT: Everything looks good, finalize this point
-        // We reset the counter ATOMICALLY here only because we are saving the data
-        val finalBeeps = beepCountSinceLastPoint.getAndSet(0)
+        // We logically "reset" by taking a new snapshot instead of mutating the counter
+        val finalBeeps = repo.getTotalCounts() - lastPointTotalBeeps
         val finalCps = finalBeeps.toDouble() / timeDeltaSec
 
         val avgLat = if (nAv > 0) latSum / nAv.toDouble() else loc.latitude
@@ -409,6 +413,7 @@ class TrackingService : Service() {
         latSum = 0.0
         lonSum = 0.0
         nAv = 0
+        lastPointTotalBeeps = repo.getTotalCounts()
 
         updateStats(elapsedSec, lastCps = finalCps)
     }
@@ -417,7 +422,8 @@ class TrackingService : Service() {
         val now = System.currentTimeMillis()
         val lastTime = lastWrittenTime.takeIf { it != 0L } ?: startTimeMillis
         val dt = max(1.0, (now - lastTime) / 1000.0)
-        return beepCountSinceLastPoint.get().toDouble() / dt
+        val currentBeeps = repo.getTotalCounts() - lastPointTotalBeeps
+        return currentBeeps.toDouble() / dt
     }
 
     private fun updateStats(elapsedSec: Long, lastCps: Double) {
@@ -428,13 +434,14 @@ class TrackingService : Service() {
             else -> "Working"
         }
         val currentSize = synchronized(writtenPoints) { writtenPoints.size }
+        val trackBeepCount = repo.getTotalCounts() - trackStartTotalBeeps
         repo.updateStatus(
             tracking = true,
             durationSeconds = elapsedSec,
             distance = totalDistance,
             points = currentSize,
             cps = lastCps,
-            trackCounts = trackBeepCount.get(),
+            trackCounts = trackBeepCount,
             gpsStatus = gpsStatus
         )
     }
@@ -456,10 +463,7 @@ class TrackingService : Service() {
         audioBeepDetector = AudioBeepDetector.createWithPrefs(
             context = this,
             onBeep = {
-            if (startTimeMillis != 0L) {
-                beepCountSinceLastPoint.incrementAndGet()
-                trackBeepCount.incrementAndGet()
-            }
+            // Only update the global total counter via repository; all other counts are derived
             repo.incrementTotalCounts()
             },
             onAudioHealth = { healthy ->
