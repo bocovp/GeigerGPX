@@ -79,6 +79,12 @@ class TrackingService : Service() {
     @Volatile private var minCountsPerPoint: Int = 0
     @Volatile private var maxTimeWithoutCountsS: Double = 1.0
 
+    private val mainCpsBeepWindowSize = 10
+    private val mainCpsBeepTimes = LongArray(mainCpsBeepWindowSize)
+    private var mainCpsBeepCount: Int = 0
+    private var mainCpsBeepNextIndex: Int = 0
+    private val mainCpsLock = Any()
+
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
             "max_speed_kmh",
@@ -242,7 +248,7 @@ class TrackingService : Service() {
             durationSeconds = 0,
             distance = 0.0,
             points = 0,
-            cps = 0.0,
+            cps = calculateMainScreenCps(),
             gpsStatus = "Waiting"
         )
         repo.updateAudioStatus("Working")
@@ -286,7 +292,7 @@ class TrackingService : Service() {
                 durationSeconds = 0,
                 distance = 0.0,
                 points = 0,
-                cps = 0.0,
+                cps = calculateMainScreenCps(),
                 gpsStatus = repo.gpsStatus.value ?: "Waiting"
             )
         } else {
@@ -298,7 +304,7 @@ class TrackingService : Service() {
                 durationSeconds = 0,
                 distance = 0.0,
                 points = 0,
-                cps = 0.0,
+                cps = calculateMainScreenCps(),
                 gpsStatus = "Waiting"
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -432,15 +438,40 @@ class TrackingService : Service() {
         updateStats(elapsedSec, lastCps = finalCps)
     }
 
-    private fun currentCps(): Double {
-        val now = System.currentTimeMillis()
-        val lastTime = lastWrittenTime.takeIf { it != 0L } ?: startTimeMillis
-        val dt = max(1.0, (now - lastTime) / 1000.0)
-        val currentBeeps = repo.getTotalCounts() - lastPointTotalBeeps
-        return currentBeeps.toDouble() / dt
+    private fun currentCps(): Double = calculateMainScreenCps()
+
+    private fun registerBeepsForMainCps(beepCount: Int) {
+        if (beepCount <= 0) return
+        synchronized(mainCpsLock) {
+            repeat(beepCount) {
+                mainCpsBeepTimes[mainCpsBeepNextIndex] = System.currentTimeMillis()
+                mainCpsBeepNextIndex = (mainCpsBeepNextIndex + 1) % mainCpsBeepWindowSize
+                if (mainCpsBeepCount < mainCpsBeepWindowSize) {
+                    mainCpsBeepCount += 1
+                }
+            }
+        }
     }
 
-    private fun updateStats(elapsedSec: Long, lastCps: Double) {
+    private fun calculateMainScreenCps(): Double = synchronized(mainCpsLock) {
+        if (mainCpsBeepCount < 2) return@synchronized 0.0
+
+        val newestIndex = (mainCpsBeepNextIndex - 1 + mainCpsBeepWindowSize) % mainCpsBeepWindowSize
+        val oldestIndex = if (mainCpsBeepCount == mainCpsBeepWindowSize) {
+            mainCpsBeepNextIndex
+        } else {
+            0
+        }
+
+        val newest = mainCpsBeepTimes[newestIndex]
+        val oldest = mainCpsBeepTimes[oldestIndex]
+        val deltaSeconds = (newest - oldest) / 1000.0
+        if (deltaSeconds <= 0.0) return@synchronized 0.0
+
+        (mainCpsBeepCount - 1).toDouble() / deltaSeconds
+    }
+
+    private fun updateStats(elapsedSec: Long, @Suppress("UNUSED_PARAMETER") lastCps: Double) {
         val gpsOk = (System.currentTimeMillis() - lastGpsFixMillis) <= 5000L
         val gpsStatus = when {
             !gpsOk || lastGpsFixMillis == 0L -> "Waiting"
@@ -453,7 +484,7 @@ class TrackingService : Service() {
             durationSeconds = elapsedSec,
             distance = totalDistance,
             points = currentSize,
-            cps = lastCps,
+            cps = calculateMainScreenCps(),
             gpsStatus = gpsStatus
         )
     }
@@ -476,6 +507,8 @@ class TrackingService : Service() {
             context = this,
             onBeep = { _, count ->
                 repo.incrementTotalCounts(count)
+                registerBeepsForMainCps(count)
+                repo.updateCurrentCps(calculateMainScreenCps())
             },
             onAudioHealth = { healthy ->
                 repo.updateAudioStatus(if (healthy) "Working" else "Error")

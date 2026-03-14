@@ -54,6 +54,10 @@ class TrackingRepository {
         _gpsStatus.postValue(gpsStatus)
     }
 
+    fun updateCurrentCps(cps: Double) {
+        _currentCps.postValue(cps)
+    }
+
     fun clearTrackStartCount() {
         _countsAtTrackStart.postValue(totalCounter.get())
     }
@@ -83,4 +87,3 @@ class TrackingRepository {
         return String.format("%02d:%02d:%02d", h, m, s)
     }
 }
-
