@@ -68,6 +68,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
         coeff?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
 
+        val avgTimestamps = findPreference<ListPreference>("dose_rate_avg_timestamps_n")
+        avgTimestamps?.summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
+
         val tagType = findPreference<ListPreference>("dose_tag_type")
         tagType?.summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
 
