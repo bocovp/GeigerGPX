@@ -7,4 +7,3 @@ data class TrackPoint(
     val distanceFromLast: Double,
     val cps: Double
 )
-

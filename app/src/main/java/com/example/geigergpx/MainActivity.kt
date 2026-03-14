@@ -110,8 +110,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateCountDisplay(
         isTracking: Boolean = viewModel.isTracking.value ?: false,
-        totalCounts: Long = viewModel.totalCounts.value ?: 0,
-        trackCounts: Long = viewModel.trackCounts.value ?: 0) {
+        totalCounts: Int = viewModel.totalCounts.value ?: 0,
+        trackCounts: Int = viewModel.trackCounts.value ?: 0) {
         binding.textTotalCounts.text = if (isTracking) {
             "Total counts: $trackCounts / $totalCounts"
         } else {
@@ -146,6 +146,10 @@ class MainActivity : AppCompatActivity() {
 
         viewModel.totalCounts.observe(this) { totalCounts ->
             updateCountDisplay(totalCounts = totalCounts)
+        }
+
+        viewModel.trackCounts.observe(this) { trackCount ->
+            updateCountDisplay(trackCounts = trackCount)
         }
 
         viewModel.gpsStatus.observe(this) { status ->

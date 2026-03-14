@@ -55,8 +55,6 @@ class TrackingService : Service() {
 
 
     // Global beep counter since app start (only updated from audio thread)
-    // Snapshot at the moment the current track started
-    private var trackStartTotalBeeps: Int = 0
     // Snapshot at the last committed (or anchor) point
     private var lastPointTotalBeeps: Int = 0
 
@@ -179,7 +177,6 @@ class TrackingService : Service() {
         nAv = 0
         // Snapshots for derived beep counts
         val currentTotal = repo.getTotalCounts()
-        trackStartTotalBeeps = currentTotal
         lastPointTotalBeeps = currentTotal
         lastGpsFixMillis = 0L
         gpsSpoofingActive = false
@@ -212,13 +209,13 @@ class TrackingService : Service() {
 
         startBackupLoop()
 
+        repo.clearTrackStartCount()
         repo.updateStatus(
             tracking = true,
             durationSeconds = 0,
             distance = 0.0,
             points = 0,
             cps = 0.0,
-            trackCounts = 0,
             gpsStatus = "Waiting"
         )
         repo.updateAudioStatus("Working")
@@ -250,7 +247,7 @@ class TrackingService : Service() {
         latSum = 0.0
         lonSum = 0.0
         nAv = 0
-        trackStartTotalBeeps = 0
+        repo.clearTrackStartCount() // Do I need it here????
         lastPointTotalBeeps = 0
 
         if (isMonitoring) {
@@ -267,7 +264,6 @@ class TrackingService : Service() {
                 distance = 0.0,
                 points = 0,
                 cps = 0.0,
-                trackCounts = 0,
                 gpsStatus = repo.gpsStatus.value ?: "Waiting"
             )
         } else {
@@ -280,7 +276,6 @@ class TrackingService : Service() {
                 distance = 0.0,
                 points = 0,
                 cps = 0.0,
-                trackCounts = 0,
                 gpsStatus = "Waiting"
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -435,14 +430,12 @@ class TrackingService : Service() {
             else -> "Working"
         }
         val currentSize = synchronized(writtenPoints) { writtenPoints.size }
-        val trackBeepCount = repo.getTotalCounts() - trackStartTotalBeeps
         repo.updateStatus(
             tracking = true,
             durationSeconds = elapsedSec,
             distance = totalDistance,
             points = currentSize,
             cps = lastCps,
-            trackCounts = trackBeepCount,
             gpsStatus = gpsStatus
         )
     }

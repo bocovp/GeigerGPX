@@ -29,8 +29,8 @@ class TrackingRepository {
     private val _totalCounts = MutableLiveData(0)
     val totalCounts: LiveData<Int> = _totalCounts
 
-    private val _trackCounts = MutableLiveData(0)
-    val trackCounts: LiveData<Int> = _trackCounts
+    private val _countsAtTrackStart = MutableLiveData(0)
+    val countsAtTrackStart: LiveData<Int> = _countsAtTrackStart
 
     private val _gpsStatus = MutableLiveData("unknown")
     val gpsStatus: LiveData<String> = _gpsStatus
@@ -44,7 +44,6 @@ class TrackingRepository {
         distance: Double,
         points: Int,
         cps: Double,
-        trackCounts: Int,
         gpsStatus: String
     ) {
         _isTracking.postValue(tracking)
@@ -52,8 +51,11 @@ class TrackingRepository {
         _distanceMeters.postValue(distance)
         _pointCount.postValue(points)
         _currentCps.postValue(cps)
-        _trackCounts.postValue(trackCounts)
         _gpsStatus.postValue(gpsStatus)
+    }
+
+    fun clearTrackStartCount() {
+        _countsAtTrackStart.postValue(totalCounter.get())
     }
 
     fun updateMonitoringStatus(gpsStatus: String) {
@@ -66,7 +68,7 @@ class TrackingRepository {
 
     /** Increment and return the global total beep count in a thread-safe way. */
     fun incrementTotalCounts(amount: Int): Int {
-        val newValue = totalCounter.addAndGet(amount.toLong())
+        val newValue = totalCounter.addAndGet(amount)
         _totalCounts.postValue(newValue)
         return newValue
     }

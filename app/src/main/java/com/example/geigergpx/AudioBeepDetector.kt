@@ -24,10 +24,12 @@ class AudioBeepDetector(
     private val SAMPLE_RATE = 44100
 
     private val FREQ_MAIN = 3276.0f
-    private val FREQ_LOW  = 3276.0f - 200f
-    private val FREQ_HIGH = 3276.0f + 200f
+    private val WINDOW_SIZE = 175 // aligned: bin 13 is central frequency
 
-    private val WINDOW_SIZE = 128
+    private val FREQ_LOW  = 3276.0f - 252f // bin 12
+    private val FREQ_HIGH = 3276.0f + 252f // bin 14
+
+    private val WINDOWS_IN_BUFFER = 64 // 0.25 sec delaly
     private val STEP_SIZE = 32
 
     private val SILENCE_WINDOWS_LIMIT = 4
@@ -36,38 +38,40 @@ class AudioBeepDetector(
     private val ONE_BEEP_MAX = 0.035
     private val TWO_BEEP_MAX = 0.070
 
+    private val ZERO_BUFFER_LIMIT = 20
+
     fun start()
     {
 
         if (running) return
         running = true
 
-        val minBuffer = AudioRecord.getMinBufferSize(
-            SAMPLE_RATE,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
-
-        // 64*128/44100. = 0.18 seconds
-        val bufferSize = maxOf(minBuffer, WINDOW_SIZE * 64)
-
-        val ar = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            SAMPLE_RATE,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufferSize*2// Double it for safety/internal headroom
-        )
-
-        if (ar.state != AudioRecord.STATE_INITIALIZED)
-        {
+        // MODIFIED: create recorder using new API
+        val created = createAudioRecord()
+        if (created == null) {
             running = false
-            ar.release() // Release immediately if failed
             return
         }
 
-        audioRecord = ar
-        ar.startRecording()
+        val (ar, bufferSize) = created   // MODIFIED
+        audioRecord = ar                 // MODIFIED
+
+        try {                            // MODIFIED
+            ar.startRecording()
+
+            if (ar.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                Log.e("AudioBeepDetector", "Failed to start recording")
+                ar.release()
+                running = false
+                return
+            }
+
+        } catch (e: Exception) {         // MODIFIED
+            Log.e("AudioBeepDetector", "startRecording failed", e)
+            ar.release()
+            running = false
+            return
+        }
 
         fun coeff(freq: Float): Float
         {
@@ -100,25 +104,64 @@ class AudioBeepDetector(
             var silenceWindows = 0
             var currentBeepMaxMain = 0f
 
+            var zeroBufferCount = 0
+
             try
             {
                 while (running)
                 {
-                    val currentAr  = audioRecord ?: break
+                    val currentAr  = audioRecord
+                    if (currentAr == null) {
+                        Thread.sleep(20)   // MODIFIED
+                        continue
+                    }
 
-                    if (currentAr.state != AudioRecord.STATE_INITIALIZED) break
+                    if (currentAr.state != AudioRecord.STATE_INITIALIZED) {
+                        Log.e("AudioBeepDetector", "Recorder uninitialized") // MODIFIED
+                        restartAudioRecord()                                  // MODIFIED
+                        continue
+                    }
+
                     val read = currentAr.read(audioBuf, 0, audioBuf.size)
-                    if (read <= 0) continue
-                    val isZero = audioBuf.all { it == 0.toShort() }
+                    if (read <= 0) {
+                        zeroBufferCount++
+                        Log.e("MYTAG", "Hardware Error: $read")
+                        continue
+                    }
+
+                    var isZero = true
+                    for (i in 0 until read) {
+                        if (audioBuf[i] != 0.toShort()) {
+                            isZero = false
+                            break
+                        }
+                    }
+
                     if (isZero) {
+                        zeroBufferCount++
                         if (audioHealthy) {
                             Log.d("MYTAG", "Error: empty audioBuff")
                             audioHealthy = false
                             onAudioHealth(false)
                         }
-                    } else if (!audioHealthy) {
-                        audioHealthy = true
-                        onAudioHealth(true)
+                    } else {
+                        zeroBufferCount = 0
+                        if (!audioHealthy) {
+                            audioHealthy = true
+                            onAudioHealth(true)
+                        }
+                    }
+
+                    if (zeroBufferCount >= ZERO_BUFFER_LIMIT) {
+                        Log.w("AudioBeepDetector", "AudioRecord appears stuck — restarting")
+                        val newBufferSize = restartAudioRecord()
+
+                        if (newBufferSize != null && newBufferSize != bufferSize) {
+                            Log.w("AudioBeepDetector", "Buffer size changed after restart") // MODIFIED
+                        }
+
+                        zeroBufferCount = 0
+                        continue
                     }
 
                     // FIX: Bounds check to prevent crash if read is unexpectedly large
@@ -139,9 +182,10 @@ class AudioBeepDetector(
                         var q1M = 0f; var q2M = 0f
                         var q1L = 0f; var q2L = 0f
                         var q1H = 0f; var q2H = 0f
-
+                        var energy = 0f
                         for (i in 0 until WINDOW_SIZE) {
                             val s = processingBuf[pos + i].toFloat() * hann[i]
+                            energy += s * s
 
                             val q0M = coeffMain * q1M - q2M + s
                             q2M = q1M; q1M = q0M
@@ -155,12 +199,26 @@ class AudioBeepDetector(
 
                         val main =  (q1M*q1M + q2M*q2M - q1M*q2M*coeffMain) // / WINDOW_SIZE
 
-                        var detected = false
-                        if (main > magThreshold) {
-                            val low = (q1L * q1L + q2L * q2L - q1L * q2L * coeffLow) // / WINDOW_SIZE
-                            val high = (q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh) // / WINDOW_SIZE
+                        val toneRatio = main / (energy + 1e-9f)
 
-                            if (main > low * 1.2f && main > high * 1.2f) detected = true
+                        var detected = false
+
+             //         Log.e("AudioBeepDetector", "main: ${main.toInt()}")
+                        var dominance = -1f
+
+                        if (main > magThreshold/100) {
+                            val ratioThreshold = 20f
+                        //    Log.e("AudioBeepDetector", "toneRatio: ${toneRatio}")
+                            if (toneRatio > ratioThreshold) {
+                                val low = (q1L * q1L + q2L * q2L - q1L * q2L * coeffLow) // / WINDOW_SIZE
+                                val high = (q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh) // / WINDOW_SIZE
+                                val sideEnergy = low + high
+                                dominance = main / (sideEnergy + 1e-9f)
+                                val dominanceThreshold = 0.75f
+                                detected = (dominance > dominanceThreshold)
+                           //     if (detected) Log.e("AudioBeepDetector", "dominance: ${dominance}")
+                         //   if (main > low * 1.2f && main > high * 1.2f) detected = true
+                            }
                         }
 
                         if (detected) {
@@ -174,6 +232,7 @@ class AudioBeepDetector(
                             }
                         } else if (isBeeping) {
                             silenceWindows++
+                            Log.e("AudioBeepDetector", "Loosing     toneRatio: ${toneRatio} dominance: ${dominance}")
                             if (silenceWindows > SILENCE_WINDOWS_LIMIT) {
                                 val duration = (currentWindowGlobalSample  - beepStartSample).toDouble() / SAMPLE_RATE
                                 processBeep(duration, currentBeepMaxMain)
@@ -195,12 +254,95 @@ class AudioBeepDetector(
             } catch (e: Exception) {
                 Log.e("AudioBeepDetector", "Thread error", e)
             } finally {
-                // NOTE: Do NOT call ar.release() here.
-                // Let the stop() function handle cleanup to avoid race conditions.
-                try {
-                    if (ar.state == AudioRecord.STATE_INITIALIZED) ar.stop()
-                } catch (e: Exception) {}
+                audioRecord?.let {
+                    try {
+                        if (it.state == AudioRecord.STATE_INITIALIZED) {
+                            it.stop()
+                        }
+                    } catch (_: Exception) {}
+                }
             }
+        }
+    }
+
+    private fun createAudioRecord(): Pair<AudioRecord, Int>? {
+
+        val minBuffer = AudioRecord.getMinBufferSize(
+            SAMPLE_RATE,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
+
+        if (minBuffer <= 0) {
+            Log.e("AudioBeepDetector", "Invalid minBufferSize: $minBuffer")
+            return null
+        }
+
+        val bufferSize = maxOf(minBuffer, WINDOW_SIZE * WINDOWS_IN_BUFFER)
+
+        val ar = AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            SAMPLE_RATE,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            bufferSize * 2
+        )
+
+        if (ar.state != AudioRecord.STATE_INITIALIZED) {
+            Log.e("AudioBeepDetector", "AudioRecord initialization failed")
+            ar.release()
+            return null
+        }
+
+        return Pair(ar, bufferSize)
+    }
+
+    private fun restartAudioRecord(): Int? {
+
+        val old = audioRecord
+        audioRecord = null
+
+        try {
+            old?.let {
+                if (it.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    it.stop()
+                }
+                it.release()
+            }
+        } catch (e: Exception) {
+            Log.e("AudioBeepDetector", "Error stopping AudioRecord", e)
+        }
+
+        val created = createAudioRecord()
+        if (created == null) {
+            Log.e("AudioBeepDetector", "AudioRecord recreation failed")
+            return null
+        }
+
+        val (newRecorder, bufferSize) = created
+
+        try {
+
+            newRecorder.startRecording()
+
+            if (newRecorder.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                Log.e("AudioBeepDetector", "AudioRecord failed to start")
+                newRecorder.release()
+                return null
+            }
+
+            audioRecord = newRecorder
+            return bufferSize
+
+        } catch (e: Exception) {
+
+            Log.e("AudioBeepDetector", "Error starting AudioRecord", e)
+
+            try {
+                newRecorder.release()
+            } catch (_: Exception) {}
+
+            return null
         }
     }
 
