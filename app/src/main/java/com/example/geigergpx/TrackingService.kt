@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.location.Location
 import android.os.Build
 import android.os.IBinder
@@ -72,10 +73,28 @@ class TrackingService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var backupJob: kotlinx.coroutines.Job? = null
 
+    private lateinit var prefs: SharedPreferences
+    @Volatile private var maxSpeedKmh: Double = 30.0
+    @Volatile private var spacingM: Double = 5.0
+    @Volatile private var minCountsPerPoint: Int = 0
+    @Volatile private var maxTimeWithoutCountsS: Double = 1.0
+
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        when (key) {
+            "max_speed_kmh",
+            "point_spacing_m",
+            "min_counts_per_point",
+            "max_time_without_counts_s" -> loadTrackingPrefs()
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        loadTrackingPrefs()
+        prefs.registerOnSharedPreferenceChangeListener(prefListener)
         createNotificationChannel()
         setupLocationRequest()
         setupLocationCallback()
@@ -84,7 +103,15 @@ class TrackingService : Service() {
     override fun onDestroy() {
         stopBackupLoop()
         serviceScope.cancel()
+        prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
         super.onDestroy()
+    }
+
+    private fun loadTrackingPrefs() {
+        maxSpeedKmh = prefs.getString("max_speed_kmh", "30.0")?.toDoubleOrNull() ?: 30.0
+        spacingM = prefs.getString("point_spacing_m", "5.0")?.toDoubleOrNull() ?: 5.0
+        minCountsPerPoint = prefs.getString("min_counts_per_point", "0")?.toIntOrNull() ?: 0
+        maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")?.toDoubleOrNull() ?: 1.0
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -252,12 +279,8 @@ class TrackingService : Service() {
 
         if (isMonitoring) {
             // Stay in monitoring mode: keep GPS and audio running, downgrade notification.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-            } else {
-                @Suppress("DEPRECATION")
-                stopForeground(true)
-            }
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(NOTIF_ID, buildNotification("Monitoring..."))
             repo.updateStatus(
                 tracking = false,
                 durationSeconds = 0,
@@ -287,9 +310,12 @@ class TrackingService : Service() {
             stopSelf()
         }
 
-        // Ensure any ongoing tracking notification is removed when tracking stops
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.cancel(NOTIF_ID)
+        // When fully stopped, remove the foreground notification.
+        // In monitoring mode we keep showing a foreground notification.
+        if (!isMonitoring) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(NOTIF_ID)
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -337,14 +363,6 @@ class TrackingService : Service() {
             updateStats(0, lastCps = 0.0)
             return
         }
-
-        // 3. Load user preferences for filtering
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val maxSpeedKmh = prefs.getString("max_speed_kmh", "30.0")?.toDoubleOrNull() ?: 30.0
-        val spacingM = prefs.getString("point_spacing_m", "5.0")?.toDoubleOrNull() ?: 5.0
-        val minCountsPerPoint = prefs.getString("min_counts_per_point", "0")?.toIntOrNull() ?: 0
-        val maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")?.toDoubleOrNull() ?: 1.0
-
 
         // 4. Calculate movement statistics
         val elapsedSec = max(0L, (now - startTimeMillis) / 1000L)
