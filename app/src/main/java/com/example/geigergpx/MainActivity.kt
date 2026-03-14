@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var lastCps: Double = 0.0
     private var lastCpsSampleCount: Int = 0
+    private var isHighAccuracyModeEnabled: Boolean = false
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -188,11 +189,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         viewModel.highAccuracyModeEnabled.observe(this) { enabled ->
+            isHighAccuracyModeEnabled = enabled
             binding.buttonHighAccuracy.text = if (enabled) {
                 "Live mode"
             } else {
                 "High accuracy measurement"
             }
+            updateCpsOrDoseLine()
         }
     }
 
@@ -200,13 +203,14 @@ class MainActivity : AppCompatActivity() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
         val confidenceIntervalMultiplier = getConfidenceIntervalMultiplier(lastCpsSampleCount)
+        val decimalDigits = if (isHighAccuracyModeEnabled) 3 else 2
         if (coeff == 1.0) {
             val confidenceInterval = confidenceIntervalMultiplier * lastCps
-            binding.textCps.text = "CPS: %.2f ± %.2f".format(lastCps, confidenceInterval)
+            binding.textCps.text = "CPS: %.${decimalDigits}f ± %.${decimalDigits}f".format(lastCps, confidenceInterval)
         } else {
             val doseRate = lastCps * coeff
             val confidenceInterval = confidenceIntervalMultiplier * doseRate
-            binding.textCps.text = "Dose rate: %.2f ± %.2f μSv/h".format(doseRate, confidenceInterval)
+            binding.textCps.text = "Dose rate: %.${decimalDigits}f ± %.${decimalDigits}f μSv/h".format(doseRate, confidenceInterval)
         }
     }
 
