@@ -86,6 +86,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        binding.buttonHighAccuracy.setOnClickListener {
+            val intent = Intent(this, TrackingService::class.java).apply {
+                action = TrackingService.ACTION_TOGGLE_HIGH_ACCURACY_MEASUREMENT
+            }
+            startService(intent)
+        }
+
         binding.buttonSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
@@ -172,6 +179,14 @@ class MainActivity : AppCompatActivity() {
             }
             binding.textAudioStatus.setTextColor(ContextCompat.getColor(this, color))
         }
+
+        viewModel.highAccuracyModeEnabled.observe(this) { enabled ->
+            binding.buttonHighAccuracy.text = if (enabled) {
+                "Live mode"
+            } else {
+                "High accuracy measurement"
+            }
+        }
     }
 
     private fun updateCpsOrDoseLine() {
@@ -255,4 +270,3 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-

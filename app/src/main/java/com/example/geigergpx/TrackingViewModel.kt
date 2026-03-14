@@ -39,5 +39,6 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
     val gpsStatus: LiveData<String> = repo.gpsStatus
 
     val audioStatus: LiveData<String> = repo.audioStatus
-}
 
+    val highAccuracyModeEnabled: LiveData<Boolean> = repo.highAccuracyModeEnabled
+}
