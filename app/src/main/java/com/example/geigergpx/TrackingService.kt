@@ -261,6 +261,7 @@ class TrackingService : Service() {
             distance = 0.0,
             points = 0,
             cps = calculateMainScreenCps(),
+            cpsSampleCount = currentMainCpsSampleCount(),
             gpsStatus = "Waiting"
         )
         repo.updateAudioStatus("Working")
@@ -305,6 +306,7 @@ class TrackingService : Service() {
                 distance = 0.0,
                 points = 0,
                 cps = calculateMainScreenCps(),
+                cpsSampleCount = currentMainCpsSampleCount(),
                 gpsStatus = repo.gpsStatus.value ?: "Waiting"
             )
         } else {
@@ -317,6 +319,7 @@ class TrackingService : Service() {
                 distance = 0.0,
                 points = 0,
                 cps = calculateMainScreenCps(),
+                cpsSampleCount = currentMainCpsSampleCount(),
                 gpsStatus = "Waiting"
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -452,6 +455,10 @@ class TrackingService : Service() {
 
     private fun currentCps(): Double = calculateMainScreenCps()
 
+    private fun currentMainCpsSampleCount(): Int = synchronized(mainCpsLock) {
+        if (highAccuracyModeEnabled) highAccuracyTimestampCount.toInt() else mainCpsBeepCount
+    }
+
     private fun toggleHighAccuracyMeasurement() {
         synchronized(mainCpsLock) {
             highAccuracyModeEnabled = !highAccuracyModeEnabled
@@ -470,7 +477,7 @@ class TrackingService : Service() {
             }
         }
         repo.updateHighAccuracyMode(highAccuracyModeEnabled)
-        repo.updateCurrentCps(calculateMainScreenCps())
+        repo.updateCurrentCps(calculateMainScreenCps(), currentMainCpsSampleCount())
     }
 
 
@@ -560,6 +567,7 @@ class TrackingService : Service() {
             distance = totalDistance,
             points = currentSize,
             cps = calculateMainScreenCps(),
+            cpsSampleCount = currentMainCpsSampleCount(),
             gpsStatus = gpsStatus
         )
     }
@@ -583,7 +591,7 @@ class TrackingService : Service() {
             onBeep = { _, count ->
                 repo.incrementTotalCounts(count)
                 registerBeepsForMainCps(count)
-                repo.updateCurrentCps(calculateMainScreenCps())
+                repo.updateCurrentCps(calculateMainScreenCps(), currentMainCpsSampleCount())
             },
             onAudioHealth = { healthy ->
                 repo.updateAudioStatus(if (healthy) "Working" else "Error")

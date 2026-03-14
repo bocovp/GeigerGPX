@@ -25,6 +25,9 @@ class TrackingRepository {
     private val _currentCps = MutableLiveData(0.0)
     val currentCps: LiveData<Double> = _currentCps
 
+    private val _currentCpsSampleCount = MutableLiveData(0)
+    val currentCpsSampleCount: LiveData<Int> = _currentCpsSampleCount
+
     private val totalCounter = java.util.concurrent.atomic.AtomicInteger(0)
     private val _totalCounts = MutableLiveData(0)
     val totalCounts: LiveData<Int> = _totalCounts
@@ -47,6 +50,7 @@ class TrackingRepository {
         distance: Double,
         points: Int,
         cps: Double,
+        cpsSampleCount: Int,
         gpsStatus: String
     ) {
         _isTracking.postValue(tracking)
@@ -54,11 +58,13 @@ class TrackingRepository {
         _distanceMeters.postValue(distance)
         _pointCount.postValue(points)
         _currentCps.postValue(cps)
+        _currentCpsSampleCount.postValue(cpsSampleCount)
         _gpsStatus.postValue(gpsStatus)
     }
 
-    fun updateCurrentCps(cps: Double) {
+    fun updateCurrentCps(cps: Double, cpsSampleCount: Int) {
         _currentCps.postValue(cps)
+        _currentCpsSampleCount.postValue(cpsSampleCount)
     }
 
     fun clearTrackStartCount() {

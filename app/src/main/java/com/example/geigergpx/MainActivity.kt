@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var lastCps: Double = 0.0
+    private var lastCpsSampleCount: Int = 0
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -151,6 +152,11 @@ class MainActivity : AppCompatActivity() {
             updateCpsOrDoseLine()
         }
 
+        viewModel.currentCpsSampleCount.observe(this) { sampleCount ->
+            lastCpsSampleCount = sampleCount
+            updateCpsOrDoseLine()
+        }
+
         viewModel.totalCounts.observe(this) { totalCounts ->
             updateCountDisplay(totalCounts = totalCounts)
         }
@@ -192,11 +198,20 @@ class MainActivity : AppCompatActivity() {
     private fun updateCpsOrDoseLine() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val confidenceIntervalMultiplier = getConfidenceIntervalMultiplier(lastCpsSampleCount)
         if (coeff == 1.0) {
-            binding.textCps.text = "CPS: %.2f".format(lastCps)
+            val confidenceInterval = confidenceIntervalMultiplier * lastCps
+            binding.textCps.text = "CPS: %.2f ± %.2f".format(lastCps, confidenceInterval)
         } else {
-            binding.textCps.text = "Dose rate: %.2f μSv/h".format(lastCps * coeff)
+            val doseRate = lastCps * coeff
+            val confidenceInterval = confidenceIntervalMultiplier * doseRate
+            binding.textCps.text = "Dose rate: %.2f ± %.2f μSv/h".format(doseRate, confidenceInterval)
         }
+    }
+
+    private fun getConfidenceIntervalMultiplier(@Suppress("UNUSED_PARAMETER") n: Int): Double {
+        // Placeholder implementation. Replace with your own implementation.
+        return 0.0
     }
 
     private fun startTracking() {
