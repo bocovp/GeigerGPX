@@ -21,6 +21,9 @@ public final class ActivityMainBinding implements ViewBinding {
   private final ConstraintLayout rootView;
 
   @NonNull
+  public final Button buttonHighAccuracy;
+
+  @NonNull
   public final Button buttonSettings;
 
   @NonNull
@@ -50,12 +53,14 @@ public final class ActivityMainBinding implements ViewBinding {
   @NonNull
   public final TextView textTotalCounts;
 
-  private ActivityMainBinding(@NonNull ConstraintLayout rootView, @NonNull Button buttonSettings,
+  private ActivityMainBinding(@NonNull ConstraintLayout rootView,
+      @NonNull Button buttonHighAccuracy, @NonNull Button buttonSettings,
       @NonNull Button buttonStart, @NonNull Button buttonStop, @NonNull TextView textAudioStatus,
       @NonNull TextView textCps, @NonNull TextView textDistance, @NonNull TextView textDuration,
       @NonNull TextView textGpsStatus, @NonNull TextView textPoints,
       @NonNull TextView textTotalCounts) {
     this.rootView = rootView;
+    this.buttonHighAccuracy = buttonHighAccuracy;
     this.buttonSettings = buttonSettings;
     this.buttonStart = buttonStart;
     this.buttonStop = buttonStop;
@@ -95,6 +100,12 @@ public final class ActivityMainBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
+      id = R.id.buttonHighAccuracy;
+      Button buttonHighAccuracy = ViewBindings.findChildViewById(rootView, id);
+      if (buttonHighAccuracy == null) {
+        break missingId;
+      }
+
       id = R.id.buttonSettings;
       Button buttonSettings = ViewBindings.findChildViewById(rootView, id);
       if (buttonSettings == null) {
@@ -155,9 +166,9 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityMainBinding((ConstraintLayout) rootView, buttonSettings, buttonStart,
-          buttonStop, textAudioStatus, textCps, textDistance, textDuration, textGpsStatus,
-          textPoints, textTotalCounts);
+      return new ActivityMainBinding((ConstraintLayout) rootView, buttonHighAccuracy,
+          buttonSettings, buttonStart, buttonStop, textAudioStatus, textCps, textDistance,
+          textDuration, textGpsStatus, textPoints, textTotalCounts);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

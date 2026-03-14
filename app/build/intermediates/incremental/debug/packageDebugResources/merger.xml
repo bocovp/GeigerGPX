@@ -5,6 +5,18 @@
     </string-array><string-array name="dose_tag_values">
         <item>ele</item>
         <item>cmt</item>
+    </string-array><string-array name="dose_rate_avg_timestamps_values">
+        <item>5</item>
+        <item>10</item>
+        <item>20</item>
+        <item>50</item>
+        <item>100</item>
+    </string-array><string-array name="dose_rate_avg_timestamps_entries">
+        <item>5</item>
+        <item>10</item>
+        <item>20</item>
+        <item>50</item>
+        <item>100</item>
     </string-array></file><file path="C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\res\values\colors.xml" qualifiers=""><color name="purple_500">#03A9F4</color><color name="purple_700">#0288D1</color><color name="teal_200">#40C4FF</color><color name="status_waiting">#808080</color><color name="status_working">#2E7D32</color><color name="status_spoofing">#C62828</color><color name="black">#000000</color><color name="white">#FFFFFF</color></file><file path="C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\res\values\ic_launcher_background.xml" qualifiers=""><color name="ic_launcher_background">#FFFFFF</color></file><file path="C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\res\values\strings.xml" qualifiers=""><string name="app_name">Geiger GPX</string></file><file path="C:\Users\bp\Documents\GitHub\GeigerGPX\app\src\main\res\values\themes.xml" qualifiers=""><style name="Theme.GeigerGpx" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
         <item name="colorPrimary">@color/purple_500</item>
         <item name="colorPrimaryVariant">@color/purple_700</item>
