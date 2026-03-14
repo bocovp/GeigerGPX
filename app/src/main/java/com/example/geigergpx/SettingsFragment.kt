@@ -2,7 +2,6 @@ package com.example.geigergpx
 
 import android.content.Intent
 import android.os.Bundle
-import android.provider.DocumentsContract
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -56,7 +55,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         val maxTime = findPreference<EditTextPreference>("max_time_without_counts_s")
         maxTime?.setOnBindEditTextListener { edit ->
-            edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
         maxTime?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
 
