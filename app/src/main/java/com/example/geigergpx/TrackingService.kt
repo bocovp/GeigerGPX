@@ -79,8 +79,8 @@ class TrackingService : Service() {
     @Volatile private var minCountsPerPoint: Int = 0
     @Volatile private var maxTimeWithoutCountsS: Double = 1.0
 
-    private val mainCpsBeepWindowSize = 10
-    private val mainCpsBeepTimes = LongArray(mainCpsBeepWindowSize)
+    @Volatile private var mainCpsBeepWindowSize = 10
+    private var mainCpsBeepTimes = LongArray(mainCpsBeepWindowSize)
     private var mainCpsBeepCount: Int = 0
     private var mainCpsBeepNextIndex: Int = 0
     private val mainCpsLock = Any()
@@ -90,7 +90,8 @@ class TrackingService : Service() {
             "max_speed_kmh",
             "point_spacing_m",
             "min_counts_per_point",
-            "max_time_without_counts_s" -> loadTrackingPrefs()
+            "max_time_without_counts_s",
+            "dose_rate_avg_timestamps_n" -> loadTrackingPrefs()
         }
     }
 
@@ -118,6 +119,13 @@ class TrackingService : Service() {
         spacingM = prefs.getString("point_spacing_m", "5.0")?.toDoubleOrNull() ?: 5.0
         minCountsPerPoint = prefs.getString("min_counts_per_point", "0")?.toIntOrNull() ?: 0
         maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")?.toDoubleOrNull() ?: 1.0
+
+        val allowedSizes = setOf(5, 10, 20, 50, 100)
+        val requestedWindowSize = prefs.getString("dose_rate_avg_timestamps_n", "10")
+            ?.toIntOrNull()
+            ?.takeIf { it in allowedSizes }
+            ?: 10
+        updateMainCpsWindowSize(requestedWindowSize)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -439,6 +447,29 @@ class TrackingService : Service() {
     }
 
     private fun currentCps(): Double = calculateMainScreenCps()
+
+
+    private fun updateMainCpsWindowSize(newSize: Int) {
+        synchronized(mainCpsLock) {
+            if (newSize == mainCpsBeepWindowSize) return
+
+            val preservedCount = minOf(mainCpsBeepCount, newSize)
+            val newTimes = LongArray(newSize)
+
+            if (preservedCount > 0) {
+                val start = (mainCpsBeepNextIndex - preservedCount + mainCpsBeepWindowSize) % mainCpsBeepWindowSize
+                for (i in 0 until preservedCount) {
+                    val srcIndex = (start + i) % mainCpsBeepWindowSize
+                    newTimes[i] = mainCpsBeepTimes[srcIndex]
+                }
+            }
+
+            mainCpsBeepTimes = newTimes
+            mainCpsBeepWindowSize = newSize
+            mainCpsBeepCount = preservedCount
+            mainCpsBeepNextIndex = preservedCount % newSize
+        }
+    }
 
     private fun registerBeepsForMainCps(beepCount: Int) {
         if (beepCount <= 0) return
