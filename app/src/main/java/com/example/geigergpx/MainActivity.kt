@@ -18,6 +18,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.net.Uri
 import android.content.Context
+import kotlin.math.sqrt
 
 class MainActivity : AppCompatActivity() {
 
@@ -209,9 +210,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getConfidenceIntervalMultiplier(@Suppress("UNUSED_PARAMETER") n: Int): Double {
+    private fun getConfidenceIntervalMultiplier(n: Int): Float {
         // Placeholder implementation. Replace with your own implementation.
-        return 0.0
+        val z = 1.95996f;
+        return if (n > 1) {
+            z / sqrt(n.toFloat() - 1)
+        } else {
+            0f
+        }
+    // -0.171962 * z*(z*z-7)/((n.toFloat()-1)*sqrt(n.toFloat()-1))
     }
 
     private fun startTracking() {

@@ -1,5 +1,7 @@
 R_DEF: Internal format may change without notice
 local
+array dose_rate_avg_timestamps_entries
+array dose_rate_avg_timestamps_values
 array dose_tag_entries
 array dose_tag_values
 color black
@@ -12,6 +14,7 @@ color status_working
 color teal_200
 color white
 drawable ic_launcher_foreground
+id buttonHighAccuracy
 id buttonSettings
 id buttonStart
 id buttonStop

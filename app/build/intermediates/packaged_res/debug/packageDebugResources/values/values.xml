@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:ns1="http://schemas.android.com/tools">
+    <string-array name="dose_rate_avg_timestamps_entries">
+        <item>5</item>
+        <item>10</item>
+        <item>20</item>
+        <item>50</item>
+        <item>100</item>
+    </string-array>
+    <string-array name="dose_rate_avg_timestamps_values">
+        <item>5</item>
+        <item>10</item>
+        <item>20</item>
+        <item>50</item>
+        <item>100</item>
+    </string-array>
     <string-array name="dose_tag_entries">
         <item>Elevation tag (&lt;ele>)</item>
         <item>Comment tag (&lt;cmt>)</item>
