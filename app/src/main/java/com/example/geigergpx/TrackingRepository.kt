@@ -10,6 +10,12 @@ import androidx.lifecycle.MutableLiveData
  * and UI-layer ViewModels.
  */
 class TrackingRepository {
+    data class CpsSnapshot(
+        val cps: Double = 0.0,
+        val sampleCount: Int = 0,
+        val oldestTimestampMillis: Long = 0L
+    )
+
     private val _isTracking = MutableLiveData(false)
     val isTracking: LiveData<Boolean> = _isTracking
 
@@ -22,14 +28,8 @@ class TrackingRepository {
     private val _pointCount = MutableLiveData(0)
     val pointCount: LiveData<Int> = _pointCount
 
-    private val _currentCps = MutableLiveData(0.0)
-    val currentCps: LiveData<Double> = _currentCps
-
-    private val _currentCpsSampleCount = MutableLiveData(0)
-    val currentCpsSampleCount: LiveData<Int> = _currentCpsSampleCount
-
-    private val _currentCpsOldestTimestampMillis = MutableLiveData(0L)
-    val currentCpsOldestTimestampMillis: LiveData<Long> = _currentCpsOldestTimestampMillis
+    private val _cpsSnapshot = MutableLiveData(CpsSnapshot())
+    val cpsSnapshot: LiveData<CpsSnapshot> = _cpsSnapshot
 
     private val totalCounter = java.util.concurrent.atomic.AtomicInteger(0)
     private val _totalCounts = MutableLiveData(0)
@@ -52,25 +52,19 @@ class TrackingRepository {
         durationSeconds: Long,
         distance: Double,
         points: Int,
-        cps: Double,
-        cpsSampleCount: Int,
-        cpsOldestTimestampMillis: Long,
+        cpsSnapshot: CpsSnapshot,
         gpsStatus: String
     ) {
         _isTracking.postValue(tracking)
         _durationText.postValue(formatDuration(durationSeconds))
         _distanceMeters.postValue(distance)
         _pointCount.postValue(points)
-        _currentCps.postValue(cps)
-        _currentCpsSampleCount.postValue(cpsSampleCount)
-        _currentCpsOldestTimestampMillis.postValue(cpsOldestTimestampMillis)
+        _cpsSnapshot.postValue(cpsSnapshot)
         _gpsStatus.postValue(gpsStatus)
     }
 
-    fun updateCurrentCps(cps: Double, cpsSampleCount: Int, cpsOldestTimestampMillis: Long) {
-        _currentCps.postValue(cps)
-        _currentCpsSampleCount.postValue(cpsSampleCount)
-        _currentCpsOldestTimestampMillis.postValue(cpsOldestTimestampMillis)
+    fun updateCpsSnapshot(cpsSnapshot: CpsSnapshot) {
+        _cpsSnapshot.postValue(cpsSnapshot)
     }
 
     fun clearTrackStartCount() {
