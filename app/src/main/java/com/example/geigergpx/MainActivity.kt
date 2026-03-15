@@ -55,7 +55,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val restoredName = GpxWriter.restoreBackupIfPresent(this)
+        val restoredName = (application as GeigerGpxApp).consumeRestoredBackupName()
         if (restoredName != null) {
             Toast.makeText(
                 this,
