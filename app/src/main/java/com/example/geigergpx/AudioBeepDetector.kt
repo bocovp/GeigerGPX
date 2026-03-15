@@ -206,7 +206,7 @@ class AudioBeepDetector(
              //         Log.e("AudioBeepDetector", "main: ${main.toInt()}")
                         var dominance = -1f
 
-                        if (main > magThreshold/100) {
+                        if (main > magThreshold/2) {
                             val ratioThreshold = 20f
                         //    Log.e("AudioBeepDetector", "toneRatio: ${toneRatio}")
                             if (toneRatio > ratioThreshold) {
@@ -232,7 +232,7 @@ class AudioBeepDetector(
                             }
                         } else if (isBeeping) {
                             silenceWindows++
-                            Log.e("AudioBeepDetector", "Loosing     toneRatio: ${toneRatio} dominance: ${dominance}")
+                    //        Log.e("AudioBeepDetector", "Loosing     toneRatio: ${toneRatio} dominance: ${dominance}")
                             if (silenceWindows > SILENCE_WINDOWS_LIMIT) {
                                 val duration = (currentWindowGlobalSample  - beepStartSample).toDouble() / SAMPLE_RATE
                                 processBeep(duration, currentBeepMaxMain)
@@ -349,15 +349,15 @@ class AudioBeepDetector(
     private fun processBeep(duration: Double, peakMain: Float) {
         when {
             duration >= ONE_BEEP_MIN && duration <= ONE_BEEP_MAX -> {
-                Log.e("AudioBeepDetector", "SINGLE duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
+          //      Log.e("AudioBeepDetector", "SINGLE duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
                 onBeep(peakMain, 1)
             }
             duration > ONE_BEEP_MAX && duration <= TWO_BEEP_MAX -> {
                 Log.e("AudioBeepDetector", "DOUBLE duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
-                onBeep(peakMain, 2)
+                onBeep(peakMain, 1) /// OFF for now
             }
             else -> {
-                Log.e("AudioBeepDetector", "       duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
+          //      Log.e("AudioBeepDetector", "       duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
             }
         }
     }
