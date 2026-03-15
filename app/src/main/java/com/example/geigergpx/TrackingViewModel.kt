@@ -21,6 +21,8 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
 
     val currentCpsSampleCount: LiveData<Int> = repo.currentCpsSampleCount
 
+    val currentCpsOldestTimestampMillis: LiveData<Long> = repo.currentCpsOldestTimestampMillis
+
     val totalCounts: LiveData<Int> = repo.totalCounts
 
     val trackCounts: LiveData<Int> = MediatorLiveData<Int>().apply {

@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -25,9 +27,17 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
-    private var lastCps: Double = 0.0
     private var lastCpsSampleCount: Int = 0
+    private var lastCpsOldestTimestampMillis: Long = 0L
     private var isHighAccuracyModeEnabled: Boolean = false
+
+    private val cpsRefreshHandler = Handler(Looper.getMainLooper())
+    private val cpsRefreshRunnable = object : Runnable {
+        override fun run() {
+            updateCpsOrDoseLine()
+            cpsRefreshHandler.postDelayed(this, 1000L)
+        }
+    }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -107,16 +117,27 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateCpsOrDoseLine()
+        startCpsRefreshLoop()
         startMonitoring()
     }
 
     override fun onPause() {
         super.onPause()
+        stopCpsRefreshLoop()
         // Keep monitoring active in background while tracking or while high-accuracy
         // measurement mode is enabled.
         if (viewModel.isTracking.value != true && !isHighAccuracyModeEnabled) {
             stopMonitoring()
         }
+    }
+
+    private fun startCpsRefreshLoop() {
+        cpsRefreshHandler.removeCallbacks(cpsRefreshRunnable)
+        cpsRefreshHandler.postDelayed(cpsRefreshRunnable, 1000L)
+    }
+
+    private fun stopCpsRefreshLoop() {
+        cpsRefreshHandler.removeCallbacks(cpsRefreshRunnable)
     }
 
     private fun updateCountDisplay(
@@ -150,13 +171,17 @@ class MainActivity : AppCompatActivity() {
             binding.textPoints.text = "Points: $count"
         }
 
-        viewModel.currentCps.observe(this) { cps ->
-            lastCps = cps
+        viewModel.currentCps.observe(this) { _ ->
             updateCpsOrDoseLine()
         }
 
         viewModel.currentCpsSampleCount.observe(this) { sampleCount ->
             lastCpsSampleCount = sampleCount
+            updateCpsOrDoseLine()
+        }
+
+        viewModel.currentCpsOldestTimestampMillis.observe(this) { oldestTimestampMillis ->
+            lastCpsOldestTimestampMillis = oldestTimestampMillis
             updateCpsOrDoseLine()
         }
 
@@ -205,13 +230,8 @@ class MainActivity : AppCompatActivity() {
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
         val decimalDigits = if (isHighAccuracyModeEnabled) 3 else 2
 
+        val t1 = lastCpsOldestTimestampMillis.toDouble() / 1000.0
         val tn = System.currentTimeMillis().toDouble() / 1000.0
-        val sampleSpanSeconds = if (lastCpsSampleCount > 1 && lastCps > 0.0) {
-            (lastCpsSampleCount - 1).toDouble() / lastCps
-        } else {
-            0.0
-        }
-        val t1 = tn - sampleSpanSeconds
 
         val ci = getConfidenceInterval(t1, tn, lastCpsSampleCount)
 
