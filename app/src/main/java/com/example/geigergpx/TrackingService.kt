@@ -262,9 +262,7 @@ class TrackingService : Service() {
             durationSeconds = 0,
             distance = 0.0,
             points = 0,
-            cps = calculateMainScreenCps(),
-            cpsSampleCount = currentMainCpsSampleCount(),
-            cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis(),
+            cpsSnapshot = currentCpsSnapshot(),
             gpsStatus = "Waiting"
         )
         repo.updateAudioStatus("Working")
@@ -296,7 +294,6 @@ class TrackingService : Service() {
         latSum = 0.0
         lonSum = 0.0
         nAv = 0
-        repo.clearTrackStartCount() // Do I need it here????
         lastPointTotalBeeps = 0
 
         if (isMonitoring) {
@@ -308,9 +305,7 @@ class TrackingService : Service() {
                 durationSeconds = 0,
                 distance = 0.0,
                 points = 0,
-                cps = calculateMainScreenCps(),
-                cpsSampleCount = currentMainCpsSampleCount(),
-                cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis(),
+                cpsSnapshot = currentCpsSnapshot(),
                 gpsStatus = repo.gpsStatus.value ?: "Waiting"
             )
         } else {
@@ -322,9 +317,7 @@ class TrackingService : Service() {
                 durationSeconds = 0,
                 distance = 0.0,
                 points = 0,
-                cps = calculateMainScreenCps(),
-                cpsSampleCount = currentMainCpsSampleCount(),
-                cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis(),
+                cpsSnapshot = currentCpsSnapshot(),
                 gpsStatus = "Waiting"
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -386,7 +379,7 @@ class TrackingService : Service() {
             nAv = 1
             // Start counting from this exact moment/spot
             lastPointTotalBeeps = repo.getTotalCounts()
-            updateStats(0, lastCps = 0.0)
+            updateStats(0)
             return
         }
 
@@ -401,7 +394,7 @@ class TrackingService : Service() {
 
         if (speedKmh > maxSpeedKmh) {
             gpsSpoofingActive = true
-            updateStats(elapsedSec, lastCps = currentCps())
+            updateStats(elapsedSec)
             return
         }
         gpsSpoofingActive = false
@@ -413,7 +406,7 @@ class TrackingService : Service() {
 
         // 6. Distance Filter (Wait until we've moved far enough)
         if (distance < spacingM) {
-            updateStats(elapsedSec, lastCps = currentCps())
+            updateStats(elapsedSec)
             return
         }
 
@@ -423,7 +416,7 @@ class TrackingService : Service() {
 
         // If we haven't hit the minimum count requirement AND we haven't timed out, wait for more data
         if (minCountsPerPoint > 0 && currentBeeps < minCountsPerPoint && !timedOut) {
-            updateStats(elapsedSec, lastCps = currentBeeps.toDouble() / timeDeltaSec)
+            updateStats(elapsedSec)
             return
         }
 
@@ -455,10 +448,8 @@ class TrackingService : Service() {
         nAv = 0
         lastPointTotalBeeps = repo.getTotalCounts()
 
-        updateStats(elapsedSec, lastCps = finalCps)
+        updateStats(elapsedSec)
     }
-
-    private fun currentCps(): Double = calculateMainScreenCps()
 
     private fun currentMainCpsSampleCount(): Int = synchronized(mainCpsLock) {
         if (highAccuracyModeEnabled) highAccuracyTimestampCount.toInt() else mainCpsBeepCount
@@ -479,6 +470,11 @@ class TrackingService : Service() {
         return@synchronized mainCpsBeepTimes[oldestIndex]
     }
 
+    private fun currentCpsSnapshot() = TrackingRepository.CpsSnapshot(
+        cps = calculateMainScreenCps(),
+        sampleCount = currentMainCpsSampleCount(),
+        oldestTimestampMillis = currentMainCpsOldestTimestampMillis()
+    )
 
     private fun toggleHighAccuracyMeasurement() {
         synchronized(mainCpsLock) {
@@ -498,11 +494,7 @@ class TrackingService : Service() {
             }
         }
         repo.updateHighAccuracyMode(highAccuracyModeEnabled)
-        repo.updateCurrentCps(
-            cps = calculateMainScreenCps(),
-            cpsSampleCount = currentMainCpsSampleCount(),
-            cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis()
-        )
+        repo.updateCpsSnapshot(currentCpsSnapshot())
     }
 
 
@@ -578,7 +570,7 @@ class TrackingService : Service() {
         (mainCpsBeepCount - 1).toDouble() / deltaSeconds
     }
 
-    private fun updateStats(elapsedSec: Long, @Suppress("UNUSED_PARAMETER") lastCps: Double) {
+    private fun updateStats(elapsedSec: Long) {
         val gpsOk = (System.currentTimeMillis() - lastGpsFixMillis) <= 5000L
         val gpsStatus = when {
             !gpsOk || lastGpsFixMillis == 0L -> "Waiting"
@@ -591,9 +583,7 @@ class TrackingService : Service() {
             durationSeconds = elapsedSec,
             distance = totalDistance,
             points = currentSize,
-            cps = calculateMainScreenCps(),
-            cpsSampleCount = currentMainCpsSampleCount(),
-            cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis(),
+            cpsSnapshot = currentCpsSnapshot(),
             gpsStatus = gpsStatus
         )
     }
@@ -619,11 +609,7 @@ class TrackingService : Service() {
             onBeep = { _, count ->
                 repo.incrementTotalCounts(count)
                 registerBeepsForMainCps(count)
-                repo.updateCurrentCps(
-                    cps = calculateMainScreenCps(),
-                    cpsSampleCount = currentMainCpsSampleCount(),
-                    cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis()
-                )
+                repo.updateCpsSnapshot(currentCpsSnapshot())
             },
             onAudioHealth = { healthy ->
                 repo.updateAudioStatus(if (healthy) "Working" else "Error")
