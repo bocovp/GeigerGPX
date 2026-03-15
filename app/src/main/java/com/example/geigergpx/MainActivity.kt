@@ -19,6 +19,7 @@ import android.provider.Settings
 import android.net.Uri
 import android.content.Context
 import kotlin.math.sqrt
+import kotlin.math.max
 
 class MainActivity : AppCompatActivity() {
 
@@ -202,27 +203,79 @@ class MainActivity : AppCompatActivity() {
     private fun updateCpsOrDoseLine() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        val confidenceIntervalMultiplier = getConfidenceIntervalMultiplier(lastCpsSampleCount)
         val decimalDigits = if (isHighAccuracyModeEnabled) 3 else 2
-        if (coeff == 1.0) {
-            val confidenceInterval = confidenceIntervalMultiplier * lastCps
-            binding.textCps.text = "CPS: %.${decimalDigits}f ± %.${decimalDigits}f".format(lastCps, confidenceInterval)
+
+        val tn = System.currentTimeMillis().toDouble() / 1000.0
+        val sampleSpanSeconds = if (lastCpsSampleCount > 1 && lastCps > 0.0) {
+            (lastCpsSampleCount - 1).toDouble() / lastCps
         } else {
-            val doseRate = lastCps * coeff
-            val confidenceInterval = confidenceIntervalMultiplier * doseRate
-            binding.textCps.text = "Dose rate: %.${decimalDigits}f ± %.${decimalDigits}f μSv/h".format(doseRate, confidenceInterval)
+            0.0
+        }
+        val t1 = tn - sampleSpanSeconds
+
+        val ci = getConfidenceInterval(
+            t1 = t1,
+            tn = tn,
+            n = lastCpsSampleCount,
+            symmetric = lastCpsSampleCount > 9
+        )
+
+        if (coeff == 1.0) {
+            if (lastCpsSampleCount <= 9) {
+                binding.textCps.text = "CPS: %.${decimalDigits}f … %.${decimalDigits}f".format(ci.lowBound, ci.highBound)
+            } else {
+                binding.textCps.text = "CPS: %.${decimalDigits}f ± %.${decimalDigits}f".format(ci.mean, ci.delta)
+            }
+        } else {
+            val doseRateMean = ci.mean * coeff
+            val doseRateLow = ci.lowBound * coeff
+            val doseRateHigh = ci.highBound * coeff
+            val doseRateDelta = ci.delta * coeff
+
+            if (lastCpsSampleCount <= 9) {
+                binding.textCps.text = "Dose rate: %.${decimalDigits}f … %.${decimalDigits}f μSv/h".format(doseRateLow, doseRateHigh)
+            } else {
+                binding.textCps.text = "Dose rate: %.${decimalDigits}f ± %.${decimalDigits}f μSv/h".format(doseRateMean, doseRateDelta)
+            }
         }
     }
 
-    private fun getConfidenceIntervalMultiplier(n: Int): Float {
-        // Placeholder implementation. Replace with your own implementation.
-        val z = 1.95996f;
-        return if (n > 1) {
-            z / sqrt(n.toFloat() - 1)
-        } else {
-            0f
+    private data class ConfidenceInterval(
+        val mean: Double,
+        val delta: Double,
+        val lowBound: Double,
+        val highBound: Double
+    )
+
+    private fun getConfidenceInterval(t1: Double, tn: Double, n: Int, symmetric: Boolean): ConfidenceInterval {
+        if (n <= 1) {
+            return ConfidenceInterval(mean = 0.0, delta = 0.0, lowBound = 0.0, highBound = 0.0)
         }
-    // -0.171962 * z*(z*z-7)/((n.toFloat()-1)*sqrt(n.toFloat()-1))
+
+        val deltaTime = tn - t1
+        if (deltaTime <= 0.0) {
+            return ConfidenceInterval(mean = 0.0, delta = 0.0, lowBound = 0.0, highBound = 0.0)
+        }
+
+        val mean = (n - 1).toDouble() / deltaTime
+        val z = 1.95996
+        val delta = z * mean / sqrt((n - 1).toDouble())
+
+        return if (symmetric) {
+            ConfidenceInterval(
+                mean = mean,
+                delta = delta,
+                lowBound = max(0.0, mean - delta),
+                highBound = mean + delta
+            )
+        } else {
+            ConfidenceInterval(
+                mean = mean,
+                delta = delta,
+                lowBound = max(0.0, mean - delta),
+                highBound = mean + delta
+            )
+        }
     }
 
     private fun startTracking() {
