@@ -213,12 +213,7 @@ class MainActivity : AppCompatActivity() {
         }
         val t1 = tn - sampleSpanSeconds
 
-        val ci = getConfidenceInterval(
-            t1 = t1,
-            tn = tn,
-            n = lastCpsSampleCount,
-            symmetric = lastCpsSampleCount > 9
-        )
+        val ci = getConfidenceInterval(t1, tn, lastCpsSampleCount)
 
         if (coeff == 1.0) {
             if (lastCpsSampleCount <= 9) {
@@ -247,35 +242,26 @@ class MainActivity : AppCompatActivity() {
         val highBound: Double
     )
 
-    private fun getConfidenceInterval(t1: Double, tn: Double, n: Int, symmetric: Boolean): ConfidenceInterval {
-        if (n <= 1) {
+    private fun getConfidenceInterval(t1: Double, tn: Double, n: Int): ConfidenceInterval {
+        if (n <= 1 || tn <= t1) {
             return ConfidenceInterval(mean = 0.0, delta = 0.0, lowBound = 0.0, highBound = 0.0)
         }
-
         val deltaTime = tn - t1
-        if (deltaTime <= 0.0) {
-            return ConfidenceInterval(mean = 0.0, delta = 0.0, lowBound = 0.0, highBound = 0.0)
-        }
+        // Using unbiased estimator for low number of points
+        val norm = (if (n < 10) n-2 else n-1).toDouble()
 
-        val mean = (n - 1).toDouble() / deltaTime
+        val mean = norm / deltaTime
         val z = 1.95996
-        val delta = z * mean / sqrt((n - 1).toDouble())
+        val root =  sqrt((n - 1).toDouble())
+        val delta = mean * z / root // This is simply CI for normal distribution
+        val gamma = mean * (z*z - 1.0)/(3*(n - 1)).toDouble() // This follows from Cornish–Fisher expansion for Chi^2 distribution
 
-        return if (symmetric) {
-            ConfidenceInterval(
-                mean = mean,
-                delta = delta,
-                lowBound = max(0.0, mean - delta),
-                highBound = mean + delta
-            )
-        } else {
-            ConfidenceInterval(
-                mean = mean,
-                delta = delta,
-                lowBound = max(0.0, mean - delta),
-                highBound = mean + delta
-            )
-        }
+        return ConfidenceInterval(
+            mean = mean,
+            delta = delta,
+            lowBound = max(0.0, mean - delta + gamma),
+            highBound = mean + delta + gamma
+        )
     }
 
     private fun startTracking() {
