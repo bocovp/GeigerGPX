@@ -264,6 +264,7 @@ class TrackingService : Service() {
             points = 0,
             cps = calculateMainScreenCps(),
             cpsSampleCount = currentMainCpsSampleCount(),
+            cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis(),
             gpsStatus = "Waiting"
         )
         repo.updateAudioStatus("Working")
@@ -309,6 +310,7 @@ class TrackingService : Service() {
                 points = 0,
                 cps = calculateMainScreenCps(),
                 cpsSampleCount = currentMainCpsSampleCount(),
+                cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis(),
                 gpsStatus = repo.gpsStatus.value ?: "Waiting"
             )
         } else {
@@ -322,6 +324,7 @@ class TrackingService : Service() {
                 points = 0,
                 cps = calculateMainScreenCps(),
                 cpsSampleCount = currentMainCpsSampleCount(),
+                cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis(),
                 gpsStatus = "Waiting"
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -460,6 +463,22 @@ class TrackingService : Service() {
     private fun currentMainCpsSampleCount(): Int = synchronized(mainCpsLock) {
         if (highAccuracyModeEnabled) highAccuracyTimestampCount.toInt() else mainCpsBeepCount
     }
+    private fun currentMainCpsOldestTimestampMillis(): Long = synchronized(mainCpsLock) {
+        if (highAccuracyModeEnabled) {
+            if (highAccuracyTimestampCount < 1L) return@synchronized 0L
+            return@synchronized highAccuracyOldestTimestamp
+        }
+
+        if (mainCpsBeepCount < 1) return@synchronized 0L
+
+        val oldestIndex = if (mainCpsBeepCount == mainCpsBeepWindowSize) {
+            mainCpsBeepNextIndex
+        } else {
+            0
+        }
+        return@synchronized mainCpsBeepTimes[oldestIndex]
+    }
+
 
     private fun toggleHighAccuracyMeasurement() {
         synchronized(mainCpsLock) {
@@ -479,7 +498,11 @@ class TrackingService : Service() {
             }
         }
         repo.updateHighAccuracyMode(highAccuracyModeEnabled)
-        repo.updateCurrentCps(calculateMainScreenCps(), currentMainCpsSampleCount())
+        repo.updateCurrentCps(
+            cps = calculateMainScreenCps(),
+            cpsSampleCount = currentMainCpsSampleCount(),
+            cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis()
+        )
     }
 
 
@@ -570,6 +593,7 @@ class TrackingService : Service() {
             points = currentSize,
             cps = calculateMainScreenCps(),
             cpsSampleCount = currentMainCpsSampleCount(),
+            cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis(),
             gpsStatus = gpsStatus
         )
     }
@@ -595,7 +619,11 @@ class TrackingService : Service() {
             onBeep = { _, count ->
                 repo.incrementTotalCounts(count)
                 registerBeepsForMainCps(count)
-                repo.updateCurrentCps(calculateMainScreenCps(), currentMainCpsSampleCount())
+                repo.updateCurrentCps(
+                    cps = calculateMainScreenCps(),
+                    cpsSampleCount = currentMainCpsSampleCount(),
+                    cpsOldestTimestampMillis = currentMainCpsOldestTimestampMillis()
+                )
             },
             onAudioHealth = { healthy ->
                 repo.updateAudioStatus(if (healthy) "Working" else "Error")
