@@ -12,7 +12,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.Observer
 import androidx.preference.PreferenceManager
 import com.example.geigergpx.databinding.ActivityMainBinding
 import android.widget.Toast
@@ -27,8 +26,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
-    private var lastCpsSampleCount: Int = 0
-    private var lastCpsOldestTimestampMillis: Long = 0L
+    private var latestCpsSnapshot = TrackingRepository.CpsSnapshot()
     private var isHighAccuracyModeEnabled: Boolean = false
 
     private val cpsRefreshHandler = Handler(Looper.getMainLooper())
@@ -171,17 +169,8 @@ class MainActivity : AppCompatActivity() {
             binding.textPoints.text = "Points: $count"
         }
 
-        viewModel.currentCps.observe(this) { _ ->
-            updateCpsOrDoseLine()
-        }
-
-        viewModel.currentCpsSampleCount.observe(this) { sampleCount ->
-            lastCpsSampleCount = sampleCount
-            updateCpsOrDoseLine()
-        }
-
-        viewModel.currentCpsOldestTimestampMillis.observe(this) { oldestTimestampMillis ->
-            lastCpsOldestTimestampMillis = oldestTimestampMillis
+        viewModel.cpsSnapshot.observe(this) { snapshot ->
+            latestCpsSnapshot = snapshot
             updateCpsOrDoseLine()
         }
 
@@ -230,13 +219,13 @@ class MainActivity : AppCompatActivity() {
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
         val decimalDigits = if (isHighAccuracyModeEnabled) 3 else 2
 
-        val t1 = lastCpsOldestTimestampMillis.toDouble() / 1000.0
+        val t1 = latestCpsSnapshot.oldestTimestampMillis.toDouble() / 1000.0
         val tn = System.currentTimeMillis().toDouble() / 1000.0
 
-        val ci = getConfidenceInterval(t1, tn, lastCpsSampleCount)
+        val ci = getConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
 
         if (coeff == 1.0) {
-            if (lastCpsSampleCount <= 9) {
+            if (latestCpsSnapshot.sampleCount <= 9) {
                 binding.textCps.text = "CPS: %.${decimalDigits}f … %.${decimalDigits}f".format(ci.lowBound, ci.highBound)
             } else {
                 binding.textCps.text = "CPS: %.${decimalDigits}f ± %.${decimalDigits}f".format(ci.mean, ci.delta)
@@ -247,7 +236,7 @@ class MainActivity : AppCompatActivity() {
             val doseRateHigh = ci.highBound * coeff
             val doseRateDelta = ci.delta * coeff
 
-            if (lastCpsSampleCount <= 9) {
+            if (latestCpsSnapshot.sampleCount <= 9) {
                 binding.textCps.text = "Dose rate: %.${decimalDigits}f … %.${decimalDigits}f μSv/h".format(doseRateLow, doseRateHigh)
             } else {
                 binding.textCps.text = "Dose rate: %.${decimalDigits}f ± %.${decimalDigits}f μSv/h".format(doseRateMean, doseRateDelta)
