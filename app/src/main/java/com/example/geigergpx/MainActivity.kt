@@ -112,9 +112,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        // Only stop monitoring if tracking is not active
-        // If tracking is active, keep GPS and audio running in background
-        if (viewModel.isTracking.value != true) {
+        // Keep monitoring active in background while tracking or while high-accuracy
+        // measurement mode is enabled.
+        if (viewModel.isTracking.value != true && !isHighAccuracyModeEnabled) {
             stopMonitoring()
         }
     }
