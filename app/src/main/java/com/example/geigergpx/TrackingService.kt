@@ -112,6 +112,8 @@ class TrackingService : Service() {
 
     override fun onDestroy() {
         stopBackupLoop()
+        fusedLocation.removeLocationUpdates(locationCallback)
+        stopBeepDetector()
         serviceScope.cancel()
         prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
         super.onDestroy()
@@ -586,6 +588,8 @@ class TrackingService : Service() {
     // -------------------------------------------------------------------------
 
     private fun startBeepDetector() {
+        if (audioBeepDetector != null) return
+
         audioBeepDetector = AudioBeepDetector.createWithPrefs(
             context = this,
             onBeep = { _, count ->
