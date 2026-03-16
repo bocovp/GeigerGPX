@@ -24,20 +24,20 @@ class TracksActivity : AppCompatActivity() {
         binding.tracksRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.tracksRecyclerView.adapter = adapter
 
+        // Trigger an initial load immediately
+        refreshTrackList(emptyList())
+
         viewModel.activeTrackPoints.observe(this) { points ->
-            Thread {
-                val items = TrackCatalog.loadTrackListItems(this, points)
-                val selectedIds = selectedTrackIds()
-                val selected = if (selectedIds.isEmpty()) {
-                    setOf(TrackCatalog.currentTrackId())
-                } else {
-                    selectedIds
-                }
-                runOnUiThread {
-                    adapter.submit(items, selected)
-                }
-            }.start()
+            refreshTrackList(points)
         }
+    }
+
+    private fun refreshTrackList(points: List<TrackPoint>) {
+        Thread {
+            val items = TrackCatalog.loadTrackListItems(this, points)
+            val selected = selectedTrackIds().ifEmpty { setOf(TrackCatalog.currentTrackId()) }
+            runOnUiThread { adapter.submit(items, selected) }
+        }.start()
     }
 
     override fun onSupportNavigateUp(): Boolean {

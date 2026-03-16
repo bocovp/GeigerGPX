@@ -12,6 +12,8 @@ import java.io.File
 import java.io.InputStream
 import java.time.Instant
 
+import android.util.Log
+
 private const val CURRENT_TRACK_ID = "active-track"
 private const val CURRENT_TRACK_TITLE = "Current recording"
 
@@ -56,7 +58,8 @@ object TrackCatalog {
             .forEach { source ->
             val parsed = try {
                 parseGpxTrack(source.openStream())
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.e("GPX", "Points parsed: ")
                 null
             } ?: return@forEach
             items.add(
@@ -131,10 +134,12 @@ object TrackCatalog {
             var currentTag: String? = null
 
             while (parser.eventType != XmlPullParser.END_DOCUMENT) {
+
                 when (parser.eventType) {
                     XmlPullParser.START_TAG -> {
+                        val tagName = parser.name
                         currentTag = parser.name
-                        if (parser.name == "trkpt") {
+                        if (tagName.equals("trkpt", ignoreCase = true)) {
                             insideTrkpt = true
                             lat = parser.getAttributeValue(null, "lat")?.toDoubleOrNull() ?: 0.0
                             lon = parser.getAttributeValue(null, "lon")?.toDoubleOrNull() ?: 0.0
@@ -144,12 +149,11 @@ object TrackCatalog {
                     }
 
                     XmlPullParser.TEXT -> {
-                        if (!insideTrkpt) {
-                            continue
-                        }
-                        when (currentTag) {
-                            "ele" -> ele = parser.text?.toDoubleOrNull() ?: 0.0
-                            "time" -> timeMs = parseIsoTime(parser.text)
+                        if (insideTrkpt) {
+                            when (currentTag) {
+                                "ele" -> ele = parser.text?.toDoubleOrNull() ?: 0.0
+                                "time" -> timeMs = parseIsoTime(parser.text)
+                            }
                         }
                     }
 
