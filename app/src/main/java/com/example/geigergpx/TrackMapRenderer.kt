@@ -7,7 +7,7 @@ import org.osmdroid.views.overlay.Polyline
 
 class TrackMapRenderer(private val mapView: MapView) {
 
-    private val trackOverlays = mutableMapOf<String, Polyline>()
+    private val trackOverlays = mutableMapOf<String, MutableList<Polyline>>()
     private val renderedPointCounts = mutableMapOf<String, Int>()
     private var hasPositionedToTrack = false
 
@@ -36,27 +36,16 @@ class TrackMapRenderer(private val mapView: MapView) {
             if (trackPoints.isEmpty()) return@forEach
 
             val geoPoints = ArrayList<GeoPoint>(trackPoints.size)
-            var doseSum = 0.0
             trackPoints.forEach { sample ->
                 geoPoints.add(GeoPoint(sample.latitude, sample.longitude))
-                doseSum += sample.doseRate
             }
             latestPoint = geoPoints.lastOrNull() ?: latestPoint
 
             val previousCount = renderedPointCounts[track.id] ?: 0
             if (previousCount == trackPoints.size) return@forEach
 
-            val polyline = trackOverlays.getOrPut(track.id) {
-                Polyline(mapView).also {
-                    it.outlinePaint.strokeWidth = 8f
-                    it.isGeodesic = false
-                    mapView.overlays.add(it)
-                }
-            }
-
-            polyline.setPoints(geoPoints)
-            val averageDose = doseSum / trackPoints.size.toDouble()
-            polyline.outlinePaint.color = colorForDose(averageDose, minDose, maxDose)
+            trackOverlays.remove(track.id)?.forEach { mapView.overlays.remove(it) }
+            trackOverlays[track.id] = createSegmentedPolylines(track, geoPoints, minDose, maxDose)
 
             renderedPointCounts[track.id] = trackPoints.size
             shouldInvalidate = true
@@ -77,10 +66,48 @@ class TrackMapRenderer(private val mapView: MapView) {
     private fun removeDeletedTracks(activeIds: Set<String>) {
         val toRemove = trackOverlays.keys.filterNot { it in activeIds }
         toRemove.forEach { id ->
-            trackOverlays[id]?.let { mapView.overlays.remove(it) }
+            trackOverlays[id]?.forEach { mapView.overlays.remove(it) }
             trackOverlays.remove(id)
             renderedPointCounts.remove(id)
         }
+    }
+
+    private fun createSegmentedPolylines(
+        track: MapTrack,
+        geoPoints: List<GeoPoint>,
+        minDose: Double,
+        maxDose: Double
+    ): MutableList<Polyline> {
+        if (geoPoints.size < 2) {
+            val fallback = Polyline(mapView).also {
+                it.outlinePaint.strokeWidth = 8f
+                it.isGeodesic = false
+                it.setPoints(geoPoints)
+                it.outlinePaint.color = colorForDose(track.points.first().doseRate, minDose, maxDose)
+                mapView.overlays.add(it)
+            }
+            return mutableListOf(fallback)
+        }
+
+        val segmentPolylines = mutableListOf<Polyline>()
+        for (index in 0 until geoPoints.lastIndex) {
+            val start = geoPoints[index]
+            val end = geoPoints[index + 1]
+            val startDose = track.points[index].doseRate
+            val endDose = track.points[index + 1].doseRate
+            val segmentDose = (startDose + endDose) / 2.0
+
+            val segmentPolyline = Polyline(mapView).also {
+                it.outlinePaint.strokeWidth = 8f
+                it.isGeodesic = false
+                it.setPoints(listOf(start, end))
+                it.outlinePaint.color = colorForDose(segmentDose, minDose, maxDose)
+                mapView.overlays.add(it)
+            }
+            segmentPolylines.add(segmentPolyline)
+        }
+
+        return segmentPolylines
     }
 
     private fun colorForDose(value: Double, minDose: Double, maxDose: Double): Int {
