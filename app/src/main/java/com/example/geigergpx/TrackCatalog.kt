@@ -9,6 +9,7 @@ import androidx.preference.PreferenceManager
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.InputStream
 import java.time.Instant
 
@@ -39,16 +40,13 @@ object TrackCatalog {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
-        val activeSamples = activePoints.map {
-            TrackSample(it.latitude, it.longitude, it.cps * coeff)
-        }
-        val activeStats = statsFromTrackPoints(activePoints)
+        val currentTrack = currentTrackData(context, activePoints, coeff)
         items.add(
             TrackListItem(
                 id = CURRENT_TRACK_ID,
                 title = CURRENT_TRACK_TITLE,
-                subtitle = formatStats(activeStats),
-                mapTrack = MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, activeSamples),
+                subtitle = formatStats(currentTrack.stats),
+                mapTrack = MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.samples),
                 isCurrentTrack = true,
                 defaultVisible = true
             )
@@ -73,6 +71,34 @@ object TrackCatalog {
         }
 
         return items
+    }
+
+    private data class CurrentTrackData(
+        val samples: List<TrackSample>,
+        val stats: TrackStats
+    )
+
+    private fun currentTrackData(
+        context: Context,
+        activePoints: List<TrackPoint>,
+        coeff: Double
+    ): CurrentTrackData {
+        if (activePoints.isNotEmpty()) {
+            val activeSamples = activePoints.map {
+                TrackSample(it.latitude, it.longitude, it.cps * coeff)
+            }
+            return CurrentTrackData(activeSamples, statsFromTrackPoints(activePoints))
+        }
+
+        val backup = runCatching {
+            openBackupStream(context)?.use { parseGpxTrack(it) }
+        }.getOrNull()
+
+        return if (backup != null) {
+            CurrentTrackData(backup.samples, backup.stats)
+        } else {
+            CurrentTrackData(emptyList(), TrackStats(0, 0L, 0.0))
+        }
     }
 
     private fun statsFromTrackPoints(points: List<TrackPoint>): TrackStats {
@@ -196,24 +222,55 @@ object TrackCatalog {
         val openStream: () -> InputStream
     )
 
+    private fun openBackupStream(context: Context): InputStream? {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+
+        if (!treeUriStr.isNullOrBlank()) {
+            val treeStream = runCatching {
+                val treeUri = Uri.parse(treeUriStr)
+                val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return@runCatching null
+                val backupDoc = rootDoc.findFile("Backup.gpx") ?: return@runCatching null
+                context.contentResolver.openInputStream(backupDoc.uri)
+            }.getOrNull()
+            if (treeStream != null) {
+                return treeStream
+            }
+        }
+
+        val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
+        val backupFile = File(root, "Backup.gpx")
+        return try {
+            if (backupFile.exists()) backupFile.inputStream() else null
+        } catch (_: FileNotFoundException) {
+            null
+        }
+    }
+
     private fun listTrackFiles(context: Context): List<TrackSource> {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
 
         if (!treeUriStr.isNullOrBlank()) {
-            val treeUri = Uri.parse(treeUriStr)
-            val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return emptyList()
-            return rootDoc.listFiles()
-                .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name != "Backup.gpx" }
-                .sortedByDescending { it.lastModified() }
-                .mapNotNull { doc ->
-                    val name = doc.name ?: return@mapNotNull null
-                    TrackSource(
-                        id = "doc:${doc.uri}",
-                        displayName = name,
-                        openStream = { context.contentResolver.openInputStream(doc.uri) ?: throw IllegalStateException("Cannot open $name") }
-                    )
-                }
+            val treeFiles = runCatching {
+                val treeUri = Uri.parse(treeUriStr)
+                val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return@runCatching emptyList()
+                rootDoc.listFiles()
+                    .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name != "Backup.gpx" }
+                    .sortedByDescending { it.lastModified() }
+                    .mapNotNull { doc ->
+                        val name = doc.name ?: return@mapNotNull null
+                        TrackSource(
+                            id = "doc:${doc.uri}",
+                            displayName = name,
+                            openStream = { context.contentResolver.openInputStream(doc.uri) ?: throw IllegalStateException("Cannot open $name") }
+                        )
+                    }
+            }.getOrElse { emptyList() }
+
+            if (treeFiles.isNotEmpty()) {
+                return treeFiles
+            }
         }
 
         val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
