@@ -1,5 +1,3 @@
-package com.example.geigergpx
-
 import android.graphics.*
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
@@ -7,7 +5,7 @@ import org.osmdroid.views.overlay.Overlay
 
 class GradientTrackOverlay : Overlay() {
     // We store our own copy of points to draw
-    var points: List<TrackSample> = emptyList()
+    var points: List<TrackPoint> = emptyList()
     var minDose: Double = 0.0
     var maxDose: Double = 1.0
 
