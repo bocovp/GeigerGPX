@@ -51,7 +51,9 @@ object TrackCatalog {
             )
         )
 
-        listTrackFiles(context).forEach { source ->
+        runCatching { listTrackFiles(context) }
+            .getOrDefault(emptyList())
+            .forEach { source ->
             val parsed = try {
                 parseGpxTrack(source.openStream())
             } catch (_: Exception) {
