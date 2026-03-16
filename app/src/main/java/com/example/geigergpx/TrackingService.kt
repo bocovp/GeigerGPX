@@ -39,6 +39,16 @@ class TrackingService : Service() {
         @Volatile
         private var runningInstance: TrackingService? = null
 
+        const val ACTION_START_MONITORING = "com.example.geigergpx.START_MONITORING"
+        const val ACTION_STOP_MONITORING  = "com.example.geigergpx.STOP_MONITORING"
+        const val ACTION_START = "com.example.geigergpx.START"
+        const val ACTION_STOP  = "com.example.geigergpx.STOP"
+        const val ACTION_TOGGLE_HIGH_ACCURACY_MEASUREMENT = "com.example.geigergpx.TOGGLE_HIGH_ACCURACY_MEASUREMENT"
+        const val NOTIF_ID = 1001
+
+        // 10 minutes
+        private const val BACKUP_INTERVAL_MS = 10 * 60 * 1000L
+
         fun activeTrackPointsSnapshot(): List<TrackPoint> {
             val service = runningInstance ?: return emptyList()
             return synchronized(service.writtenPoints) {
@@ -695,18 +705,6 @@ class TrackingService : Service() {
             }
         }
     }
-    companion object {
-        const val ACTION_START_MONITORING = "com.example.geigergpx.START_MONITORING"
-        const val ACTION_STOP_MONITORING  = "com.example.geigergpx.STOP_MONITORING"
-        const val ACTION_START = "com.example.geigergpx.START"
-        const val ACTION_STOP  = "com.example.geigergpx.STOP"
-        const val ACTION_TOGGLE_HIGH_ACCURACY_MEASUREMENT = "com.example.geigergpx.TOGGLE_HIGH_ACCURACY_MEASUREMENT"
-        const val NOTIF_ID = 1001
-
-        // 10 minutes
-        private const val BACKUP_INTERVAL_MS = 10 * 60 * 1000L
-    }
-
     private fun startBackupLoop() {
         backupJob?.cancel()
         backupJob = serviceScope.launch {
