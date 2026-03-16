@@ -191,8 +191,11 @@ class MainActivity : AppCompatActivity() {
             val color = when (status) {
                 "Waiting" -> R.color.status_waiting
                 "Working" -> R.color.status_working
-                "Spoofing detected" -> R.color.status_spoofing
-                else -> R.color.status_waiting
+                else -> if (status.startsWith("Spoofing detected")) {
+                    R.color.status_spoofing
+                } else {
+                    R.color.status_waiting
+                }
             }
             binding.textGpsStatus.setTextColor(ContextCompat.getColor(this, color))
         }
