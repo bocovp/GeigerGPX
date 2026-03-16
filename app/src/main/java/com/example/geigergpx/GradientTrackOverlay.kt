@@ -5,7 +5,7 @@ import org.osmdroid.views.overlay.Overlay
 
 class GradientTrackOverlay : Overlay() {
     // We store our own copy of points to draw
-    var points: List<MapTrackPoint> = emptyList()
+    var points: List<TrackPoint> = emptyList()
     var minDose: Double = 0.0
     var maxDose: Double = 1.0
 
