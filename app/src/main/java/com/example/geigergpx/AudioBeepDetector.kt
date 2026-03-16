@@ -206,7 +206,7 @@ class AudioBeepDetector(
              //         Log.e("AudioBeepDetector", "main: ${main.toInt()}")
                         var dominance = -1f
 
-                        if (main > magThreshold/2) {
+                        if (main > magThreshold) {
                             val ratioThreshold = 20f
                         //    Log.e("AudioBeepDetector", "toneRatio: ${toneRatio}")
                             if (toneRatio > ratioThreshold) {
@@ -349,7 +349,7 @@ class AudioBeepDetector(
     private fun processBeep(duration: Double, peakMain: Float) {
         when {
             duration >= ONE_BEEP_MIN && duration <= ONE_BEEP_MAX -> {
-          //      Log.e("AudioBeepDetector", "SINGLE duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
+                Log.e("AudioBeepDetector", "SINGLE duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
                 onBeep(peakMain, 1)
             }
             duration > ONE_BEEP_MAX && duration <= TWO_BEEP_MAX -> {
@@ -357,7 +357,8 @@ class AudioBeepDetector(
                 onBeep(peakMain, 1) /// OFF for now
             }
             else -> {
-          //      Log.e("AudioBeepDetector", "       duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
+                Log.e("AudioBeepDetector", "       duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
+                onBeep(peakMain, 0)
             }
         }
     }
@@ -389,8 +390,8 @@ class AudioBeepDetector(
     }
 
     companion object {
-        private const val WINDOW_SIZE_STATIC = 128
-        private const val BASE_MAG = 1e6f
+        private const val WINDOW_SIZE_STATIC = 175
+        private const val BASE_MAG = 1e6f  *10f//for MIC
         private val DEFAULT_MAG_THRESHOLD = (BASE_MAG * WINDOW_SIZE_STATIC).toFloat()
 
         fun createWithPrefs(context: Context, onBeep: (Float, Int) -> Unit): AudioBeepDetector {
@@ -427,8 +428,8 @@ class AudioBeepDetector(
                     onProgress(peaks.size, totalBeepCount)
 
                     if (peaks.size == totalBeepCount) {
-                        val avg = peaks.average().toFloat()
-                        val rawThreshold = avg / 2f
+                        val median = peaks.sorted()[totalBeepCount/2].toFloat()
+                        val rawThreshold = minOf( median / 2f, 2e9f)
                         val threshold = if (rawThreshold > 0f) rawThreshold else DEFAULT_MAG_THRESHOLD
 
                         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
