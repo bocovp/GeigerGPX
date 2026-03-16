@@ -8,48 +8,71 @@ import org.osmdroid.views.overlay.Polyline
 
 class TrackMapRenderer(private val mapView: MapView) {
 
-    private val segmentOverlays = mutableListOf<Polyline>()
+    private val trackOverlays = mutableMapOf<String, Polyline>()
+    private val renderedPointCounts = mutableMapOf<String, Int>()
+    private var hasZoomedToTrack = false
 
     fun renderTracks(tracks: List<MapTrack>) {
-        clearTracks()
+        val activeIds = tracks.map { it.id }.toSet()
+        removeDeletedTracks(activeIds)
 
+        var shouldInvalidate = false
         val allPoints = mutableListOf<GeoPoint>()
+
         val allDoseRates = tracks.flatMap { it.points }.map { it.doseRate }
         val minDose = allDoseRates.minOrNull() ?: 0.0
         val maxDose = allDoseRates.maxOrNull() ?: 1.0
 
         tracks.forEach { track ->
-            if (track.points.size < 2) return@forEach
+            val trackPoints = track.points
+            if (trackPoints.isEmpty()) return@forEach
 
-            track.points.windowed(size = 2, step = 1, partialWindows = false).forEach { segment ->
-                val a = segment[0]
-                val b = segment[1]
-                val polyline = Polyline(mapView).apply {
-                    setPoints(listOf(GeoPoint(a.latitude, a.longitude), GeoPoint(b.latitude, b.longitude)))
-                    outlinePaint.color = colorForDose((a.doseRate + b.doseRate) / 2.0, minDose, maxDose)
-                    outlinePaint.strokeWidth = 8f
-                    isGeodesic = true
+            val geoPoints = ArrayList<GeoPoint>(trackPoints.size)
+            var doseSum = 0.0
+            trackPoints.forEach { sample ->
+                geoPoints.add(GeoPoint(sample.latitude, sample.longitude))
+                doseSum += sample.doseRate
+            }
+            allPoints.addAll(geoPoints)
+
+            val previousCount = renderedPointCounts[track.id] ?: 0
+            if (previousCount == trackPoints.size) return@forEach
+
+            val polyline = trackOverlays.getOrPut(track.id) {
+                Polyline(mapView).also {
+                    it.outlinePaint.strokeWidth = 8f
+                    it.isGeodesic = true
+                    mapView.overlays.add(it)
                 }
-                mapView.overlays.add(polyline)
-                segmentOverlays.add(polyline)
             }
 
-            track.points.forEach { point ->
-                allPoints.add(GeoPoint(point.latitude, point.longitude))
-            }
+            polyline.setPoints(geoPoints)
+            val averageDose = doseSum / trackPoints.size.toDouble()
+            polyline.outlinePaint.color = colorForDose(averageDose, minDose, maxDose)
+
+            renderedPointCounts[track.id] = trackPoints.size
+            shouldInvalidate = true
         }
 
-        if (allPoints.isNotEmpty()) {
+        if (allPoints.isNotEmpty() && !hasZoomedToTrack) {
             val box = BoundingBox.fromGeoPointsSafe(allPoints)
-            mapView.zoomToBoundingBox(box, true, 64)
+            mapView.zoomToBoundingBox(box, false, 64)
+            hasZoomedToTrack = true
+            shouldInvalidate = true
         }
 
-        mapView.invalidate()
+        if (shouldInvalidate) {
+            mapView.invalidate()
+        }
     }
 
-    private fun clearTracks() {
-        mapView.overlays.removeAll(segmentOverlays)
-        segmentOverlays.clear()
+    private fun removeDeletedTracks(activeIds: Set<String>) {
+        val toRemove = trackOverlays.keys.filterNot { it in activeIds }
+        toRemove.forEach { id ->
+            trackOverlays[id]?.let { mapView.overlays.remove(it) }
+            trackOverlays.remove(id)
+            renderedPointCounts.remove(id)
+        }
     }
 
     private fun colorForDose(value: Double, minDose: Double, maxDose: Double): Int {
