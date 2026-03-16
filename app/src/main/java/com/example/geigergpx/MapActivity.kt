@@ -1,6 +1,7 @@
 package com.example.geigergpx
 
 import android.os.Bundle
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
@@ -27,7 +28,10 @@ class MapActivity : AppCompatActivity() {
 
         binding.mapView.setTileSource(TileSourceFactory.MAPNIK)
         binding.mapView.setMultiTouchControls(true)
-        trackMapRenderer = TrackMapRenderer(binding.mapView)
+
+        val tvHalf = findViewById<TextView>(R.id.tvHalfDose)
+        val tvMax = findViewById<TextView>(R.id.tvMaxDose)
+        trackMapRenderer = TrackMapRenderer(binding.mapView,tvHalf,tvMax)
 
         observeTrack()
     }
