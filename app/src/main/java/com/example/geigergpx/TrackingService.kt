@@ -35,6 +35,18 @@ import kotlinx.coroutines.cancel
 
 class TrackingService : Service() {
 
+    companion object {
+        @Volatile
+        private var runningInstance: TrackingService? = null
+
+        fun activeTrackPointsSnapshot(): List<TrackPoint> {
+            val service = runningInstance ?: return emptyList()
+            return synchronized(service.writtenPoints) {
+                service.writtenPoints.toList()
+            }
+        }
+    }
+
     private val fusedLocation by lazy { LocationServices.getFusedLocationProviderClient(this) }
     private lateinit var locationRequest: LocationRequest
     private lateinit var locationCallback: LocationCallback
@@ -106,6 +118,7 @@ class TrackingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        runningInstance = this
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
         loadTrackingPrefs()
         prefs.registerOnSharedPreferenceChangeListener(prefListener)
@@ -115,6 +128,7 @@ class TrackingService : Service() {
     }
 
     override fun onDestroy() {
+        runningInstance = null
         stopBackupLoop()
         fusedLocation.removeLocationUpdates(locationCallback)
         stopBeepDetector()
