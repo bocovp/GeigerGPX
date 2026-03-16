@@ -17,6 +17,8 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
 
     val pointCount: LiveData<Int> = repo.pointCount
 
+    val activeTrackPoints: LiveData<List<TrackPoint>> = repo.activeTrackPoints
+
     val cpsSnapshot: LiveData<TrackingRepository.CpsSnapshot> = repo.cpsSnapshot
 
     val totalCounts: LiveData<Int> = repo.totalCounts
