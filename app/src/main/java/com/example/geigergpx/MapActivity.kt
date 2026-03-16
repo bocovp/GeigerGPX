@@ -1,6 +1,9 @@
 package com.example.geigergpx
 
+import android.content.Intent
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
@@ -14,6 +17,7 @@ class MapActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMapBinding
     private lateinit var trackMapRenderer: TrackMapRenderer
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
+    private var latestActivePoints: List<TrackPoint> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,14 +35,30 @@ class MapActivity : AppCompatActivity() {
 
         val tvHalf = findViewById<TextView>(R.id.tvHalfDose)
         val tvMax = findViewById<TextView>(R.id.tvMaxDose)
-        trackMapRenderer = TrackMapRenderer(binding.mapView,tvHalf,tvMax)
+        trackMapRenderer = TrackMapRenderer(binding.mapView, tvHalf, tvMax)
 
         observeTrack()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.map_toolbar_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_tracks -> {
+                startActivity(Intent(this, TracksActivity::class.java))
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     override fun onResume() {
         super.onResume()
         binding.mapView.onResume()
+        refreshMapTracks(latestActivePoints)
     }
 
     override fun onPause() {
@@ -53,27 +73,29 @@ class MapActivity : AppCompatActivity() {
 
     private fun observeTrack() {
         viewModel.activeTrackPoints.observe(this) { points ->
-            val coeff = PreferenceManager.getDefaultSharedPreferences(this)
-                .getString("cps_to_usvh", "1.0")
-                ?.toDoubleOrNull()
-                ?: 1.0
-
-            val mappedPoints = points.map {
-                TrackSample(
-                    latitude = it.latitude,
-                    longitude = it.longitude,
-                    doseRate = it.cps * coeff
-                )
-            }
-
-            val tracks = listOf(
-                MapTrack(
-                    id = "active-track",
-                    title = "Current recording",
-                    points = mappedPoints
-                )
-            )
-            trackMapRenderer.renderTracks(tracks)
+            latestActivePoints = points
+            refreshMapTracks(points)
         }
+    }
+
+    private fun refreshMapTracks(activePoints: List<TrackPoint>) {
+        Thread {
+            val allItems = TrackCatalog.loadTrackListItems(this, activePoints)
+            val selectedIds = selectedTrackIds()
+            val visibleTracks = allItems
+                .filter { selectedIds.contains(it.id) || (selectedIds.isEmpty() && it.defaultVisible) }
+                .map { it.mapTrack }
+
+            runOnUiThread {
+                trackMapRenderer.renderTracks(visibleTracks)
+            }
+        }.start()
+    }
+
+    private fun selectedTrackIds(): Set<String> {
+        return PreferenceManager.getDefaultSharedPreferences(this)
+            .getStringSet(TracksActivity.PREF_MAP_VISIBLE_TRACK_IDS, emptySet())
+            ?.toSet()
+            ?: emptySet()
     }
 }
