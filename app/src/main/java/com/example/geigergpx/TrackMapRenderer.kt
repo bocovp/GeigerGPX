@@ -1,13 +1,17 @@
 package com.example.geigergpx
 
+import android.widget.TextView
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
+import org.w3c.dom.Text
 
-class TrackMapRenderer(private val mapView: MapView) {
+class TrackMapRenderer(private val mapView: MapView,
+    private val tvHalf: TextView?,
+   private val tvMax: TextView?
+    ) {
 
     private val trackOverlays = mutableMapOf<String, GradientTrackOverlay>()
     private val renderedPointCounts = mutableMapOf<String, Int>()
-    private var lastMinDose = Double.POSITIVE_INFINITY
     private var lastMaxDose = Double.NEGATIVE_INFINITY
     private var hasPositionedToTrack = false
 
@@ -16,23 +20,26 @@ class TrackMapRenderer(private val mapView: MapView) {
         removeDeletedTracks(activeIds)
 
         // 1. Calculate current global scale
-        var currentMin = Double.POSITIVE_INFINITY
         var currentMax = Double.NEGATIVE_INFINITY
         tracks.forEach { track ->
             track.points.forEach { sample ->
-                if (sample.doseRate < currentMin) currentMin = sample.doseRate
                 if (sample.doseRate > currentMax) currentMax = sample.doseRate
             }
         }
 
-        if (!currentMin.isFinite() || !currentMax.isFinite()) {
-            currentMin = 0.0; currentMax = 1.0
+        val currentMin = 0.0;
+        if (!currentMax.isFinite()) {
+            currentMax = 1.0
         }
 
         // Check if the scale itself has changed
-        val scaleChanged = currentMin != lastMinDose || currentMax != lastMaxDose
-        lastMinDose = currentMin
+        val scaleChanged = currentMax != lastMaxDose
         lastMaxDose = currentMax
+
+        if (scaleChanged) {
+            tvHalf?.text = String.format("%.2f µSv/h", currentMax/2)
+            tvMax?.text = String.format("%.2f µSv/h", currentMax)
+        }
 
         var latestPoint: GeoPoint? = null
         var shouldInvalidate = false
