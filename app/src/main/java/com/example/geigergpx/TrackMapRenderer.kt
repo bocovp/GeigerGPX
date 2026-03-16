@@ -1,7 +1,6 @@
 package com.example.geigergpx
 
 import android.graphics.Color
-import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
@@ -10,18 +9,27 @@ class TrackMapRenderer(private val mapView: MapView) {
 
     private val trackOverlays = mutableMapOf<String, Polyline>()
     private val renderedPointCounts = mutableMapOf<String, Int>()
-    private var hasZoomedToTrack = false
+    private var hasPositionedToTrack = false
 
     fun renderTracks(tracks: List<MapTrack>) {
         val activeIds = tracks.map { it.id }.toSet()
         removeDeletedTracks(activeIds)
 
         var shouldInvalidate = false
-        val allPoints = mutableListOf<GeoPoint>()
+        var minDose = Double.POSITIVE_INFINITY
+        var maxDose = Double.NEGATIVE_INFINITY
+        tracks.forEach { track ->
+            track.points.forEach { sample ->
+                if (sample.doseRate < minDose) minDose = sample.doseRate
+                if (sample.doseRate > maxDose) maxDose = sample.doseRate
+            }
+        }
+        if (!minDose.isFinite() || !maxDose.isFinite()) {
+            minDose = 0.0
+            maxDose = 1.0
+        }
 
-        val allDoseRates = tracks.flatMap { it.points }.map { it.doseRate }
-        val minDose = allDoseRates.minOrNull() ?: 0.0
-        val maxDose = allDoseRates.maxOrNull() ?: 1.0
+        var latestPoint: GeoPoint? = null
 
         tracks.forEach { track ->
             val trackPoints = track.points
@@ -33,7 +41,7 @@ class TrackMapRenderer(private val mapView: MapView) {
                 geoPoints.add(GeoPoint(sample.latitude, sample.longitude))
                 doseSum += sample.doseRate
             }
-            allPoints.addAll(geoPoints)
+            latestPoint = geoPoints.lastOrNull() ?: latestPoint
 
             val previousCount = renderedPointCounts[track.id] ?: 0
             if (previousCount == trackPoints.size) return@forEach
@@ -41,7 +49,7 @@ class TrackMapRenderer(private val mapView: MapView) {
             val polyline = trackOverlays.getOrPut(track.id) {
                 Polyline(mapView).also {
                     it.outlinePaint.strokeWidth = 8f
-                    it.isGeodesic = true
+                    it.isGeodesic = false
                     mapView.overlays.add(it)
                 }
             }
@@ -54,10 +62,10 @@ class TrackMapRenderer(private val mapView: MapView) {
             shouldInvalidate = true
         }
 
-        if (allPoints.isNotEmpty() && !hasZoomedToTrack) {
-            val box = BoundingBox.fromGeoPointsSafe(allPoints)
-            mapView.zoomToBoundingBox(box, false, 64)
-            hasZoomedToTrack = true
+        if (!hasPositionedToTrack && latestPoint != null) {
+            mapView.controller.setCenter(latestPoint)
+            mapView.controller.setZoom(18.0)
+            hasPositionedToTrack = true
             shouldInvalidate = true
         }
 
