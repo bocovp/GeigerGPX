@@ -277,13 +277,9 @@ class TrackingService : Service() {
 
         stopBackupLoop()
 
-        val finalDurationSec = max(0L, (System.currentTimeMillis() - startTimeMillis) / 1000L)
-        val finalDistance = totalDistance
-
         val copy = synchronized(writtenPoints) {
             writtenPoints.toList()
         }
-        val finalPointCount = copy.size
         if (copy.isNotEmpty()) {
             val filename = GpxWriter.saveTrack(this, copy)
             if (filename != null) {
@@ -310,9 +306,9 @@ class TrackingService : Service() {
             nm.notify(NOTIF_ID, buildNotification("Monitoring..."))
             repo.updateStatus(
                 tracking = false,
-                durationSeconds = finalDurationSec,
-                distance = finalDistance,
-                points = finalPointCount,
+                durationSeconds = 0,
+                distance = 0.0,
+                points = 0,
                 cpsSnapshot = currentCpsSnapshot(),
                 gpsStatus = repo.gpsStatus.value ?: "Waiting"
             )
@@ -322,9 +318,9 @@ class TrackingService : Service() {
             stopBeepDetector()
             repo.updateStatus(
                 tracking = false,
-                durationSeconds = finalDurationSec,
-                distance = finalDistance,
-                points = finalPointCount,
+                durationSeconds = 0,
+                distance = 0.0,
+                points = 0,
                 cpsSnapshot = currentCpsSnapshot(),
                 gpsStatus = "Waiting"
             )

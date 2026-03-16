@@ -142,7 +142,7 @@ class MainActivity : AppCompatActivity() {
         isTracking: Boolean = viewModel.isTracking.value ?: false,
         totalCounts: Int = viewModel.totalCounts.value ?: 0,
         trackCounts: Int = viewModel.trackCounts.value ?: 0) {
-        binding.textTotalCounts.text = if (isTracking || trackCounts > 0) {
+        binding.textTotalCounts.text = if (isTracking) {
             "Total counts: $trackCounts / $totalCounts"
         } else {
             "Total counts: $totalCounts"
