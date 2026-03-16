@@ -28,6 +28,9 @@ class TrackingRepository {
     private val _pointCount = MutableLiveData(0)
     val pointCount: LiveData<Int> = _pointCount
 
+    private val _activeTrackPoints = MutableLiveData<List<TrackPoint>>(emptyList())
+    val activeTrackPoints: LiveData<List<TrackPoint>> = _activeTrackPoints
+
     private val _cpsSnapshot = MutableLiveData(CpsSnapshot())
     val cpsSnapshot: LiveData<CpsSnapshot> = _cpsSnapshot
 
@@ -73,6 +76,11 @@ class TrackingRepository {
     fun beginNewTrack() {
         _countsAtTrackStart.postValue(totalCounter.get())
         _savedTrackCounts.postValue(null)
+        _activeTrackPoints.postValue(emptyList())
+    }
+
+    fun setActiveTrackPoints(points: List<TrackPoint>) {
+        _activeTrackPoints.postValue(points)
     }
 
     fun finalizeTrackCounts() {
