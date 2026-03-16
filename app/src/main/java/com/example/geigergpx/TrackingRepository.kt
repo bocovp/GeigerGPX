@@ -38,6 +38,9 @@ class TrackingRepository {
     private val _countsAtTrackStart = MutableLiveData(0)
     val countsAtTrackStart: LiveData<Int> = _countsAtTrackStart
 
+    private val _savedTrackCounts = MutableLiveData<Int?>(null)
+    val savedTrackCounts: LiveData<Int?> = _savedTrackCounts
+
     private val _gpsStatus = MutableLiveData("unknown")
     val gpsStatus: LiveData<String> = _gpsStatus
 
@@ -67,8 +70,15 @@ class TrackingRepository {
         _cpsSnapshot.postValue(cpsSnapshot)
     }
 
-    fun clearTrackStartCount() {
+    fun beginNewTrack() {
         _countsAtTrackStart.postValue(totalCounter.get())
+        _savedTrackCounts.postValue(null)
+    }
+
+    fun finalizeTrackCounts() {
+        val total = totalCounter.get()
+        val offset = _countsAtTrackStart.value ?: 0
+        _savedTrackCounts.postValue(total - offset)
     }
 
     fun updateMonitoringStatus(gpsStatus: String) {

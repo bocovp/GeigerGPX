@@ -21,17 +21,25 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
 
     val totalCounts: LiveData<Int> = repo.totalCounts
 
+    val savedTrackCounts: LiveData<Int?> = repo.savedTrackCounts
+
     val trackCounts: LiveData<Int> = MediatorLiveData<Int>().apply {
-        // 1. Give it a starting value so it's never null
         value = 0
 
         val update = {
+            val tracking = repo.isTracking.value ?: false
+            val savedCounts = repo.savedTrackCounts.value
             val total = repo.totalCounts.value ?: 0
             val offset = repo.countsAtTrackStart.value ?: 0
-            value = total - offset
+            value = when {
+                tracking -> total - offset
+                savedCounts != null -> savedCounts
+                else -> 0
+            }
         }
 
-        // 2. Observe changes
+        addSource(repo.isTracking) { update() }
+        addSource(repo.savedTrackCounts) { update() }
         addSource(repo.totalCounts) { update() }
         addSource(repo.countsAtTrackStart) { update() }
     }
