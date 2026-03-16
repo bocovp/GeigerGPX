@@ -141,11 +141,8 @@ class MainActivity : AppCompatActivity() {
     private fun updateCountDisplay(
         isTracking: Boolean = viewModel.isTracking.value ?: false,
         totalCounts: Int = viewModel.totalCounts.value ?: 0,
-        trackCounts: Int = viewModel.trackCounts.value ?: 0,
-        pointCount: Int = viewModel.pointCount.value ?: 0
-    ) {
-        val shouldShowTrackAndTotal = isTracking || pointCount > 0
-        binding.textTotalCounts.text = if (shouldShowTrackAndTotal) {
+        trackCounts: Int = viewModel.trackCounts.value ?: 0) {
+        binding.textTotalCounts.text = if (isTracking || trackCounts > 0) {
             "Total counts: $trackCounts / $totalCounts"
         } else {
             "Total counts: $totalCounts"
@@ -170,7 +167,6 @@ class MainActivity : AppCompatActivity() {
 
         viewModel.pointCount.observe(this) { count ->
             binding.textPoints.text = "Points: $count"
-            updateCountDisplay(pointCount = count)
         }
 
         viewModel.cpsSnapshot.observe(this) { snapshot ->
