@@ -21,7 +21,6 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlin.math.max
-import java.util.Locale
 import android.widget.Toast
 import android.os.Handler
 import android.os.Looper
@@ -65,9 +64,6 @@ class TrackingService : Service() {
 
     @Volatile
     private var gpsSpoofingActive: Boolean = false
-
-    @Volatile
-    private var spoofingSpeedKmh: Double = 0.0
 
     private var audioBeepDetector: AudioBeepDetector? = null
 
@@ -403,12 +399,10 @@ class TrackingService : Service() {
 
         if (speedKmh > maxSpeedKmh) {
             gpsSpoofingActive = true
-            spoofingSpeedKmh = speedKmh
             updateStats(elapsedSec)
             return
         }
         gpsSpoofingActive = false
-        spoofingSpeedKmh = 0.0
 
         // Accumulate raw GPS points for averaging (only if not spoofing)
         latSum += loc.latitude
@@ -585,7 +579,7 @@ class TrackingService : Service() {
         val gpsOk = (System.currentTimeMillis() - lastGpsFixMillis) <= 5000L
         val gpsStatus = when {
             !gpsOk || lastGpsFixMillis == 0L -> "Waiting"
-            gpsSpoofingActive -> "Spoofing detected (${String.format(Locale.US, "%.1f", spoofingSpeedKmh)} km/h)"
+            gpsSpoofingActive -> "Spoofing detected"
             else -> "Working"
         }
         val currentSize = synchronized(writtenPoints) { writtenPoints.size }
