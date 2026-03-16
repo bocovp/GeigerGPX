@@ -22,24 +22,18 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
     val totalCounts: LiveData<Int> = repo.totalCounts
 
     val trackCounts: LiveData<Int> = MediatorLiveData<Int>().apply {
-        // Persist last completed track counts after tracking stops.
+        // 1. Give it a starting value so it's never null
         value = 0
 
         val update = {
-            val isTrackingNow = repo.isTracking.value == true
-            value = if (isTrackingNow) {
-                val total = repo.totalCounts.value ?: 0
-                val offset = repo.countsAtTrackStart.value ?: 0
-                (total - offset).coerceAtLeast(0)
-            } else {
-                repo.lastTrackCounts.value ?: 0
-            }
+            val total = repo.totalCounts.value ?: 0
+            val offset = repo.countsAtTrackStart.value ?: 0
+            value = total - offset
         }
 
-        addSource(repo.isTracking) { update() }
+        // 2. Observe changes
         addSource(repo.totalCounts) { update() }
         addSource(repo.countsAtTrackStart) { update() }
-        addSource(repo.lastTrackCounts) { update() }
     }
 
     val gpsStatus: LiveData<String> = repo.gpsStatus
