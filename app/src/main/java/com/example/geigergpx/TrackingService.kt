@@ -261,6 +261,7 @@ class TrackingService : Service() {
         startBackupLoop()
 
         repo.beginNewTrack()
+        repo.setActiveTrackPoints(emptyList())
         repo.updateStatus(
             tracking = true,
             durationSeconds = 0,
@@ -284,6 +285,7 @@ class TrackingService : Service() {
             writtenPoints.toList()
         }
         val finalPointCount = copy.size
+        repo.setActiveTrackPoints(copy)
         if (copy.isNotEmpty()) {
             val filename = GpxWriter.saveTrack(this, copy)
             if (filename != null) {
@@ -448,9 +450,11 @@ class TrackingService : Service() {
             cps = finalCps
         )
 
-        synchronized(writtenPoints) {
+        val snapshot = synchronized(writtenPoints) {
             writtenPoints.add(point)
+            writtenPoints.toList()
         }
+        repo.setActiveTrackPoints(snapshot)
         totalDistance += distance
         lastWrittenLocation = loc
         lastWrittenTime = now

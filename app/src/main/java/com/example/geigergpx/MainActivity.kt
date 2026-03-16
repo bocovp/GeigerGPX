@@ -109,6 +109,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
+        binding.buttonMap.setOnClickListener {
+            startActivity(Intent(this, MapActivity::class.java))
+        }
+
         observeViewModel()
     }
 
