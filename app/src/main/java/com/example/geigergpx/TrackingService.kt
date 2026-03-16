@@ -279,7 +279,6 @@ class TrackingService : Service() {
 
         val finalDurationSec = max(0L, (System.currentTimeMillis() - startTimeMillis) / 1000L)
         val finalDistance = totalDistance
-        repo.finalizeTrackCounts()
 
         val copy = synchronized(writtenPoints) {
             writtenPoints.toList()
