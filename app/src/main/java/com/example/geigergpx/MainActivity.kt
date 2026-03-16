@@ -19,6 +19,8 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.net.Uri
 import android.content.Context
+import android.view.Menu
+import android.view.MenuItem
 import kotlin.math.sqrt
 import kotlin.math.max
 
@@ -105,15 +107,26 @@ class MainActivity : AppCompatActivity() {
             startService(intent)
         }
 
-        binding.buttonSettings.setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
-
         binding.buttonMap.setOnClickListener {
             startActivity(Intent(this, MapActivity::class.java))
         }
 
         observeViewModel()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_toolbar_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_settings -> {
+                startActivity(Intent(this, SettingsActivity::class.java))
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     override fun onResume() {
