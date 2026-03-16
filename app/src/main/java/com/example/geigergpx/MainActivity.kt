@@ -141,9 +141,12 @@ class MainActivity : AppCompatActivity() {
     private fun updateCountDisplay(
         isTracking: Boolean = viewModel.isTracking.value ?: false,
         totalCounts: Int = viewModel.totalCounts.value ?: 0,
-        trackCounts: Int = viewModel.trackCounts.value ?: 0) {
-        binding.textTotalCounts.text = if (isTracking) {
-            "Total counts: $trackCounts / $totalCounts"
+        trackCounts: Int = viewModel.trackCounts.value ?: 0,
+        savedTrackCounts: Int? = viewModel.savedTrackCounts.value
+    ) {
+        binding.textTotalCounts.text = if (isTracking || savedTrackCounts != null) {
+            val persistedTrackCounts = if (isTracking) trackCounts else (savedTrackCounts ?: trackCounts)
+            "Total counts: $persistedTrackCounts / $totalCounts"
         } else {
             "Total counts: $totalCounts"
         }
@@ -180,6 +183,10 @@ class MainActivity : AppCompatActivity() {
 
         viewModel.trackCounts.observe(this) { trackCount ->
             updateCountDisplay(trackCounts = trackCount)
+        }
+
+        viewModel.savedTrackCounts.observe(this) { savedCounts ->
+            updateCountDisplay(savedTrackCounts = savedCounts)
         }
 
         viewModel.gpsStatus.observe(this) { status ->
