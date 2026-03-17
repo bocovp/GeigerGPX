@@ -5,6 +5,15 @@
     android:orientation="vertical"
     android:padding="12dp">
 
+    <TextView
+        android:id="@+id/loadingLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="16dp"
+        android:text="@string/loading_files"
+        android:visibility="gone" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/tracksRecyclerView"
         android:layout_width="match_parent"

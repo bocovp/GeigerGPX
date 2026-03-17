@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Geiger GPX</string>
+    <string name="loading_files">Loading files ...</string>
+    <string name="refresh">Refresh</string>
 </resources>
-
