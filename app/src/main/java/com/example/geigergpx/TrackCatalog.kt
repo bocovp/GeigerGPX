@@ -4,6 +4,7 @@ import android.content.Context
 import android.location.Location
 import android.net.Uri
 import android.os.Environment
+import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import androidx.preference.PreferenceManager
 import org.xmlpull.v1.XmlPullParser
@@ -11,8 +12,7 @@ import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
 import java.io.InputStream
 import java.time.Instant
-
-import android.util.Log
+import java.util.concurrent.ConcurrentHashMap
 
 private const val CURRENT_TRACK_ID = "active-track"
 private const val CURRENT_TRACK_TITLE = "Current recording"
@@ -34,7 +34,13 @@ data class TrackListItem(
 
 object TrackCatalog {
 
+    private val parsedTrackCache = ConcurrentHashMap<String, ParsedTrack>()
+
     fun currentTrackId(): String = CURRENT_TRACK_ID
+
+    fun clearTrackCache() {
+        parsedTrackCache.clear()
+    }
 
     fun loadTrackListItems(context: Context, activePoints: List<TrackPoint>): List<TrackListItem> {
         val items = mutableListOf<TrackListItem>()
@@ -56,23 +62,25 @@ object TrackCatalog {
         runCatching { listTrackFiles(context) }
             .getOrDefault(emptyList())
             .forEach { source ->
-            val parsed = try {
-                parseGpxTrack(source.openStream())
-            } catch (e: Exception) {
-                Log.e("GPX", "Points parsed: ")
-                null
-            } ?: return@forEach
-            items.add(
-                TrackListItem(
-                    id = source.id,
-                    title = source.displayName,
-                    subtitle = formatStats(parsed.stats),
-                    mapTrack = MapTrack(source.id, source.displayName, parsed.samples),
-                    isCurrentTrack = false,
-                    defaultVisible = false
+                val parsed = parsedTrackCache[source.displayName] ?: try {
+                    parseGpxTrack(source.openStream())?.also {
+                        parsedTrackCache[source.displayName] = it
+                    }
+                } catch (e: Exception) {
+                    Log.e("GPX", "Unable to parse track ${source.displayName}", e)
+                    null
+                } ?: return@forEach
+                items.add(
+                    TrackListItem(
+                        id = source.id,
+                        title = source.displayName,
+                        subtitle = formatStats(parsed.stats),
+                        mapTrack = MapTrack(source.id, source.displayName, parsed.samples),
+                        isCurrentTrack = false,
+                        defaultVisible = false
+                    )
                 )
-            )
-        }
+            }
 
         return items
     }

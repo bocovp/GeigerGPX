@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.widget.PopupMenu
 import android.widget.Toast
@@ -44,11 +45,34 @@ class TracksActivity : AppCompatActivity() {
     }
 
     private fun refreshTrackList(points: List<TrackPoint>) {
+        binding.loadingLabel.visibility = View.VISIBLE
+        binding.tracksRecyclerView.visibility = View.GONE
         Thread {
             val items = TrackCatalog.loadTrackListItems(this, points)
             val selected = selectedTrackIds().ifEmpty { setOf(TrackCatalog.currentTrackId()) }
-            runOnUiThread { adapter.submit(items, selected) }
+            runOnUiThread {
+                adapter.submit(items, selected)
+                binding.loadingLabel.visibility = View.GONE
+                binding.tracksRecyclerView.visibility = View.VISIBLE
+            }
         }.start()
+    }
+
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.tracks_toolbar_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_refresh_tracks -> {
+                TrackCatalog.clearTrackCache()
+                refreshTrackList(viewModel.activeTrackPoints.value.orEmpty())
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {
