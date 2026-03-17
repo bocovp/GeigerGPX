@@ -15,7 +15,7 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 private const val CURRENT_TRACK_ID = "active-track"
-private const val CURRENT_TRACK_TITLE = "Current recording"
+private const val CURRENT_TRACK_TITLE = "Currently recording"
 
 data class TrackStats(
     val pointCount: Int,
@@ -42,22 +42,28 @@ object TrackCatalog {
         parsedTrackCache.clear()
     }
 
-    fun loadTrackListItems(context: Context, activePoints: List<TrackPoint>): List<TrackListItem> {
+    fun loadTrackListItems(
+        context: Context,
+        activePoints: List<TrackPoint>,
+        includeCurrentTrack: Boolean
+    ): List<TrackListItem> {
         val items = mutableListOf<TrackListItem>()
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
-        val currentTrack = currentTrackData(activePoints, coeff)
-        items.add(
-            TrackListItem(
-                id = CURRENT_TRACK_ID,
-                title = CURRENT_TRACK_TITLE,
-                subtitle = formatStats(currentTrack.stats),
-                mapTrack = MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.samples),
-                isCurrentTrack = true,
-                defaultVisible = true
+        if (includeCurrentTrack) {
+            val currentTrack = currentTrackData(activePoints, coeff)
+            items.add(
+                TrackListItem(
+                    id = CURRENT_TRACK_ID,
+                    title = CURRENT_TRACK_TITLE,
+                    subtitle = formatStats(currentTrack.stats),
+                    mapTrack = MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.samples),
+                    isCurrentTrack = true,
+                    defaultVisible = true
+                )
             )
-        )
+        }
 
         runCatching { listTrackFiles(context) }
             .getOrDefault(emptyList())
