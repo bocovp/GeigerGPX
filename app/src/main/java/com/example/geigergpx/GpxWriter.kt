@@ -32,6 +32,26 @@ object GpxWriter {
         return writeGpxFile(context, points, "Backup.gpx")
     }
 
+
+    fun backupUri(context: Context): Uri? {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+
+        if (!treeUriStr.isNullOrBlank()) {
+            return try {
+                val treeUri = Uri.parse(treeUriStr)
+                val dirDoc = DocumentFile.fromTreeUri(context, treeUri)
+                dirDoc?.findFile("Backup.gpx")?.uri
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
+        val backupFile = File(root, "Backup.gpx")
+        return if (backupFile.exists()) Uri.fromFile(backupFile) else null
+    }
+
     /**
      * Delete the Backup.gpx file (if it exists) in either the configured GPX folder
      * or the app-specific documents directory.
