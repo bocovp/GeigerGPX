@@ -2,6 +2,7 @@ package com.example.geigergpx
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.example.geigergpx.databinding.ItemTrackBinding
 
@@ -34,6 +35,13 @@ class TracksAdapter(
         fun bind(item: TrackListItem) {
             binding.trackTitle.text = item.title
             binding.trackSubtitle.text = item.subtitle
+            val defaultTitleColor = binding.trackSubtitle.currentTextColor
+            val titleColor = if (item.isCurrentTrack) {
+                ContextCompat.getColor(binding.root.context, R.color.status_working)
+            } else {
+                defaultTitleColor
+            }
+            binding.trackTitle.setTextColor(titleColor)
 
             binding.trackCheckbox.setOnCheckedChangeListener(null)
             binding.trackCheckbox.isChecked = selectedIds.contains(item.id)
