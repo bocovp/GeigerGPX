@@ -6,7 +6,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.geigergpx.databinding.ItemTrackBinding
 
 class TracksAdapter(
-    private val onCheckedChanged: (String, Boolean) -> Unit
+    private val onCheckedChanged: (String, Boolean) -> Unit,
+    private val onTrackLongPressed: (TrackListItem, android.view.View) -> Unit
 ) : RecyclerView.Adapter<TracksAdapter.TrackViewHolder>() {
 
     private var items: List<TrackListItem> = emptyList()
@@ -44,6 +45,11 @@ class TracksAdapter(
             binding.root.setOnClickListener {
                 val next = !binding.trackCheckbox.isChecked
                 binding.trackCheckbox.isChecked = next
+            }
+
+            binding.root.setOnLongClickListener {
+                onTrackLongPressed(item, binding.root)
+                true
             }
         }
     }
