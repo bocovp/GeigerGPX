@@ -49,8 +49,9 @@ class TracksActivity : AppCompatActivity() {
     }
 
     private fun refreshTrackList() {
-        binding.loadingLabel.visibility = View.VISIBLE
-        binding.tracksRecyclerView.visibility = View.GONE
+        val showLoading = TrackCatalog.isTrackCacheEmpty()
+        binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
+        binding.tracksRecyclerView.visibility = if (showLoading) View.GONE else View.VISIBLE
         Thread {
             val points = viewModel.activeTrackPoints.value.orEmpty()
             val includeCurrentTrack = viewModel.isTracking.value == true
