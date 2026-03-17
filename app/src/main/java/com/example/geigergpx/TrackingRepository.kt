@@ -89,6 +89,10 @@ class TrackingRepository {
         _savedTrackCounts.postValue(total - offset)
     }
 
+    fun discardTrackCounts() {
+        _savedTrackCounts.postValue(null)
+    }
+
     fun updateMonitoringStatus(gpsStatus: String) {
         _gpsStatus.postValue(gpsStatus)
     }
