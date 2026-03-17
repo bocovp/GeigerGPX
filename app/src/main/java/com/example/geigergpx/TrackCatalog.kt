@@ -42,6 +42,8 @@ object TrackCatalog {
         parsedTrackCache.clear()
     }
 
+    fun isTrackCacheEmpty(): Boolean = parsedTrackCache.isEmpty()
+
     fun loadTrackListItems(
         context: Context,
         activePoints: List<TrackPoint>,
