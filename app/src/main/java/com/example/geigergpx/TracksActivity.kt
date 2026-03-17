@@ -37,18 +37,24 @@ class TracksActivity : AppCompatActivity() {
         binding.tracksRecyclerView.adapter = adapter
 
         // Trigger an initial load immediately
-        refreshTrackList(emptyList())
+        refreshTrackList()
 
-        viewModel.activeTrackPoints.observe(this) { points ->
-            refreshTrackList(points)
+        viewModel.activeTrackPoints.observe(this) {
+            refreshTrackList()
+        }
+
+        viewModel.isTracking.observe(this) {
+            refreshTrackList()
         }
     }
 
-    private fun refreshTrackList(points: List<TrackPoint>) {
+    private fun refreshTrackList() {
         binding.loadingLabel.visibility = View.VISIBLE
         binding.tracksRecyclerView.visibility = View.GONE
         Thread {
-            val items = TrackCatalog.loadTrackListItems(this, points)
+            val points = viewModel.activeTrackPoints.value.orEmpty()
+            val includeCurrentTrack = viewModel.isTracking.value == true
+            val items = TrackCatalog.loadTrackListItems(this, points, includeCurrentTrack)
             val selected = selectedTrackIds().ifEmpty { setOf(TrackCatalog.currentTrackId()) }
             runOnUiThread {
                 adapter.submit(items, selected)
@@ -68,7 +74,7 @@ class TracksActivity : AppCompatActivity() {
         return when (item.itemId) {
             R.id.action_refresh_tracks -> {
                 TrackCatalog.clearTrackCache()
-                refreshTrackList(viewModel.activeTrackPoints.value.orEmpty())
+                refreshTrackList()
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -123,7 +129,7 @@ class TracksActivity : AppCompatActivity() {
                 val deleted = deleteTrack(item)
                 if (deleted) {
                     Toast.makeText(this, "Deleted", Toast.LENGTH_SHORT).show()
-                    refreshTrackList(emptyList())
+                    refreshTrackList()
                 } else {
                     Toast.makeText(this, "Unable to delete file", Toast.LENGTH_SHORT).show()
                 }
