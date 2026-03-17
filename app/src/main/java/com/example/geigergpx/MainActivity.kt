@@ -118,6 +118,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, MapActivity::class.java))
         }
 
+        binding.buttonPoi.setOnClickListener {
+            startActivity(Intent(this, PoiActivity::class.java))
+        }
+
         observeViewModel()
     }
 
@@ -264,14 +268,27 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Save POI") { _, _ ->
                 val description = input.text?.toString()?.trim().orEmpty()
                 val (doseRate, delta) = getCurrentDoseRateAndDelta()
-                savePoiPlaceholder(
-                    description = description,
-                    timestampMillis = System.currentTimeMillis(),
-                    latitude = viewModel.activeTrackPoints.value?.lastOrNull()?.latitude,
-                    longitude = viewModel.activeTrackPoints.value?.lastOrNull()?.longitude,
-                    doseRate = doseRate,
-                    delta = delta
-                )
+                val latitude = viewModel.activeTrackPoints.value?.lastOrNull()?.latitude
+                val longitude = viewModel.activeTrackPoints.value?.lastOrNull()?.longitude
+
+                if (latitude == null || longitude == null) {
+                    Toast.makeText(this, "No GPS point available for POI", Toast.LENGTH_SHORT).show()
+                } else {
+                    val ok = PoiLibrary.addPoi(
+                        context = this,
+                        description = description,
+                        timestampMillis = System.currentTimeMillis(),
+                        latitude = latitude,
+                        longitude = longitude,
+                        doseRate = doseRate,
+                        delta = delta
+                    )
+                    if (ok) {
+                        Toast.makeText(this, "POI saved", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, "Unable to save POI", Toast.LENGTH_SHORT).show()
+                    }
+                }
 
                 if (isHighAccuracyModeEnabled) {
                     val intent = Intent(this, TrackingService::class.java).apply {
@@ -282,17 +299,6 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    private fun savePoiPlaceholder(
-        description: String,
-        timestampMillis: Long,
-        latitude: Double?,
-        longitude: Double?,
-        doseRate: Double,
-        delta: Double
-    ) {
-        // TODO: persist POI to a file.
     }
 
     private fun getCurrentDoseRateAndDelta(): Pair<Double, Double> {
