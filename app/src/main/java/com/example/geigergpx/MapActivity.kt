@@ -76,11 +76,15 @@ class MapActivity : AppCompatActivity() {
             latestActivePoints = points
             refreshMapTracks(points)
         }
+        viewModel.isTracking.observe(this) {
+            refreshMapTracks(latestActivePoints)
+        }
     }
 
     private fun refreshMapTracks(activePoints: List<TrackPoint>) {
         Thread {
-            val allItems = TrackCatalog.loadTrackListItems(this, activePoints)
+            val includeCurrentTrack = viewModel.isTracking.value == true
+            val allItems = TrackCatalog.loadTrackListItems(this, activePoints, includeCurrentTrack)
             val selectedIds = selectedTrackIds()
             val visibleTracks = allItems
                 .filter { selectedIds.contains(it.id) || (selectedIds.isEmpty() && it.defaultVisible) }
