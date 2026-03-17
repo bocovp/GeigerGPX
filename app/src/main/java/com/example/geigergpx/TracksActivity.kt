@@ -24,6 +24,7 @@ class TracksActivity : AppCompatActivity() {
     private lateinit var binding: ActivityTracksBinding
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private val adapter by lazy { TracksAdapter(::onTrackToggled, ::onTrackLongPressed) }
+    private var hasLoadedTrackList = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,7 +50,7 @@ class TracksActivity : AppCompatActivity() {
     }
 
     private fun refreshTrackList() {
-        val showLoading = TrackCatalog.isTrackCacheEmpty()
+        val showLoading = !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty()
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
         binding.tracksRecyclerView.visibility = if (showLoading) View.GONE else View.VISIBLE
         Thread {
@@ -58,6 +59,7 @@ class TracksActivity : AppCompatActivity() {
             val items = TrackCatalog.loadTrackListItems(this, points, includeCurrentTrack)
             val selected = selectedTrackIds().ifEmpty { setOf(TrackCatalog.currentTrackId()) }
             runOnUiThread {
+                hasLoadedTrackList = true
                 adapter.submit(items, selected)
                 binding.loadingLabel.visibility = View.GONE
                 binding.tracksRecyclerView.visibility = View.VISIBLE
