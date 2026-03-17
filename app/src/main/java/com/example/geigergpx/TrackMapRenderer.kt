@@ -1,19 +1,20 @@
 package com.example.geigergpx
 
 import android.widget.TextView
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
-import org.w3c.dom.Text
 
-class TrackMapRenderer(private val mapView: MapView,
+class TrackMapRenderer(
+    private val mapView: MapView,
     private val tvHalf: TextView?,
-   private val tvMax: TextView?
-    ) {
+    private val tvMax: TextView?
+) {
 
     private val trackOverlays = mutableMapOf<String, GradientTrackOverlay>()
     private val renderedPointCounts = mutableMapOf<String, Int>()
     private var lastMaxDose = Double.NEGATIVE_INFINITY
-    private var hasPositionedToTrack = false
+    private var lastRenderedTrackIds: Set<String> = emptySet()
 
     fun renderTracks(tracks: List<MapTrack>) {
         val activeIds = tracks.map { it.id }.toSet()
@@ -27,7 +28,7 @@ class TrackMapRenderer(private val mapView: MapView,
             }
         }
 
-        val currentMin = 0.0;
+        val currentMin = 0.0
         if (!currentMax.isFinite()) {
             currentMax = 1.0
         }
@@ -37,7 +38,7 @@ class TrackMapRenderer(private val mapView: MapView,
         lastMaxDose = currentMax
 
         if (scaleChanged) {
-            tvHalf?.text = String.format("%.2f µSv/h", currentMax/2)
+            tvHalf?.text = String.format("%.2f µSv/h", currentMax / 2)
             tvMax?.text = String.format("%.2f µSv/h", currentMax)
         }
 
@@ -67,16 +68,37 @@ class TrackMapRenderer(private val mapView: MapView,
             }
         }
 
-        // 3. Auto-center logic
-        if (!hasPositionedToTrack && latestPoint != null) {
-            mapView.controller.setCenter(latestPoint)
-            mapView.controller.setZoom(18.0)
-            hasPositionedToTrack = true
+        // 3. Auto-center / fit logic
+        val trackSetChanged = activeIds != lastRenderedTrackIds
+        if (trackSetChanged) {
+            fitToTracks(tracks, latestPoint)
+            lastRenderedTrackIds = activeIds
             shouldInvalidate = true
         }
 
         if (shouldInvalidate) {
             mapView.invalidate()
+        }
+    }
+
+    private fun fitToTracks(tracks: List<MapTrack>, fallbackPoint: GeoPoint?) {
+        val geoPoints = tracks
+            .flatMap { track -> track.points }
+            .map { sample -> GeoPoint(sample.latitude, sample.longitude) }
+
+        when {
+            geoPoints.size > 1 -> {
+                val boundingBox = BoundingBox.fromGeoPointsSafe(geoPoints)
+                mapView.zoomToBoundingBox(boundingBox, true, 64)
+            }
+            geoPoints.size == 1 -> {
+                mapView.controller.setCenter(geoPoints.first())
+                mapView.controller.setZoom(18.0)
+            }
+            fallbackPoint != null -> {
+                mapView.controller.setCenter(fallbackPoint)
+                mapView.controller.setZoom(18.0)
+            }
         }
     }
 
