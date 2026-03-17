@@ -75,7 +75,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.buttonStart.setOnClickListener {
-            if (ensurePermissions()) {
+            if (viewModel.isTracking.value == true) {
+                showCancelTrackConfirmation()
+            } else if (ensurePermissions()) {
                 checkBatteryOptimizations()
                 startTracking()
             }
@@ -171,10 +173,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun observeViewModel() {
         viewModel.isTracking.observe(this) { tracking ->
-            binding.buttonStart.isEnabled = !tracking
+            binding.buttonStart.text = if (tracking) "Cancel" else "Start track"
             binding.buttonStop.isEnabled = tracking
 
-            updateCountDisplay(isTracking = tracking) 
+            updateCountDisplay(isTracking = tracking)
         }
 
         viewModel.durationText.observe(this) {
@@ -298,6 +300,24 @@ class MainActivity : AppCompatActivity() {
             lowBound = max(0.0, mean - delta + gamma),
             highBound = mean + delta + gamma
         )
+    }
+
+    private fun showCancelTrackConfirmation() {
+        AlertDialog.Builder(this)
+            .setTitle("Cancel track")
+            .setMessage("Are you sure you want to dicard track?")
+            .setPositiveButton("Yes") { _, _ ->
+                cancelTracking()
+            }
+            .setNegativeButton("No", null)
+            .show()
+    }
+
+    private fun cancelTracking() {
+        val intent = Intent(this, TrackingService::class.java).apply {
+            action = TrackingService.ACTION_CANCEL_TRACK
+        }
+        startService(intent)
     }
 
     private fun startTracking() {

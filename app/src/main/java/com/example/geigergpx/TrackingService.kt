@@ -43,6 +43,7 @@ class TrackingService : Service() {
         const val ACTION_STOP_MONITORING  = "com.example.geigergpx.STOP_MONITORING"
         const val ACTION_START = "com.example.geigergpx.START"
         const val ACTION_STOP  = "com.example.geigergpx.STOP"
+        const val ACTION_CANCEL_TRACK = "com.example.geigergpx.CANCEL_TRACK"
         const val ACTION_TOGGLE_HIGH_ACCURACY_MEASUREMENT = "com.example.geigergpx.TOGGLE_HIGH_ACCURACY_MEASUREMENT"
         const val NOTIF_ID = 1001
 
@@ -180,6 +181,7 @@ class TrackingService : Service() {
             ACTION_STOP_MONITORING -> stopMonitoring()
             ACTION_START -> startTracking()
             ACTION_STOP -> stopTracking()
+            ACTION_CANCEL_TRACK -> cancelTracking()
             ACTION_TOGGLE_HIGH_ACCURACY_MEASUREMENT -> toggleHighAccuracyMeasurement()
         }
         return START_STICKY
@@ -297,6 +299,73 @@ class TrackingService : Service() {
         repo.updateAudioStatus("Working")
     }
 
+    private data class TrackStopStats(
+        val durationSeconds: Long,
+        val distance: Double,
+        val points: Int
+    )
+
+    private fun stopTrackingSession(stats: TrackStopStats) {
+        startTimeMillis = 0L
+        totalDistance = 0.0
+        synchronized(writtenPoints) {
+            writtenPoints.clear()
+        }
+        repo.setActiveTrackPoints(emptyList())
+        lastWrittenLocation = null
+        lastWrittenTime = 0L
+        latSum = 0.0
+        lonSum = 0.0
+        nAv = 0
+        lastPointTotalBeeps = 0
+        lastGpsFixMillis = 0L
+        gpsSpoofingActive = false
+        spoofingSpeedKmh = 0.0
+
+        if (isMonitoring) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(NOTIF_ID, buildNotification("Monitoring..."))
+            repo.updateStatus(
+                tracking = false,
+                durationSeconds = stats.durationSeconds,
+                distance = stats.distance,
+                points = stats.points,
+                cpsSnapshot = currentCpsSnapshot(),
+                gpsStatus = repo.gpsStatus.value ?: "Waiting"
+            )
+        } else {
+            fusedLocation.removeLocationUpdates(locationCallback)
+            stopBeepDetector()
+            repo.updateStatus(
+                tracking = false,
+                durationSeconds = stats.durationSeconds,
+                distance = stats.distance,
+                points = stats.points,
+                cpsSnapshot = currentCpsSnapshot(),
+                gpsStatus = "Waiting"
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            stopSelf()
+
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(NOTIF_ID)
+        }
+    }
+
+    private fun cancelTracking() {
+        if (startTimeMillis == 0L) return
+
+        stopBackupLoop()
+        GpxWriter.deleteBackupIfExists(this)
+        repo.discardTrackCounts()
+        stopTrackingSession(TrackStopStats(durationSeconds = 0, distance = 0.0, points = 0))
+    }
+
     private fun stopTracking() {
         if (startTimeMillis == 0L) return
 
@@ -323,53 +392,13 @@ class TrackingService : Service() {
             showSaveNotification("Nothing to save")
         }
         repo.finalizeTrackCounts()
-        startTimeMillis = 0L
-        lastWrittenLocation = null
-        lastWrittenTime = 0L
-        latSum = 0.0
-        lonSum = 0.0
-        nAv = 0
-        lastPointTotalBeeps = 0
-
-        if (isMonitoring) {
-            // Stay in monitoring mode: keep GPS and audio running, downgrade notification.
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(NOTIF_ID, buildNotification("Monitoring..."))
-            repo.updateStatus(
-                tracking = false,
+        stopTrackingSession(
+            TrackStopStats(
                 durationSeconds = finalDurationSeconds,
                 distance = finalDistance,
-                points = finalPointCount,
-                cpsSnapshot = currentCpsSnapshot(),
-                gpsStatus = repo.gpsStatus.value ?: "Waiting"
+                points = finalPointCount
             )
-        } else {
-            // Not monitoring: stop GPS and audio.
-            fusedLocation.removeLocationUpdates(locationCallback)
-            stopBeepDetector()
-            repo.updateStatus(
-                tracking = false,
-                durationSeconds = finalDurationSeconds,
-                distance = finalDistance,
-                points = finalPointCount,
-                cpsSnapshot = currentCpsSnapshot(),
-                gpsStatus = "Waiting"
-            )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-            } else {
-                @Suppress("DEPRECATION")
-                stopForeground(true)
-            }
-            stopSelf()
-        }
-
-        // When fully stopped, remove the foreground notification.
-        // In monitoring mode we keep showing a foreground notification.
-        if (!isMonitoring) {
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.cancel(NOTIF_ID)
-        }
+        )
     }
 
     // -------------------------------------------------------------------------
