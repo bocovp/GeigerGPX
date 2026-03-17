@@ -4,6 +4,7 @@ import android.graphics.*
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
+import kotlin.math.abs
 
 class GradientTrackOverlay : Overlay() {
     // We store our own copy of points to draw
@@ -50,6 +51,8 @@ class GradientTrackOverlay : Overlay() {
     }
 
     private fun colorForDose(value: Double): Int {
+        if (abs(value) < 1e-5) // Gray color if no dose info
+            return Color.rgb(128, 128, 128)
         val normalized = if (maxDose > minDose) (value - minDose) / (maxDose - minDose) else 0.0
         val clamped = normalized.coerceIn(0.0, 1.0)
         return if (clamped < 0.5) {
