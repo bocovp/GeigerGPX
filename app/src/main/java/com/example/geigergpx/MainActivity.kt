@@ -21,6 +21,7 @@ import android.net.Uri
 import android.content.Context
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.EditText
 import kotlin.math.sqrt
 import kotlin.math.max
 
@@ -107,6 +108,10 @@ class MainActivity : AppCompatActivity() {
                 action = TrackingService.ACTION_TOGGLE_HIGH_ACCURACY_MEASUREMENT
             }
             startService(intent)
+        }
+
+        binding.buttonSavePoi.setOnClickListener {
+            showSavePoiDialog()
         }
 
         binding.buttonMap.setOnClickListener {
@@ -235,12 +240,69 @@ class MainActivity : AppCompatActivity() {
         viewModel.highAccuracyModeEnabled.observe(this) { enabled ->
             isHighAccuracyModeEnabled = enabled
             binding.buttonHighAccuracy.text = if (enabled) {
-                "Live mode"
+                "Live Mode"
             } else {
-                "High accuracy measurement"
+                "Measure"
             }
+            binding.buttonSavePoi.isEnabled = enabled
             updateCpsOrDoseLine()
         }
+    }
+
+    private fun showSavePoiDialog() {
+        if (!isHighAccuracyModeEnabled) {
+            return
+        }
+
+        val input = EditText(this).apply {
+            hint = "Description"
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Save POI")
+            .setView(input)
+            .setPositiveButton("Save POI") { _, _ ->
+                val description = input.text?.toString()?.trim().orEmpty()
+                val (doseRate, delta) = getCurrentDoseRateAndDelta()
+                savePoiPlaceholder(
+                    description = description,
+                    timestampMillis = System.currentTimeMillis(),
+                    latitude = viewModel.activeTrackPoints.value?.lastOrNull()?.latitude,
+                    longitude = viewModel.activeTrackPoints.value?.lastOrNull()?.longitude,
+                    doseRate = doseRate,
+                    delta = delta
+                )
+
+                if (isHighAccuracyModeEnabled) {
+                    val intent = Intent(this, TrackingService::class.java).apply {
+                        action = TrackingService.ACTION_TOGGLE_HIGH_ACCURACY_MEASUREMENT
+                    }
+                    startService(intent)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun savePoiPlaceholder(
+        description: String,
+        timestampMillis: Long,
+        latitude: Double?,
+        longitude: Double?,
+        doseRate: Double,
+        delta: Double
+    ) {
+        // TODO: persist POI to a file.
+    }
+
+    private fun getCurrentDoseRateAndDelta(): Pair<Double, Double> {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+
+        val t1 = latestCpsSnapshot.oldestTimestampMillis.toDouble() / 1000.0
+        val tn = System.currentTimeMillis().toDouble() / 1000.0
+        val ci = getConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
+        return Pair(ci.mean * coeff, ci.delta * coeff)
     }
 
     private fun updateCpsOrDoseLine() {
