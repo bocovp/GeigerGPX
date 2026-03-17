@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 private const val CURRENT_TRACK_ID = "active-track"
 private const val CURRENT_TRACK_TITLE = "Currently recording"
+private val EXCLUDED_GPX_FILES = setOf("Backup.gpx", "POI.gpx", "POI-Backup.gpx")
 
 data class TrackStats(
     val pointCount: Int,
@@ -249,7 +250,7 @@ object TrackCatalog {
                 val treeUri = Uri.parse(treeUriStr)
                 val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return@runCatching emptyList()
                 rootDoc.listFiles()
-                    .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name != "Backup.gpx" }
+                    .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name !in EXCLUDED_GPX_FILES }
                     .sortedByDescending { it.lastModified() }
                     .mapNotNull { doc ->
                         val name = doc.name ?: return@mapNotNull null
@@ -269,7 +270,7 @@ object TrackCatalog {
         val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
         return (root.listFiles() ?: emptyArray())
             .asSequence()
-            .filter { it.isFile && it.name.endsWith(".gpx", true) && it.name != "Backup.gpx" }
+            .filter { it.isFile && it.name.endsWith(".gpx", true) && it.name !in EXCLUDED_GPX_FILES }
             .sortedByDescending { it.lastModified() }
             .map {
                 TrackSource(
