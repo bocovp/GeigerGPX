@@ -268,26 +268,21 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Save POI") { _, _ ->
                 val description = input.text?.toString()?.trim().orEmpty()
                 val (doseRate, delta) = getCurrentDoseRateAndDelta()
-                val latitude = viewModel.activeTrackPoints.value?.lastOrNull()?.latitude
-                val longitude = viewModel.activeTrackPoints.value?.lastOrNull()?.longitude
+                val (latitude, longitude) = TrackingService.consumeMeasurementAverageCoordinates()
 
-                if (latitude == null || longitude == null) {
-                    Toast.makeText(this, "No GPS point available for POI", Toast.LENGTH_SHORT).show()
+                val ok = PoiLibrary.addPoi(
+                    context = this,
+                    description = description,
+                    timestampMillis = System.currentTimeMillis(),
+                    latitude = latitude,
+                    longitude = longitude,
+                    doseRate = doseRate,
+                    delta = delta
+                )
+                if (ok) {
+                    Toast.makeText(this, "POI saved", Toast.LENGTH_SHORT).show()
                 } else {
-                    val ok = PoiLibrary.addPoi(
-                        context = this,
-                        description = description,
-                        timestampMillis = System.currentTimeMillis(),
-                        latitude = latitude,
-                        longitude = longitude,
-                        doseRate = doseRate,
-                        delta = delta
-                    )
-                    if (ok) {
-                        Toast.makeText(this, "POI saved", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(this, "Unable to save POI", Toast.LENGTH_SHORT).show()
-                    }
+                    Toast.makeText(this, "Unable to save POI", Toast.LENGTH_SHORT).show()
                 }
 
                 if (isHighAccuracyModeEnabled) {

@@ -56,6 +56,11 @@ class TrackingService : Service() {
                 service.writtenPoints.toList()
             }
         }
+
+        fun consumeMeasurementAverageCoordinates(): Pair<Double, Double> {
+            val service = runningInstance ?: return Pair(0.0, 0.0)
+            return service.consumeMeasurementAverageCoordinatesInternal()
+        }
     }
 
     private val fusedLocation by lazy { LocationServices.getFusedLocationProviderClient(this) }
@@ -77,6 +82,11 @@ class TrackingService : Service() {
     private var latSum: Double = 0.0
     private var lonSum: Double = 0.0
     private var nAv: Int = 0
+
+    // GPS averaging for measurement mode (POI placement)
+    private var measLatSum: Double = 0.0
+    private var measLonSum: Double = 0.0
+    private var measLatLonCount: Int = 0
 
 
     // Global beep counter since app start (only updated from audio thread)
@@ -427,11 +437,18 @@ class TrackingService : Service() {
         val now = System.currentTimeMillis()
         lastGpsFixMillis = now
 
+        handleMeasurementLocation(loc)
+
         // 1. If not recording a track, just update the "Waiting/Working" UI status and exit
         if (startTimeMillis == 0L) {
             updateMonitoringStats()
             return
         }
+
+        handleTrackLocation(loc, now)
+    }
+
+    private fun handleTrackLocation(loc: Location, now: Long) {
 
         // 2. Handle the very first GPS fix (The Anchor)
         val lastLoc = lastWrittenLocation
@@ -519,6 +536,22 @@ class TrackingService : Service() {
         updateStats(elapsedSec)
     }
 
+    private fun handleMeasurementLocation(loc: Location) {
+        if (!highAccuracyModeEnabled) return
+        measLatSum += loc.latitude
+        measLonSum += loc.longitude
+        measLatLonCount += 1
+    }
+
+    private fun consumeMeasurementAverageCoordinatesInternal(): Pair<Double, Double> {
+        val latitude = if (measLatLonCount > 0) measLatSum / measLatLonCount.toDouble() else 0.0
+        val longitude = if (measLatLonCount > 0) measLonSum / measLatLonCount.toDouble() else 0.0
+        measLatSum = 0.0
+        measLonSum = 0.0
+        measLatLonCount = 0
+        return Pair(latitude, longitude)
+    }
+
     private fun currentMainCpsSampleCount(): Int = synchronized(mainCpsLock) {
         if (highAccuracyModeEnabled) highAccuracyTimestampCount.toInt() else mainCpsBeepCount
     }
@@ -559,6 +592,9 @@ class TrackingService : Service() {
                 } else {
                     0L
                 }
+                measLatSum = 0.0
+                measLonSum = 0.0
+                measLatLonCount = 0
             }
         }
         repo.updateHighAccuracyMode(highAccuracyModeEnabled)
