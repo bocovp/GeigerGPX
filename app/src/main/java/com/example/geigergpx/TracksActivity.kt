@@ -166,7 +166,7 @@ class TracksActivity : AppCompatActivity() {
             val backupUri = GpxWriter.backupUri(this) ?: return null
             if (backupUri.scheme == "file") {
                 val file = File(backupUri.path ?: return null)
-                FileProvider.getUriForFile(this, "${BuildConfig.APPLICATION_ID}.fileprovider", file)
+                FileProvider.getUriForFile(this, "${this.packageName}.fileprovider", file)
             } else {
                 backupUri
             }
@@ -176,7 +176,7 @@ class TracksActivity : AppCompatActivity() {
                 item.id.startsWith("file:") -> {
                     val file = File(item.id.removePrefix("file:"))
                     if (!file.exists()) return null
-                    FileProvider.getUriForFile(this, "${BuildConfig.APPLICATION_ID}.fileprovider", file)
+                    FileProvider.getUriForFile(this, "${this.packageName}.fileprovider", file)
                 }
                 else -> null
             }
