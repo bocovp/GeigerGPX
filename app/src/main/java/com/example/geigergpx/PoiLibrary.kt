@@ -60,6 +60,20 @@ object PoiLibrary {
         }
     }
 
+    fun renamePoi(context: Context, poi: PoiEntry, description: String): Boolean {
+        val updatedDescription = description.ifBlank { "POI" }
+        return modifyPoiFile(context) { existing ->
+            val updated = parsePoiEntries(existing).map { entry ->
+                if (entry.id == poi.id) {
+                    entry.copy(description = updatedDescription)
+                } else {
+                    entry
+                }
+            }
+            serializePoiEntries(updated)
+        }
+    }
+
     fun removePoi(context: Context, poi: PoiEntry): Boolean {
         return modifyPoiFile(context) { existing ->
             val filtered = parsePoiEntries(existing)

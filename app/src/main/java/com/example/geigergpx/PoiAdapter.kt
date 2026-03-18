@@ -1,6 +1,7 @@
 package com.example.geigergpx
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.example.geigergpx.databinding.ItemPoiBinding
@@ -12,7 +13,7 @@ data class PoiUiItem(
 )
 
 class PoiAdapter(
-    private val onLongPress: (PoiUiItem) -> Unit
+    private val onLongPress: (PoiUiItem, View) -> Unit
 ) : RecyclerView.Adapter<PoiAdapter.PoiViewHolder>() {
 
     private val items = mutableListOf<PoiUiItem>()
@@ -42,7 +43,7 @@ class PoiAdapter(
             binding.poiTitle.text = item.title
             binding.poiSubtitle.text = item.subtitle
             binding.root.setOnLongClickListener {
-                onLongPress(item)
+                onLongPress(item, binding.root)
                 true
             }
         }
