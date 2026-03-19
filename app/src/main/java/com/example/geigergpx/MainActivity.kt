@@ -77,7 +77,11 @@ class MainActivity : AppCompatActivity() {
 
         binding.buttonStart.setOnClickListener {
             if (viewModel.isTracking.value == true) {
-                showCancelTrackConfirmation()
+                if ((viewModel.pointCount.value ?: 0) == 0) {
+                    cancelTracking()
+                } else {
+                    showCancelTrackConfirmation()
+                }
             } else if (ensurePermissions()) {
                 checkBatteryOptimizations()
                 startTracking()
@@ -175,8 +179,13 @@ class MainActivity : AppCompatActivity() {
         val displayedTrackCounts = if (isTracking) trackCounts else (savedTrackCounts ?: trackCounts)
         val measurementCount = if (isMeasurementModeEnabled) latestCpsSnapshot.sampleCount else 0
         val measurementDurationSeconds = if (isMeasurementModeEnabled) {
-            ((System.currentTimeMillis() - latestCpsSnapshot.oldestTimestampMillis).toDouble() / 1000.0)
-                .coerceAtLeast(0.0)
+            val measurementStart = latestCpsSnapshot.measurementStartTimestampMillis
+            if (measurementStart > 0L) {
+                ((System.currentTimeMillis() - measurementStart).toDouble() / 1000.0)
+                    .coerceAtLeast(0.0)
+            } else {
+                0.0
+            }
         } else {
             0.0
         }
