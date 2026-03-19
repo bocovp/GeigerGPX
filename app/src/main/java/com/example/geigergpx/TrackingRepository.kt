@@ -55,8 +55,8 @@ class TrackingRepository {
     private val _audioStatus = MutableLiveData("unknown")
     val audioStatus: LiveData<String> = _audioStatus
 
-    private val _highAccuracyModeEnabled = MutableLiveData(false)
-    val highAccuracyModeEnabled: LiveData<Boolean> = _highAccuracyModeEnabled
+    private val _measurementModeEnabled = MutableLiveData(false)
+    val measurementModeEnabled: LiveData<Boolean> = _measurementModeEnabled
 
     fun updateStatus(
         tracking: Boolean,
@@ -106,8 +106,8 @@ class TrackingRepository {
         _audioStatus.postValue(audioStatus)
     }
 
-    fun updateHighAccuracyMode(enabled: Boolean) {
-        _highAccuracyModeEnabled.postValue(enabled)
+    fun updateMeasurementMode(enabled: Boolean) {
+        _measurementModeEnabled.postValue(enabled)
     }
 
     /** Increment and return the global total beep count in a thread-safe way. */

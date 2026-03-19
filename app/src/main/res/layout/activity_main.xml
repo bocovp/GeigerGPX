@@ -40,7 +40,7 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <Button
-        android:id="@+id/buttonHighAccuracy"
+        android:id="@+id/buttonMeasurementMode"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="Measure"
@@ -60,7 +60,7 @@
         android:layout_marginTop="16dp"
         android:enabled="false"
         app:layout_constraintTop_toBottomOf="@id/textTrackCounts"
-        app:layout_constraintStart_toEndOf="@id/buttonHighAccuracy"
+        app:layout_constraintStart_toEndOf="@id/buttonMeasurementMode"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_weight="1" />
 
