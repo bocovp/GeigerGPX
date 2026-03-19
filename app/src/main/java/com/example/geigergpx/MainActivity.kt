@@ -173,7 +173,17 @@ class MainActivity : AppCompatActivity() {
         savedTrackCounts: Int? = viewModel.savedTrackCounts.value
     ) {
         val displayedTrackCounts = if (isTracking) trackCounts else (savedTrackCounts ?: trackCounts)
+        val measurementCount = if (isHighAccuracyModeEnabled) latestCpsSnapshot.sampleCount else 0
+        val measurementDurationSeconds = if (isHighAccuracyModeEnabled) {
+            ((System.currentTimeMillis() - latestCpsSnapshot.oldestTimestampMillis).toDouble() / 1000.0)
+                .coerceAtLeast(0.0)
+        } else {
+            0.0
+        }
+
         binding.textTrackCounts.text = "Track counts: $displayedTrackCounts"
+        binding.textMeasurementCounts.text = "Counts: $measurementCount"
+        binding.textMeasurementDuration.text = "Duration: %.1f s".format(measurementDurationSeconds)
         binding.textTotalCounts.text = "Total counts: $totalCounts"
     }
 
@@ -200,6 +210,7 @@ class MainActivity : AppCompatActivity() {
         viewModel.cpsUpdate.observe(this) { update ->
             latestCpsSnapshot = update.snapshot
             updateCpsOrDoseLine(update.onBeep)
+            updateCountDisplay()
         }
 
         viewModel.totalCounts.observe(this) { totalCounts ->
@@ -247,6 +258,7 @@ class MainActivity : AppCompatActivity() {
             }
             binding.buttonSavePoi.isEnabled = enabled
             updateCpsOrDoseLine(false)
+            updateCountDisplay()
         }
     }
 
