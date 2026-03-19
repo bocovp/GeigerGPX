@@ -35,7 +35,7 @@ class MainActivity : AppCompatActivity() {
     private val cpsRefreshHandler = Handler(Looper.getMainLooper())
     private val cpsRefreshRunnable = object : Runnable {
         override fun run() {
-            updateCpsOrDoseLine()
+            updateCpsOrDoseLine(false)
             cpsRefreshHandler.postDelayed(this, 1000L)
         }
     }
@@ -142,7 +142,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        updateCpsOrDoseLine()
+        updateCpsOrDoseLine(false)
         startCpsRefreshLoop()
         startMonitoring()
     }
@@ -200,9 +200,9 @@ class MainActivity : AppCompatActivity() {
             binding.textPoints.text = "Points: $count"
         }
 
-        viewModel.cpsSnapshot.observe(this) { snapshot ->
-            latestCpsSnapshot = snapshot
-            updateCpsOrDoseLine()
+        viewModel.cpsUpdate.observe(this) { update ->
+            latestCpsSnapshot = update.snapshot
+            updateCpsOrDoseLine(update.onBeep)
         }
 
         viewModel.totalCounts.observe(this) { totalCounts ->
@@ -249,7 +249,7 @@ class MainActivity : AppCompatActivity() {
                 "Measure"
             }
             binding.buttonSavePoi.isEnabled = enabled
-            updateCpsOrDoseLine()
+            updateCpsOrDoseLine(false)
         }
     }
 
@@ -306,7 +306,8 @@ class MainActivity : AppCompatActivity() {
         return Pair(ci.mean * coeff, ci.delta * coeff)
     }
 
-    private fun updateCpsOrDoseLine() {
+    @Suppress("UNUSED_PARAMETER")
+    private fun updateCpsOrDoseLine(onBeep: Boolean) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
         val decimalDigits = if (isHighAccuracyModeEnabled) 3 else 2
