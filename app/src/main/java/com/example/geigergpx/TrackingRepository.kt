@@ -16,6 +16,11 @@ class TrackingRepository {
         val oldestTimestampMillis: Long = 0L
     )
 
+    data class CpsUpdate(
+        val snapshot: CpsSnapshot = CpsSnapshot(),
+        val onBeep: Boolean = false
+    )
+
     private val _isTracking = MutableLiveData(false)
     val isTracking: LiveData<Boolean> = _isTracking
 
@@ -31,8 +36,8 @@ class TrackingRepository {
     private val _activeTrackPoints = MutableLiveData<List<TrackPoint>>(emptyList())
     val activeTrackPoints: LiveData<List<TrackPoint>> = _activeTrackPoints
 
-    private val _cpsSnapshot = MutableLiveData(CpsSnapshot())
-    val cpsSnapshot: LiveData<CpsSnapshot> = _cpsSnapshot
+    private val _cpsUpdate = MutableLiveData(CpsUpdate())
+    val cpsUpdate: LiveData<CpsUpdate> = _cpsUpdate
 
     private val totalCounter = java.util.concurrent.atomic.AtomicInteger(0)
     private val _totalCounts = MutableLiveData(0)
@@ -65,12 +70,12 @@ class TrackingRepository {
         _durationText.postValue(formatDuration(durationSeconds))
         _distanceMeters.postValue(distance)
         _pointCount.postValue(points)
-        _cpsSnapshot.postValue(cpsSnapshot)
+        _cpsUpdate.postValue(CpsUpdate(snapshot = cpsSnapshot, onBeep = false))
         _gpsStatus.postValue(gpsStatus)
     }
 
-    fun updateCpsSnapshot(cpsSnapshot: CpsSnapshot) {
-        _cpsSnapshot.postValue(cpsSnapshot)
+    fun updateCpsSnapshot(cpsSnapshot: CpsSnapshot, onBeep: Boolean = false) {
+        _cpsUpdate.postValue(CpsUpdate(snapshot = cpsSnapshot, onBeep = onBeep))
     }
 
     fun beginNewTrack() {
