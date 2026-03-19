@@ -24,6 +24,7 @@ import android.view.MenuItem
 import android.widget.EditText
 import kotlin.math.sqrt
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
 
@@ -192,7 +193,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.textTrackCounts.text = "Track counts: $displayedTrackCounts"
         binding.textMeasurementCounts.text = "Counts: $measurementCount"
-        binding.textMeasurementDuration.text = "Duration: %.1f s".format(measurementDurationSeconds)
+        binding.textMeasurementDuration.text = "Duration: ${measurementDurationSeconds.roundToInt()} s"
         binding.textTotalCounts.text = "Total counts: $totalCounts"
     }
 
@@ -328,16 +329,20 @@ class MainActivity : AppCompatActivity() {
     private fun updateCpsOrDoseLine(onBeep: Boolean) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        val decimalDigits = if (isMeasurementModeEnabled) 3 else 2
+        var decimalDigits = if (isMeasurementModeEnabled) 3 else 2
 
         val t1 = latestCpsSnapshot.oldestTimestampMillis.toDouble() / 1000.0
         val tn = System.currentTimeMillis().toDouble() / 1000.0
 
         val ci = getConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
+        val doseRateMean = ci.mean * coeff
+        val doseRateDelta = ci.delta * coeff
+        if (doseRateDelta < 0.002 / 0.1 * coeff) decimalDigits = 4
+
         val doseColor = when {
-            ci.mean == 0.0 -> R.color.dose_zero
-            ci.mean < 0.15 -> R.color.dose_low
-            ci.mean < 0.3 -> R.color.dose_medium
+            doseRateMean == 0.0 -> R.color.dose_zero
+            doseRateMean < 0.15 -> R.color.dose_low
+            doseRateMean < 0.3 -> R.color.dose_medium
             else -> R.color.dose_high
         }
         binding.textCps.setTextColor(ContextCompat.getColor(this, doseColor))
@@ -349,10 +354,8 @@ class MainActivity : AppCompatActivity() {
                 binding.textCps.text = "CPS: %.${decimalDigits}f ± %.${decimalDigits}f".format(ci.mean, ci.delta)
             }
         } else {
-            val doseRateMean = ci.mean * coeff
             val doseRateLow = ci.lowBound * coeff
             val doseRateHigh = ci.highBound * coeff
-            val doseRateDelta = ci.delta * coeff
 
             if (latestCpsSnapshot.sampleCount <= 9) {
                 binding.textCps.text = "Dose rate: %.${decimalDigits}f … %.${decimalDigits}f μSv/h".format(doseRateLow, doseRateHigh)
