@@ -325,6 +325,13 @@ class MainActivity : AppCompatActivity() {
         val tn = System.currentTimeMillis().toDouble() / 1000.0
 
         val ci = getConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
+        val doseColor = when {
+            ci.mean == 0.0 -> R.color.dose_zero
+            ci.mean < 0.15 -> R.color.dose_low
+            ci.mean < 0.3 -> R.color.dose_medium
+            else -> R.color.dose_high
+        }
+        binding.textCps.setTextColor(ContextCompat.getColor(this, doseColor))
 
         if (coeff == 1.0) {
             if (latestCpsSnapshot.sampleCount <= 9) {
