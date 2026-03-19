@@ -30,7 +30,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var latestCpsSnapshot = TrackingRepository.CpsSnapshot()
-    private var isHighAccuracyModeEnabled: Boolean = false
+    private var isMeasurementModeEnabled: Boolean = false
 
     private val cpsRefreshHandler = Handler(Looper.getMainLooper())
     private val cpsRefreshRunnable = object : Runnable {
@@ -103,9 +103,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        binding.buttonHighAccuracy.setOnClickListener {
+        binding.buttonMeasurementMode.setOnClickListener {
             val intent = Intent(this, TrackingService::class.java).apply {
-                action = TrackingService.ACTION_TOGGLE_HIGH_ACCURACY_MEASUREMENT
+                action = TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE
             }
             startService(intent)
         }
@@ -150,9 +150,9 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         stopCpsRefreshLoop()
-        // Keep monitoring active in background while tracking or while high-accuracy
+        // Keep monitoring active in background while tracking or while
         // measurement mode is enabled.
-        if (viewModel.isTracking.value != true && !isHighAccuracyModeEnabled) {
+        if (viewModel.isTracking.value != true && !isMeasurementModeEnabled) {
             stopMonitoring()
         }
     }
@@ -173,8 +173,8 @@ class MainActivity : AppCompatActivity() {
         savedTrackCounts: Int? = viewModel.savedTrackCounts.value
     ) {
         val displayedTrackCounts = if (isTracking) trackCounts else (savedTrackCounts ?: trackCounts)
-        val measurementCount = if (isHighAccuracyModeEnabled) latestCpsSnapshot.sampleCount else 0
-        val measurementDurationSeconds = if (isHighAccuracyModeEnabled) {
+        val measurementCount = if (isMeasurementModeEnabled) latestCpsSnapshot.sampleCount else 0
+        val measurementDurationSeconds = if (isMeasurementModeEnabled) {
             ((System.currentTimeMillis() - latestCpsSnapshot.oldestTimestampMillis).toDouble() / 1000.0)
                 .coerceAtLeast(0.0)
         } else {
@@ -249,9 +249,9 @@ class MainActivity : AppCompatActivity() {
             binding.textAudioStatus.setTextColor(ContextCompat.getColor(this, color))
         }
 
-        viewModel.highAccuracyModeEnabled.observe(this) { enabled ->
-            isHighAccuracyModeEnabled = enabled
-            binding.buttonHighAccuracy.text = if (enabled) {
+        viewModel.measurementModeEnabled.observe(this) { enabled ->
+            isMeasurementModeEnabled = enabled
+            binding.buttonMeasurementMode.text = if (enabled) {
                 "Live Mode"
             } else {
                 "Measure"
@@ -263,7 +263,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSavePoiDialog() {
-        if (!isHighAccuracyModeEnabled) {
+        if (!isMeasurementModeEnabled) {
             return
         }
 
@@ -294,9 +294,9 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, "Unable to save POI", Toast.LENGTH_SHORT).show()
                 }
 
-                if (isHighAccuracyModeEnabled) {
+                if (isMeasurementModeEnabled) {
                     val intent = Intent(this, TrackingService::class.java).apply {
-                        action = TrackingService.ACTION_TOGGLE_HIGH_ACCURACY_MEASUREMENT
+                        action = TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE
                     }
                     startService(intent)
                 }
@@ -319,7 +319,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateCpsOrDoseLine(onBeep: Boolean) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        val decimalDigits = if (isHighAccuracyModeEnabled) 3 else 2
+        val decimalDigits = if (isMeasurementModeEnabled) 3 else 2
 
         val t1 = latestCpsSnapshot.oldestTimestampMillis.toDouble() / 1000.0
         val tn = System.currentTimeMillis().toDouble() / 1000.0

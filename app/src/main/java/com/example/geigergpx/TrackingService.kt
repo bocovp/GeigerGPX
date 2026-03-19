@@ -44,7 +44,7 @@ class TrackingService : Service() {
         const val ACTION_START = "com.example.geigergpx.START"
         const val ACTION_STOP  = "com.example.geigergpx.STOP"
         const val ACTION_CANCEL_TRACK = "com.example.geigergpx.CANCEL_TRACK"
-        const val ACTION_TOGGLE_HIGH_ACCURACY_MEASUREMENT = "com.example.geigergpx.TOGGLE_HIGH_ACCURACY_MEASUREMENT"
+        const val ACTION_TOGGLE_MEASUREMENT_MODE = "com.example.geigergpx.TOGGLE_MEASUREMENT_MODE"
         const val NOTIF_ID = 1001
 
         // 10 minutes
@@ -120,9 +120,9 @@ class TrackingService : Service() {
     private var mainCpsBeepTimes = LongArray(mainCpsBeepWindowSize)
     private var mainCpsBeepCount: Int = 0
     private var mainCpsBeepNextIndex: Int = 0
-    private var highAccuracyModeEnabled: Boolean = false
-    private var highAccuracyOldestTimestamp: Long = 0L
-    private var highAccuracyTimestampCount: Long = 0L
+    private var measurementModeEnabled: Boolean = false
+    private var measurementOldestTimestamp: Long = 0L
+    private var measurementTimestampCount: Long = 0L
     private val mainCpsLock = Any()
 
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -192,7 +192,7 @@ class TrackingService : Service() {
             ACTION_START -> startTracking()
             ACTION_STOP -> stopTracking()
             ACTION_CANCEL_TRACK -> cancelTracking()
-            ACTION_TOGGLE_HIGH_ACCURACY_MEASUREMENT -> toggleHighAccuracyMeasurement()
+            ACTION_TOGGLE_MEASUREMENT_MODE -> toggleMeasurementMode()
         }
         return START_STICKY
     }
@@ -537,7 +537,7 @@ class TrackingService : Service() {
     }
 
     private fun handleMeasurementLocation(loc: Location) {
-        if (!highAccuracyModeEnabled) return
+        if (!measurementModeEnabled) return
         measLatSum += loc.latitude
         measLonSum += loc.longitude
         measLatLonCount += 1
@@ -553,12 +553,12 @@ class TrackingService : Service() {
     }
 
     private fun currentMainCpsSampleCount(): Int = synchronized(mainCpsLock) {
-        if (highAccuracyModeEnabled) highAccuracyTimestampCount.toInt() else mainCpsBeepCount
+        if (measurementModeEnabled) measurementTimestampCount.toInt() else mainCpsBeepCount
     }
     private fun currentMainCpsOldestTimestampMillis(): Long = synchronized(mainCpsLock) {
-        if (highAccuracyModeEnabled) {
-            if (highAccuracyTimestampCount < 1L) return@synchronized 0L
-            return@synchronized highAccuracyOldestTimestamp
+        if (measurementModeEnabled) {
+            if (measurementTimestampCount < 1L) return@synchronized 0L
+            return@synchronized measurementOldestTimestamp
         }
 
         if (mainCpsBeepCount < 1) return@synchronized 0L
@@ -577,12 +577,12 @@ class TrackingService : Service() {
         oldestTimestampMillis = currentMainCpsOldestTimestampMillis()
     )
 
-    private fun toggleHighAccuracyMeasurement() {
+    private fun toggleMeasurementMode() {
         synchronized(mainCpsLock) {
-            highAccuracyModeEnabled = !highAccuracyModeEnabled
-            if (highAccuracyModeEnabled) {
-                highAccuracyTimestampCount = mainCpsBeepCount.toLong()
-                highAccuracyOldestTimestamp = if (mainCpsBeepCount >= 1) {
+            measurementModeEnabled = !measurementModeEnabled
+            if (measurementModeEnabled) {
+                measurementTimestampCount = mainCpsBeepCount.toLong()
+                measurementOldestTimestamp = if (mainCpsBeepCount >= 1) {
                     val oldestIndex = if (mainCpsBeepCount == mainCpsBeepWindowSize) {
                         mainCpsBeepNextIndex
                     } else {
@@ -597,7 +597,7 @@ class TrackingService : Service() {
                 measLatLonCount = 0
             }
         }
-        repo.updateHighAccuracyMode(highAccuracyModeEnabled)
+        repo.updateMeasurementMode(measurementModeEnabled)
         repo.updateCpsSnapshot(currentCpsSnapshot(), onBeep = false)
     }
 
@@ -634,27 +634,27 @@ class TrackingService : Service() {
                 if (mainCpsBeepCount < mainCpsBeepWindowSize) {
                     mainCpsBeepCount += 1
                 }
-                if (highAccuracyModeEnabled) {
-                    if (highAccuracyTimestampCount == 0L) {
-                        highAccuracyOldestTimestamp = beepTime
+                if (measurementModeEnabled) {
+                    if (measurementTimestampCount == 0L) {
+                        measurementOldestTimestamp = beepTime
                     }
-                    highAccuracyTimestampCount += 1L
+                    measurementTimestampCount += 1L
                 }
             }
         }
     }
 
     private fun calculateMainScreenCps(): Double = synchronized(mainCpsLock) {
-        if (highAccuracyModeEnabled) {
-            if (highAccuracyTimestampCount < 2L || highAccuracyOldestTimestamp == 0L) {
+        if (measurementModeEnabled) {
+            if (measurementTimestampCount < 2L || measurementOldestTimestamp == 0L) {
                 return@synchronized 0.0
             }
             val newestIndex = (mainCpsBeepNextIndex - 1 + mainCpsBeepWindowSize) % mainCpsBeepWindowSize
             val newest = mainCpsBeepTimes[newestIndex]
-            val deltaSeconds = (newest - highAccuracyOldestTimestamp) / 1000.0
+            val deltaSeconds = (newest - measurementOldestTimestamp) / 1000.0
             if (deltaSeconds <= 0.0) return@synchronized 0.0
 
-            return@synchronized (highAccuracyTimestampCount - 1).toDouble() / deltaSeconds
+            return@synchronized (measurementTimestampCount - 1).toDouble() / deltaSeconds
         }
 
         if (mainCpsBeepCount < 2) return@synchronized 0.0
