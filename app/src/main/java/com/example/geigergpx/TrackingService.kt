@@ -121,6 +121,7 @@ class TrackingService : Service() {
     private var mainCpsBeepCount: Int = 0
     private var mainCpsBeepNextIndex: Int = 0
     private var measurementModeEnabled: Boolean = false
+    private var measurementStartTimestampMillis: Long = 0L
     private var measurementOldestTimestamp: Long = 0L
     private var measurementTimestampCount: Long = 0L
     private val mainCpsLock = Any()
@@ -574,13 +575,17 @@ class TrackingService : Service() {
     private fun currentCpsSnapshot() = TrackingRepository.CpsSnapshot(
         cps = calculateMainScreenCps(),
         sampleCount = currentMainCpsSampleCount(),
-        oldestTimestampMillis = currentMainCpsOldestTimestampMillis()
+        oldestTimestampMillis = currentMainCpsOldestTimestampMillis(),
+        measurementStartTimestampMillis = synchronized(mainCpsLock) {
+            if (measurementModeEnabled) measurementStartTimestampMillis else 0L
+        }
     )
 
     private fun toggleMeasurementMode() {
         synchronized(mainCpsLock) {
             measurementModeEnabled = !measurementModeEnabled
             if (measurementModeEnabled) {
+                measurementStartTimestampMillis = System.currentTimeMillis()
                 measurementTimestampCount = mainCpsBeepCount.toLong()
                 measurementOldestTimestamp = if (mainCpsBeepCount >= 1) {
                     val oldestIndex = if (mainCpsBeepCount == mainCpsBeepWindowSize) {
@@ -595,6 +600,8 @@ class TrackingService : Service() {
                 measLatSum = 0.0
                 measLonSum = 0.0
                 measLatLonCount = 0
+            } else {
+                measurementStartTimestampMillis = 0L
             }
         }
         repo.updateMeasurementMode(measurementModeEnabled)
