@@ -598,7 +598,7 @@ class TrackingService : Service() {
             }
         }
         repo.updateHighAccuracyMode(highAccuracyModeEnabled)
-        repo.updateCpsSnapshot(currentCpsSnapshot())
+        repo.updateCpsSnapshot(currentCpsSnapshot(), onBeep = false)
     }
 
 
@@ -713,7 +713,7 @@ class TrackingService : Service() {
             onBeep = { _, count ->
                 repo.incrementTotalCounts(count)
                 registerBeepsForMainCps(count)
-                repo.updateCpsSnapshot(currentCpsSnapshot())
+                repo.updateCpsSnapshot(currentCpsSnapshot(), onBeep = true)
             },
             onAudioHealth = { healthy ->
                 repo.updateAudioStatus(if (healthy) "Working" else "Error")
