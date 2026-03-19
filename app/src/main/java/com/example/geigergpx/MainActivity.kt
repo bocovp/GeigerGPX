@@ -21,6 +21,7 @@ import android.net.Uri
 import android.content.Context
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import android.widget.EditText
 import kotlin.math.sqrt
 import kotlin.math.max
@@ -172,12 +173,14 @@ class MainActivity : AppCompatActivity() {
         trackCounts: Int = viewModel.trackCounts.value ?: 0,
         savedTrackCounts: Int? = viewModel.savedTrackCounts.value
     ) {
-        binding.textTotalCounts.text = if (isTracking || savedTrackCounts != null) {
+        if (isTracking || savedTrackCounts != null) {
             val persistedTrackCounts = if (isTracking) trackCounts else (savedTrackCounts ?: trackCounts)
-            "Total counts: $persistedTrackCounts / $totalCounts"
+            binding.textTrackCounts.text = "Track counts: $persistedTrackCounts"
+            binding.textTrackCounts.visibility = View.VISIBLE
         } else {
-            "Total counts: $totalCounts"
+            binding.textTrackCounts.visibility = View.GONE
         }
+        binding.textTotalCounts.text = "Total counts: $totalCounts"
     }
 
     private fun observeViewModel() {
