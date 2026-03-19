@@ -1,4 +1,4 @@
-package com.example.geigergpx
+//package com.example.geigergpx
 
 import android.content.Context
 import android.media.AudioFormat
@@ -92,23 +92,16 @@ class AudioBeepDetector(
             // Устанавливаем приоритет для работы со звуком
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
 
+
             val audioBuf = ShortArray(bufferSize)
             val processingBuf = ShortArray(bufferSize + WINDOW_SIZE * 2)
             var leftoverSamples = 0
             var totalSamplesProcessed: Long = 0 // Используем обработанные сэмплы для точности
             var audioHealthy = true
 
-            val STATE_SILENCE = 0
-            val STATE_DECAY = 1
-            val STATE_BEEP = 2
-            var cur_state = STATE_SILENCE
-
-            var magThreshold_end = magThreshold / 2
-
-            val dominanceThreshold = 2.0f
-            val dominanceThreshold_end = 1.5f
-
+            var isBeeping = false
             var beepStartSample: Long = 0
+            var silenceWindows = 0
             var currentBeepMaxMain = 0f
 
             var zeroBufferCount = 0
@@ -189,10 +182,10 @@ class AudioBeepDetector(
                         var q1M = 0f; var q2M = 0f
                         var q1L = 0f; var q2L = 0f
                         var q1H = 0f; var q2H = 0f
-//                        var energy = 0f
+                        var energy = 0f
                         for (i in 0 until WINDOW_SIZE) {
                             val s = processingBuf[pos + i].toFloat() * hann[i]
-//                            energy += s * s
+                            energy += s * s
 
                             val q0M = coeffMain * q1M - q2M + s
                             q2M = q1M; q1M = q0M
@@ -204,41 +197,48 @@ class AudioBeepDetector(
                             q2H = q1H; q1H = q0H
                         }
 
-                        val main = q1M * q1M + q2M * q2M - q1M * q2M * coeffMain // / WINDOW_SIZE
-                        var sideEnergy = 1e10f
+                        val main =  (q1M*q1M + q2M*q2M - q1M*q2M*coeffMain) // / WINDOW_SIZE
+
+                        val toneRatio = main / (energy + 1e-9f)
+
                         var detected = false
-                        var detected_weak = false
-                        if (main > magThreshold_end) {
-                            val low  = q1L * q1L + q2L * q2L - q1L * q2L * coeffLow // / WINDOW_SIZE
-                            val high = q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh // / WINDOW_SIZE
-                            sideEnergy = (low + high) / 2f
-                            detected = (main > magThreshold)  && (main > dominanceThreshold * sideEnergy)
-                            detected_weak = (main > dominanceThreshold_end * sideEnergy) // && (main > magThreshold_end)
-//                            if (detected_weak) Log.e("AudioBeepDetector", "dominance: ${"%.2e".format(main / (sideEnergy + 1e-9f))}\tmain: ${"%.2e".format(main)}")
+
+             //         Log.e("AudioBeepDetector", "main: ${main.toInt()}")
+                        var dominance = -1f
+
+                        if (main > magThreshold) {
+                            val ratioThreshold = 20f
+                        //    Log.e("AudioBeepDetector", "toneRatio: ${toneRatio}")
+                            if (toneRatio > ratioThreshold) {
+                                val low = (q1L * q1L + q2L * q2L - q1L * q2L * coeffLow) // / WINDOW_SIZE
+                                val high = (q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh) // / WINDOW_SIZE
+                                val sideEnergy = low + high
+                                dominance = main / (sideEnergy + 1e-9f)
+                                val dominanceThreshold = 0.75f
+                                detected = (dominance > dominanceThreshold)
+                           //     if (detected) Log.e("AudioBeepDetector", "dominance: ${dominance}")
+                         //   if (main > low * 1.2f && main > high * 1.2f) detected = true
+                            }
                         }
 
-//                      Log.e("AudioBeepDetector", "main: ${main.toInt()}")
-//                      Log.e("AudioBeepDetector", "dominance: ${dominance}")
-
-
                         if (detected) {
-                            if (cur_state == STATE_SILENCE) {
-                                cur_state = STATE_BEEP
+                            silenceWindows = 0
+                            if (!isBeeping) {
+                                isBeeping = true
                                 beepStartSample = currentWindowGlobalSample
-                                Log.e("AudioBeepDetector", "\t\t\t\t\t\t\t\tdominance: ${"%.2e".format(main / (sideEnergy + 1e-9f))}\tmain: ${"%.2e".format(main)}")
-                            } else if (cur_state == STATE_DECAY) {
-                                cur_state = STATE_BEEP
+                                currentBeepMaxMain = main
+                            } else if (main > currentBeepMaxMain) {
+                                    currentBeepMaxMain = main
                             }
-                            if (main > currentBeepMaxMain) currentBeepMaxMain = main
-                        } else if (detected_weak) {
-//                          Log.e("AudioBeepDetector", "Loosing     main: ${main} dominance: ${main / (sideEnergy+1e-9f)}")
-                            if (cur_state == STATE_BEEP) {
-                                cur_state = STATE_DECAY
+                        } else if (isBeeping) {
+                            silenceWindows++
+                    //        Log.e("AudioBeepDetector", "Loosing     toneRatio: ${toneRatio} dominance: ${dominance}")
+                            if (silenceWindows > SILENCE_WINDOWS_LIMIT) {
+                                val duration = (currentWindowGlobalSample  - beepStartSample).toDouble() / SAMPLE_RATE
+                                processBeep(duration, currentBeepMaxMain)
+                                isBeeping = false
+                                currentBeepMaxMain = 0f
                             }
-                        } else if ((cur_state == STATE_BEEP) || (cur_state == STATE_DECAY)) {
-                            val duration = (currentWindowGlobalSample  - beepStartSample).toDouble() / SAMPLE_RATE
-                            processBeep(duration, currentBeepMaxMain)
-                            cur_state = STATE_SILENCE
                         }
                         pos += STEP_SIZE
                     }
@@ -348,13 +348,13 @@ class AudioBeepDetector(
 
     private fun processBeep(duration: Double, peakMain: Float) {
         when {
-            duration in ONE_BEEP_MIN..ONE_BEEP_MAX -> {
+            duration >= ONE_BEEP_MIN && duration <= ONE_BEEP_MAX -> {
                 Log.e("AudioBeepDetector", "SINGLE duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
                 onBeep(peakMain, 1)
             }
             duration > ONE_BEEP_MAX && duration <= TWO_BEEP_MAX -> {
                 Log.e("AudioBeepDetector", "DOUBLE duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
-                onBeep(peakMain, 1) //  OFF for now
+                onBeep(peakMain, 1) /// OFF for now
             }
             else -> {
                 Log.e("AudioBeepDetector", "       duration: ${"%.3f".format(duration)}  peakMain: ${"%.2e".format(peakMain)}")
@@ -391,7 +391,7 @@ class AudioBeepDetector(
 
     companion object {
         private const val WINDOW_SIZE_STATIC = 175
-        private const val BASE_MAG = 1e6f
+        private const val BASE_MAG = 1e6f  *10f//for MIC
         private val DEFAULT_MAG_THRESHOLD = (BASE_MAG * WINDOW_SIZE_STATIC).toFloat()
 
         fun createWithPrefs(context: Context, onBeep: (Float, Int) -> Unit): AudioBeepDetector {
@@ -428,8 +428,8 @@ class AudioBeepDetector(
                     onProgress(peaks.size, totalBeepCount)
 
                     if (peaks.size == totalBeepCount) {
-                        val median = peaks.sorted()[totalBeepCount/2]
-                        val rawThreshold = minOf( median / 2.5f, 1e10f) // 20260319 before: 2.0f 2e9f
+                        val median = peaks.sorted()[totalBeepCount/2].toFloat()
+                        val rawThreshold = minOf( median / 2f, 2e9f)
                         val threshold = if (rawThreshold > 0f) rawThreshold else DEFAULT_MAG_THRESHOLD
 
                         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
@@ -446,7 +446,7 @@ class AudioBeepDetector(
             }
 
             detector = AudioBeepDetector(
-                magThreshold = DEFAULT_MAG_THRESHOLD / 1000f, // 20260319 before: 10f
+                magThreshold = DEFAULT_MAG_THRESHOLD / 10f,
                 onBeep = callback
             )
 
