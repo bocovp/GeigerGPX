@@ -45,7 +45,7 @@ object PoiLibrary {
     ): Boolean {
         return modifyPoiFile(context) { existing ->
             val list = parsePoiEntries(existing).toMutableList()
-            val doseRateText = String.format(Locale.US, "%.3f ± %.3f", doseRate, delta)
+            val doseRateText = String.format(Locale.US, "%.4f ± %.4f", doseRate, delta)
             list.add(
                 PoiEntry(
                     id = "${timestampMillis}_${latitude}_${longitude}",

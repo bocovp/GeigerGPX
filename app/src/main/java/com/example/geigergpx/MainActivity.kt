@@ -320,27 +320,36 @@ class MainActivity : AppCompatActivity() {
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         val t1 = latestCpsSnapshot.oldestTimestampMillis.toDouble() / 1000.0
-        val tn = System.currentTimeMillis().toDouble() / 1000.0
-        val ci = getConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
+        val t_now = System.currentTimeMillis().toDouble() / 1000.0
+        val ci = getConfidenceInterval(t1, t_now, latestCpsSnapshot.sampleCount + 1) // + 1 for we have in fact n intervals for parameters estimation
         return Pair(ci.mean * coeff, ci.delta * coeff)
     }
 
-    @Suppress("UNUSED_PARAMETER")
     private fun updateCpsOrDoseLine(onBeep: Boolean) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        var decimalDigits = if (isMeasurementModeEnabled) 3 else 2
 
         val t1 = latestCpsSnapshot.oldestTimestampMillis.toDouble() / 1000.0
-        val tn = System.currentTimeMillis().toDouble() / 1000.0
 
-        val ci = getConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
+        val ci = if (onBeep) {
+            val tn = System.currentTimeMillis().toDouble() / 1000.0
+            // if onBeep we have only n-1 intervals ot analyze (t1->t2) (t2->t1) ... (t{n-1}->tn)
+            getConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
+        } else {
+            val t_now = System.currentTimeMillis().toDouble() / 1000.0
+            // if not onBeep we have n intervals: (t1->t2) (t2->t1) ... (t{n-1}->tn) and (tn->now)
+            getConfidenceInterval(t1, t_now, latestCpsSnapshot.sampleCount + 1)
+        }
+
         val doseRateMean = ci.mean * coeff
         val doseRateDelta = ci.delta * coeff
-        if (doseRateDelta < 0.002 / 0.1 * coeff) decimalDigits = 4
+
+        val decimalDigits = if (isMeasurementModeEnabled) {
+            if (doseRateDelta < 0.002  * (coeff / 0.1)) 4 else 3
+        } else 2
 
         val doseColor = when {
-            doseRateMean == 0.0 -> R.color.dose_zero
+            doseRateMean < 0.000001 -> R.color.dose_zero
             doseRateMean < 0.15 -> R.color.dose_low
             doseRateMean < 0.3 -> R.color.dose_medium
             else -> R.color.dose_high
@@ -354,10 +363,9 @@ class MainActivity : AppCompatActivity() {
                 binding.textCps.text = "CPS: %.${decimalDigits}f ± %.${decimalDigits}f".format(ci.mean, ci.delta)
             }
         } else {
-            val doseRateLow = ci.lowBound * coeff
-            val doseRateHigh = ci.highBound * coeff
-
             if (latestCpsSnapshot.sampleCount <= 9) {
+                val doseRateLow = ci.lowBound * coeff
+                val doseRateHigh = ci.highBound * coeff
                 binding.textCps.text = "Dose rate: %.${decimalDigits}f … %.${decimalDigits}f μSv/h".format(doseRateLow, doseRateHigh)
             } else {
                 binding.textCps.text = "Dose rate: %.${decimalDigits}f ± %.${decimalDigits}f μSv/h".format(doseRateMean, doseRateDelta)
@@ -377,8 +385,7 @@ class MainActivity : AppCompatActivity() {
             return ConfidenceInterval(mean = 0.0, delta = 0.0, lowBound = 0.0, highBound = 0.0)
         }
         val deltaTime = tn - t1
-        // Using unbiased estimator for low number of points
-        val norm = (if (n < 10) n-2 else n-1).toDouble()
+        val norm = (if (n < 10) n-2 else n-1).toDouble() // Using unbiased estimator for low number of points
 
         val mean = norm / deltaTime
         val z = 1.95996
