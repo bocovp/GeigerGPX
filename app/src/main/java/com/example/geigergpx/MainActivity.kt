@@ -287,7 +287,7 @@ class MainActivity : AppCompatActivity() {
                 val (counts, seconds) = getCurrentMeasurementCountsAndSeconds()
                 val coeff = PreferenceManager.getDefaultSharedPreferences(this)
                     .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-                val doseRate = DoseStatistics.doseRateIntervalFromCountsAndSeconds(counts, seconds, coeff).mean
+                val doseRate = ConfidenceInterval.doseRateFromCountsAndSeconds(counts, seconds, coeff).mean
                 val (latitude, longitude) = TrackingService.consumeMeasurementAverageCoordinates()
 
                 val ok = PoiLibrary.addPoi(
@@ -337,11 +337,11 @@ class MainActivity : AppCompatActivity() {
         val ci = if (onBeep) {
             val tn = System.currentTimeMillis().toDouble() / 1000.0
             // if onBeep we have only n-1 intervals ot analyze (t1->t2) (t2->t1) ... (t{n-1}->tn)
-            DoseStatistics.confidenceIntervalFromTimestamps(t1, tn, latestCpsSnapshot.sampleCount)
+            ConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
         } else {
             val t_now = System.currentTimeMillis().toDouble() / 1000.0
             // if not onBeep we have n intervals: (t1->t2) (t2->t1) ... (t{n-1}->tn) and (tn->now)
-            DoseStatistics.confidenceIntervalFromTimestamps(t1, t_now, latestCpsSnapshot.sampleCount + 1)
+            ConfidenceInterval(t1, t_now, latestCpsSnapshot.sampleCount + 1)
         }
 
         val doseRateMean = ci.mean * coeff
@@ -360,23 +360,10 @@ class MainActivity : AppCompatActivity() {
         binding.textCps.setTextColor(ContextCompat.getColor(this, doseColor))
 
         if (coeff == 1.0) {
-            val cpsText = DoseStatistics.formatDoseRateText(
-                ci,
-                latestCpsSnapshot.sampleCount,
-                decimalDigits
-            )
+            val cpsText = ci.toText(decimalDigits)
             binding.textCps.text = "CPS: $cpsText"
         } else {
-            val doseRateText = DoseStatistics.formatDoseRateText(
-                ConfidenceInterval(
-                    mean = doseRateMean,
-                    delta = doseRateDelta,
-                    lowBound = ci.lowBound * coeff,
-                    highBound = ci.highBound * coeff
-                ),
-                latestCpsSnapshot.sampleCount,
-                decimalDigits
-            )
+            val doseRateText = ci.scale(coeff).toText(decimalDigits)
             binding.textCps.text = "Dose rate: $doseRateText μSv/h"
         }
     }

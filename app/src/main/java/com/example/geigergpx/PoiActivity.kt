@@ -76,8 +76,8 @@ class PoiActivity : AppCompatActivity() {
     private fun formatDoseRateText(poi: PoiEntry): String {
         val coeff = PreferenceManager.getDefaultSharedPreferences(this)
             .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        val ci = DoseStatistics.doseRateIntervalFromCountsAndSeconds(poi.counts, poi.seconds, coeff)
-        return DoseStatistics.formatDoseRateText(ci, poi.counts, decimalDigits = 4)
+        val ci = ConfidenceInterval.doseRateFromCountsAndSeconds(poi.counts, poi.seconds, coeff)
+        return ci.toText(decimalDigits = 4)
     }
 
     private fun onPoiLongPressed(item: PoiUiItem, anchor: View) {
