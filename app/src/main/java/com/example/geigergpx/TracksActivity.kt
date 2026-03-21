@@ -51,6 +51,9 @@ class TracksActivity : AppCompatActivity() {
 
     private fun refreshTrackList() {
         val showLoading = !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty(this)
+        if (showLoading) {
+            binding.loadingLabel.setText(R.string.loading_files)
+        }
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
         binding.tracksRecyclerView.visibility = if (showLoading) View.GONE else View.VISIBLE
         Thread {
@@ -66,8 +69,10 @@ class TracksActivity : AppCompatActivity() {
             runOnUiThread {
                 hasLoadedTrackList = true
                 adapter.submit(items, selected)
-                binding.loadingLabel.visibility = View.GONE
-                binding.tracksRecyclerView.visibility = View.VISIBLE
+                val hasTracks = items.isNotEmpty()
+                binding.loadingLabel.setText(if (hasTracks) R.string.loading_files else R.string.no_tracks_found)
+                binding.loadingLabel.visibility = if (hasTracks) View.GONE else View.VISIBLE
+                binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
             }
         }.start()
     }
