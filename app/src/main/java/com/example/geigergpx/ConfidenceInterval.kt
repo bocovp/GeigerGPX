@@ -20,20 +20,12 @@ class ConfidenceInterval {
     }
 
     constructor(t1: Double, tn: Double, n: Int) {
+        // n is number of detected events here so n >= 2
         sampleCount = n
-
-        if (n <= 1 || tn <= t1) {
-            mean = 0.0
-            delta = 0.0
-            lowBound = 0.0
-            highBound = 0.0
-            return
-        }
-
         val deltaTime = tn - t1
-        val norm = (if (n < 10) n - 2 else n - 1).toDouble() // Using unbiased estimator for low number of points
+        val norm = (if (n > 2 && n < 10) n - 2 else n - 1).toDouble() // Using unbiased estimator for low number of points
 
-        if (norm <= 0.0 || deltaTime <= 0.0) {
+        if (n < 2 || norm <= 0.0 || deltaTime <= 0.0) {
             mean = 0.0
             delta = 0.0
             lowBound = 0.0
@@ -51,8 +43,8 @@ class ConfidenceInterval {
     }
 
     fun toText(decimalDigits: Int): String {
-        if (mean == 0.0 && delta == 0.0) {
-            return String.format(Locale.US, "%.${decimalDigits}f", 0.0)
+        if (sampleCount < 2) {
+            return "0"
         }
 
         return if (sampleCount <= 9) {
