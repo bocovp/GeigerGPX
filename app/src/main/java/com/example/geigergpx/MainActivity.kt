@@ -22,8 +22,6 @@ import android.content.Context
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
-import kotlin.math.sqrt
-import kotlin.math.max
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
@@ -286,7 +284,10 @@ class MainActivity : AppCompatActivity() {
             .setView(input)
             .setPositiveButton("Save POI") { _, _ ->
                 val description = input.text?.toString()?.trim().orEmpty()
-                val (doseRate, delta) = getCurrentDoseRateAndDelta()
+                val (counts, seconds) = getCurrentMeasurementCountsAndSeconds()
+                val coeff = PreferenceManager.getDefaultSharedPreferences(this)
+                    .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+                val doseRate = DoseStatistics.doseRateIntervalFromCountsAndSeconds(counts, seconds, coeff).mean
                 val (latitude, longitude) = TrackingService.consumeMeasurementAverageCoordinates()
 
                 val ok = PoiLibrary.addPoi(
@@ -296,7 +297,8 @@ class MainActivity : AppCompatActivity() {
                     latitude = latitude,
                     longitude = longitude,
                     doseRate = doseRate,
-                    delta = delta
+                    counts = counts,
+                    seconds = seconds
                 )
                 if (ok) {
                     Toast.makeText(this, "POI saved", Toast.LENGTH_SHORT).show()
@@ -315,14 +317,15 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun getCurrentDoseRateAndDelta(): Pair<Double, Double> {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-
-        val t1 = latestCpsSnapshot.oldestTimestampMillis.toDouble() / 1000.0
-        val t_now = System.currentTimeMillis().toDouble() / 1000.0
-        val ci = getConfidenceInterval(t1, t_now, latestCpsSnapshot.sampleCount + 1) // + 1 for we have in fact n intervals for parameters estimation
-        return Pair(ci.mean * coeff, ci.delta * coeff)
+    private fun getCurrentMeasurementCountsAndSeconds(): Pair<Int, Double> {
+        val counts = latestCpsSnapshot.sampleCount.coerceAtLeast(0)
+        val seconds = if (latestCpsSnapshot.oldestTimestampMillis > 0L) {
+            ((System.currentTimeMillis() - latestCpsSnapshot.oldestTimestampMillis).toDouble() / 1000.0)
+                .coerceAtLeast(0.0)
+        } else {
+            0.0
+        }
+        return Pair(counts, seconds)
     }
 
     private fun updateCpsOrDoseLine(onBeep: Boolean) {
@@ -334,11 +337,11 @@ class MainActivity : AppCompatActivity() {
         val ci = if (onBeep) {
             val tn = System.currentTimeMillis().toDouble() / 1000.0
             // if onBeep we have only n-1 intervals ot analyze (t1->t2) (t2->t1) ... (t{n-1}->tn)
-            getConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
+            DoseStatistics.confidenceIntervalFromTimestamps(t1, tn, latestCpsSnapshot.sampleCount)
         } else {
             val t_now = System.currentTimeMillis().toDouble() / 1000.0
             // if not onBeep we have n intervals: (t1->t2) (t2->t1) ... (t{n-1}->tn) and (tn->now)
-            getConfidenceInterval(t1, t_now, latestCpsSnapshot.sampleCount + 1)
+            DoseStatistics.confidenceIntervalFromTimestamps(t1, t_now, latestCpsSnapshot.sampleCount + 1)
         }
 
         val doseRateMean = ci.mean * coeff
@@ -371,34 +374,6 @@ class MainActivity : AppCompatActivity() {
                 binding.textCps.text = "Dose rate: %.${decimalDigits}f ± %.${decimalDigits}f μSv/h".format(doseRateMean, doseRateDelta)
             }
         }
-    }
-
-    private data class ConfidenceInterval(
-        val mean: Double,
-        val delta: Double,
-        val lowBound: Double,
-        val highBound: Double
-    )
-
-    private fun getConfidenceInterval(t1: Double, tn: Double, n: Int): ConfidenceInterval {
-        if (n <= 1 || tn <= t1) {
-            return ConfidenceInterval(mean = 0.0, delta = 0.0, lowBound = 0.0, highBound = 0.0)
-        }
-        val deltaTime = tn - t1
-        val norm = (if (n < 10) n-2 else n-1).toDouble() // Using unbiased estimator for low number of points
-
-        val mean = norm / deltaTime
-        val z = 1.95996 // Normal distribution quantile for conf. P = 0.95
-        val root =  sqrt((n - 1).toDouble())
-        val delta = mean * z / root // This is simply CI for normal distribution
-        val gamma = mean * (z*z - 1.0)/(3*(n - 1)).toDouble() // This follows from Cornish–Fisher expansion for Chi^2 distribution
-
-        return ConfidenceInterval(
-            mean = mean,
-            delta = delta,
-            lowBound = max(0.0, mean - delta + gamma),
-            highBound = mean + delta + gamma
-        )
     }
 
     private fun showCancelTrackConfirmation() {
