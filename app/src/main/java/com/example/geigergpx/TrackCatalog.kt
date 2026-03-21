@@ -102,34 +102,25 @@ object TrackCatalog {
 
         sources.forEach { source ->
             val shouldIncludeMapTrack = includeMapTracks && (mapTrackIds == null || source.id in mapTrackIds)
-            val cached = parsedTrackCache[source.id]
-            val cacheMatches = cached != null && cached.matches(source)
-            val stats = when {
-                cacheMatches -> cached!!.stats
-                else -> {
-                    try {
-                        parseGpxTrack(source.openStream())?.also {
-                            if (source.metadataReliable) {
-                                val updatedCacheEntry = CachedParsedTrack.from(source, it)
-                                if (parsedTrackCache[source.id] != updatedCacheEntry) {
-                                    parsedTrackCache[source.id] = updatedCacheEntry
-                                    cacheChanged = true
-                                }
-                            } else if (parsedTrackCache.remove(source.id) != null) {
-                                cacheChanged = true
-                            }
-                        }?.stats
-                    } catch (e: Exception) {
-                        Log.e("GPX", "Unable to parse track ${source.displayName}", e)
-                        null
+            var cached = parsedTrackCache[source.id]
+            if (cached == null) {
+                cached = try {
+                    parseGpxTrack(source.openStream())?.let {
+                        CachedParsedTrack.from(source, it).also { updatedCacheEntry ->
+                            parsedTrackCache[source.id] = updatedCacheEntry
+                            cacheChanged = true
+                        }
                     }
+                } catch (e: Exception) {
+                    Log.e("GPX", "Unable to parse track ${source.displayName}", e)
+                    null
                 }
-            } ?: return@forEach
+            }
 
+            val stats = cached?.stats ?: return@forEach
             val mapTrack = when {
                 !shouldIncludeMapTrack -> null
-                cacheMatches -> MapTrack(source.id, source.displayName, cached!!.samples())
-                else -> parsedTrackCache[source.id]?.let { MapTrack(source.id, source.displayName, it.samples()) }
+                else -> MapTrack(source.id, source.displayName, cached.samples())
             }
 
             items.add(
@@ -298,14 +289,6 @@ object TrackCatalog {
         private val persistedJson: JSONObject? = null,
         @Volatile private var sampleCache: List<TrackSample>? = null
     ) {
-        fun matches(source: TrackSource): Boolean {
-            if (!metadataReliable || !source.metadataReliable) return false
-            return sourceId == source.id &&
-                displayName == source.displayName &&
-                lastModified == source.lastModified &&
-                sizeBytes == source.sizeBytes
-        }
-
         fun samples(): List<TrackSample> {
             sampleCache?.let { return it }
             synchronized(this) {
