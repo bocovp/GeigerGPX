@@ -5,11 +5,15 @@ import android.location.Location
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.documentfile.provider.DocumentFile
 import androidx.preference.PreferenceManager
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
+import java.io.BufferedReader
+import java.io.BufferedWriter
 import java.io.InputStream
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -35,21 +39,32 @@ data class TrackListItem(
 
 object TrackCatalog {
 
-    private val parsedTrackCache = ConcurrentHashMap<String, ParsedTrack>()
+    private val parsedTrackCache = ConcurrentHashMap<String, CachedParsedTrack>()
+    @Volatile private var diskCacheLoaded = false
 
     fun currentTrackId(): String = CURRENT_TRACK_ID
 
-    fun clearTrackCache() {
-        parsedTrackCache.clear()
+    fun clearTrackCache(context: Context) {
+        synchronized(this) {
+            parsedTrackCache.clear()
+            diskCacheLoaded = true
+            trackCacheFile(context).delete()
+        }
     }
 
-    fun isTrackCacheEmpty(): Boolean = parsedTrackCache.isEmpty()
+    fun isTrackCacheEmpty(context: Context): Boolean {
+        if (parsedTrackCache.isNotEmpty()) return false
+        val cacheFile = trackCacheFile(context)
+        return !cacheFile.exists() || cacheFile.length() == 0L
+    }
 
     fun loadTrackListItems(
         context: Context,
         activePoints: List<TrackPoint>,
         includeCurrentTrack: Boolean
     ): List<TrackListItem> {
+        ensureDiskCacheLoaded(context)
+
         val items = mutableListOf<TrackListItem>()
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
@@ -68,28 +83,41 @@ object TrackCatalog {
             )
         }
 
-        runCatching { listTrackFiles(context) }
-            .getOrDefault(emptyList())
-            .forEach { source ->
-                val parsed = parsedTrackCache[source.displayName] ?: try {
+        val sources = runCatching { listTrackFiles(context) }.getOrDefault(emptyList())
+        val sourceIds = sources.mapTo(mutableSetOf()) { it.id }
+        var cacheChanged = removeMissingSources(sourceIds)
+
+        sources.forEach { source ->
+            val cached = parsedTrackCache[source.id]
+            val parsed = if (cached != null && cached.matches(source)) {
+                cached.parsedTrack
+            } else {
+                try {
                     parseGpxTrack(source.openStream())?.also {
-                        parsedTrackCache[source.displayName] = it
+                        parsedTrackCache[source.id] = CachedParsedTrack.from(source, it)
+                        cacheChanged = true
                     }
                 } catch (e: Exception) {
                     Log.e("GPX", "Unable to parse track ${source.displayName}", e)
                     null
-                } ?: return@forEach
-                items.add(
-                    TrackListItem(
-                        id = source.id,
-                        title = source.displayName,
-                        subtitle = formatStats(parsed.stats),
-                        mapTrack = MapTrack(source.id, source.displayName, parsed.samples),
-                        isCurrentTrack = false,
-                        defaultVisible = false
-                    )
+                }
+            } ?: return@forEach
+
+            items.add(
+                TrackListItem(
+                    id = source.id,
+                    title = source.displayName,
+                    subtitle = formatStats(parsed.stats),
+                    mapTrack = MapTrack(source.id, source.displayName, parsed.samples),
+                    isCurrentTrack = false,
+                    defaultVisible = false
                 )
-            }
+            )
+        }
+
+        if (cacheChanged) {
+            persistTrackCache(context)
+        }
 
         return items
     }
@@ -230,6 +258,87 @@ object TrackCatalog {
         return "${stats.pointCount} points · $durationText · %.1f m".format(stats.distanceMeters)
     }
 
+
+    private data class CachedParsedTrack(
+        val sourceId: String,
+        val displayName: String,
+        val lastModified: Long,
+        val sizeBytes: Long,
+        val parsedTrack: ParsedTrack
+    ) {
+        fun matches(source: TrackSource): Boolean {
+            return sourceId == source.id &&
+                displayName == source.displayName &&
+                lastModified == source.lastModified &&
+                sizeBytes == source.sizeBytes
+        }
+
+        fun toJson(): JSONObject {
+            return JSONObject()
+                .put("sourceId", sourceId)
+                .put("displayName", displayName)
+                .put("lastModified", lastModified)
+                .put("sizeBytes", sizeBytes)
+                .put("stats", JSONObject()
+                    .put("pointCount", parsedTrack.stats.pointCount)
+                    .put("durationMillis", parsedTrack.stats.durationMillis)
+                    .put("distanceMeters", parsedTrack.stats.distanceMeters))
+                .put("samples", JSONArray().apply {
+                    parsedTrack.samples.forEach { sample ->
+                        put(JSONObject()
+                            .put("latitude", sample.latitude)
+                            .put("longitude", sample.longitude)
+                            .put("doseRate", sample.doseRate)
+                            .put("counts", sample.counts)
+                            .put("seconds", sample.seconds))
+                    }
+                })
+        }
+
+        companion object {
+            fun from(source: TrackSource, parsedTrack: ParsedTrack): CachedParsedTrack {
+                return CachedParsedTrack(
+                    sourceId = source.id,
+                    displayName = source.displayName,
+                    lastModified = source.lastModified,
+                    sizeBytes = source.sizeBytes,
+                    parsedTrack = parsedTrack
+                )
+            }
+
+            fun fromJson(json: JSONObject): CachedParsedTrack {
+                val statsJson = json.getJSONObject("stats")
+                val samplesJson = json.getJSONArray("samples")
+                val samples = buildList(samplesJson.length()) {
+                    for (i in 0 until samplesJson.length()) {
+                        val sampleJson = samplesJson.getJSONObject(i)
+                        add(TrackSample(
+                            latitude = sampleJson.getDouble("latitude"),
+                            longitude = sampleJson.getDouble("longitude"),
+                            doseRate = sampleJson.getDouble("doseRate"),
+                            counts = sampleJson.getInt("counts"),
+                            seconds = sampleJson.getDouble("seconds")
+                        ))
+                    }
+                }
+                return CachedParsedTrack(
+                    sourceId = json.getString("sourceId"),
+                    displayName = json.getString("displayName"),
+                    lastModified = json.optLong("lastModified", 0L),
+                    sizeBytes = json.optLong("sizeBytes", 0L),
+                    parsedTrack = ParsedTrack(
+                        samples = samples,
+                        stats = TrackStats(
+                            pointCount = statsJson.getInt("pointCount"),
+                            durationMillis = statsJson.getLong("durationMillis"),
+                            distanceMeters = statsJson.getDouble("distanceMeters")
+                        )
+                    )
+                )
+            }
+        }
+    }
+
     private data class ParsedTrack(
         val samples: List<TrackSample>,
         val stats: TrackStats
@@ -238,6 +347,8 @@ object TrackCatalog {
     private data class TrackSource(
         val id: String,
         val displayName: String,
+        val lastModified: Long,
+        val sizeBytes: Long,
         val openStream: () -> InputStream
     )
 
@@ -257,6 +368,8 @@ object TrackCatalog {
                         TrackSource(
                             id = "doc:${doc.uri}",
                             displayName = name,
+                            lastModified = doc.lastModified(),
+                            sizeBytes = doc.length(),
                             openStream = { context.contentResolver.openInputStream(doc.uri) ?: throw IllegalStateException("Cannot open $name") }
                         )
                     }
@@ -276,9 +389,72 @@ object TrackCatalog {
                 TrackSource(
                     id = "file:${it.absolutePath}",
                     displayName = it.name,
+                    lastModified = it.lastModified(),
+                    sizeBytes = it.length(),
                     openStream = { it.inputStream() }
                 )
             }
             .toList()
     }
+
+
+    private fun ensureDiskCacheLoaded(context: Context) {
+        if (diskCacheLoaded) return
+        synchronized(this) {
+            if (diskCacheLoaded) return
+            val cacheFile = trackCacheFile(context)
+            if (!cacheFile.exists()) {
+                diskCacheLoaded = true
+                return
+            }
+
+            runCatching {
+                BufferedReader(cacheFile.reader()).use { reader ->
+                    val root = JSONObject(reader.readText())
+                    val entries = root.optJSONArray("entries") ?: JSONArray()
+                    parsedTrackCache.clear()
+                    for (i in 0 until entries.length()) {
+                        val cached = CachedParsedTrack.fromJson(entries.getJSONObject(i))
+                        parsedTrackCache[cached.sourceId] = cached
+                    }
+                }
+            }.onFailure {
+                Log.w("GPX", "Unable to restore persisted track cache", it)
+                parsedTrackCache.clear()
+                cacheFile.delete()
+            }
+            diskCacheLoaded = true
+        }
+    }
+
+    private fun persistTrackCache(context: Context) {
+        synchronized(this) {
+            val cacheFile = trackCacheFile(context)
+            runCatching {
+                cacheFile.parentFile?.mkdirs()
+                val json = JSONObject().put("entries", JSONArray().apply {
+                    parsedTrackCache.values
+                        .sortedBy { it.sourceId }
+                        .forEach { put(it.toJson()) }
+                })
+                BufferedWriter(cacheFile.writer()).use { writer ->
+                    writer.write(json.toString())
+                }
+            }.onFailure {
+                Log.w("GPX", "Unable to persist track cache", it)
+            }
+        }
+    }
+
+    private fun removeMissingSources(sourceIds: Set<String>): Boolean {
+        val missingIds = parsedTrackCache.keys.filterNot { it in sourceIds }
+        if (missingIds.isEmpty()) return false
+        missingIds.forEach(parsedTrackCache::remove)
+        return true
+    }
+
+    private fun trackCacheFile(context: Context): File {
+        return File(context.filesDir, "track_catalog_cache.json")
+    }
+
 }
