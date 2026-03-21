@@ -125,11 +125,18 @@ class MapActivity : AppCompatActivity() {
     private fun refreshMapTracks(activePoints: List<TrackPoint>) {
         Thread {
             val includeCurrentTrack = viewModel.isTracking.value == true
-            val allItems = TrackCatalog.loadTrackListItems(this, activePoints, includeCurrentTrack)
             val selectedIds = selectedTrackIds()
+            val mapTrackIds = selectedIds.ifEmpty { setOf(TrackCatalog.currentTrackId()) }
+            val allItems = TrackCatalog.loadTrackListItems(
+                context = this,
+                activePoints = activePoints,
+                includeCurrentTrack = includeCurrentTrack,
+                includeMapTracks = true,
+                mapTrackIds = mapTrackIds
+            )
             val visibleTracks = allItems
                 .filter { selectedIds.contains(it.id) || (selectedIds.isEmpty() && it.defaultVisible) }
-                .map { it.mapTrack }
+                .mapNotNull { it.mapTrack }
 
             runOnUiThread {
                 trackMapRenderer.renderTracks(visibleTracks, isHeatmapMode)
