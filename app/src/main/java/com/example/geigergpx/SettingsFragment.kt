@@ -11,6 +11,7 @@ import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
+import androidx.preference.SwitchPreferenceCompat
 
 class SettingsFragment : PreferenceFragmentCompat() {
 
@@ -71,8 +72,10 @@ class SettingsFragment : PreferenceFragmentCompat() {
         val avgTimestamps = findPreference<ListPreference>("dose_rate_avg_timestamps_n")
         avgTimestamps?.summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
 
-        val tagType = findPreference<ListPreference>("dose_tag_type")
-        tagType?.summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
+        val saveInEle = findPreference<SwitchPreferenceCompat>("save_dose_rate_in_ele")
+        saveInEle?.summaryProvider = Preference.SummaryProvider<SwitchPreferenceCompat> { pref ->
+            if (pref.isChecked) "Enabled" else "Disabled"
+        }
 
         val chooseFolder = findPreference<Preference>("gpx_folder_picker")
         chooseFolder?.setOnPreferenceClickListener {
@@ -157,4 +160,3 @@ class SettingsFragment : PreferenceFragmentCompat() {
         const val KEY_AUDIO_THRESHOLD = "audio_threshold"
     }
 }
-
