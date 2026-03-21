@@ -381,7 +381,7 @@ class MainActivity : AppCompatActivity() {
         val norm = (if (n < 10) n-2 else n-1).toDouble()
 
         val mean = norm / deltaTime
-        val z = 1.95996
+        val z = 1.95996 // Normal distribution quantile for conf. P = 0.95
         val root =  sqrt((n - 1).toDouble())
         val delta = mean * z / root // This is simply CI for normal distribution
         val gamma = mean * (z*z - 1.0)/(3*(n - 1)).toDouble() // This follows from Cornish–Fisher expansion for Chi^2 distribution
