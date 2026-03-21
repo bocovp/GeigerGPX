@@ -152,11 +152,9 @@ class TracksActivity : AppCompatActivity() {
 
     private fun deleteTrack(item: TrackListItem): Boolean {
         if (item.isCurrentTrack) return false
+        val documentUri = trackDocumentUri(item)
         return when {
-            item.id.startsWith("doc:") -> {
-                val uri = Uri.parse(item.id.removePrefix("doc:"))
-                DocumentFile.fromSingleUri(this, uri)?.delete() == true
-            }
+            documentUri != null -> DocumentFile.fromSingleUri(this, documentUri)?.delete() == true
             item.id.startsWith("file:") -> {
                 val path = item.id.removePrefix("file:")
                 File(path).delete()
@@ -214,8 +212,9 @@ class TracksActivity : AppCompatActivity() {
                 backupUri
             }
         } else {
+            val documentUri = trackDocumentUri(item)
             when {
-                item.id.startsWith("doc:") -> Uri.parse(item.id.removePrefix("doc:"))
+                documentUri != null -> documentUri
                 item.id.startsWith("file:") -> {
                     val file = File(item.id.removePrefix("file:"))
                     if (!file.exists()) return null
@@ -223,6 +222,14 @@ class TracksActivity : AppCompatActivity() {
                 }
                 else -> null
             }
+        }
+    }
+
+    private fun trackDocumentUri(item: TrackListItem): Uri? {
+        return when {
+            item.id.startsWith("doc:") -> Uri.parse(item.id.removePrefix("doc:"))
+            item.id.startsWith("tree:") -> Uri.parse(item.id.removePrefix("tree:"))
+            else -> null
         }
     }
 
