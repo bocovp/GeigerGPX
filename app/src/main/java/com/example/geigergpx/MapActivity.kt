@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import com.example.geigergpx.databinding.ActivityMapBinding
 import org.osmdroid.config.Configuration
+import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 
 class MapActivity : AppCompatActivity() {
@@ -34,6 +35,9 @@ class MapActivity : AppCompatActivity() {
 
         binding.mapView.setTileSource(TileSourceFactory.MAPNIK)
         binding.mapView.setMultiTouchControls(true)
+        binding.mapView.zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+        binding.zoomInButton.setOnClickListener { binding.mapView.controller.zoomIn() }
+        binding.zoomOutButton.setOnClickListener { binding.mapView.controller.zoomOut() }
 
         val tvHalf = findViewById<TextView>(R.id.tvHalfDose)
         val tvMax = findViewById<TextView>(R.id.tvMaxDose)
