@@ -114,7 +114,7 @@ object TrackCatalog {
         }
 
         val samples = currentPoints.map {
-            TrackSample(it.latitude, it.longitude, it.cps * coeff)
+            TrackSample(it.latitude, it.longitude, it.cps * coeff, (it.cps*100).toInt(), 100.0)// REVISE: The last two argument are counts and seconds6
         }
         return CurrentTrackData(samples, statsFromTrackPoints(currentPoints))
     }
@@ -176,7 +176,7 @@ object TrackCatalog {
 
                     XmlPullParser.END_TAG -> {
                         if (parser.name == "trkpt" && insideTrkpt) {
-                            samples.add(TrackSample(lat, lon, ele))
+                            samples.add(TrackSample(lat, lon, ele, (ele*10*100).toInt(), 100.0)) // REVISE: The last two argument are counts and seconds
                             if (timeMs > 0L) timestamps.add(timeMs)
                             insideTrkpt = false
                         }
