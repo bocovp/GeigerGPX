@@ -4,7 +4,6 @@ import android.graphics.*
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
-import kotlin.math.abs
 
 class GradientTrackOverlay : Overlay() {
     // We store our own copy of points to draw
@@ -37,8 +36,8 @@ class GradientTrackOverlay : Overlay() {
             paint.shader = LinearGradient(
                 p1Pixels.x.toFloat(), p1Pixels.y.toFloat(),
                 p2Pixels.x.toFloat(), p2Pixels.y.toFloat(),
-                colorForDose(p1.doseRate),
-                colorForDose(p2.doseRate),
+                DoseColorScale.colorForDose(p1.doseRate, minDose, maxDose),
+                DoseColorScale.colorForDose(p2.doseRate, minDose, maxDose),
                 Shader.TileMode.CLAMP
             )
 
@@ -50,38 +49,4 @@ class GradientTrackOverlay : Overlay() {
         }
     }
 
-
-
-    private val R1 = 0x00
-    private val G1 = 0xC8
-    private val B1 = 0x53 // Green
-    private val R2 = 0xFF
-    private val G2 = 0xEB
-    private val B2 = 0x3B // Yellow
-    private val R3 = 0xD5
-    private val G3 = 0x00
-    private val B3 = 0x00 // Red
-
-    private fun colorForDose(value: Double): Int {
-        if (abs(value) < 1e-5) // Gray color if no dose info
-            return Color.rgb(128, 128, 128)
-        val normalized = if (maxDose > minDose) (value - minDose) / (maxDose - minDose) else 0.0
-        val t = normalized.coerceIn(0.0, 1.0)
-        val r: Int
-        val g: Int
-        val b: Int
-
-        if (t < 0.5f) {
-            val ratio = t * 2f
-            r = (R1 + ratio * (R2 - R1)).toInt()
-            g = (G1 + ratio * (G2 - G1)).toInt()
-            b = (B1 + ratio * (B2 - B1)).toInt()
-        } else {
-            val ratio = (t - 0.5f) * 2f
-            r = (R2 + ratio * (R3 - R2)).toInt()
-            g = (G2 + ratio * (G3 - G2)).toInt()
-            b = (B2 + ratio * (B3 - B2)).toInt()
-        }
-        return Color.rgb(r, g, b)
-    }
 }
