@@ -83,7 +83,13 @@ object TrackCatalog {
             )
         }
 
-        val sources = runCatching { listTrackFiles(context) }.getOrDefault(emptyList())
+        val sourceListing = listTrackFiles(context)
+        if (sourceListing is TrackSourceListing.Failure) {
+            Log.w("GPX", "Unable to enumerate track files; keeping existing cache", sourceListing.error)
+            return items
+        }
+
+        val sources = (sourceListing as TrackSourceListing.Success).sources
         val sourceIds = sources.mapTo(mutableSetOf()) { it.id }
         var cacheChanged = removeMissingSources(sourceIds)
 
@@ -94,8 +100,15 @@ object TrackCatalog {
             } else {
                 try {
                     parseGpxTrack(source.openStream())?.also {
-                        parsedTrackCache[source.id] = CachedParsedTrack.from(source, it)
-                        cacheChanged = true
+                        if (source.metadataReliable) {
+                            val updatedCacheEntry = CachedParsedTrack.from(source, it)
+                            if (parsedTrackCache[source.id] != updatedCacheEntry) {
+                                parsedTrackCache[source.id] = updatedCacheEntry
+                                cacheChanged = true
+                            }
+                        } else if (parsedTrackCache.remove(source.id) != null) {
+                            cacheChanged = true
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("GPX", "Unable to parse track ${source.displayName}", e)
@@ -264,9 +277,11 @@ object TrackCatalog {
         val displayName: String,
         val lastModified: Long,
         val sizeBytes: Long,
+        val metadataReliable: Boolean,
         val parsedTrack: ParsedTrack
     ) {
         fun matches(source: TrackSource): Boolean {
+            if (!metadataReliable || !source.metadataReliable) return false
             return sourceId == source.id &&
                 displayName == source.displayName &&
                 lastModified == source.lastModified &&
@@ -279,6 +294,7 @@ object TrackCatalog {
                 .put("displayName", displayName)
                 .put("lastModified", lastModified)
                 .put("sizeBytes", sizeBytes)
+                .put("metadataReliable", metadataReliable)
                 .put("stats", JSONObject()
                     .put("pointCount", parsedTrack.stats.pointCount)
                     .put("durationMillis", parsedTrack.stats.durationMillis)
@@ -302,6 +318,7 @@ object TrackCatalog {
                     displayName = source.displayName,
                     lastModified = source.lastModified,
                     sizeBytes = source.sizeBytes,
+                    metadataReliable = source.metadataReliable,
                     parsedTrack = parsedTrack
                 )
             }
@@ -326,6 +343,7 @@ object TrackCatalog {
                     displayName = json.getString("displayName"),
                     lastModified = json.optLong("lastModified", 0L),
                     sizeBytes = json.optLong("sizeBytes", 0L),
+                    metadataReliable = json.optBoolean("metadataReliable", true),
                     parsedTrack = ParsedTrack(
                         samples = samples,
                         stats = TrackStats(
@@ -349,52 +367,65 @@ object TrackCatalog {
         val displayName: String,
         val lastModified: Long,
         val sizeBytes: Long,
+        val metadataReliable: Boolean,
         val openStream: () -> InputStream
     )
 
-    private fun listTrackFiles(context: Context): List<TrackSource> {
+    private sealed interface TrackSourceListing {
+        data class Success(val sources: List<TrackSource>) : TrackSourceListing
+        data class Failure(val error: Throwable) : TrackSourceListing
+    }
+
+    private fun listTrackFiles(context: Context): TrackSourceListing {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
 
         if (!treeUriStr.isNullOrBlank()) {
-            val treeFiles = runCatching {
+            return runCatching {
                 val treeUri = Uri.parse(treeUriStr)
-                val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return@runCatching emptyList()
-                rootDoc.listFiles()
-                    .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name !in EXCLUDED_GPX_FILES }
-                    .sortedByDescending { it.lastModified() }
-                    .mapNotNull { doc ->
-                        val name = doc.name ?: return@mapNotNull null
-                        TrackSource(
-                            id = "doc:${doc.uri}",
-                            displayName = name,
-                            lastModified = doc.lastModified(),
-                            sizeBytes = doc.length(),
-                            openStream = { context.contentResolver.openInputStream(doc.uri) ?: throw IllegalStateException("Cannot open $name") }
-                        )
-                    }
-            }.getOrElse { emptyList() }
-
-            if (treeFiles.isNotEmpty()) {
-                return treeFiles
-            }
+                val rootDoc = DocumentFile.fromTreeUri(context, treeUri)
+                    ?: throw IllegalStateException("Cannot open GPX tree URI")
+                TrackSourceListing.Success(
+                    rootDoc.listFiles()
+                        .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name !in EXCLUDED_GPX_FILES }
+                        .sortedByDescending { it.lastModified() }
+                        .mapNotNull { doc ->
+                            val name = doc.name ?: return@mapNotNull null
+                            val lastModified = doc.lastModified()
+                            val sizeBytes = doc.length()
+                            TrackSource(
+                                id = "doc:${doc.uri}",
+                                displayName = name,
+                                lastModified = lastModified,
+                                sizeBytes = sizeBytes,
+                                metadataReliable = lastModified > 0L || sizeBytes > 0L,
+                                openStream = { context.contentResolver.openInputStream(doc.uri) ?: throw IllegalStateException("Cannot open $name") }
+                            )
+                        }
+                )
+            }.getOrElse { TrackSourceListing.Failure(it) }
         }
 
-        val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
-        return (root.listFiles() ?: emptyArray())
-            .asSequence()
-            .filter { it.isFile && it.name.endsWith(".gpx", true) && it.name !in EXCLUDED_GPX_FILES }
-            .sortedByDescending { it.lastModified() }
-            .map {
-                TrackSource(
-                    id = "file:${it.absolutePath}",
-                    displayName = it.name,
-                    lastModified = it.lastModified(),
-                    sizeBytes = it.length(),
-                    openStream = { it.inputStream() }
-                )
-            }
-            .toList()
+        return runCatching {
+            val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
+            TrackSourceListing.Success(
+                (root.listFiles() ?: emptyArray())
+                    .asSequence()
+                    .filter { it.isFile && it.name.endsWith(".gpx", true) && it.name !in EXCLUDED_GPX_FILES }
+                    .sortedByDescending { it.lastModified() }
+                    .map {
+                        TrackSource(
+                            id = "file:${it.absolutePath}",
+                            displayName = it.name,
+                            lastModified = it.lastModified(),
+                            sizeBytes = it.length(),
+                            metadataReliable = true,
+                            openStream = { it.inputStream() }
+                        )
+                    }
+                    .toList()
+            )
+        }.getOrElse { TrackSourceListing.Failure(it) }
     }
 
 
