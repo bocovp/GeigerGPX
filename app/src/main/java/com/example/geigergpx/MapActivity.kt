@@ -17,6 +17,8 @@ class MapActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMapBinding
     private lateinit var trackMapRenderer: TrackMapRenderer
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
+
+    private var isHeatmapMode: Boolean = false
     private var latestActivePoints: List<TrackPoint> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,7 +39,15 @@ class MapActivity : AppCompatActivity() {
         val tvMax = findViewById<TextView>(R.id.tvMaxDose)
         trackMapRenderer = TrackMapRenderer(binding.mapView, tvHalf, tvMax)
 
+        if (savedInstanceState != null) {
+            isHeatmapMode = savedInstanceState.getBoolean("heatmap_mode", false)
+        }
         observeTrack()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean("heatmap_mode", isHeatmapMode)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -45,8 +55,35 @@ class MapActivity : AppCompatActivity() {
         return true
     }
 
+    override fun onPrepareOptionsMenu(menu: Menu?): Boolean {
+        val toggleItem = menu?.findItem(R.id.action_toggle_heatmap)
+
+        if (isHeatmapMode) {
+            toggleItem?.title = "Show Lines"
+            // Use a generic "list" or "lines" icon to indicate switching back to tracks
+            toggleItem?.setIcon(android.R.drawable.ic_menu_sort_by_size)
+        } else {
+            toggleItem?.title = "Show Heatmap"
+            // Use a "view" or "eye" icon to indicate switching to visual heatmap
+            toggleItem?.setIcon(android.R.drawable.ic_menu_view)
+        }
+
+        return super.onPrepareOptionsMenu(menu)
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_toggle_heatmap -> {
+                // 1. Flip the state
+                isHeatmapMode = !isHeatmapMode
+
+                // 2. Refresh the menu to update Icon/Text
+                invalidateOptionsMenu()
+
+                // 3. Refresh the map with the new mode
+                refreshMapTracks(latestActivePoints)
+                true
+            }
             R.id.action_tracks -> {
                 startActivity(Intent(this, TracksActivity::class.java))
                 true
@@ -91,7 +128,7 @@ class MapActivity : AppCompatActivity() {
                 .map { it.mapTrack }
 
             runOnUiThread {
-                trackMapRenderer.renderTracks(visibleTracks)
+                trackMapRenderer.renderTracks(visibleTracks, isHeatmapMode)
             }
         }.start()
     }

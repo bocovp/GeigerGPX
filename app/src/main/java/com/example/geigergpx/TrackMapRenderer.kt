@@ -12,13 +12,18 @@ class TrackMapRenderer(
 ) {
 
     private val trackOverlays = mutableMapOf<String, GradientTrackOverlay>()
+    private var heatmapOverlay: HeatmapOverlay? = null
     private val renderedPointCounts = mutableMapOf<String, Int>()
     private var lastMaxDose = Double.NEGATIVE_INFINITY
     private var lastRenderedTrackIds: Set<String> = emptySet()
 
-    fun renderTracks(tracks: List<MapTrack>) {
+    fun renderTracks(tracks: List<MapTrack>,
+                     isHeatmapMode: Boolean) {
+
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
+        val doseCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+
         val activeIds = tracks.map { it.id }.toSet()
-        removeDeletedTracks(activeIds)
 
         // 1. Calculate current global scale
         var currentMax = Double.NEGATIVE_INFINITY
@@ -45,26 +50,76 @@ class TrackMapRenderer(
         var latestPoint: GeoPoint? = null
         var shouldInvalidate = false
 
-        tracks.forEach { track ->
-            val trackPoints = track.points
-            if (trackPoints.isEmpty()) return@forEach
+        // 2. Mode Branching
+        if (isHeatmapMode) {
+            // --- HEATMAP MODE ---
 
-            latestPoint = GeoPoint(trackPoints.last().latitude, trackPoints.last().longitude)
+            // A. Clean up Line Overlays if they exist
+            if (trackOverlays.isNotEmpty()) {
+                trackOverlays.values.forEach { mapView.overlays.remove(it) }
+                trackOverlays.clear()
+                renderedPointCounts.clear()
+            }
 
-            val previousCount = renderedPointCounts[track.id] ?: 0
+            // B. Initialize or Update Heatmap Overlay
+            // We pass the coefficient here to ensure the overlay uses the latest setting
+            val overlay = heatmapOverlay ?: HeatmapOverlay(doseCoefficient).also {
+                mapView.overlays.add(it)
+                heatmapOverlay = it
+            }
 
-            // 2. Update if point count changed OR if global scale changed
-            if (previousCount != trackPoints.size || scaleChanged) {
-                val overlay = trackOverlays.getOrPut(track.id) {
-                    GradientTrackOverlay().also { mapView.overlays.add(it) }
+            // CRITICAL: Always update the coefficient from settings
+            // This ensures that if the user changed settings, the existing overlay updates.
+            overlay.doseCoefficient = doseCoefficient
+
+            // C. Update Data
+            // We pass ALL tracks to the single overlay
+            overlay.tracks = tracks
+            overlay.minDose = currentMin
+            overlay.maxDose = currentMax
+
+            // Always invalidate in heatmap mode as grid needs recalc if tracks change
+            shouldInvalidate = true
+
+            // Capture latest point for auto-center logic
+            if (tracks.isNotEmpty() && tracks.last().points.isNotEmpty()) {
+                val lastP = tracks.last().points.last()
+                latestPoint = GeoPoint(lastP.latitude, lastP.longitude)
+            }
+
+        } else {
+            // --- LINE MODE ---
+            heatmapOverlay?.let {
+                mapView.overlays.remove(it)
+                heatmapOverlay = null
+            }
+
+            // B. Clean up deleted tracks
+            removeDeletedTracks(activeIds)
+
+            // C. Draw/Update individual lines
+
+            tracks.forEach { track ->
+                val trackPoints = track.points
+                if (trackPoints.isEmpty()) return@forEach
+
+                latestPoint = GeoPoint(trackPoints.last().latitude, trackPoints.last().longitude)
+
+                val previousCount = renderedPointCounts[track.id] ?: 0
+
+                // 2. Update if point count changed OR if global scale changed
+                if (previousCount != trackPoints.size || scaleChanged) {
+                    val overlay = trackOverlays.getOrPut(track.id) {
+                        GradientTrackOverlay().also { mapView.overlays.add(it) }
+                    }
+
+                    overlay.points = trackPoints
+                    overlay.minDose = currentMin
+                    overlay.maxDose = currentMax
+
+                    renderedPointCounts[track.id] = trackPoints.size
+                    shouldInvalidate = true
                 }
-
-                overlay.points = trackPoints
-                overlay.minDose = currentMin
-                overlay.maxDose = currentMax
-
-                renderedPointCounts[track.id] = trackPoints.size
-                shouldInvalidate = true
             }
         }
 
