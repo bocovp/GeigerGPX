@@ -32,7 +32,7 @@ data class TrackListItem(
     val id: String,
     val title: String,
     val subtitle: String,
-    val mapTrack: MapTrack,
+    val mapTrack: MapTrack?,
     val isCurrentTrack: Boolean,
     val defaultVisible: Boolean
 )
@@ -61,7 +61,9 @@ object TrackCatalog {
     fun loadTrackListItems(
         context: Context,
         activePoints: List<TrackPoint>,
-        includeCurrentTrack: Boolean
+        includeCurrentTrack: Boolean,
+        includeMapTracks: Boolean = true,
+        mapTrackIds: Set<String>? = null
     ): List<TrackListItem> {
         ensureDiskCacheLoaded(context)
 
@@ -71,12 +73,17 @@ object TrackCatalog {
 
         if (includeCurrentTrack) {
             val currentTrack = currentTrackData(activePoints, coeff)
+            val includeCurrentMapTrack = includeMapTracks && (mapTrackIds == null || CURRENT_TRACK_ID in mapTrackIds)
             items.add(
                 TrackListItem(
                     id = CURRENT_TRACK_ID,
                     title = CURRENT_TRACK_TITLE,
                     subtitle = formatStats(currentTrack.stats),
-                    mapTrack = MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.samples),
+                    mapTrack = if (includeCurrentMapTrack) {
+                        MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.samples)
+                    } else {
+                        null
+                    },
                     isCurrentTrack = true,
                     defaultVisible = true
                 )
@@ -94,34 +101,43 @@ object TrackCatalog {
         var cacheChanged = removeMissingSources(sourceIds)
 
         sources.forEach { source ->
+            val shouldIncludeMapTrack = includeMapTracks && (mapTrackIds == null || source.id in mapTrackIds)
             val cached = parsedTrackCache[source.id]
-            val parsed = if (cached != null && cached.matches(source)) {
-                cached.parsedTrack
-            } else {
-                try {
-                    parseGpxTrack(source.openStream())?.also {
-                        if (source.metadataReliable) {
-                            val updatedCacheEntry = CachedParsedTrack.from(source, it)
-                            if (parsedTrackCache[source.id] != updatedCacheEntry) {
-                                parsedTrackCache[source.id] = updatedCacheEntry
+            val cacheMatches = cached != null && cached.matches(source)
+            val stats = when {
+                cacheMatches -> cached!!.stats
+                else -> {
+                    try {
+                        parseGpxTrack(source.openStream())?.also {
+                            if (source.metadataReliable) {
+                                val updatedCacheEntry = CachedParsedTrack.from(source, it)
+                                if (parsedTrackCache[source.id] != updatedCacheEntry) {
+                                    parsedTrackCache[source.id] = updatedCacheEntry
+                                    cacheChanged = true
+                                }
+                            } else if (parsedTrackCache.remove(source.id) != null) {
                                 cacheChanged = true
                             }
-                        } else if (parsedTrackCache.remove(source.id) != null) {
-                            cacheChanged = true
-                        }
+                        }?.stats
+                    } catch (e: Exception) {
+                        Log.e("GPX", "Unable to parse track ${source.displayName}", e)
+                        null
                     }
-                } catch (e: Exception) {
-                    Log.e("GPX", "Unable to parse track ${source.displayName}", e)
-                    null
                 }
             } ?: return@forEach
+
+            val mapTrack = when {
+                !shouldIncludeMapTrack -> null
+                cacheMatches -> MapTrack(source.id, source.displayName, cached!!.samples())
+                else -> parsedTrackCache[source.id]?.let { MapTrack(source.id, source.displayName, it.samples()) }
+            }
 
             items.add(
                 TrackListItem(
                     id = source.id,
                     title = source.displayName,
-                    subtitle = formatStats(parsed.stats),
-                    mapTrack = MapTrack(source.id, source.displayName, parsed.samples),
+                    subtitle = formatStats(stats),
+                    mapTrack = mapTrack,
                     isCurrentTrack = false,
                     defaultVisible = false
                 )
@@ -278,7 +294,9 @@ object TrackCatalog {
         val lastModified: Long,
         val sizeBytes: Long,
         val metadataReliable: Boolean,
-        val parsedTrack: ParsedTrack
+        val stats: TrackStats,
+        private val persistedJson: JSONObject? = null,
+        @Volatile private var sampleCache: List<TrackSample>? = null
     ) {
         fun matches(source: TrackSource): Boolean {
             if (!metadataReliable || !source.metadataReliable) return false
@@ -286,6 +304,28 @@ object TrackCatalog {
                 displayName == source.displayName &&
                 lastModified == source.lastModified &&
                 sizeBytes == source.sizeBytes
+        }
+
+        fun samples(): List<TrackSample> {
+            sampleCache?.let { return it }
+            synchronized(this) {
+                sampleCache?.let { return it }
+                val samplesJson = persistedJson?.optJSONArray("samples") ?: JSONArray()
+                val loadedSamples = buildList(samplesJson.length()) {
+                    for (i in 0 until samplesJson.length()) {
+                        val sampleJson = samplesJson.getJSONObject(i)
+                        add(TrackSample(
+                            latitude = sampleJson.getDouble("latitude"),
+                            longitude = sampleJson.getDouble("longitude"),
+                            doseRate = sampleJson.getDouble("doseRate"),
+                            counts = sampleJson.getInt("counts"),
+                            seconds = sampleJson.getDouble("seconds")
+                        ))
+                    }
+                }
+                sampleCache = loadedSamples
+                return loadedSamples
+            }
         }
 
         fun toJson(): JSONObject {
@@ -296,11 +336,11 @@ object TrackCatalog {
                 .put("sizeBytes", sizeBytes)
                 .put("metadataReliable", metadataReliable)
                 .put("stats", JSONObject()
-                    .put("pointCount", parsedTrack.stats.pointCount)
-                    .put("durationMillis", parsedTrack.stats.durationMillis)
-                    .put("distanceMeters", parsedTrack.stats.distanceMeters))
+                    .put("pointCount", stats.pointCount)
+                    .put("durationMillis", stats.durationMillis)
+                    .put("distanceMeters", stats.distanceMeters))
                 .put("samples", JSONArray().apply {
-                    parsedTrack.samples.forEach { sample ->
+                    samples().forEach { sample ->
                         put(JSONObject()
                             .put("latitude", sample.latitude)
                             .put("longitude", sample.longitude)
@@ -319,39 +359,25 @@ object TrackCatalog {
                     lastModified = source.lastModified,
                     sizeBytes = source.sizeBytes,
                     metadataReliable = source.metadataReliable,
-                    parsedTrack = parsedTrack
+                    stats = parsedTrack.stats,
+                    sampleCache = parsedTrack.samples
                 )
             }
 
             fun fromJson(json: JSONObject): CachedParsedTrack {
                 val statsJson = json.getJSONObject("stats")
-                val samplesJson = json.getJSONArray("samples")
-                val samples = buildList(samplesJson.length()) {
-                    for (i in 0 until samplesJson.length()) {
-                        val sampleJson = samplesJson.getJSONObject(i)
-                        add(TrackSample(
-                            latitude = sampleJson.getDouble("latitude"),
-                            longitude = sampleJson.getDouble("longitude"),
-                            doseRate = sampleJson.getDouble("doseRate"),
-                            counts = sampleJson.getInt("counts"),
-                            seconds = sampleJson.getDouble("seconds")
-                        ))
-                    }
-                }
                 return CachedParsedTrack(
                     sourceId = json.getString("sourceId"),
                     displayName = json.getString("displayName"),
                     lastModified = json.optLong("lastModified", 0L),
                     sizeBytes = json.optLong("sizeBytes", 0L),
                     metadataReliable = json.optBoolean("metadataReliable", true),
-                    parsedTrack = ParsedTrack(
-                        samples = samples,
-                        stats = TrackStats(
-                            pointCount = statsJson.getInt("pointCount"),
-                            durationMillis = statsJson.getLong("durationMillis"),
-                            distanceMeters = statsJson.getDouble("distanceMeters")
-                        )
-                    )
+                    stats = TrackStats(
+                        pointCount = statsJson.getInt("pointCount"),
+                        durationMillis = statsJson.getLong("durationMillis"),
+                        distanceMeters = statsJson.getDouble("distanceMeters")
+                    ),
+                    persistedJson = json
                 )
             }
         }

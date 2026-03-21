@@ -56,7 +56,12 @@ class TracksActivity : AppCompatActivity() {
         Thread {
             val points = viewModel.activeTrackPoints.value.orEmpty()
             val includeCurrentTrack = viewModel.isTracking.value == true
-            val items = TrackCatalog.loadTrackListItems(this, points, includeCurrentTrack)
+            val items = TrackCatalog.loadTrackListItems(
+                context = this,
+                activePoints = points,
+                includeCurrentTrack = includeCurrentTrack,
+                includeMapTracks = false
+            )
             val selected = selectedTrackIds().ifEmpty { setOf(TrackCatalog.currentTrackId()) }
             runOnUiThread {
                 hasLoadedTrackList = true
