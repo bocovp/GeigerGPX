@@ -48,7 +48,10 @@ object TrackCatalog {
         synchronized(this) {
             parsedTrackCache.clear()
             diskCacheLoaded = true
-            trackCacheFile(context).delete()
+            val cacheFile = trackCacheFile(context)
+            if (cacheFile.exists() && !cacheFile.delete()) {
+                Log.w("GPX", "Unable to delete persisted track cache ${cacheFile.absolutePath}")
+            }
         }
     }
 
@@ -457,6 +460,7 @@ object TrackCatalog {
     private fun persistTrackCache(context: Context) {
         synchronized(this) {
             val cacheFile = trackCacheFile(context)
+            val tempCacheFile = File(cacheFile.parentFile, "${cacheFile.name}.tmp")
             runCatching {
                 cacheFile.parentFile?.mkdirs()
                 val json = JSONObject().put("entries", JSONArray().apply {
@@ -464,10 +468,17 @@ object TrackCatalog {
                         .sortedBy { it.sourceId }
                         .forEach { put(it.toJson()) }
                 })
-                BufferedWriter(cacheFile.writer()).use { writer ->
+                BufferedWriter(tempCacheFile.writer()).use { writer ->
                     writer.write(json.toString())
                 }
+                if (cacheFile.exists() && !cacheFile.delete()) {
+                    throw IllegalStateException("Unable to replace existing track cache ${cacheFile.absolutePath}")
+                }
+                if (!tempCacheFile.renameTo(cacheFile)) {
+                    throw IllegalStateException("Unable to promote rebuilt track cache ${cacheFile.absolutePath}")
+                }
             }.onFailure {
+                tempCacheFile.delete()
                 Log.w("GPX", "Unable to persist track cache", it)
             }
         }
