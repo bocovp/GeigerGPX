@@ -103,7 +103,7 @@ object TrackCatalog {
         sources.forEach { source ->
             val shouldIncludeMapTrack = includeMapTracks && (mapTrackIds == null || source.id in mapTrackIds)
             var cached = parsedTrackCache[source.id]
-            if (cached == null) {
+            if (cached == null || !cached.matches(source)) {
                 cached = try {
                     parseGpxTrack(source.openStream())?.let {
                         CachedParsedTrack.from(source, it).also { updatedCacheEntry ->
@@ -115,12 +115,23 @@ object TrackCatalog {
                     Log.e("GPX", "Unable to parse track ${source.displayName}", e)
                     null
                 }
+            } else if (shouldIncludeMapTrack && !cached.hasSamples()) {
+                cached = try {
+                    parseGpxTrack(source.openStream())?.let {
+                        CachedParsedTrack.from(source, it).also { updatedCacheEntry ->
+                            parsedTrackCache[source.id] = updatedCacheEntry
+                        }
+                    } ?: cached
+                } catch (e: Exception) {
+                    Log.e("GPX", "Unable to load track samples ${source.displayName}", e)
+                    cached
+                }
             }
 
             val stats = cached?.stats ?: return@forEach
             val mapTrack = when {
                 !shouldIncludeMapTrack -> null
-                else -> MapTrack(source.id, source.displayName, cached.samples())
+                else -> MapTrack(source.id, source.displayName, cached.samplesOrEmpty())
             }
 
             items.add(
@@ -286,30 +297,17 @@ object TrackCatalog {
         val sizeBytes: Long,
         val metadataReliable: Boolean,
         val stats: TrackStats,
-        private val persistedJson: JSONObject? = null,
         @Volatile private var sampleCache: List<TrackSample>? = null
     ) {
-        fun samples(): List<TrackSample> {
-            sampleCache?.let { return it }
-            synchronized(this) {
-                sampleCache?.let { return it }
-                val samplesJson = persistedJson?.optJSONArray("samples") ?: JSONArray()
-                val loadedSamples = buildList(samplesJson.length()) {
-                    for (i in 0 until samplesJson.length()) {
-                        val sampleJson = samplesJson.getJSONObject(i)
-                        add(TrackSample(
-                            latitude = sampleJson.getDouble("latitude"),
-                            longitude = sampleJson.getDouble("longitude"),
-                            doseRate = sampleJson.getDouble("doseRate"),
-                            counts = sampleJson.getInt("counts"),
-                            seconds = sampleJson.getDouble("seconds")
-                        ))
-                    }
-                }
-                sampleCache = loadedSamples
-                return loadedSamples
-            }
+        fun matches(source: TrackSource): Boolean {
+            if (sourceId != source.id) return false
+            if (!metadataReliable || !source.metadataReliable) return true
+            return lastModified == source.lastModified && sizeBytes == source.sizeBytes
         }
+
+        fun hasSamples(): Boolean = sampleCache != null
+
+        fun samplesOrEmpty(): List<TrackSample> = sampleCache ?: emptyList()
 
         fun toJson(): JSONObject {
             return JSONObject()
@@ -322,16 +320,6 @@ object TrackCatalog {
                     .put("pointCount", stats.pointCount)
                     .put("durationMillis", stats.durationMillis)
                     .put("distanceMeters", stats.distanceMeters))
-                .put("samples", JSONArray().apply {
-                    samples().forEach { sample ->
-                        put(JSONObject()
-                            .put("latitude", sample.latitude)
-                            .put("longitude", sample.longitude)
-                            .put("doseRate", sample.doseRate)
-                            .put("counts", sample.counts)
-                            .put("seconds", sample.seconds))
-                    }
-                })
         }
 
         companion object {
@@ -359,8 +347,7 @@ object TrackCatalog {
                         pointCount = statsJson.getInt("pointCount"),
                         durationMillis = statsJson.getLong("durationMillis"),
                         distanceMeters = statsJson.getDouble("distanceMeters")
-                    ),
-                    persistedJson = json
+                    )
                 )
             }
         }
