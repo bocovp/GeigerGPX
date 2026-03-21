@@ -360,19 +360,24 @@ class MainActivity : AppCompatActivity() {
         binding.textCps.setTextColor(ContextCompat.getColor(this, doseColor))
 
         if (coeff == 1.0) {
-            if (latestCpsSnapshot.sampleCount <= 9) {
-                binding.textCps.text = "CPS: %.${decimalDigits}f … %.${decimalDigits}f".format(ci.lowBound, ci.highBound)
-            } else {
-                binding.textCps.text = "CPS: %.${decimalDigits}f ± %.${decimalDigits}f".format(ci.mean, ci.delta)
-            }
+            val cpsText = DoseStatistics.formatDoseRateText(
+                ci,
+                latestCpsSnapshot.sampleCount,
+                decimalDigits
+            )
+            binding.textCps.text = "CPS: $cpsText"
         } else {
-            if (latestCpsSnapshot.sampleCount <= 9) {
-                val doseRateLow = ci.lowBound * coeff
-                val doseRateHigh = ci.highBound * coeff
-                binding.textCps.text = "Dose rate: %.${decimalDigits}f … %.${decimalDigits}f μSv/h".format(doseRateLow, doseRateHigh)
-            } else {
-                binding.textCps.text = "Dose rate: %.${decimalDigits}f ± %.${decimalDigits}f μSv/h".format(doseRateMean, doseRateDelta)
-            }
+            val doseRateText = DoseStatistics.formatDoseRateText(
+                ConfidenceInterval(
+                    mean = doseRateMean,
+                    delta = doseRateDelta,
+                    lowBound = ci.lowBound * coeff,
+                    highBound = ci.highBound * coeff
+                ),
+                latestCpsSnapshot.sampleCount,
+                decimalDigits
+            )
+            binding.textCps.text = "Dose rate: $doseRateText μSv/h"
         }
     }
 
