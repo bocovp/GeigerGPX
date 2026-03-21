@@ -287,7 +287,7 @@ class MainActivity : AppCompatActivity() {
                 val (counts, seconds) = getCurrentMeasurementCountsAndSeconds()
                 val coeff = PreferenceManager.getDefaultSharedPreferences(this)
                     .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-                val doseRate = ConfidenceInterval.doseRateFromCountsAndSeconds(counts, seconds, coeff).mean
+                val doseRate = ConfidenceInterval(0.0, seconds, counts + 1).scale(coeff).mean
                 val (latitude, longitude) = TrackingService.consumeMeasurementAverageCoordinates()
 
                 val ok = PoiLibrary.addPoi(

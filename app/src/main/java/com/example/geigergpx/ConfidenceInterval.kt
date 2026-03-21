@@ -62,27 +62,4 @@ class ConfidenceInterval {
         sampleCount = sampleCount
     )
 
-    companion object {
-        /**
-         * Stored GPX/POI samples carry only the number of counts and the total elapsed seconds.
-         * Reconstruct the same interval model used by the live UI by treating those values as the
-         * full measurement window, which corresponds to n = counts + 1 interval boundaries.
-         */
-        fun fromCountsAndSeconds(counts: Int, seconds: Double): ConfidenceInterval {
-            if (counts <= 0 || seconds <= 0.0) {
-                return ConfidenceInterval(
-                    mean = 0.0,
-                    delta = 0.0,
-                    lowBound = 0.0,
-                    highBound = 0.0,
-                    sampleCount = counts + 1
-                )
-            }
-            return ConfidenceInterval(0.0, seconds, counts + 1)
-        }
-
-        fun doseRateFromCountsAndSeconds(counts: Int, seconds: Double, coeff: Double): ConfidenceInterval {
-            return fromCountsAndSeconds(counts, seconds).scale(coeff)
-        }
-    }
 }
