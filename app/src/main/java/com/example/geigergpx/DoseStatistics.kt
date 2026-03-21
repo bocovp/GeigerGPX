@@ -1,5 +1,6 @@
 package com.example.geigergpx
 
+import java.util.Locale
 import kotlin.math.max
 import kotlin.math.sqrt
 
@@ -56,5 +57,17 @@ object DoseStatistics {
             lowBound = cpsInterval.lowBound * coeff,
             highBound = cpsInterval.highBound * coeff
         )
+    }
+
+    fun formatDoseRateText(ci: ConfidenceInterval, sampleCount: Int, decimalDigits: Int): String {
+        if (ci.mean == 0.0 && ci.delta == 0.0) {
+            return String.format(Locale.US, "%.${decimalDigits}f", 0.0)
+        }
+
+        return if (sampleCount <= 9) {
+            String.format(Locale.US, "%.${decimalDigits}f … %.${decimalDigits}f", ci.lowBound, ci.highBound)
+        } else {
+            String.format(Locale.US, "%.${decimalDigits}f ± %.${decimalDigits}f", ci.mean, ci.delta)
+        }
     }
 }
