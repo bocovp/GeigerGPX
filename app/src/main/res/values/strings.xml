@@ -2,5 +2,6 @@
 <resources>
     <string name="app_name">Geiger GPX</string>
     <string name="loading_files">Loading files ...</string>
+    <string name="no_tracks_found">No tracks found</string>
     <string name="refresh">Refresh</string>
 </resources>
