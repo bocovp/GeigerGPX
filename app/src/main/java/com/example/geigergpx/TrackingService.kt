@@ -518,7 +518,9 @@ class TrackingService : Service() {
             longitude = avgLon,
             timeMillis = avgTimeMillis,
             distanceFromLast = distance,
-            cps = finalCps
+            cps = finalCps,
+            counts = finalBeeps,
+            seconds = timeDeltaSec
         )
 
         val snapshot = synchronized(writtenPoints) {

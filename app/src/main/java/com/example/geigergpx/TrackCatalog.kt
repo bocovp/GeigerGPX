@@ -20,7 +20,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 private const val CURRENT_TRACK_ID = "active-track"
 private const val CURRENT_TRACK_TITLE = "Currently recording"
-private val EXCLUDED_GPX_FILES = setOf("Backup.gpx", "POI.gpx", "POI-Backup.gpx")
+private val EXCLUDED_GPX_FILE_SET = setOf("Backup.gpx", "POI.gpx", "POI-Backup.gpx")
+private const val RAD_NAMESPACE = "https://github.com/bocovp/GeigerGPX"
 
 data class TrackStats(
     val pointCount: Int,
@@ -176,7 +177,7 @@ object TrackCatalog {
         }
 
         val samples = currentPoints.map {
-            TrackSample(it.latitude, it.longitude, it.cps * coeff, (it.cps*100).toInt(), 100.0)// REVISE: The last two argument are counts and seconds6
+            TrackSample(it.latitude, it.longitude, it.cps * coeff, it.counts, it.seconds)
         }
         return CurrentTrackData(samples, statsFromTrackPoints(currentPoints))
     }
@@ -198,7 +199,10 @@ object TrackCatalog {
 
     private fun parseGpxTrack(inputStream: InputStream): ParsedTrack? {
         inputStream.use { stream ->
-            val parser = XmlPullParserFactory.newInstance().newPullParser().apply {
+            val factory = XmlPullParserFactory.newInstance().apply {
+                isNamespaceAware = true
+            }
+            val parser = factory.newPullParser().apply {
                 setInput(stream, null)
             }
 
@@ -207,42 +211,55 @@ object TrackCatalog {
 
             var lat = 0.0
             var lon = 0.0
-            var ele = 0.0
+            var doseRate = 0.0
+            var counts = 0
+            var seconds = 0.0
             var timeMs = 0L
             var insideTrkpt = false
             var currentTag: String? = null
+            var currentNamespace: String? = null
 
             while (parser.eventType != XmlPullParser.END_DOCUMENT) {
-
                 when (parser.eventType) {
                     XmlPullParser.START_TAG -> {
-                        val tagName = parser.name
                         currentTag = parser.name
-                        if (tagName.equals("trkpt", ignoreCase = true)) {
+                        currentNamespace = parser.namespace
+                        if (parser.name.equals("trkpt", ignoreCase = true)) {
                             insideTrkpt = true
                             lat = parser.getAttributeValue(null, "lat")?.toDoubleOrNull() ?: 0.0
                             lon = parser.getAttributeValue(null, "lon")?.toDoubleOrNull() ?: 0.0
-                            ele = 0.0
+                            doseRate = 0.0
+                            counts = 0
+                            seconds = 0.0
                             timeMs = 0L
                         }
                     }
 
                     XmlPullParser.TEXT -> {
                         if (insideTrkpt) {
-                            when (currentTag) {
-                                "ele" -> ele = parser.text?.toDoubleOrNull() ?: 0.0
-                                "time" -> timeMs = parseIsoTime(parser.text)
+                            when {
+                                currentTag == "time" -> timeMs = parseIsoTime(parser.text)
+                                currentNamespace == RAD_NAMESPACE && currentTag == "doseRate" -> {
+                                    doseRate = parser.text?.trim()?.toDoubleOrNull() ?: 0.0
+                                }
+                                currentNamespace == RAD_NAMESPACE && currentTag == "counts" -> {
+                                    counts = parser.text?.trim()?.toIntOrNull() ?: 0
+                                }
+                                currentNamespace == RAD_NAMESPACE && currentTag == "seconds" -> {
+                                    seconds = parser.text?.trim()?.toDoubleOrNull() ?: 0.0
+                                }
                             }
                         }
                     }
 
                     XmlPullParser.END_TAG -> {
                         if (parser.name == "trkpt" && insideTrkpt) {
-                            samples.add(TrackSample(lat, lon, ele, (ele*10*100).toInt(), 100.0)) // REVISE: The last two argument are counts and seconds
+                            samples.add(TrackSample(lat, lon, doseRate, counts, seconds))
                             if (timeMs > 0L) timestamps.add(timeMs)
                             insideTrkpt = false
                         }
                         currentTag = null
+                        currentNamespace = null
                     }
                 }
                 parser.next()
@@ -291,7 +308,6 @@ object TrackCatalog {
         val durationText = String.format("%02d:%02d:%02d", hh, mm, ss)
         return "${stats.pointCount} points · $durationText · %.1f m".format(stats.distanceMeters)
     }
-
 
     private data class CachedParsedTrack(
         val sourceId: String,
@@ -380,78 +396,85 @@ object TrackCatalog {
         val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
 
         if (!treeUriStr.isNullOrBlank()) {
-            return runCatching {
+            return try {
                 val treeUri = Uri.parse(treeUriStr)
-                val rootDoc = DocumentFile.fromTreeUri(context, treeUri)
-                    ?: throw IllegalStateException("Cannot open GPX tree URI")
-                TrackSourceListing.Success(
-                    rootDoc.listFiles()
-                        .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name !in EXCLUDED_GPX_FILES }
-                        .sortedByDescending { it.lastModified() }
-                        .mapNotNull { doc ->
-                            val name = doc.name ?: return@mapNotNull null
-                            val lastModified = doc.lastModified()
-                            val sizeBytes = doc.length()
-                            TrackSource(
-                                id = "doc:${doc.uri}",
-                                displayName = name,
-                                lastModified = lastModified,
-                                sizeBytes = sizeBytes,
-                                metadataReliable = lastModified > 0L || sizeBytes > 0L,
-                                openStream = { context.contentResolver.openInputStream(doc.uri) ?: throw IllegalStateException("Cannot open $name") }
-                            )
-                        }
-                )
-            }.getOrElse { TrackSourceListing.Failure(it) }
-        }
-
-        return runCatching {
-            val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
-            TrackSourceListing.Success(
-                (root.listFiles() ?: emptyArray())
-                    .asSequence()
-                    .filter { it.isFile && it.name.endsWith(".gpx", true) && it.name !in EXCLUDED_GPX_FILES }
-                    .sortedByDescending { it.lastModified() }
-                    .map {
+                val dirDoc = DocumentFile.fromTreeUri(context, treeUri)
+                    ?: return TrackSourceListing.Success(emptyList())
+                val files = dirDoc.listFiles()
+                    .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name !in EXCLUDED_GPX_FILE_SET }
+                    .sortedBy { it.name?.lowercase() }
+                    .map { doc ->
                         TrackSource(
-                            id = "file:${it.absolutePath}",
-                            displayName = it.name,
-                            lastModified = it.lastModified(),
-                            sizeBytes = it.length(),
-                            metadataReliable = true,
-                            openStream = { it.inputStream() }
+                            id = "tree:${doc.uri}",
+                            displayName = doc.name ?: "Track",
+                            lastModified = doc.lastModified(),
+                            sizeBytes = doc.length(),
+                            metadataReliable = doc.lastModified() > 0L || doc.length() > 0L,
+                            openStream = {
+                                context.contentResolver.openInputStream(doc.uri)
+                                    ?: throw IllegalStateException("Unable to open ${doc.uri}")
+                            }
                         )
                     }
-                    .toList()
-            )
-        }.getOrElse { TrackSourceListing.Failure(it) }
+                TrackSourceListing.Success(files)
+            } catch (e: Exception) {
+                TrackSourceListing.Failure(e)
+            }
+        }
+
+        return try {
+            val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
+            val files = root.listFiles()
+                ?.filter { it.isFile && it.name.endsWith(".gpx", true) && it.name !in EXCLUDED_GPX_FILE_SET }
+                ?.sortedBy { it.name.lowercase() }
+                ?.map { file ->
+                    TrackSource(
+                        id = "file:${file.absolutePath}",
+                        displayName = file.name,
+                        lastModified = file.lastModified(),
+                        sizeBytes = file.length(),
+                        metadataReliable = true,
+                        openStream = { file.inputStream() }
+                    )
+                }
+                .orEmpty()
+            TrackSourceListing.Success(files)
+        } catch (e: Exception) {
+            TrackSourceListing.Failure(e)
+        }
     }
 
+    private fun removeMissingSources(sourceIds: Set<String>): Boolean {
+        val iterator = parsedTrackCache.keys.iterator()
+        var changed = false
+        while (iterator.hasNext()) {
+            val id = iterator.next()
+            if (id !in sourceIds) {
+                iterator.remove()
+                changed = true
+            }
+        }
+        return changed
+    }
 
     private fun ensureDiskCacheLoaded(context: Context) {
         if (diskCacheLoaded) return
         synchronized(this) {
             if (diskCacheLoaded) return
             val cacheFile = trackCacheFile(context)
-            if (!cacheFile.exists()) {
-                diskCacheLoaded = true
-                return
-            }
-
-            runCatching {
-                BufferedReader(cacheFile.reader()).use { reader ->
-                    val root = JSONObject(reader.readText())
-                    val entries = root.optJSONArray("entries") ?: JSONArray()
-                    parsedTrackCache.clear()
-                    for (i in 0 until entries.length()) {
-                        val cached = CachedParsedTrack.fromJson(entries.getJSONObject(i))
-                        parsedTrackCache[cached.sourceId] = cached
+            if (cacheFile.exists()) {
+                runCatching {
+                    BufferedReader(cacheFile.reader()).use { reader ->
+                        val array = JSONArray(reader.readText())
+                        for (i in 0 until array.length()) {
+                            val entry = CachedParsedTrack.fromJson(array.getJSONObject(i))
+                            parsedTrackCache[entry.sourceId] = entry
+                        }
                     }
+                }.onFailure {
+                    Log.w("GPX", "Unable to load track cache ${cacheFile.absolutePath}", it)
+                    parsedTrackCache.clear()
                 }
-            }.onFailure {
-                Log.w("GPX", "Unable to restore persisted track cache", it)
-                parsedTrackCache.clear()
-                cacheFile.delete()
             }
             diskCacheLoaded = true
         }
@@ -460,39 +483,23 @@ object TrackCatalog {
     private fun persistTrackCache(context: Context) {
         synchronized(this) {
             val cacheFile = trackCacheFile(context)
-            val tempCacheFile = File(cacheFile.parentFile, "${cacheFile.name}.tmp")
             runCatching {
                 cacheFile.parentFile?.mkdirs()
-                val json = JSONObject().put("entries", JSONArray().apply {
+                BufferedWriter(cacheFile.writer()).use { writer ->
+                    val array = JSONArray()
                     parsedTrackCache.values
-                        .sortedBy { it.sourceId }
-                        .forEach { put(it.toJson()) }
-                })
-                BufferedWriter(tempCacheFile.writer()).use { writer ->
-                    writer.write(json.toString())
-                }
-                if (cacheFile.exists() && !cacheFile.delete()) {
-                    throw IllegalStateException("Unable to replace existing track cache ${cacheFile.absolutePath}")
-                }
-                if (!tempCacheFile.renameTo(cacheFile)) {
-                    throw IllegalStateException("Unable to promote rebuilt track cache ${cacheFile.absolutePath}")
+                        .sortedBy { it.displayName.lowercase() }
+                        .forEach { array.put(it.toJson()) }
+                    writer.write(array.toString())
                 }
             }.onFailure {
-                tempCacheFile.delete()
-                Log.w("GPX", "Unable to persist track cache", it)
+                Log.w("GPX", "Unable to persist track cache ${cacheFile.absolutePath}", it)
             }
         }
     }
 
-    private fun removeMissingSources(sourceIds: Set<String>): Boolean {
-        val missingIds = parsedTrackCache.keys.filterNot { it in sourceIds }
-        if (missingIds.isEmpty()) return false
-        missingIds.forEach(parsedTrackCache::remove)
-        return true
-    }
-
     private fun trackCacheFile(context: Context): File {
-        return File(context.filesDir, "track_catalog_cache.json")
+        val root = context.cacheDir
+        return File(root, "track-cache.json")
     }
-
 }

@@ -25,7 +25,6 @@
         android:defaultValue="10"
         android:dialogTitle="Max time without counts (s)" />
 
-
     <ListPreference
         android:key="dose_rate_avg_timestamps_n"
         android:title="Timestamps for dose rate averaging"
@@ -33,12 +32,10 @@
         android:entryValues="@array/dose_rate_avg_timestamps_values"
         android:defaultValue="10" />
 
-    <ListPreference
-        android:key="dose_tag_type"
-        android:title="Tag for dose rate"
-        android:entries="@array/dose_tag_entries"
-        android:entryValues="@array/dose_tag_values"
-        android:defaultValue="ele" />
+    <androidx.preference.SwitchPreferenceCompat
+        android:key="save_dose_rate_in_ele"
+        android:title="Also save dose rate in elevation tag"
+        android:defaultValue="false" />
 
     <EditTextPreference
         android:key="cps_to_usvh"

@@ -7,14 +7,14 @@ When track is being recorded, a statistics appears on the screen: track duration
 
 2. The main feature: When the track is recorded the app also records the dose rate. The assumed used Geiger counter does not have a digital interface it only produces a sound (beep) with known frequency and duration.
 So this sound is recorded with phone's mic and processed to detect each beep.
-The dose rate (counts per second, which is basically the number of beeps between two gpx points divided by the time passed) is written for each point in the gpx file in the elevation gpx tag or comment tag.
+The dose rate and raw measurement data are written for each GPX point inside GPX extensions using the custom `rad` namespace. Optionally, the dose rate can also be duplicated into the elevation tag for compatibility.
 
 3. Since there is GPS spoofing/jamming possible, a part of the track where the speed is too high is automatically removed.
 
 4. There is an options menu, where following options are defined:
 - max speed to detect gps spoofing/jamming
 - distance (in meters) between points written in the gpx file
-- tag to use for writing dose rate: elevation tag or comment tag.
+- whether to also save dose rate in the elevation tag.
 - coundd to dose rate coefficeint.
 - folder for saveing gpx file selection
 

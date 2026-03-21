@@ -10,6 +10,7 @@ import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.geigergpx.databinding.ActivityPoiBinding
 import java.text.SimpleDateFormat
@@ -69,7 +70,18 @@ class PoiActivity : AppCompatActivity() {
         }
         val lat = String.format(Locale.US, "%.5f", poi.latitude)
         val lon = String.format(Locale.US, "%.5f", poi.longitude)
-        return "$date   $lat $lon   ${poi.doseRateText} μSv/h"
+        return "$date   $lat $lon   ${formatDoseRateText(poi)} μSv/h"
+    }
+
+    private fun formatDoseRateText(poi: PoiEntry): String {
+        val coeff = PreferenceManager.getDefaultSharedPreferences(this)
+            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val ci = DoseStatistics.doseRateIntervalFromCountsAndSeconds(poi.counts, poi.seconds, coeff)
+        return if (poi.counts <= 9) {
+            String.format(Locale.US, "%.4f … %.4f", ci.lowBound, ci.highBound)
+        } else {
+            String.format(Locale.US, "%.4f ± %.4f", ci.mean, ci.delta)
+        }
     }
 
     private fun onPoiLongPressed(item: PoiUiItem, anchor: View) {
@@ -138,7 +150,9 @@ class PoiActivity : AppCompatActivity() {
             appendLine("Date: $dateTime")
             appendLine("Latitude: $lat")
             appendLine("Longitude: $lon")
-            append("Dose rate: ${poi.doseRateText} μSv/h")
+            appendLine("Counts: ${poi.counts}")
+            appendLine("Seconds: ${String.format(Locale.US, "%.3f", poi.seconds)}")
+            append("Dose rate: ${formatDoseRateText(poi)} μSv/h")
         }
     }
 
