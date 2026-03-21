@@ -6,13 +6,15 @@ import android.os.Environment
 import androidx.preference.PreferenceManager
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import android.provider.DocumentsContract
 
 object GpxWriter {
+
+    private const val GPX_NAMESPACE = "http://www.topografix.com/GPX/1/1"
+    private const val RAD_NAMESPACE = "https://github.com/bocovp/GeigerGPX"
 
     fun saveTrack(context: Context, points: List<TrackPoint>): String? {
         if (points.isEmpty()) return null
@@ -32,11 +34,11 @@ object GpxWriter {
         return writeGpxFile(context, points, "Backup.gpx")
     }
 
-
     fun backupUri(context: Context): Uri? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
 
+        // 1) SAF folder, if configured
         if (!treeUriStr.isNullOrBlank()) {
             return try {
                 val treeUri = Uri.parse(treeUriStr)
@@ -47,6 +49,7 @@ object GpxWriter {
             }
         }
 
+        // 2) Fallback: app-specific external Documents folder
         val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
         val backupFile = File(root, "Backup.gpx")
         return if (backupFile.exists()) Uri.fromFile(backupFile) else null
@@ -82,6 +85,7 @@ object GpxWriter {
             }
         }
     }
+
     /**
      * If a stale "Backup.gpx" exists in the currently configured save location (or
      * in the app default directory when no save folder is configured), rename it
@@ -162,7 +166,7 @@ object GpxWriter {
     private fun writeGpxFile(context: Context, points: List<TrackPoint>, fileName: String): String? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
-        val tagType = prefs.getString("dose_tag_type", "ele") ?: "ele"
+        val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         try {
@@ -173,12 +177,11 @@ object GpxWriter {
 
                 // Delete existing to prevent "(1)" duplicates
                 dirDoc.findFile(fileName)?.delete()
-
                 val outDoc = dirDoc.createFile("application/gpx+xml", fileName) ?: throw Exception("File creation failed")
 
                 context.contentResolver.openOutputStream(outDoc.uri)?.use { out ->
                     out.bufferedWriter().use { writer ->
-                        writeXmlToStream(writer, points, tagType, coeff)
+                        writeXmlToStream(writer, points, saveDoseRateInEle, coeff)
                     }
                 }
 
@@ -194,7 +197,7 @@ object GpxWriter {
 
                 file.outputStream().use { out ->
                     out.bufferedWriter().use { writer ->
-                        writeXmlToStream(writer, points, tagType, coeff)
+                        writeXmlToStream(writer, points, saveDoseRateInEle, coeff)
                     }
                 }
                 // Return absolute path for fallback files
@@ -206,26 +209,38 @@ object GpxWriter {
         }
     }
 
-    private fun writeXmlToStream(writer: java.io.BufferedWriter, points: List<TrackPoint>, tagType: String, coeff: Double) {
+    private fun writeXmlToStream(
+        writer: java.io.BufferedWriter,
+        points: List<TrackPoint>,
+        saveDoseRateInEle: Boolean,
+        coeff: Double
+    ) {
         val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
             timeZone = java.util.TimeZone.getTimeZone("UTC")
         }
 
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-        writer.write("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"http://www.topografix.com\">\n")
+        writer.write("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
         writer.write("\t<trk>\n\t\t<trkseg>\n")
 
         for (p in points) {
             val timeStr = iso.format(Date(p.timeMillis))
-            val doseStr = "%.3f".format(Locale.US, p.cps * coeff)
-            val tag = if (tagType == "ele") "ele" else "cmt"
+            val doseRate = p.cps * coeff
+            val doseStr = "%.5f".format(Locale.US, doseRate)
+            val secondsStr = "%.3f".format(Locale.US, p.seconds)
 
             writer.write("\t\t\t<trkpt lat=\"${p.latitude}\" lon=\"${p.longitude}\">\n")
             writer.write("\t\t\t\t<time>$timeStr</time>\n")
-            writer.write("\t\t\t\t<$tag>$doseStr</$tag>\n")
+            if (saveDoseRateInEle) {
+                writer.write("\t\t\t\t<ele>$doseStr</ele>\n")
+            }
+            writer.write("\t\t\t\t<extensions>\n")
+            writer.write("\t\t\t\t\t<rad:doseRate>$doseStr</rad:doseRate>\n")
+            writer.write("\t\t\t\t\t<rad:counts>${p.counts}</rad:counts>\n")
+            writer.write("\t\t\t\t\t<rad:seconds>$secondsStr</rad:seconds>\n")
+            writer.write("\t\t\t\t</extensions>\n")
             writer.write("\t\t\t</trkpt>\n")
         }
         writer.write("\t\t</trkseg>\n\t</trk>\n</gpx>\n")
     }
 }
-
