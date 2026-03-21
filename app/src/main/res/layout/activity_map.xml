@@ -31,7 +31,7 @@
             app:backgroundTint="#CCFFFFFF"
             app:fabCustomSize="48dp"
             app:maxImageSize="24dp"
-            app:srcCompat="@android:drawable/ic_input_add"
+            app:srcCompat="@drawable/sharp_add_black_36"
             app:tint="#212121" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -43,7 +43,7 @@
             app:backgroundTint="#CCFFFFFF"
             app:fabCustomSize="48dp"
             app:maxImageSize="24dp"
-            app:srcCompat="@android:drawable/ic_delete"
+            app:srcCompat="@drawable/sharp_remove_black_36"
             app:tint="#212121" />
     </LinearLayout>
 
