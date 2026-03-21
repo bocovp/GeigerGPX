@@ -50,7 +50,7 @@ class TracksActivity : AppCompatActivity() {
     }
 
     private fun refreshTrackList() {
-        val showLoading = !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty()
+        val showLoading = !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty(this)
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
         binding.tracksRecyclerView.visibility = if (showLoading) View.GONE else View.VISIBLE
         Thread {
@@ -76,7 +76,7 @@ class TracksActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_refresh_tracks -> {
-                TrackCatalog.clearTrackCache()
+                TrackCatalog.clearTrackCache(this)
                 refreshTrackList()
                 true
             }
