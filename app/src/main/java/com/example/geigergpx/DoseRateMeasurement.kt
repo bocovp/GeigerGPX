@@ -7,25 +7,16 @@ class DoseRateMeasurement(
 ) {
     private val mainCpsLock = Any()
 
-    var measurementModeEnabled: Boolean = false
-        private set
-    var measurementStartTimestampMillis: Long = 0L
-        private set
-    var measurementOldestTimestamp: Long = 0L
-        private set
-    var measurementTimestampCount: Long = 0L
-        private set
-    var windowSize: Int = initialWindowSize
-        private set
+    private var measurementModeEnabled: Boolean = false
+    private var measurementStartTimestampMillis: Long = 0L
+    private var measurementOldestTimestamp: Long = 0L
+    private var measurementTimestampCount: Long = 0L
+    private var windowSize: Int = initialWindowSize
 
-    var beepTimes = LongArray(windowSize)
-        private set
-    var mainCpsBeepTimes = beepTimes
-        private set
-    var mainCpsBeepCount: Int = 0
-        private set
-    var mainCpsBeepNextIndex: Int = 0
-        private set
+    private var beepTimes = LongArray(windowSize)
+    private var mainCpsBeepTimes = beepTimes
+    private var mainCpsBeepCount: Int = 0
+    private var mainCpsBeepNextIndex: Int = 0
 
     private var measLatSum: Double = 0.0
     private var measLonSum: Double = 0.0
@@ -145,17 +136,56 @@ class DoseRateMeasurement(
         if (measurementModeEnabled) measurementStartTimestampMillis else 0L
     }
 
-    fun currentSnapshot(): TrackingRepository.CpsSnapshot = TrackingRepository.CpsSnapshot(
-        cps = calculateMainScreenCps(),
-        sampleCount = currentSampleCount(),
-        oldestTimestampMillis = currentOldestTimestampMillis(),
-        measurementStartTimestampMillis = currentMeasurementStartTimestampMillis()
-    )
+    fun currentSnapshot(): TrackingRepository.CpsSnapshot = synchronized(mainCpsLock) {
+        TrackingRepository.CpsSnapshot(
+            cps = calculateCurrentCpsLocked(),
+            sampleCount = currentSampleCountLocked(),
+            oldestTimestampMillis = currentOldestTimestampMillisLocked(),
+            measurementStartTimestampMillis = if (measurementModeEnabled) {
+                measurementStartTimestampMillis
+            } else {
+                0L
+            }
+        )
+    }
 
     private fun newestMainCpsTimestamp(): Long? {
         if (mainCpsBeepCount < 1) return null
         val newestIndex = (mainCpsBeepNextIndex - 1 + windowSize) % windowSize
         return mainCpsBeepTimes[newestIndex]
+    }
+
+    private fun calculateCurrentCpsLocked(): Double {
+        if (measurementModeEnabled) {
+            if (measurementTimestampCount < 2L || measurementOldestTimestamp == 0L) {
+                return 0.0
+            }
+            val newest = newestMainCpsTimestamp() ?: return 0.0
+            val deltaSeconds = (newest - measurementOldestTimestamp) / 1000.0
+            if (deltaSeconds <= 0.0) return 0.0
+            return (measurementTimestampCount - 1).toDouble() / deltaSeconds
+        }
+
+        if (mainCpsBeepCount < 2) return 0.0
+        val newest = newestMainCpsTimestamp() ?: return 0.0
+        val oldest = mainCpsBeepTimes[oldestMainCpsIndex()]
+        val deltaSeconds = (newest - oldest) / 1000.0
+        if (deltaSeconds <= 0.0) return 0.0
+        return (mainCpsBeepCount - 1).toDouble() / deltaSeconds
+    }
+
+    private fun currentSampleCountLocked(): Int {
+        return if (measurementModeEnabled) measurementTimestampCount.toInt() else mainCpsBeepCount
+    }
+
+    private fun currentOldestTimestampMillisLocked(): Long {
+        if (measurementModeEnabled) {
+            if (measurementTimestampCount < 1L) return 0L
+            return measurementOldestTimestamp
+        }
+
+        if (mainCpsBeepCount < 1) return 0L
+        return mainCpsBeepTimes[oldestMainCpsIndex()]
     }
 
     private fun oldestMainCpsIndex(): Int {
