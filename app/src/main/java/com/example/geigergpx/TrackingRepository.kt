@@ -11,7 +11,6 @@ import androidx.lifecycle.MutableLiveData
  */
 class TrackingRepository {
     data class CpsSnapshot(
-        val cps: Double = 0.0,
         val sampleCount: Int = 0,
         val oldestTimestampMillis: Long = 0L,
         val measurementStartTimestampMillis: Long = 0L
