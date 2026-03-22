@@ -6,6 +6,7 @@
     android:layout_height="match_parent"
     android:padding="16dp">
 
+
     <TextView
         android:id="@+id/textCps"
         android:layout_width="0dp"
