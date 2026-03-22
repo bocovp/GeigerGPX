@@ -64,8 +64,18 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        setSupportActionBar(binding.topAppBar)
-        configureToolbarMenu()
+        //setSupportActionBar(binding.topAppBar)
+        //configureToolbarMenu()
+
+        binding.topAppBar.setOnMenuItemClickListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.action_more -> {
+                    showToolbarMenu()
+                    true
+                }
+                else -> false
+            }
+        }
 
         val restoredName = (application as GeigerGpxApp).consumeRestoredBackupName()
         if (restoredName != null) {
@@ -129,6 +139,8 @@ class MainActivity : AppCompatActivity() {
 
         observeViewModel()
     }
+
+
 
     private fun configureToolbarMenu() {
         binding.topAppBar.setOnMenuItemClickListener { menuItem ->
