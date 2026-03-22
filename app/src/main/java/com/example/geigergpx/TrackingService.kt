@@ -79,6 +79,9 @@ class TrackingService : Service() {
     @Volatile
     private var spoofingSpeedKmh: Double = 0.0
 
+    @Volatile
+    private var lastGpsFixMillis: Long = 0L
+
     private var audioBeepDetector: AudioBeepDetector? = null
 
     // Monitoring state (GPS + audio active, but not recording a track)
@@ -225,7 +228,7 @@ class TrackingService : Service() {
         val now = System.currentTimeMillis()
         val currentTotal = repo.getTotalCounts()
         trackWriter.start(now, currentTotal)
-        trackWriter.updateLastGpsFix(0L)
+        lastGpsFixMillis = 0L
         clearLastTrackLocation()
         gpsSpoofingActive = false
         spoofingSpeedKmh = 0.0
@@ -285,7 +288,7 @@ class TrackingService : Service() {
     private fun stopTrackingSession(stats: TrackStopStats) {
         trackWriter.reset()
         repo.setActiveTrackPoints(emptyList())
-        trackWriter.updateLastGpsFix(0L)
+        lastGpsFixMillis = 0L
         clearLastTrackLocation()
         gpsSpoofingActive = false
         spoofingSpeedKmh = 0.0
@@ -415,7 +418,7 @@ class TrackingService : Service() {
         checkSpoofing(loc)
 
         val now = System.currentTimeMillis()
-        trackWriter.updateLastGpsFix(now)
+        lastGpsFixMillis = now
         val tracking = trackWriter.isTracking()
         val elapsedSec = if (tracking) trackWriter.elapsedSeconds(now) else 0
 
@@ -458,10 +461,10 @@ class TrackingService : Service() {
     }
 
     private fun updateStats(elapsedSec: Long) {
-        val lastGpsFixMillis = trackWriter.lastGpsFixMillis
-        val gpsOk = (System.currentTimeMillis() - lastGpsFixMillis) <= 5000L
+        val lastGpsFixMillisSnapshot = lastGpsFixMillis
+        val gpsOk = (System.currentTimeMillis() - lastGpsFixMillisSnapshot) <= 5000L
         val gpsStatus = when {
-            !gpsOk || lastGpsFixMillis == 0L -> "Waiting"
+            !gpsOk || lastGpsFixMillisSnapshot == 0L -> "Waiting"
             gpsSpoofingActive -> "Spoofing detected (${String.format(Locale.US, "%.1f", spoofingSpeedKmh)} km/h)"
             else -> "Working"
         }
@@ -477,10 +480,10 @@ class TrackingService : Service() {
     }
 
     private fun updateMonitoringStats() {
-        val lastGpsFixMillis = trackWriter.lastGpsFixMillis
-        val gpsOk = (System.currentTimeMillis() - lastGpsFixMillis) <= 5000L
+        val lastGpsFixMillisSnapshot = lastGpsFixMillis
+        val gpsOk = (System.currentTimeMillis() - lastGpsFixMillisSnapshot) <= 5000L
         val gpsStatus = when {
-            !gpsOk || lastGpsFixMillis == 0L -> "Waiting"
+            !gpsOk || lastGpsFixMillisSnapshot == 0L -> "Waiting"
             else -> "Working"
         }
         repo.updateMonitoringStatus(gpsStatus = gpsStatus)
