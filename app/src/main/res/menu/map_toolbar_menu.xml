@@ -4,8 +4,8 @@
     <!-- Usage: Toggles between standard lines and heatmap overlay -->
     <item
         android:id="@+id/action_toggle_heatmap"
-        android:title="Show Heatmap"
         android:icon="@android:drawable/ic_menu_view"
+        android:title="Show Heatmap"
         app:showAsAction="always" />
 
     <item
