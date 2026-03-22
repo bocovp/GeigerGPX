@@ -49,7 +49,7 @@ class DoseRateMeasurement(
         measurementModeEnabled
     }
 
-    fun handleMeasurementLocation(loc: Location) {
+    fun handleGpsLocation(loc: Location) {
         synchronized(mainCpsLock) {
             if (!measurementModeEnabled) return
             measLatSum += loc.latitude
@@ -88,7 +88,7 @@ class DoseRateMeasurement(
         }
     }
 
-    fun registerBeepsForMainCps(beepCount: Int, nowProvider: () -> Long = System::currentTimeMillis) {
+    fun processBeep(beepCount: Int, nowProvider: () -> Long = System::currentTimeMillis) {
         if (beepCount <= 0) return
         synchronized(mainCpsLock) {
             repeat(beepCount) {
