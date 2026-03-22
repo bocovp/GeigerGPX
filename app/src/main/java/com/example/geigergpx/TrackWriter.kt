@@ -22,9 +22,6 @@ class TrackWriter {
 
     private var lastWrittenLocation: Location? = null
 
-    private var _lastGpsFixMillis: Long = 0L
-    val lastGpsFixMillis: Long
-        get() = synchronized(lock) { _lastGpsFixMillis }
 
     private var lastPointTotalBeeps: Int = 0
 
@@ -64,7 +61,6 @@ class TrackWriter {
         lonSum = 0.0
         latLonSum = 0
         lastPointTotalBeeps = 0
-        _lastGpsFixMillis = 0L
     }
 
     fun start(now: Long, totalBeeps: Int) = synchronized(lock) {
@@ -73,9 +69,6 @@ class TrackWriter {
         lastPointTotalBeeps = totalBeeps
     }
 
-    fun updateLastGpsFix(now: Long) = synchronized(lock) {
-        _lastGpsFixMillis = now
-    }
 
     fun initializeAnchor(loc: Location, now: Long, totalBeeps: Int) = synchronized(lock) {
         lastWrittenLocation = Location(loc)
