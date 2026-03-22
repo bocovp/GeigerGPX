@@ -443,10 +443,9 @@ class TrackingService : Service() {
         // 1. If not recording a track, just update the "Waiting/Working" UI status and exit
         if (startTimeMillis == 0L) {
             updateMonitoringStats()
-            return
+        } else {
+            handleTrackLocation(loc, now)
         }
-
-        handleTrackLocation(loc, now)
     }
 
     private fun handleTrackLocation(loc: Location, now: Long) {
@@ -609,7 +608,6 @@ class TrackingService : Service() {
         repo.updateMeasurementMode(measurementModeEnabled)
         repo.updateCpsSnapshot(currentCpsSnapshot(), onBeep = false)
     }
-
 
     private fun updateMainCpsWindowSize(newSize: Int) {
         synchronized(mainCpsLock) {
