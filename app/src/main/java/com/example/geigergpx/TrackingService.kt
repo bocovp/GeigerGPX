@@ -67,10 +67,10 @@ class TrackingService : Service() {
     private val repo by lazy { (application as GeigerGpxApp).trackingRepository }
 
     // Track recording state
-    @Volatile
-    private var startTimeMillis: Long = 0L
     private val trackWriter = TrackWriter()
 
+    private var lastTimeMillis: Long = 0L
+    private var lastLocation: Location? = null
 
     @Volatile
     private var gpsSpoofingActive: Boolean = false
@@ -180,7 +180,7 @@ class TrackingService : Service() {
     // -------------------------------------------------------------------------
 
     private fun startMonitoring() {
-        if (isMonitoring || startTimeMillis != 0L) return  // already monitoring or tracking
+        if (isMonitoring || trackWriter.isTracking()) return  // already monitoring or tracking
         isMonitoring = true
 
         if (ActivityCompatHelper.hasLocationAndAudioPermissions(this)) {
@@ -199,13 +199,13 @@ class TrackingService : Service() {
         isMonitoring = false
 
         // Only remove location updates and stop beep detector if not tracking
-        if (startTimeMillis == 0L) {
+        if (!trackWriter.isTracking()) {
             fusedLocation.removeLocationUpdates(locationCallback)
             stopBeepDetector()
         }
 
         // Only stop foreground and self-destruct if not tracking
-        if (startTimeMillis == 0L) {
+        if (!trackWriter.isTracking()) {
             stopSelf()
         } else {
             // Still tracking: downgrade notification to indicate background tracking
@@ -219,13 +219,16 @@ class TrackingService : Service() {
     // -------------------------------------------------------------------------
 
     private fun startTracking() {
-        if (startTimeMillis != 0L) return  // already tracking
+        if (trackWriter.isTracking()) return  // already tracking
 
-        startTimeMillis = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
         val currentTotal = repo.getTotalCounts()
-        trackWriter.start(currentTotal)
+        trackWriter.start(now, currentTotal)
         trackWriter.updateLastGpsFix(0L)
+        lastTimeMillis = 0L
+        lastLocation = null
         gpsSpoofingActive = false
+        spoofingSpeedKmh = 0.0
 
         if (isMonitoring) {
             // Already monitoring: GPS and audio are already running.
@@ -247,7 +250,7 @@ class TrackingService : Service() {
                 fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
                 startBeepDetector()
             } else {
-                startTimeMillis = 0L
+                trackWriter.reset()
                 stopSelf()
                 return
             }
@@ -275,10 +278,11 @@ class TrackingService : Service() {
     )
 
     private fun stopTrackingSession(stats: TrackStopStats) {
-        startTimeMillis = 0L
         trackWriter.reset()
         repo.setActiveTrackPoints(emptyList())
         trackWriter.updateLastGpsFix(0L)
+        lastTimeMillis = 0L
+        lastLocation = null
         gpsSpoofingActive = false
         spoofingSpeedKmh = 0.0
 
@@ -318,7 +322,7 @@ class TrackingService : Service() {
     }
 
     private fun cancelTracking() {
-        if (startTimeMillis == 0L) return
+        if (!trackWriter.isTracking()) return
 
         stopBackupLoop()
         GpxWriter.deleteBackupIfExists(this)
@@ -327,9 +331,9 @@ class TrackingService : Service() {
     }
 
     private fun stopTracking() {
-        if (startTimeMillis == 0L) return
+        if (!trackWriter.isTracking()) return
 
-        val finalDurationSeconds = max(0L, (System.currentTimeMillis() - startTimeMillis) / 1000L)
+        val finalDurationSeconds = trackWriter.elapsedSeconds(System.currentTimeMillis())
         val finalDistance = trackWriter.totalDistance
 
         stopBackupLoop()
@@ -385,57 +389,51 @@ class TrackingService : Service() {
         val now = System.currentTimeMillis()
         trackWriter.updateLastGpsFix(now)
 
-        doseRateMeasurement.handleGpsLocation(loc)
-
         // 1. If not recording a track, just update the "Waiting/Working" UI status and exit
-        if (startTimeMillis == 0L) {
+        if (!trackWriter.isTracking()) {
+            doseRateMeasurement.handleGpsLocation(loc)
             updateMonitoringStats()
             return
         }
 
-        // 2. Handle the very first GPS fix (The Anchor)
-        if (!trackWriter.hasAnchor()) {
-            trackWriter.initializeAnchor(loc, now, repo.getTotalCounts())
-            updateStats(0)
-            return
+        val previousLocation = lastLocation
+        val previousTimeMillis = lastTimeMillis
+        val elapsedSec = trackWriter.elapsedSeconds(now)
+
+        if (previousLocation != null && previousTimeMillis > 0L) {
+            val timeDeltaSec = max(0.1, (now - previousTimeMillis) / 1000.0)
+            val distance = previousLocation.distanceTo(loc).toDouble()
+            val speedKmh = (distance / timeDeltaSec) * 3.6
+
+            if (speedKmh > maxSpeedKmh) {
+                lastLocation = loc
+                lastTimeMillis = now
+                gpsSpoofingActive = true
+                spoofingSpeedKmh = speedKmh
+                updateStats(elapsedSec)
+                return
+            }
         }
 
-        // 4. Calculate movement statistics
-        val elapsedSec = max(0L, (now - startTimeMillis) / 1000L)
-        val movementStats = trackWriter.movementStatsFor(loc, now)
-        val distance = movementStats.distance
-        val timeDeltaSec = movementStats.timeDeltaSec
-        val speedKmh = movementStats.speedKmh
-
-        // 5. GPS Quality / Spoofing Filter
-
-        if (speedKmh > maxSpeedKmh) {
-            gpsSpoofingActive = true
-            spoofingSpeedKmh = speedKmh
-            updateStats(elapsedSec)
-            return
-        }
+        lastLocation = loc
+        lastTimeMillis = now
         gpsSpoofingActive = false
         spoofingSpeedKmh = 0.0
+        doseRateMeasurement.handleGpsLocation(loc)
 
-        // Accumulate raw GPS points for averaging (only if not spoofing)
-        trackWriter.accumulateLocation(loc)
-
-        // 6. Distance Filter (Wait until we've moved far enough)
-        if (distance < spacingM) {
-            updateStats(elapsedSec)
-            return
-        }
-
-        // 7. Geiger Logic: Check if we should "commit" this point to the track
         val totalBeeps = repo.getTotalCounts()
-        if (trackWriter.shouldWaitForCounts(totalBeeps, minCountsPerPoint, maxTimeWithoutCountsS, timeDeltaSec)) {
-            updateStats(elapsedSec)
-            return
-        }
+        val result = trackWriter.processLocation(
+            loc = loc,
+            now = now,
+            totalBeeps = totalBeeps,
+            spacingM = spacingM,
+            minCountsPerPoint = minCountsPerPoint,
+            maxTimeWithoutCountsS = maxTimeWithoutCountsS
+        )
 
-        val snapshot = trackWriter.commitPoint(loc, now, movementStats, totalBeeps)
-        repo.setActiveTrackPoints(snapshot)
+        result.snapshot?.let { snapshot ->
+            repo.setActiveTrackPoints(snapshot)
+        }
 
         updateStats(elapsedSec)
     }
@@ -548,9 +546,9 @@ class TrackingService : Service() {
     private fun startBackupLoop() {
         backupJob?.cancel()
         backupJob = serviceScope.launch {
-            while (isActive && startTimeMillis != 0L) {
+            while (isActive && trackWriter.isTracking()) {
                 delay(BACKUP_INTERVAL_MS)
-                if (startTimeMillis == 0L) break
+                if (!trackWriter.isTracking()) break
                 val snapshot = trackWriter.activeTrackPointsSnapshot()
                 if (snapshot.isEmpty()) continue
                 launch(Dispatchers.IO) {

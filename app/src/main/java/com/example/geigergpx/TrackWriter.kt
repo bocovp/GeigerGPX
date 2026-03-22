@@ -10,6 +10,12 @@ class TrackWriter {
         val speedKmh: Double = if (timeDeltaSec > 0.0) (distance / timeDeltaSec) * 3.6 else 0.0
     }
 
+    data class ProcessLocationResult(
+        val snapshot: List<TrackPoint>? = null
+    )
+
+    private var startTimeMillis: Long = 0L
+
     var totalDistance: Double = 0.0
         private set
     var lastWrittenLocation: Location? = null
@@ -39,7 +45,16 @@ class TrackWriter {
 
     fun pointCount(): Int = synchronized(_writtenPoints) { _writtenPoints.size }
 
+    fun isTracking(): Boolean = startTimeMillis != 0L
+
+    fun elapsedSeconds(now: Long): Long = if (isTracking()) {
+        kotlin.math.max(0L, (now - startTimeMillis) / 1000L)
+    } else {
+        0L
+    }
+
     fun reset() {
+        startTimeMillis = 0L
         totalDistance = 0.0
         synchronized(_writtenPoints) {
             _writtenPoints.clear()
@@ -53,8 +68,9 @@ class TrackWriter {
         lastGpsFixMillis = 0L
     }
 
-    fun start(totalBeeps: Int) {
+    fun start(now: Long, totalBeeps: Int) {
         reset()
+        startTimeMillis = now
         lastPointTotalBeeps = totalBeeps
     }
 
@@ -97,6 +113,33 @@ class TrackWriter {
         val currentBeeps = currentBeeps(totalBeeps)
         val timedOut = maxTimeWithoutCountsS > 0.0 && timeDeltaSec >= maxTimeWithoutCountsS
         return minCountsPerPoint > 0 && currentBeeps < minCountsPerPoint && !timedOut
+    }
+
+    fun processLocation(
+        loc: Location,
+        now: Long,
+        totalBeeps: Int,
+        spacingM: Double,
+        minCountsPerPoint: Int,
+        maxTimeWithoutCountsS: Double
+    ): ProcessLocationResult {
+        if (!hasAnchor()) {
+            initializeAnchor(loc, now, totalBeeps)
+            return ProcessLocationResult()
+        }
+
+        val movementStats = movementStatsFor(loc, now)
+        accumulateLocation(loc)
+        if (movementStats.distance < spacingM) {
+            return ProcessLocationResult()
+        }
+
+        if (shouldWaitForCounts(totalBeeps, minCountsPerPoint, maxTimeWithoutCountsS, movementStats.timeDeltaSec)) {
+            return ProcessLocationResult()
+        }
+
+        val snapshot = commitPoint(loc, now, movementStats, totalBeeps)
+        return ProcessLocationResult(snapshot = snapshot)
     }
 
     fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int): List<TrackPoint> {
