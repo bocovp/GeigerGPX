@@ -68,6 +68,7 @@ class TrackingService : Service() {
 
     // Track recording state
     private val trackWriter = TrackWriter()
+    private val trackLocationLock = Any()
 
     private var lastTimeMillis: Long = 0L
     private var lastLocation: Location? = null
@@ -225,8 +226,7 @@ class TrackingService : Service() {
         val currentTotal = repo.getTotalCounts()
         trackWriter.start(now, currentTotal)
         trackWriter.updateLastGpsFix(0L)
-        lastTimeMillis = 0L
-        lastLocation = null
+        clearLastTrackLocation()
         gpsSpoofingActive = false
         spoofingSpeedKmh = 0.0
 
@@ -277,12 +277,16 @@ class TrackingService : Service() {
         val points: Int
     )
 
+    private data class TrackLocationSnapshot(
+        val location: Location?,
+        val timeMillis: Long
+    )
+
     private fun stopTrackingSession(stats: TrackStopStats) {
         trackWriter.reset()
         repo.setActiveTrackPoints(emptyList())
         trackWriter.updateLastGpsFix(0L)
-        lastTimeMillis = 0L
-        lastLocation = null
+        clearLastTrackLocation()
         gpsSpoofingActive = false
         spoofingSpeedKmh = 0.0
 
@@ -396,8 +400,9 @@ class TrackingService : Service() {
             return
         }
 
-        val previousLocation = lastLocation
-        val previousTimeMillis = lastTimeMillis
+        val previousLocationSnapshot = lastTrackLocationSnapshot()
+        val previousLocation = previousLocationSnapshot.location
+        val previousTimeMillis = previousLocationSnapshot.timeMillis
         val elapsedSec = trackWriter.elapsedSeconds(now)
 
         if (previousLocation != null && previousTimeMillis > 0L) {
@@ -406,8 +411,7 @@ class TrackingService : Service() {
             val speedKmh = (distance / timeDeltaSec) * 3.6
 
             if (speedKmh > maxSpeedKmh) {
-                lastLocation = loc
-                lastTimeMillis = now
+                updateLastTrackLocation(loc, now)
                 gpsSpoofingActive = true
                 spoofingSpeedKmh = speedKmh
                 updateStats(elapsedSec)
@@ -415,8 +419,7 @@ class TrackingService : Service() {
             }
         }
 
-        lastLocation = loc
-        lastTimeMillis = now
+        updateLastTrackLocation(loc, now)
         gpsSpoofingActive = false
         spoofingSpeedKmh = 0.0
         doseRateMeasurement.handleGpsLocation(loc)
@@ -446,9 +449,10 @@ class TrackingService : Service() {
     }
 
     private fun updateStats(elapsedSec: Long) {
-        val gpsOk = (System.currentTimeMillis() - trackWriter.lastGpsFixMillis) <= 5000L
+        val lastGpsFixMillis = trackWriter.lastGpsFixMillis
+        val gpsOk = (System.currentTimeMillis() - lastGpsFixMillis) <= 5000L
         val gpsStatus = when {
-            !gpsOk || trackWriter.lastGpsFixMillis == 0L -> "Waiting"
+            !gpsOk || lastGpsFixMillis == 0L -> "Waiting"
             gpsSpoofingActive -> "Spoofing detected (${String.format(Locale.US, "%.1f", spoofingSpeedKmh)} km/h)"
             else -> "Working"
         }
@@ -464,12 +468,30 @@ class TrackingService : Service() {
     }
 
     private fun updateMonitoringStats() {
-        val gpsOk = (System.currentTimeMillis() - trackWriter.lastGpsFixMillis) <= 5000L
+        val lastGpsFixMillis = trackWriter.lastGpsFixMillis
+        val gpsOk = (System.currentTimeMillis() - lastGpsFixMillis) <= 5000L
         val gpsStatus = when {
-            !gpsOk || trackWriter.lastGpsFixMillis == 0L -> "Waiting"
+            !gpsOk || lastGpsFixMillis == 0L -> "Waiting"
             else -> "Working"
         }
         repo.updateMonitoringStatus(gpsStatus = gpsStatus)
+    }
+
+    private fun clearLastTrackLocation() = synchronized(trackLocationLock) {
+        lastLocation = null
+        lastTimeMillis = 0L
+    }
+
+    private fun lastTrackLocationSnapshot(): TrackLocationSnapshot = synchronized(trackLocationLock) {
+        TrackLocationSnapshot(
+            location = lastLocation?.let(::Location),
+            timeMillis = lastTimeMillis
+        )
+    }
+
+    private fun updateLastTrackLocation(location: Location, timeMillis: Long) = synchronized(trackLocationLock) {
+        lastLocation = Location(location)
+        lastTimeMillis = timeMillis
     }
 
     // -------------------------------------------------------------------------
