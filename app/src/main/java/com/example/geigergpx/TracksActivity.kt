@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.EditText
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -117,6 +118,7 @@ class TracksActivity : AppCompatActivity() {
         val menu = popup.menu
 
         if (!item.isCurrentTrack) {
+            menu.add(Menu.NONE, MENU_RENAME, Menu.NONE, "Rename file")
             menu.add(Menu.NONE, MENU_DELETE, Menu.NONE, "Delete")
         }
         menu.add(Menu.NONE, MENU_OPEN_DEFAULT, Menu.NONE, "Open in default app")
@@ -124,6 +126,7 @@ class TracksActivity : AppCompatActivity() {
 
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
+                MENU_RENAME -> showRenameDialog(item)
                 MENU_DELETE -> confirmDeleteTrack(item)
                 MENU_OPEN_DEFAULT -> openInDefaultApp(item)
                 MENU_SHARE -> shareTrack(item)
@@ -131,6 +134,32 @@ class TracksActivity : AppCompatActivity() {
             true
         }
         popup.show()
+    }
+
+    private fun showRenameDialog(item: TrackListItem) {
+        if (item.isCurrentTrack) return
+
+        val input = EditText(this).apply {
+            setText(item.title)
+            setSelection(text.length)
+            hint = "Track file name"
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Rename file")
+            .setView(input)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val renamed = renameTrack(item, input.text?.toString().orEmpty())
+                if (renamed) {
+                    Toast.makeText(this, "File renamed", Toast.LENGTH_SHORT).show()
+                    TrackCatalog.clearTrackCache(this)
+                    refreshTrackList()
+                } else {
+                    Toast.makeText(this, "Unable to rename file", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .show()
     }
 
     private fun confirmDeleteTrack(item: TrackListItem) {
@@ -148,6 +177,41 @@ class TracksActivity : AppCompatActivity() {
                 }
             }
             .show()
+    }
+
+    private fun renameTrack(item: TrackListItem, requestedName: String): Boolean {
+        if (item.isCurrentTrack) return false
+
+        val sanitizedName = requestedName.trim()
+            .substringAfterLast('/')
+            .substringAfterLast('\\')
+        if (sanitizedName.isBlank()) return false
+
+        val targetName = if (sanitizedName.endsWith(".gpx", ignoreCase = true)) {
+            sanitizedName
+        } else {
+            "$sanitizedName.gpx"
+        }
+        if (targetName == item.title) return true
+
+        val documentUri = trackDocumentUri(item)
+        return when {
+            documentUri != null -> {
+                val document = DocumentFile.fromSingleUri(this, documentUri) ?: return false
+                document.parentFile?.findFile(targetName)?.delete()
+                document.renameTo(targetName)
+            }
+            item.id.startsWith("file:") -> {
+                val source = File(item.id.removePrefix("file:"))
+                if (!source.exists()) return false
+                val parent = source.parentFile ?: return false
+                val destination = File(parent, targetName)
+                if (source.absolutePath == destination.absolutePath) return true
+                if (destination.exists() && !destination.delete()) return false
+                source.renameTo(destination)
+            }
+            else -> false
+        }
     }
 
     private fun deleteTrack(item: TrackListItem): Boolean {
@@ -243,9 +307,10 @@ class TracksActivity : AppCompatActivity() {
     companion object {
         const val PREF_MAP_VISIBLE_TRACK_IDS = "map_visible_track_ids"
 
-        private const val MENU_DELETE = 1
-        private const val MENU_OPEN_DEFAULT = 2
-        private const val MENU_SHARE = 3
+        private const val MENU_RENAME = 1
+        private const val MENU_DELETE = 2
+        private const val MENU_OPEN_DEFAULT = 3
+        private const val MENU_SHARE = 4
         private const val GPX_MIME = "application/gpx+xml"
     }
 }
