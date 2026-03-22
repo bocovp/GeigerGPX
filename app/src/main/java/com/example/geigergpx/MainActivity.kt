@@ -21,6 +21,8 @@ import android.provider.Settings
 import android.net.Uri
 import android.content.Context
 import android.view.Gravity
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.EditText
 import kotlin.math.roundToInt
 
@@ -64,18 +66,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        //setSupportActionBar(binding.topAppBar)
-        //configureToolbarMenu()
-
-        binding.topAppBar.setOnMenuItemClickListener { menuItem ->
-            when (menuItem.itemId) {
-                R.id.action_more -> {
-                    showToolbarMenu()
-                    true
-                }
-                else -> false
-            }
-        }
+        setSupportActionBar(binding.topAppBar)
 
         val restoredName = (application as GeigerGpxApp).consumeRestoredBackupName()
         if (restoredName != null) {
@@ -140,17 +131,18 @@ class MainActivity : AppCompatActivity() {
         observeViewModel()
     }
 
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_toolbar_menu, menu)
+        return true
+    }
 
-
-    private fun configureToolbarMenu() {
-        binding.topAppBar.setOnMenuItemClickListener { menuItem ->
-            when (menuItem.itemId) {
-                R.id.action_more -> {
-                    showToolbarMenu()
-                    true
-                }
-                else -> false
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_more -> {
+                showToolbarMenu()
+                true
             }
+            else -> super.onOptionsItemSelected(item)
         }
     }
 
