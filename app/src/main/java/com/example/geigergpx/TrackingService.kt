@@ -403,15 +403,11 @@ class TrackingService : Service() {
             if (speedKmh > maxSpeedKmh) {
                 gpsSpoofingActive = true
                 spoofingSpeedKmh = speedKmh
-
-                if (trackWriter.isTracking()) {
-                    val elapsedSec = trackWriter.elapsedSeconds(now)
-                    updateStats(elapsedSec)
-                }
+            } else {
+                gpsSpoofingActive = false
+                spoofingSpeedKmh = 0.0
             }
         }
-        gpsSpoofingActive = false
-        spoofingSpeedKmh = 0.0
         updateLastTrackLocation(loc, now)
     }
 
@@ -423,8 +419,11 @@ class TrackingService : Service() {
         val tracking = trackWriter.isTracking()
         val elapsedSec = if (tracking) trackWriter.elapsedSeconds(now) else 0
 
-        if (gpsSpoofingActive) {
+        if (!tracking) {
             updateMonitoringStats()
+        }
+
+        if (gpsSpoofingActive) {
             if (tracking) {
                 updateStats(elapsedSec)
             }
@@ -433,25 +432,22 @@ class TrackingService : Service() {
 
         doseRateMeasurement.handleGpsLocation(loc)
 
-        if (!tracking) {
-            updateMonitoringStats()
-            return
+        if (tracking) {
+            val result = trackWriter.handleGpsLocation(
+                loc = loc,
+                now = now,
+                totalBeeps = repo.getTotalCounts(),
+                spacingM = spacingM,
+                minCountsPerPoint = minCountsPerPoint,
+                maxTimeWithoutCountsS = maxTimeWithoutCountsS
+            )
+
+            result.snapshot?.let { snapshot ->
+                repo.setActiveTrackPoints(snapshot)
+            }
+
+            updateStats(elapsedSec)
         }
-
-        val result = trackWriter.handleGpsLocation(
-            loc = loc,
-            now = now,
-            totalBeeps = repo.getTotalCounts(),
-            spacingM = spacingM,
-            minCountsPerPoint = minCountsPerPoint,
-            maxTimeWithoutCountsS = maxTimeWithoutCountsS
-        )
-
-        result.snapshot?.let { snapshot ->
-            repo.setActiveTrackPoints(snapshot)
-        }
-
-        updateStats(elapsedSec)
     }
 
 
