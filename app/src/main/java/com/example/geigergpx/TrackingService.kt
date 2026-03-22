@@ -385,7 +385,7 @@ class TrackingService : Service() {
         val now = System.currentTimeMillis()
         trackWriter.updateLastGpsFix(now)
 
-        doseRateMeasurement.handleMeasurementLocation(loc)
+        doseRateMeasurement.handleGpsLocation(loc)
 
         // 1. If not recording a track, just update the "Waiting/Working" UI status and exit
         if (startTimeMillis == 0L) {
@@ -486,8 +486,8 @@ class TrackingService : Service() {
             onBeep = { _, count ->
                 if (count > 0) {
                     repo.incrementTotalCounts(count)
-                    doseRateMeasurement.registerBeepsForMainCps(count)
-                    repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true)
+                    doseRateMeasurement.processBeep(count)
+                    repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true) // ????????????????????
                 }
             },
             onAudioHealth = { healthy ->
