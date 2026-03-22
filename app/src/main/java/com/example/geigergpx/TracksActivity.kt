@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -197,9 +198,12 @@ class TracksActivity : AppCompatActivity() {
         val documentUri = trackDocumentUri(item)
         return when {
             documentUri != null -> {
-                val document = DocumentFile.fromSingleUri(this, documentUri) ?: return false
-                document.parentFile?.findFile(targetName)?.delete()
-                document.renameTo(targetName)
+                val treeUri = currentTrackDirectoryUri() ?: return false
+                val parent = DocumentFile.fromTreeUri(this, treeUri) ?: return false
+                parent.findFile(targetName)
+                    ?.takeUnless { it.uri == documentUri }
+                    ?.delete()
+                DocumentsContract.renameDocument(contentResolver, documentUri, targetName) != null
             }
             item.id.startsWith("file:") -> {
                 val source = File(item.id.removePrefix("file:"))
@@ -295,6 +299,14 @@ class TracksActivity : AppCompatActivity() {
             item.id.startsWith("tree:") -> Uri.parse(item.id.removePrefix("tree:"))
             else -> null
         }
+    }
+
+    private fun currentTrackDirectoryUri(): Uri? {
+        val treeUri = PreferenceManager.getDefaultSharedPreferences(this)
+            .getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
+        return Uri.parse(treeUri)
     }
 
     private fun selectedTrackIds(): Set<String> {
