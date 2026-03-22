@@ -371,7 +371,7 @@ class MainActivity : AppCompatActivity() {
     private fun showCancelTrackConfirmation() {
         AlertDialog.Builder(this)
             .setTitle("Cancel track")
-            .setMessage("Are you sure you want to dicard track?")
+            .setMessage("Are you sure you want to discard track?")
             .setPositiveButton("Yes") { _, _ ->
                 cancelTracking()
             }
