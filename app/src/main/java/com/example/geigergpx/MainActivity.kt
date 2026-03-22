@@ -66,7 +66,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        setSupportActionBar(binding.topAppBar)
+        // setSupportActionBar(binding.topAppBar)
 
         val restoredName = (application as GeigerGpxApp).consumeRestoredBackupName()
         if (restoredName != null) {
