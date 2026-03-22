@@ -41,8 +41,6 @@ class TrackWriter {
     private var _latLonSum: Int = 0
     val latLonSum: Int
         get() = synchronized(lock) { _latLonSum }
-    val latlLonSum: Int
-        get() = latLonSum
 
     private var _lastWrittenTime: Long = 0L
     val lastWrittenTime: Long
