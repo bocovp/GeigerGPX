@@ -14,105 +14,118 @@ class TrackWriter {
         val snapshot: List<TrackPoint>? = null
     )
 
-    private var startTimeMillis: Long = 0L
+    private val lock = Any()
 
-    var totalDistance: Double = 0.0
-        private set
-    var lastWrittenLocation: Location? = null
-        private set
-    private val _writtenPoints = mutableListOf<TrackPoint>()
-    val writtenPoints: List<TrackPoint>
-        get() = synchronized(_writtenPoints) { _writtenPoints.toList() }
-    var lastGpsFixMillis: Long = 0L
-        private set
-    var lastPointTotalBeeps: Int = 0
-        private set
-    var latSum: Double = 0.0
-        private set
-    var lonSum: Double = 0.0
-        private set
-    var latLonSum: Int = 0
-        private set
+    private var startTimeMillis: Long = 0L
+    private var _totalDistance: Double = 0.0
+    val totalDistance: Double
+        get() = synchronized(lock) { _totalDistance }
+
+    private var _lastWrittenLocation: Location? = null
+    private var _lastGpsFixMillis: Long = 0L
+    val lastGpsFixMillis: Long
+        get() = synchronized(lock) { _lastGpsFixMillis }
+
+    private var _lastPointTotalBeeps: Int = 0
+    val lastPointTotalBeeps: Int
+        get() = synchronized(lock) { _lastPointTotalBeeps }
+
+    private var _latSum: Double = 0.0
+    val latSum: Double
+        get() = synchronized(lock) { _latSum }
+
+    private var _lonSum: Double = 0.0
+    val lonSum: Double
+        get() = synchronized(lock) { _lonSum }
+
+    private var _latLonSum: Int = 0
+    val latLonSum: Int
+        get() = synchronized(lock) { _latLonSum }
     val latlLonSum: Int
         get() = latLonSum
 
-    var lastWrittenTime: Long = 0L
-        private set
+    private var _lastWrittenTime: Long = 0L
+    val lastWrittenTime: Long
+        get() = synchronized(lock) { _lastWrittenTime }
 
-    fun activeTrackPointsSnapshot(): List<TrackPoint> = synchronized(_writtenPoints) {
-        _writtenPoints.toList()
+    private val writtenPointsInternal = mutableListOf<TrackPoint>()
+    val writtenPoints: List<TrackPoint>
+        get() = activeTrackPointsSnapshot()
+
+    fun activeTrackPointsSnapshot(): List<TrackPoint> = synchronized(lock) {
+        writtenPointsInternal.toList()
     }
 
-    fun pointCount(): Int = synchronized(_writtenPoints) { _writtenPoints.size }
+    fun pointCount(): Int = synchronized(lock) { writtenPointsInternal.size }
 
-    fun isTracking(): Boolean = startTimeMillis != 0L
+    fun isTracking(): Boolean = synchronized(lock) { startTimeMillis != 0L }
 
-    fun elapsedSeconds(now: Long): Long = if (isTracking()) {
-        kotlin.math.max(0L, (now - startTimeMillis) / 1000L)
-    } else {
-        0L
-    }
-
-    fun reset() {
-        startTimeMillis = 0L
-        totalDistance = 0.0
-        synchronized(_writtenPoints) {
-            _writtenPoints.clear()
+    fun elapsedSeconds(now: Long): Long = synchronized(lock) {
+        if (startTimeMillis != 0L) {
+            kotlin.math.max(0L, (now - startTimeMillis) / 1000L)
+        } else {
+            0L
         }
-        lastWrittenLocation = null
-        lastWrittenTime = 0L
-        latSum = 0.0
-        lonSum = 0.0
-        latLonSum = 0
-        lastPointTotalBeeps = 0
-        lastGpsFixMillis = 0L
     }
 
-    fun start(now: Long, totalBeeps: Int) {
+    fun reset() = synchronized(lock) {
+        startTimeMillis = 0L
+        _totalDistance = 0.0
+        writtenPointsInternal.clear()
+        _lastWrittenLocation = null
+        _lastWrittenTime = 0L
+        _latSum = 0.0
+        _lonSum = 0.0
+        _latLonSum = 0
+        _lastPointTotalBeeps = 0
+        _lastGpsFixMillis = 0L
+    }
+
+    fun start(now: Long, totalBeeps: Int) = synchronized(lock) {
         reset()
         startTimeMillis = now
-        lastPointTotalBeeps = totalBeeps
+        _lastPointTotalBeeps = totalBeeps
     }
 
-    fun updateLastGpsFix(now: Long) {
-        lastGpsFixMillis = now
+    fun updateLastGpsFix(now: Long) = synchronized(lock) {
+        _lastGpsFixMillis = now
     }
 
-    fun hasAnchor(): Boolean = lastWrittenLocation != null
+    fun hasAnchor(): Boolean = synchronized(lock) { _lastWrittenLocation != null }
 
-    fun initializeAnchor(loc: Location, now: Long, totalBeeps: Int) {
-        lastWrittenLocation = loc
-        lastWrittenTime = now
-        latSum = loc.latitude
-        lonSum = loc.longitude
-        latLonSum = 1
-        lastPointTotalBeeps = totalBeeps
+    fun initializeAnchor(loc: Location, now: Long, totalBeeps: Int) = synchronized(lock) {
+        _lastWrittenLocation = Location(loc)
+        _lastWrittenTime = now
+        _latSum = loc.latitude
+        _lonSum = loc.longitude
+        _latLonSum = 1
+        _lastPointTotalBeeps = totalBeeps
     }
 
-    fun movementStatsFor(loc: Location, now: Long): MovementStats {
-        val lastLoc = requireNotNull(lastWrittenLocation) { "Anchor location missing" }
+    fun movementStatsFor(loc: Location, now: Long): MovementStats = synchronized(lock) {
+        val lastLoc = requireNotNull(_lastWrittenLocation) { "Anchor location missing" }
         val distance = lastLoc.distanceTo(loc).toDouble()
-        val timeDeltaSec = kotlin.math.max(0.1, (now - lastWrittenTime) / 1000.0)
-        return MovementStats(distance = distance, timeDeltaSec = timeDeltaSec)
+        val timeDeltaSec = kotlin.math.max(0.1, (now - _lastWrittenTime) / 1000.0)
+        MovementStats(distance = distance, timeDeltaSec = timeDeltaSec)
     }
 
-    fun accumulateLocation(loc: Location) {
-        latSum += loc.latitude
-        lonSum += loc.longitude
-        latLonSum += 1
+    fun accumulateLocation(loc: Location) = synchronized(lock) {
+        _latSum += loc.latitude
+        _lonSum += loc.longitude
+        _latLonSum += 1
     }
 
-    fun currentBeeps(totalBeeps: Int): Int = totalBeeps - lastPointTotalBeeps
+    fun currentBeeps(totalBeeps: Int): Int = synchronized(lock) { totalBeeps - _lastPointTotalBeeps }
 
     fun shouldWaitForCounts(
         totalBeeps: Int,
         minCountsPerPoint: Int,
         maxTimeWithoutCountsS: Double,
         timeDeltaSec: Double
-    ): Boolean {
-        val currentBeeps = currentBeeps(totalBeeps)
+    ): Boolean = synchronized(lock) {
+        val currentBeeps = totalBeeps - _lastPointTotalBeeps
         val timedOut = maxTimeWithoutCountsS > 0.0 && timeDeltaSec >= maxTimeWithoutCountsS
-        return minCountsPerPoint > 0 && currentBeeps < minCountsPerPoint && !timedOut
+        minCountsPerPoint > 0 && currentBeeps < minCountsPerPoint && !timedOut
     }
 
     fun processLocation(
@@ -122,8 +135,8 @@ class TrackWriter {
         spacingM: Double,
         minCountsPerPoint: Int,
         maxTimeWithoutCountsS: Double
-    ): ProcessLocationResult {
-        if (!hasAnchor()) {
+    ): ProcessLocationResult = synchronized(lock) {
+        if (_lastWrittenLocation == null) {
             initializeAnchor(loc, now, totalBeeps)
             return ProcessLocationResult()
         }
@@ -139,15 +152,15 @@ class TrackWriter {
         }
 
         val snapshot = commitPoint(loc, now, movementStats, totalBeeps)
-        return ProcessLocationResult(snapshot = snapshot)
+        ProcessLocationResult(snapshot = snapshot)
     }
 
-    fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int): List<TrackPoint> {
-        val finalBeeps = currentBeeps(totalBeeps)
+    fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int): List<TrackPoint> = synchronized(lock) {
+        val finalBeeps = totalBeeps - _lastPointTotalBeeps
         val finalCps = finalBeeps.toDouble() / movementStats.timeDeltaSec
-        val avgLat = if (latLonSum > 0) latSum / latLonSum.toDouble() else loc.latitude
-        val avgLon = if (latLonSum > 0) lonSum / latLonSum.toDouble() else loc.longitude
-        val avgTimeMillis = (lastWrittenTime + now) / 2L
+        val avgLat = if (_latLonSum > 0) _latSum / _latLonSum.toDouble() else loc.latitude
+        val avgLon = if (_latLonSum > 0) _lonSum / _latLonSum.toDouble() else loc.longitude
+        val avgTimeMillis = (_lastWrittenTime + now) / 2L
 
         val point = TrackPoint(
             latitude = avgLat,
@@ -159,18 +172,16 @@ class TrackWriter {
             seconds = movementStats.timeDeltaSec
         )
 
-        val snapshot = synchronized(_writtenPoints) {
-            _writtenPoints.add(point)
-            _writtenPoints.toList()
-        }
+        writtenPointsInternal.add(point)
+        val snapshot = writtenPointsInternal.toList()
 
-        totalDistance += movementStats.distance
-        lastWrittenLocation = loc
-        lastWrittenTime = now
-        latSum = 0.0
-        lonSum = 0.0
-        latLonSum = 0
-        lastPointTotalBeeps = totalBeeps
-        return snapshot
+        _totalDistance += movementStats.distance
+        _lastWrittenLocation = Location(loc)
+        _lastWrittenTime = now
+        _latSum = 0.0
+        _lonSum = 0.0
+        _latLonSum = 0
+        _lastPointTotalBeeps = totalBeeps
+        snapshot
     }
 }
