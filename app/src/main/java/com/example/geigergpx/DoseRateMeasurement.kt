@@ -18,9 +18,9 @@ class DoseRateMeasurement(
     private var mainCpsBeepCount: Int = 0
     private var mainCpsBeepNextIndex: Int = 0
 
-    private var measLatSum: Double = 0.0
-    private var measLonSum: Double = 0.0
-    private var measLatLonCount: Int = 0
+    private var latSum: Double = 0.0
+    private var lonSum: Double = 0.0
+    private var latLonCount: Int = 0
 
     fun toggleMeasurementMode(nowMillis: Long = System.currentTimeMillis()): Boolean = synchronized(mainCpsLock) {
         measurementModeEnabled = !measurementModeEnabled
@@ -43,15 +43,15 @@ class DoseRateMeasurement(
     fun handleGpsLocation(loc: Location) {
         synchronized(mainCpsLock) {
             if (!measurementModeEnabled) return
-            measLatSum += loc.latitude
-            measLonSum += loc.longitude
-            measLatLonCount += 1
+            latSum += loc.latitude
+            lonSum += loc.longitude
+            latLonCount += 1
         }
     }
 
     fun consumeMeasurementAverageCoordinates(): Pair<Double, Double> = synchronized(mainCpsLock) {
-        val latitude = if (measLatLonCount > 0) measLatSum / measLatLonCount.toDouble() else 0.0
-        val longitude = if (measLatLonCount > 0) measLonSum / measLatLonCount.toDouble() else 0.0
+        val latitude = if (latLonCount > 0) latSum / latLonCount.toDouble() else 0.0
+        val longitude = if (latLonCount > 0) lonSum / latLonCount.toDouble() else 0.0
         resetMeasurementCoordinates()
         Pair(latitude, longitude)
     }
@@ -173,8 +173,8 @@ class DoseRateMeasurement(
     }
 
     private fun resetMeasurementCoordinates() {
-        measLatSum = 0.0
-        measLonSum = 0.0
-        measLatLonCount = 0
+        latSum = 0.0
+        lonSum = 0.0
+        latLonCount = 0
     }
 }

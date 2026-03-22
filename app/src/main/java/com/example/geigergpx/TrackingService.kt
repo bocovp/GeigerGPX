@@ -389,21 +389,11 @@ class TrackingService : Service() {
         }
     }
 
-    private fun handleLocation(loc: Location) {
+    private fun checkSpoofing(loc:Location) {
         val now = System.currentTimeMillis()
-        trackWriter.updateLastGpsFix(now)
-
-        // 1. If not recording a track, just update the "Waiting/Working" UI status and exit
-        if (!trackWriter.isTracking()) {
-            doseRateMeasurement.handleGpsLocation(loc)
-            updateMonitoringStats()
-            return
-        }
-
         val previousLocationSnapshot = lastTrackLocationSnapshot()
         val previousLocation = previousLocationSnapshot.location
         val previousTimeMillis = previousLocationSnapshot.timeMillis
-        val elapsedSec = trackWriter.elapsedSeconds(now)
 
         if (previousLocation != null && previousTimeMillis > 0L) {
             val timeDeltaSec = max(0.1, (now - previousTimeMillis) / 1000.0)
@@ -411,24 +401,47 @@ class TrackingService : Service() {
             val speedKmh = (distance / timeDeltaSec) * 3.6
 
             if (speedKmh > maxSpeedKmh) {
-                updateLastTrackLocation(loc, now)
                 gpsSpoofingActive = true
                 spoofingSpeedKmh = speedKmh
-                updateStats(elapsedSec)
-                return
+
+                if (trackWriter.isTracking()) {
+                    val elapsedSec = trackWriter.elapsedSeconds(now)
+                    updateStats(elapsedSec)
+                }
             }
         }
-
-        updateLastTrackLocation(loc, now)
         gpsSpoofingActive = false
         spoofingSpeedKmh = 0.0
+        updateLastTrackLocation(loc, now)
+    }
+
+    private fun handleLocation(loc: Location) {
+        checkSpoofing(loc)
+
+        val now = System.currentTimeMillis()
+        trackWriter.updateLastGpsFix(now)
+        val tracking = trackWriter.isTracking()
+        val elapsedSec = if (tracking) trackWriter.elapsedSeconds(now) else 0
+
+        if (gpsSpoofingActive) {
+            updateMonitoringStats()
+            if (tracking) {
+                updateStats(elapsedSec)
+            }
+            return
+        }
+
         doseRateMeasurement.handleGpsLocation(loc)
 
-        val totalBeeps = repo.getTotalCounts()
-        val result = trackWriter.processLocation(
+        if (!tracking) {
+            updateMonitoringStats()
+            return
+        }
+
+        val result = trackWriter.handleGpsLocation(
             loc = loc,
             now = now,
-            totalBeeps = totalBeeps,
+            totalBeeps = repo.getTotalCounts(),
             spacingM = spacingM,
             minCountsPerPoint = minCountsPerPoint,
             maxTimeWithoutCountsS = maxTimeWithoutCountsS
