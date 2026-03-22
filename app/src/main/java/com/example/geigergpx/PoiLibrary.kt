@@ -32,11 +32,33 @@ data class PoiEntry(
 
 object PoiLibrary {
 
-    fun loadPois(context: Context): List<PoiEntry> {
-        ensurePoiFileExists(context)
-        val xml = readText(context, POI_FILE_NAME) ?: return emptyList()
-        return parsePoiEntries(xml)
+    enum class LoadState {
+        MISSING_FILE,
+        EMPTY_LIBRARY,
+        HAS_POIS
     }
+
+    data class LoadResult(
+        val entries: List<PoiEntry>,
+        val state: LoadState
+    )
+
+    fun loadPoiLibrary(context: Context): LoadResult {
+        if (!exists(context, POI_FILE_NAME)) {
+            return LoadResult(emptyList(), LoadState.MISSING_FILE)
+        }
+
+        val xml = readText(context, POI_FILE_NAME).orEmpty()
+        if (xml.isBlank()) {
+            return LoadResult(emptyList(), LoadState.EMPTY_LIBRARY)
+        }
+
+        val entries = parsePoiEntries(xml)
+        val state = if (entries.isEmpty()) LoadState.EMPTY_LIBRARY else LoadState.HAS_POIS
+        return LoadResult(entries, state)
+    }
+
+    fun loadPois(context: Context): List<PoiEntry> = loadPoiLibrary(context).entries
 
     fun addPoi(
         context: Context,

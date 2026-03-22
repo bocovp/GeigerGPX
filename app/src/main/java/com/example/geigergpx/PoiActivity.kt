@@ -42,12 +42,13 @@ class PoiActivity : AppCompatActivity() {
     }
 
     private fun refreshPoiList() {
+        binding.loadingLabel.setText(R.string.loading_poi_library)
         binding.loadingLabel.visibility = View.VISIBLE
         binding.poiRecyclerView.visibility = View.GONE
 
         Thread {
-            val entries = PoiLibrary.loadPois(this)
-            val items = entries.map { poi ->
+            val result = PoiLibrary.loadPoiLibrary(this)
+            val items = result.entries.map { poi ->
                 PoiUiItem(
                     poi = poi,
                     title = poi.description,
@@ -56,8 +57,14 @@ class PoiActivity : AppCompatActivity() {
             }
             runOnUiThread {
                 adapter.submit(items)
-                binding.loadingLabel.visibility = View.GONE
-                binding.poiRecyclerView.visibility = View.VISIBLE
+                val emptyMessageRes = when (result.state) {
+                    PoiLibrary.LoadState.MISSING_FILE -> R.string.no_poi_file_found
+                    PoiLibrary.LoadState.EMPTY_LIBRARY -> R.string.no_poi_in_library
+                    PoiLibrary.LoadState.HAS_POIS -> null
+                }
+                binding.loadingLabel.visibility = if (emptyMessageRes == null) View.GONE else View.VISIBLE
+                binding.poiRecyclerView.visibility = if (emptyMessageRes == null) View.VISIBLE else View.GONE
+                emptyMessageRes?.let(binding.loadingLabel::setText)
             }
         }.start()
     }
