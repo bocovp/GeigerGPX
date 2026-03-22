@@ -9,7 +9,6 @@ import android.os.Looper
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.PopupMenu
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
@@ -20,7 +19,6 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.net.Uri
 import android.content.Context
-import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
@@ -66,7 +64,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        // setSupportActionBar(binding.topAppBar)
 
         val restoredName = (application as GeigerGpxApp).consumeRestoredBackupName()
         if (restoredName != null) {
@@ -138,36 +135,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
-            R.id.action_more -> {
-                showToolbarMenu()
+            R.id.action_map -> {
+                openMap()
+                true
+            }
+            R.id.action_poi -> {
+                openPoi()
+                true
+            }
+            R.id.action_settings -> {
+                openSettings()
                 true
             }
             else -> super.onOptionsItemSelected(item)
-        }
-    }
-
-    private fun showToolbarMenu() {
-        PopupMenu(this, binding.topAppBar, Gravity.END).apply {
-            menuInflater.inflate(R.menu.main_overflow_menu, menu)
-            setForceShowIcon(true)
-            setOnMenuItemClickListener { menuItem ->
-                when (menuItem.itemId) {
-                    R.id.action_map -> {
-                        openMap()
-                        true
-                    }
-                    R.id.action_poi -> {
-                        openPoi()
-                        true
-                    }
-                    R.id.action_settings -> {
-                        openSettings()
-                        true
-                    }
-                    else -> false
-                }
-            }
-            show()
         }
     }
 
