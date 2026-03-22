@@ -157,7 +157,7 @@ class TrackWriter {
 
     fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int): List<TrackPoint> = synchronized(lock) {
         val finalBeeps = totalBeeps - _lastPointTotalBeeps
-        val finalCps = finalBeeps.toDouble() / movementStats.timeDeltaSec
+        val finalCps = finalBeeps.toDouble() / movementStats.timeDeltaSec // TODO: add -1
         val avgLat = if (_latLonSum > 0) _latSum / _latLonSum.toDouble() else loc.latitude
         val avgLon = if (_latLonSum > 0) _lonSum / _latLonSum.toDouble() else loc.longitude
         val avgTimeMillis = (_lastWrittenTime + now) / 2L
