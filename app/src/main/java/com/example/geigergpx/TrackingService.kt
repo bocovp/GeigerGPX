@@ -13,7 +13,6 @@ import android.os.IBinder
 import android.app.PendingIntent
 import android.content.pm.ServiceInfo
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -52,14 +51,12 @@ class TrackingService : Service() {
 
         fun activeTrackPointsSnapshot(): List<TrackPoint> {
             val service = runningInstance ?: return emptyList()
-            return synchronized(service.writtenPoints) {
-                service.writtenPoints.toList()
-            }
+            return service.trackWriter.activeTrackPointsSnapshot()
         }
 
         fun consumeMeasurementAverageCoordinates(): Pair<Double, Double> {
             val service = runningInstance ?: return Pair(0.0, 0.0)
-            return service.consumeMeasurementAverageCoordinatesInternal()
+            return service.doseRateMeasurement.consumeMeasurementAverageCoordinates()
         }
     }
 
@@ -72,29 +69,8 @@ class TrackingService : Service() {
     // Track recording state
     @Volatile
     private var startTimeMillis: Long = 0L
-    private var totalDistance: Double = 0.0
-    private val writtenPoints = mutableListOf<TrackPoint>()
+    private val trackWriter = TrackWriter()
 
-    private var lastWrittenLocation: Location? = null
-    private var lastWrittenTime: Long = 0L
-
-    // GPS averaging (simple running average between committed points)
-    private var latSum: Double = 0.0
-    private var lonSum: Double = 0.0
-    private var latLonCount: Int = 0
-
-    // GPS averaging for measurement mode (POI placement)
-    private var measLatSum: Double = 0.0
-    private var measLonSum: Double = 0.0
-    private var measLatLonCount: Int = 0
-
-
-    // Global beep counter since app start (only updated from audio thread)
-    // Snapshot at the last committed (or anchor) point
-    private var lastPointTotalBeeps: Int = 0
-
-    @Volatile
-    private var lastGpsFixMillis: Long = 0L
 
     @Volatile
     private var gpsSpoofingActive: Boolean = false
@@ -116,15 +92,7 @@ class TrackingService : Service() {
     @Volatile private var minCountsPerPoint: Int = 0
     @Volatile private var maxTimeWithoutCountsS: Double = 1.0
 
-    @Volatile private var mainCpsBeepWindowSize = 10
-    private var mainCpsBeepTimes = LongArray(mainCpsBeepWindowSize)
-    private var mainCpsBeepCount: Int = 0
-    private var mainCpsBeepNextIndex: Int = 0
-    private var measurementModeEnabled: Boolean = false
-    private var measurementStartTimestampMillis: Long = 0L
-    private var measurementOldestTimestamp: Long = 0L
-    private var measurementTimestampCount: Long = 0L
-    private val mainCpsLock = Any()
+    private val doseRateMeasurement = DoseRateMeasurement()
 
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
@@ -170,7 +138,7 @@ class TrackingService : Service() {
             ?.toIntOrNull()
             ?.takeIf { it in allowedSizes }
             ?: 10
-        updateMainCpsWindowSize(requestedWindowSize)
+        doseRateMeasurement.updateMainCpsWindowSize(requestedWindowSize)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -254,19 +222,9 @@ class TrackingService : Service() {
         if (startTimeMillis != 0L) return  // already tracking
 
         startTimeMillis = System.currentTimeMillis()
-        totalDistance = 0.0
-        synchronized(writtenPoints) {
-            writtenPoints.clear()
-        }
-        lastWrittenLocation = null
-        lastWrittenTime = 0L
-        latSum = 0.0
-        lonSum = 0.0
-        latLonCount = 0
-        // Snapshots for derived beep counts
         val currentTotal = repo.getTotalCounts()
-        lastPointTotalBeeps = currentTotal
-        lastGpsFixMillis = 0L
+        trackWriter.start(currentTotal)
+        trackWriter.updateLastGpsFix(0L)
         gpsSpoofingActive = false
 
         if (isMonitoring) {
@@ -304,7 +262,7 @@ class TrackingService : Service() {
             durationSeconds = 0,
             distance = 0.0,
             points = 0,
-            cpsSnapshot = currentCpsSnapshot(),
+            cpsSnapshot = doseRateMeasurement.currentSnapshot(),
             gpsStatus = "Waiting"
         )
         repo.updateAudioStatus("Working")
@@ -318,18 +276,9 @@ class TrackingService : Service() {
 
     private fun stopTrackingSession(stats: TrackStopStats) {
         startTimeMillis = 0L
-        totalDistance = 0.0
-        synchronized(writtenPoints) {
-            writtenPoints.clear()
-        }
+        trackWriter.reset()
         repo.setActiveTrackPoints(emptyList())
-        lastWrittenLocation = null
-        lastWrittenTime = 0L
-        latSum = 0.0
-        lonSum = 0.0
-        latLonCount = 0
-        lastPointTotalBeeps = 0
-        lastGpsFixMillis = 0L
+        trackWriter.updateLastGpsFix(0L)
         gpsSpoofingActive = false
         spoofingSpeedKmh = 0.0
 
@@ -341,7 +290,7 @@ class TrackingService : Service() {
                 durationSeconds = stats.durationSeconds,
                 distance = stats.distance,
                 points = stats.points,
-                cpsSnapshot = currentCpsSnapshot(),
+                cpsSnapshot = doseRateMeasurement.currentSnapshot(),
                 gpsStatus = repo.gpsStatus.value ?: "Waiting"
             )
         } else {
@@ -352,7 +301,7 @@ class TrackingService : Service() {
                 durationSeconds = stats.durationSeconds,
                 distance = stats.distance,
                 points = stats.points,
-                cpsSnapshot = currentCpsSnapshot(),
+                cpsSnapshot = doseRateMeasurement.currentSnapshot(),
                 gpsStatus = "Waiting"
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -381,13 +330,11 @@ class TrackingService : Service() {
         if (startTimeMillis == 0L) return
 
         val finalDurationSeconds = max(0L, (System.currentTimeMillis() - startTimeMillis) / 1000L)
-        val finalDistance = totalDistance
+        val finalDistance = trackWriter.totalDistance
 
         stopBackupLoop()
 
-        val copy = synchronized(writtenPoints) {
-            writtenPoints.toList()
-        }
+        val copy = trackWriter.activeTrackPointsSnapshot()
         val finalPointCount = copy.size
         repo.setActiveTrackPoints(copy)
         if (copy.isNotEmpty()) {
@@ -436,40 +383,29 @@ class TrackingService : Service() {
 
     private fun handleLocation(loc: Location) {
         val now = System.currentTimeMillis()
-        lastGpsFixMillis = now
+        trackWriter.updateLastGpsFix(now)
 
-        handleMeasurementLocation(loc)
+        doseRateMeasurement.handleMeasurementLocation(loc)
 
         // 1. If not recording a track, just update the "Waiting/Working" UI status and exit
         if (startTimeMillis == 0L) {
             updateMonitoringStats()
-        } else {
-            handleTrackLocation(loc, now)
+            return
         }
-    }
-
-    private fun handleTrackLocation(loc: Location, now: Long) {
 
         // 2. Handle the very first GPS fix (The Anchor)
-        val lastLoc = lastWrittenLocation
-        if (lastLoc == null) {
-            lastWrittenLocation = loc
-            lastWrittenTime = now
-            latSum = loc.latitude
-            lonSum = loc.longitude
-            latLonCount = 1
-            // Start counting from this exact moment/spot
-            lastPointTotalBeeps = repo.getTotalCounts()
+        if (!trackWriter.hasAnchor()) {
+            trackWriter.initializeAnchor(loc, now, repo.getTotalCounts())
             updateStats(0)
             return
         }
 
         // 4. Calculate movement statistics
         val elapsedSec = max(0L, (now - startTimeMillis) / 1000L)
-        val distance = lastLoc.distanceTo(loc).toDouble()
-        val timeDeltaSec = max(0.1, (now - lastWrittenTime) / 1000.0)
-        val speedMps = distance / timeDeltaSec
-        val speedKmh = speedMps * 3.6
+        val movementStats = trackWriter.movementStatsFor(loc, now)
+        val distance = movementStats.distance
+        val timeDeltaSec = movementStats.timeDeltaSec
+        val speedKmh = movementStats.speedKmh
 
         // 5. GPS Quality / Spoofing Filter
 
@@ -483,9 +419,7 @@ class TrackingService : Service() {
         spoofingSpeedKmh = 0.0
 
         // Accumulate raw GPS points for averaging (only if not spoofing)
-        latSum += loc.latitude
-        lonSum += loc.longitude
-        latLonCount += 1
+        trackWriter.accumulateLocation(loc)
 
         // 6. Distance Filter (Wait until we've moved far enough)
         if (distance < spacingM) {
@@ -494,215 +428,47 @@ class TrackingService : Service() {
         }
 
         // 7. Geiger Logic: Check if we should "commit" this point to the track
-        val currentBeeps = repo.getTotalCounts() - lastPointTotalBeeps // PEEK: do not reset yet!
-        val timedOut = maxTimeWithoutCountsS > 0.0 && timeDeltaSec >= maxTimeWithoutCountsS
-
-        // If we haven't hit the minimum count requirement AND we haven't timed out, wait for more data
-        if (minCountsPerPoint > 0 && currentBeeps < minCountsPerPoint && !timedOut) {
+        val totalBeeps = repo.getTotalCounts()
+        if (trackWriter.shouldWaitForCounts(totalBeeps, minCountsPerPoint, maxTimeWithoutCountsS, timeDeltaSec)) {
             updateStats(elapsedSec)
             return
         }
 
-        // 8. COMMIT: Everything looks good, finalize this point
-        // We logically "reset" by taking a new snapshot instead of mutating the counter
-        val finalBeeps = repo.getTotalCounts() - lastPointTotalBeeps
-        val finalCps = finalBeeps.toDouble() / timeDeltaSec
-
-        val avgLat = if (latLonCount > 0) latSum / latLonCount.toDouble() else loc.latitude
-        val avgLon = if (latLonCount > 0) lonSum / latLonCount.toDouble() else loc.longitude
-        val avgTimeMillis = ((lastWrittenTime + now) / 2L)
-
-        val point = TrackPoint(
-            latitude = avgLat,
-            longitude = avgLon,
-            timeMillis = avgTimeMillis,
-            distanceFromLast = distance,
-            cps = finalCps,
-            counts = finalBeeps,
-            seconds = timeDeltaSec
-        )
-
-        val snapshot = synchronized(writtenPoints) {
-            writtenPoints.add(point)
-            writtenPoints.toList()
-        }
+        val snapshot = trackWriter.commitPoint(loc, now, movementStats, totalBeeps)
         repo.setActiveTrackPoints(snapshot)
-        totalDistance += distance
-        lastWrittenLocation = loc
-        lastWrittenTime = now
-        latSum = 0.0
-        lonSum = 0.0
-        latLonCount = 0
-        lastPointTotalBeeps = repo.getTotalCounts()
 
         updateStats(elapsedSec)
     }
 
-    private fun handleMeasurementLocation(loc: Location) {
-        if (!measurementModeEnabled) return
-        measLatSum += loc.latitude
-        measLonSum += loc.longitude
-        measLatLonCount += 1
-    }
-
-    private fun consumeMeasurementAverageCoordinatesInternal(): Pair<Double, Double> {
-        val latitude = if (measLatLonCount > 0) measLatSum / measLatLonCount.toDouble() else 0.0
-        val longitude = if (measLatLonCount > 0) measLonSum / measLatLonCount.toDouble() else 0.0
-        measLatSum = 0.0
-        measLonSum = 0.0
-        measLatLonCount = 0
-        return Pair(latitude, longitude)
-    }
-
-    private fun currentMainCpsSampleCount(): Int = synchronized(mainCpsLock) {
-        if (measurementModeEnabled) measurementTimestampCount.toInt() else mainCpsBeepCount
-    }
-    private fun currentMainCpsOldestTimestampMillis(): Long = synchronized(mainCpsLock) {
-        if (measurementModeEnabled) {
-            if (measurementTimestampCount < 1L) return@synchronized 0L
-            return@synchronized measurementOldestTimestamp
-        }
-
-        if (mainCpsBeepCount < 1) return@synchronized 0L
-
-        val oldestIndex = if (mainCpsBeepCount == mainCpsBeepWindowSize) {
-            mainCpsBeepNextIndex
-        } else {
-            0
-        }
-        return@synchronized mainCpsBeepTimes[oldestIndex]
-    }
-
-    private fun currentCpsSnapshot() = TrackingRepository.CpsSnapshot(
-        cps = calculateMainScreenCps(),
-        sampleCount = currentMainCpsSampleCount(),
-        oldestTimestampMillis = currentMainCpsOldestTimestampMillis(),
-        measurementStartTimestampMillis = synchronized(mainCpsLock) {
-            if (measurementModeEnabled) measurementStartTimestampMillis else 0L
-        }
-    )
 
     private fun toggleMeasurementMode() {
-        synchronized(mainCpsLock) {
-            measurementModeEnabled = !measurementModeEnabled
-            if (measurementModeEnabled) {
-                measurementStartTimestampMillis = System.currentTimeMillis()
-                measurementTimestampCount = mainCpsBeepCount.toLong()
-                measurementOldestTimestamp = if (mainCpsBeepCount >= 1) {
-                    val oldestIndex = if (mainCpsBeepCount == mainCpsBeepWindowSize) {
-                        mainCpsBeepNextIndex
-                    } else {
-                        0
-                    }
-                    mainCpsBeepTimes[oldestIndex]
-                } else {
-                    0L
-                }
-                measLatSum = 0.0
-                measLonSum = 0.0
-                measLatLonCount = 0
-            } else {
-                measurementStartTimestampMillis = 0L
-            }
-        }
-        repo.updateMeasurementMode(measurementModeEnabled)
-        repo.updateCpsSnapshot(currentCpsSnapshot(), onBeep = false)
-    }
-
-    private fun updateMainCpsWindowSize(newSize: Int) {
-        synchronized(mainCpsLock) {
-            if (newSize == mainCpsBeepWindowSize) return
-
-            val preservedCount = minOf(mainCpsBeepCount, newSize)
-            val newTimes = LongArray(newSize)
-
-            if (preservedCount > 0) {
-                val start = (mainCpsBeepNextIndex - preservedCount + mainCpsBeepWindowSize) % mainCpsBeepWindowSize
-                for (i in 0 until preservedCount) {
-                    val srcIndex = (start + i) % mainCpsBeepWindowSize
-                    newTimes[i] = mainCpsBeepTimes[srcIndex]
-                }
-            }
-
-            mainCpsBeepTimes = newTimes
-            mainCpsBeepWindowSize = newSize
-            mainCpsBeepCount = preservedCount
-            mainCpsBeepNextIndex = preservedCount % newSize
-        }
-    }
-
-    private fun registerBeepsForMainCps(beepCount: Int) {
-        if (beepCount <= 0) return
-        synchronized(mainCpsLock) {
-            repeat(beepCount) {
-                mainCpsBeepTimes[mainCpsBeepNextIndex] = System.currentTimeMillis()
-                val beepTime = mainCpsBeepTimes[mainCpsBeepNextIndex]
-                mainCpsBeepNextIndex = (mainCpsBeepNextIndex + 1) % mainCpsBeepWindowSize
-                if (mainCpsBeepCount < mainCpsBeepWindowSize) {
-                    mainCpsBeepCount += 1
-                }
-                if (measurementModeEnabled) {
-                    if (measurementTimestampCount == 0L) {
-                        measurementOldestTimestamp = beepTime
-                    }
-                    measurementTimestampCount += 1L
-                }
-            }
-        }
-    }
-
-    private fun calculateMainScreenCps(): Double = synchronized(mainCpsLock) {
-        if (measurementModeEnabled) {
-            if (measurementTimestampCount < 2L || measurementOldestTimestamp == 0L) {
-                return@synchronized 0.0
-            }
-            val newestIndex = (mainCpsBeepNextIndex - 1 + mainCpsBeepWindowSize) % mainCpsBeepWindowSize
-            val newest = mainCpsBeepTimes[newestIndex]
-            val deltaSeconds = (newest - measurementOldestTimestamp) / 1000.0
-            if (deltaSeconds <= 0.0) return@synchronized 0.0
-
-            return@synchronized (measurementTimestampCount - 1).toDouble() / deltaSeconds
-        }
-
-        if (mainCpsBeepCount < 2) return@synchronized 0.0
-
-        val newestIndex = (mainCpsBeepNextIndex - 1 + mainCpsBeepWindowSize) % mainCpsBeepWindowSize
-        val oldestIndex = if (mainCpsBeepCount == mainCpsBeepWindowSize) {
-            mainCpsBeepNextIndex
-        } else {
-            0
-        }
-
-        val newest = mainCpsBeepTimes[newestIndex]
-        val oldest = mainCpsBeepTimes[oldestIndex]
-        val deltaSeconds = (newest - oldest) / 1000.0
-        if (deltaSeconds <= 0.0) return@synchronized 0.0
-
-        (mainCpsBeepCount - 1).toDouble() / deltaSeconds
+        val enabled = doseRateMeasurement.toggleMeasurementMode()
+        repo.updateMeasurementMode(enabled)
+        repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = false)
     }
 
     private fun updateStats(elapsedSec: Long) {
-        val gpsOk = (System.currentTimeMillis() - lastGpsFixMillis) <= 5000L
+        val gpsOk = (System.currentTimeMillis() - trackWriter.lastGpsFixMillis) <= 5000L
         val gpsStatus = when {
-            !gpsOk || lastGpsFixMillis == 0L -> "Waiting"
+            !gpsOk || trackWriter.lastGpsFixMillis == 0L -> "Waiting"
             gpsSpoofingActive -> "Spoofing detected (${String.format(Locale.US, "%.1f", spoofingSpeedKmh)} km/h)"
             else -> "Working"
         }
-        val currentSize = synchronized(writtenPoints) { writtenPoints.size }
+        val currentSize = trackWriter.pointCount()
         repo.updateStatus(
             tracking = true,
             durationSeconds = elapsedSec,
-            distance = totalDistance,
+            distance = trackWriter.totalDistance,
             points = currentSize,
-            cpsSnapshot = currentCpsSnapshot(),
+            cpsSnapshot = doseRateMeasurement.currentSnapshot(),
             gpsStatus = gpsStatus
         )
     }
 
     private fun updateMonitoringStats() {
-        val gpsOk = (System.currentTimeMillis() - lastGpsFixMillis) <= 5000L
+        val gpsOk = (System.currentTimeMillis() - trackWriter.lastGpsFixMillis) <= 5000L
         val gpsStatus = when {
-            !gpsOk || lastGpsFixMillis == 0L -> "Waiting"
+            !gpsOk || trackWriter.lastGpsFixMillis == 0L -> "Waiting"
             else -> "Working"
         }
         repo.updateMonitoringStatus(gpsStatus = gpsStatus)
@@ -720,8 +486,8 @@ class TrackingService : Service() {
             onBeep = { _, count ->
                 if (count > 0) {
                     repo.incrementTotalCounts(count)
-                    registerBeepsForMainCps(count)
-                    repo.updateCpsSnapshot(currentCpsSnapshot(), onBeep = true)
+                    doseRateMeasurement.registerBeepsForMainCps(count)
+                    repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true)
                 }
             },
             onAudioHealth = { healthy ->
@@ -785,9 +551,7 @@ class TrackingService : Service() {
             while (isActive && startTimeMillis != 0L) {
                 delay(BACKUP_INTERVAL_MS)
                 if (startTimeMillis == 0L) break
-                val snapshot = synchronized(writtenPoints) {
-                    writtenPoints.toList()
-                }
+                val snapshot = trackWriter.activeTrackPointsSnapshot()
                 if (snapshot.isEmpty()) continue
                 launch(Dispatchers.IO) {
                     try {
