@@ -143,6 +143,10 @@ class MainActivity : AppCompatActivity() {
                 openPoi()
                 true
             }
+            R.id.action_tracks -> {
+                openTracks()
+                true
+            }
             R.id.action_settings -> {
                 openSettings()
                 true
@@ -157,6 +161,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun openPoi() {
         startActivity(Intent(this, PoiActivity::class.java))
+    }
+
+    private fun openTracks() {
+        startActivity(Intent(this, TracksActivity::class.java))
     }
 
     private fun openSettings() {
