@@ -81,7 +81,7 @@ class TrackingService : Service() {
     // GPS averaging (simple running average between committed points)
     private var latSum: Double = 0.0
     private var lonSum: Double = 0.0
-    private var nAv: Int = 0
+    private var latLonCount: Int = 0
 
     // GPS averaging for measurement mode (POI placement)
     private var measLatSum: Double = 0.0
@@ -262,7 +262,7 @@ class TrackingService : Service() {
         lastWrittenTime = 0L
         latSum = 0.0
         lonSum = 0.0
-        nAv = 0
+        latLonCount = 0
         // Snapshots for derived beep counts
         val currentTotal = repo.getTotalCounts()
         lastPointTotalBeeps = currentTotal
@@ -327,7 +327,7 @@ class TrackingService : Service() {
         lastWrittenTime = 0L
         latSum = 0.0
         lonSum = 0.0
-        nAv = 0
+        latLonCount = 0
         lastPointTotalBeeps = 0
         lastGpsFixMillis = 0L
         gpsSpoofingActive = false
@@ -457,7 +457,7 @@ class TrackingService : Service() {
             lastWrittenTime = now
             latSum = loc.latitude
             lonSum = loc.longitude
-            nAv = 1
+            latLonCount = 1
             // Start counting from this exact moment/spot
             lastPointTotalBeeps = repo.getTotalCounts()
             updateStats(0)
@@ -485,7 +485,7 @@ class TrackingService : Service() {
         // Accumulate raw GPS points for averaging (only if not spoofing)
         latSum += loc.latitude
         lonSum += loc.longitude
-        nAv += 1
+        latLonCount += 1
 
         // 6. Distance Filter (Wait until we've moved far enough)
         if (distance < spacingM) {
@@ -508,8 +508,8 @@ class TrackingService : Service() {
         val finalBeeps = repo.getTotalCounts() - lastPointTotalBeeps
         val finalCps = finalBeeps.toDouble() / timeDeltaSec
 
-        val avgLat = if (nAv > 0) latSum / nAv.toDouble() else loc.latitude
-        val avgLon = if (nAv > 0) lonSum / nAv.toDouble() else loc.longitude
+        val avgLat = if (latLonCount > 0) latSum / latLonCount.toDouble() else loc.latitude
+        val avgLon = if (latLonCount > 0) lonSum / latLonCount.toDouble() else loc.longitude
         val avgTimeMillis = ((lastWrittenTime + now) / 2L)
 
         val point = TrackPoint(
@@ -532,7 +532,7 @@ class TrackingService : Service() {
         lastWrittenTime = now
         latSum = 0.0
         lonSum = 0.0
-        nAv = 0
+        latLonCount = 0
         lastPointTotalBeeps = repo.getTotalCounts()
 
         updateStats(elapsedSec)
@@ -718,9 +718,11 @@ class TrackingService : Service() {
         audioBeepDetector = AudioBeepDetector.createWithPrefs(
             context = this,
             onBeep = { _, count ->
-                repo.incrementTotalCounts(count)
-                registerBeepsForMainCps(count)
-                repo.updateCpsSnapshot(currentCpsSnapshot(), onBeep = true)
+                if (count > 0) {
+                    repo.incrementTotalCounts(count)
+                    registerBeepsForMainCps(count)
+                    repo.updateCpsSnapshot(currentCpsSnapshot(), onBeep = true)
+                }
             },
             onAudioHealth = { healthy ->
                 repo.updateAudioStatus(if (healthy) "Working" else "Error")
