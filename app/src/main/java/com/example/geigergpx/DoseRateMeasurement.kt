@@ -138,7 +138,6 @@ class DoseRateMeasurement(
 
     fun currentSnapshot(): TrackingRepository.CpsSnapshot = synchronized(mainCpsLock) {
         TrackingRepository.CpsSnapshot(
-            cps = calculateCurrentCpsLocked(),
             sampleCount = currentSampleCountLocked(),
             oldestTimestampMillis = currentOldestTimestampMillisLocked(),
             measurementStartTimestampMillis = if (measurementModeEnabled) {
@@ -153,25 +152,6 @@ class DoseRateMeasurement(
         if (mainCpsBeepCount < 1) return null
         val newestIndex = (mainCpsBeepNextIndex - 1 + windowSize) % windowSize
         return mainCpsBeepTimes[newestIndex]
-    }
-
-    private fun calculateCurrentCpsLocked(): Double {
-        if (measurementModeEnabled) {
-            if (measurementTimestampCount < 2L || measurementOldestTimestamp == 0L) {
-                return 0.0
-            }
-            val newest = newestMainCpsTimestamp() ?: return 0.0
-            val deltaSeconds = (newest - measurementOldestTimestamp) / 1000.0
-            if (deltaSeconds <= 0.0) return 0.0
-            return (measurementTimestampCount - 1).toDouble() / deltaSeconds
-        }
-
-        if (mainCpsBeepCount < 2) return 0.0
-        val newest = newestMainCpsTimestamp() ?: return 0.0
-        val oldest = mainCpsBeepTimes[oldestMainCpsIndex()]
-        val deltaSeconds = (newest - oldest) / 1000.0
-        if (deltaSeconds <= 0.0) return 0.0
-        return (mainCpsBeepCount - 1).toDouble() / deltaSeconds
     }
 
     private fun currentSampleCountLocked(): Int {
