@@ -124,16 +124,24 @@ class MapActivity : AppCompatActivity() {
         Thread {
             val includeCurrentTrack = viewModel.isTracking.value == true
             val selectedIds = selectedTrackIds()
+            val selectedFolders = selectedFolderIds()
             val mapTrackIds = selectedIds.ifEmpty { setOf(TrackCatalog.currentTrackId()) }
             val allItems = TrackCatalog.loadTrackListItems(
                 context = this,
                 activePoints = activePoints,
                 includeCurrentTrack = includeCurrentTrack,
                 includeMapTracks = true,
-                mapTrackIds = mapTrackIds
+                mapTrackIds = mapTrackIds,
+                includeSubfolderTracks = true
             )
             val visibleTracks = allItems
-                .filter { selectedIds.contains(it.id) || (selectedIds.isEmpty() && it.defaultVisible) }
+                .filter { item ->
+                    when {
+                        item.itemType != TrackListItemType.TRACK -> false
+                        item.folderName != null -> selectedIds.contains(item.id) && selectedFolders.contains(item.folderName)
+                        else -> selectedIds.contains(item.id) || (selectedIds.isEmpty() && item.defaultVisible)
+                    }
+                }
                 .mapNotNull { it.mapTrack }
 
             runOnUiThread {
@@ -145,6 +153,13 @@ class MapActivity : AppCompatActivity() {
     private fun selectedTrackIds(): Set<String> {
         return PreferenceManager.getDefaultSharedPreferences(this)
             .getStringSet(TracksActivity.PREF_MAP_VISIBLE_TRACK_IDS, emptySet())
+            ?.toSet()
+            ?: emptySet()
+    }
+
+    private fun selectedFolderIds(): Set<String> {
+        return PreferenceManager.getDefaultSharedPreferences(this)
+            .getStringSet(TracksActivity.PREF_MAP_VISIBLE_SUBFOLDER_NAMES, emptySet())
             ?.toSet()
             ?: emptySet()
     }

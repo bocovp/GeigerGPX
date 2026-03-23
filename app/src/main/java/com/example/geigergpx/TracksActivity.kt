@@ -25,7 +25,17 @@ class TracksActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityTracksBinding
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
-    private val adapter by lazy { TracksAdapter(::onTrackToggled, ::onTrackLongPressed) }
+    private val adapter by lazy {
+        TracksAdapter(
+            ::onTrackToggled,
+            ::onFolderToggled,
+            ::openSubfolder,
+            ::onTrackLongPressed
+        )
+    }
+    private val currentFolderName: String? by lazy {
+        intent.getStringExtra(EXTRA_SUBFOLDER_NAME)?.takeIf { it.isNotBlank() }
+    }
     private var hasLoadedTrackList = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,12 +44,11 @@ class TracksActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.title = "Tracks"
+        supportActionBar?.title = currentFolderName?.let { "Tracks: $it" } ?: "Tracks"
 
         binding.tracksRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.tracksRecyclerView.adapter = adapter
 
-        // Trigger an initial load immediately
         refreshTrackList()
 
         viewModel.activeTrackPoints.observe(this) {
@@ -58,19 +67,25 @@ class TracksActivity : AppCompatActivity() {
         }
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
         binding.tracksRecyclerView.visibility = if (showLoading) View.GONE else View.VISIBLE
+
         Thread {
             val points = viewModel.activeTrackPoints.value.orEmpty()
-            val includeCurrentTrack = viewModel.isTracking.value == true
+            val includeCurrentTrack = currentFolderName == null && viewModel.isTracking.value == true
             val items = TrackCatalog.loadTrackListItems(
                 context = this,
                 activePoints = points,
                 includeCurrentTrack = includeCurrentTrack,
-                includeMapTracks = false
+                includeMapTracks = false,
+                browseFolderName = currentFolderName,
+                includeFolderEntries = currentFolderName == null
             )
-            val selected = selectedTrackIds().ifEmpty { setOf(TrackCatalog.currentTrackId()) }
+            val selectedTracks = selectedTrackIds().ifEmpty {
+                if (currentFolderName == null) setOf(TrackCatalog.currentTrackId()) else emptySet()
+            }
+            val selectedFolders = selectedFolderIds()
             runOnUiThread {
                 hasLoadedTrackList = true
-                adapter.submit(items, selected)
+                adapter.submit(items, selectedTracks, selectedFolders)
                 val hasTracks = items.isNotEmpty()
                 binding.loadingLabel.setText(if (hasTracks) R.string.loading_files else R.string.no_tracks_found)
                 binding.loadingLabel.visibility = if (hasTracks) View.GONE else View.VISIBLE
@@ -78,7 +93,6 @@ class TracksActivity : AppCompatActivity() {
             }
         }.start()
     }
-
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.tracks_toolbar_menu, menu)
@@ -114,14 +128,47 @@ class TracksActivity : AppCompatActivity() {
             .apply()
     }
 
+    private fun onFolderToggled(folderName: String, visible: Boolean) {
+        val selected = selectedFolderIds().toMutableSet()
+        if (visible) {
+            selected.add(folderName)
+        } else {
+            selected.remove(folderName)
+        }
+        PreferenceManager.getDefaultSharedPreferences(this)
+            .edit()
+            .putStringSet(PREF_MAP_VISIBLE_SUBFOLDER_NAMES, selected)
+            .apply()
+    }
+
+    private fun openSubfolder(item: TrackListItem) {
+        val folderName = item.folderName ?: return
+        startActivity(
+            Intent(this, TracksActivity::class.java)
+                .putExtra(EXTRA_SUBFOLDER_NAME, folderName)
+        )
+    }
+
     private fun onTrackLongPressed(item: TrackListItem, anchor: View) {
+        if (item.itemType != TrackListItemType.TRACK) return
+
         val popup = PopupMenu(this, anchor)
         val menu = popup.menu
+        val moveActions = linkedMapOf<Int, String?>()
 
         if (!item.isCurrentTrack) {
             menu.add(Menu.NONE, MENU_RENAME, Menu.NONE, "Rename file")
             menu.add(Menu.NONE, MENU_DELETE, Menu.NONE, "Delete")
+
+            var nextMoveId = MENU_MOVE_BASE
+            availableMoveTargets(item.folderName).forEach { targetFolder ->
+                val title = targetFolder?.let { "Move to $it" } ?: "Move to main folder"
+                menu.add(Menu.NONE, nextMoveId, Menu.NONE, title)
+                moveActions[nextMoveId] = targetFolder
+                nextMoveId += 1
+            }
         }
+
         menu.add(Menu.NONE, MENU_OPEN_DEFAULT, Menu.NONE, "Open in default app")
         menu.add(Menu.NONE, MENU_SHARE, Menu.NONE, "Share")
 
@@ -131,10 +178,34 @@ class TracksActivity : AppCompatActivity() {
                 MENU_DELETE -> confirmDeleteTrack(item)
                 MENU_OPEN_DEFAULT -> openInDefaultApp(item)
                 MENU_SHARE -> shareTrack(item)
+                in moveActions.keys -> {
+                    val movedTrackId = moveTrack(item, moveActions.getValue(menuItem.itemId))
+                    if (movedTrackId != null) {
+                        Toast.makeText(this, "Track moved", Toast.LENGTH_SHORT).show()
+                        updateSelectedTrackId(item.id, movedTrackId)
+                        refreshTrackList()
+                    } else {
+                        Toast.makeText(this, "Unable to move file", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
             true
         }
         popup.show()
+    }
+
+    private fun availableMoveTargets(currentFolder: String?): List<String?> {
+        val subfolders = (TrackCatalog.listTrackSubfolderNames(this) + ARCHIVE_SUBFOLDER)
+            .distinct()
+            .sortedBy { it.lowercase() }
+        val targets = mutableListOf<String?>()
+        if (currentFolder != null) {
+            targets.add(null)
+        }
+        subfolders
+            .filter { it != currentFolder }
+            .forEach { targets.add(it) }
+        return targets
     }
 
     private fun showRenameDialog(item: TrackListItem) {
@@ -171,6 +242,7 @@ class TracksActivity : AppCompatActivity() {
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val deleted = deleteTrack(item)
                 if (deleted) {
+                    removeSelectedTrackId(item.id)
                     Toast.makeText(this, "Deleted", Toast.LENGTH_SHORT).show()
                     refreshTrackList()
                 } else {
@@ -198,8 +270,7 @@ class TracksActivity : AppCompatActivity() {
         val documentUri = trackDocumentUri(item)
         return when {
             documentUri != null -> {
-                val treeUri = currentTrackDirectoryUri() ?: return false
-                val parent = DocumentFile.fromTreeUri(this, treeUri) ?: return false
+                val parent = resolveDocumentDirectory(item.folderName, createIfMissing = false) ?: return false
                 parent.findFile(targetName)
                     ?.takeUnless { it.uri == documentUri }
                     ?.delete()
@@ -229,6 +300,58 @@ class TracksActivity : AppCompatActivity() {
             }
             else -> false
         }
+    }
+
+    private fun moveTrack(item: TrackListItem, destinationFolder: String?): String? {
+        if (item.isCurrentTrack || item.folderName == destinationFolder) return null
+        val movedTrackId = when {
+            trackDocumentUri(item) != null -> moveDocumentTrack(item, destinationFolder)
+            item.id.startsWith("file:") -> moveFileTrack(item, destinationFolder)
+            else -> null
+        }
+        if (movedTrackId != null) {
+            TrackCatalog.clearTrackCache(this)
+        }
+        return movedTrackId
+    }
+
+    private fun moveDocumentTrack(item: TrackListItem, destinationFolder: String?): String? {
+        val documentUri = trackDocumentUri(item) ?: return null
+        val sourceDoc = DocumentFile.fromSingleUri(this, documentUri) ?: return null
+        val fileName = sourceDoc.name ?: item.title
+        val targetDir = resolveDocumentDirectory(destinationFolder, createIfMissing = destinationFolder != null) ?: return null
+
+        targetDir.findFile(fileName)?.delete()
+        val newDoc = targetDir.createFile(GPX_MIME, fileName) ?: return null
+        return try {
+            contentResolver.openInputStream(documentUri)?.use { input ->
+                contentResolver.openOutputStream(newDoc.uri)?.use { output ->
+                    input.copyTo(output)
+                } ?: return null
+            } ?: return null
+            if (!sourceDoc.delete()) {
+                newDoc.delete()
+                return null
+            }
+            "tree:${newDoc.uri}"
+        } catch (_: Exception) {
+            newDoc.delete()
+            null
+        }
+    }
+
+    private fun moveFileTrack(item: TrackListItem, destinationFolder: String?): String? {
+        val source = File(item.id.removePrefix("file:"))
+        if (!source.exists()) return null
+
+        val root = trackRootDirectory()
+        val targetDir = destinationFolder?.let { File(root, it) } ?: root
+        if (!targetDir.exists() && !targetDir.mkdirs()) return null
+
+        val destination = File(targetDir, source.name)
+        if (destination.exists() && !destination.delete()) return null
+        if (!source.renameTo(destination)) return null
+        return "file:${destination.absolutePath}"
     }
 
     private fun openInDefaultApp(item: TrackListItem) {
@@ -309,6 +432,20 @@ class TracksActivity : AppCompatActivity() {
         return Uri.parse(treeUri)
     }
 
+    private fun resolveDocumentDirectory(folderName: String?, createIfMissing: Boolean): DocumentFile? {
+        val root = currentTrackDirectoryUri()?.let { DocumentFile.fromTreeUri(this, it) } ?: return null
+        if (folderName == null) return root
+
+        val existing = root.findFile(folderName)
+        if (existing?.isDirectory == true) return existing
+        if (!createIfMissing) return null
+        return root.createDirectory(folderName)
+    }
+
+    private fun trackRootDirectory(): File {
+        return getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS) ?: filesDir
+    }
+
     private fun selectedTrackIds(): Set<String> {
         return PreferenceManager.getDefaultSharedPreferences(this)
             .getStringSet(PREF_MAP_VISIBLE_TRACK_IDS, emptySet())
@@ -316,13 +453,43 @@ class TracksActivity : AppCompatActivity() {
             ?: emptySet()
     }
 
+    private fun selectedFolderIds(): Set<String> {
+        return PreferenceManager.getDefaultSharedPreferences(this)
+            .getStringSet(PREF_MAP_VISIBLE_SUBFOLDER_NAMES, emptySet())
+            ?.toSet()
+            ?: emptySet()
+    }
+
+    private fun updateSelectedTrackId(oldTrackId: String, newTrackId: String) {
+        val selected = selectedTrackIds().toMutableSet()
+        if (!selected.remove(oldTrackId)) return
+        selected.add(newTrackId)
+        PreferenceManager.getDefaultSharedPreferences(this)
+            .edit()
+            .putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selected)
+            .apply()
+    }
+
+    private fun removeSelectedTrackId(trackId: String) {
+        val selected = selectedTrackIds().toMutableSet()
+        if (!selected.remove(trackId)) return
+        PreferenceManager.getDefaultSharedPreferences(this)
+            .edit()
+            .putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selected)
+            .apply()
+    }
+
     companion object {
         const val PREF_MAP_VISIBLE_TRACK_IDS = "map_visible_track_ids"
+        const val PREF_MAP_VISIBLE_SUBFOLDER_NAMES = "map_visible_subfolder_names"
+        const val EXTRA_SUBFOLDER_NAME = "extra_subfolder_name"
 
         private const val MENU_RENAME = 1
         private const val MENU_DELETE = 2
         private const val MENU_OPEN_DEFAULT = 3
         private const val MENU_SHARE = 4
+        private const val MENU_MOVE_BASE = 100
         private const val GPX_MIME = "application/gpx+xml"
+        private const val ARCHIVE_SUBFOLDER = "Archive"
     }
 }
