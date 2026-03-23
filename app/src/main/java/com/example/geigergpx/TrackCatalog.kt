@@ -35,8 +35,15 @@ data class TrackListItem(
     val subtitle: String,
     val mapTrack: MapTrack?,
     val isCurrentTrack: Boolean,
-    val defaultVisible: Boolean
+    val defaultVisible: Boolean,
+    val itemType: TrackListItemType = TrackListItemType.TRACK,
+    val folderName: String? = null
 )
+
+enum class TrackListItemType {
+    TRACK,
+    FOLDER
+}
 
 object TrackCatalog {
 
@@ -67,7 +74,10 @@ object TrackCatalog {
         activePoints: List<TrackPoint>,
         includeCurrentTrack: Boolean,
         includeMapTracks: Boolean = true,
-        mapTrackIds: Set<String>? = null
+        mapTrackIds: Set<String>? = null,
+        browseFolderName: String? = null,
+        includeSubfolderTracks: Boolean = false,
+        includeFolderEntries: Boolean = false
     ): List<TrackListItem> {
         ensureDiskCacheLoaded(context)
 
@@ -75,7 +85,7 @@ object TrackCatalog {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
-        if (includeCurrentTrack) {
+        if (includeCurrentTrack && browseFolderName == null) {
             val currentTrack = currentTrackData(activePoints, coeff)
             val includeCurrentMapTrack = includeMapTracks && (mapTrackIds == null || CURRENT_TRACK_ID in mapTrackIds)
             items.add(
@@ -100,9 +110,18 @@ object TrackCatalog {
             return items
         }
 
-        val sources = (sourceListing as TrackSourceListing.Success).sources
-        val sourceIds = sources.mapTo(mutableSetOf()) { it.id }
+        val snapshot = (sourceListing as TrackSourceListing.Success).snapshot
+        val sourceIds = snapshot.allSources().mapTo(mutableSetOf()) { it.id }
         var cacheChanged = removeMissingSources(sourceIds)
+
+        val sources = when {
+            browseFolderName != null -> snapshot.subfolders
+                .firstOrNull { it.name == browseFolderName }
+                ?.tracks
+                .orEmpty()
+            includeSubfolderTracks -> snapshot.allSources()
+            else -> snapshot.rootTracks
+        }
 
         sources.forEach { source ->
             val shouldIncludeMapTrack = includeMapTracks && (mapTrackIds == null || source.id in mapTrackIds)
@@ -145,9 +164,30 @@ object TrackCatalog {
                     subtitle = formatStats(stats),
                     mapTrack = mapTrack,
                     isCurrentTrack = false,
-                    defaultVisible = false
+                    defaultVisible = false,
+                    itemType = TrackListItemType.TRACK,
+                    folderName = source.folderName
                 )
             )
+        }
+
+        if (browseFolderName == null && includeFolderEntries) {
+            snapshot.subfolders
+                .filter { it.tracks.isNotEmpty() }
+                .forEach { subfolder ->
+                    items.add(
+                        TrackListItem(
+                            id = folderItemId(subfolder.name),
+                            title = subfolder.name,
+                            subtitle = "Folder with ${subfolder.tracks.size} tracks",
+                            mapTrack = null,
+                            isCurrentTrack = false,
+                            defaultVisible = false,
+                            itemType = TrackListItemType.FOLDER,
+                            folderName = subfolder.name
+                        )
+                    )
+                }
         }
 
         if (cacheChanged) {
@@ -156,6 +196,17 @@ object TrackCatalog {
 
         return items
     }
+
+    fun listTrackSubfolderNames(context: Context): List<String> {
+        val sourceListing = listTrackFiles(context)
+        if (sourceListing is TrackSourceListing.Failure) {
+            Log.w("GPX", "Unable to enumerate subfolders", sourceListing.error)
+            return emptyList()
+        }
+        return (sourceListing as TrackSourceListing.Success).snapshot.subfolders.map { it.name }
+    }
+
+    fun folderItemId(folderName: String): String = "folder:$folderName"
 
     private data class CurrentTrackData(
         val samples: List<TrackSample>,
@@ -383,11 +434,24 @@ object TrackCatalog {
         val lastModified: Long,
         val sizeBytes: Long,
         val metadataReliable: Boolean,
+        val folderName: String?,
         val openStream: () -> InputStream
     )
 
+    private data class TrackSubfolder(
+        val name: String,
+        val tracks: List<TrackSource>
+    )
+
+    private data class TrackDirectorySnapshot(
+        val rootTracks: List<TrackSource>,
+        val subfolders: List<TrackSubfolder>
+    ) {
+        fun allSources(): List<TrackSource> = rootTracks + subfolders.flatMap { it.tracks }
+    }
+
     private sealed interface TrackSourceListing {
-        data class Success(val sources: List<TrackSource>) : TrackSourceListing
+        data class Success(val snapshot: TrackDirectorySnapshot) : TrackSourceListing
         data class Failure(val error: Throwable) : TrackSourceListing
     }
 
@@ -399,10 +463,10 @@ object TrackCatalog {
             return try {
                 val treeUri = Uri.parse(treeUriStr)
                 val dirDoc = DocumentFile.fromTreeUri(context, treeUri)
-                    ?: return TrackSourceListing.Success(emptyList())
-                val files = dirDoc.listFiles()
+                    ?: return TrackSourceListing.Success(TrackDirectorySnapshot(emptyList(), emptyList()))
+                val entries = dirDoc.listFiles().sortedBy { it.name?.lowercase() ?: "" }
+                val rootTracks = entries
                     .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name !in EXCLUDED_GPX_FILE_SET }
-                    .sortedBy { it.name?.lowercase() }
                     .map { doc ->
                         TrackSource(
                             id = "tree:${doc.uri}",
@@ -410,13 +474,37 @@ object TrackCatalog {
                             lastModified = doc.lastModified(),
                             sizeBytes = doc.length(),
                             metadataReliable = doc.lastModified() > 0L || doc.length() > 0L,
+                            folderName = null,
                             openStream = {
                                 context.contentResolver.openInputStream(doc.uri)
                                     ?: throw IllegalStateException("Unable to open ${doc.uri}")
                             }
                         )
                     }
-                TrackSourceListing.Success(files)
+                val subfolders = entries
+                    .filter { it.isDirectory && !it.name.isNullOrBlank() }
+                    .mapNotNull { directory ->
+                        val folderName = directory.name ?: return@mapNotNull null
+                        val tracks = directory.listFiles()
+                            .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name !in EXCLUDED_GPX_FILE_SET }
+                            .sortedBy { it.name?.lowercase() ?: "" }
+                            .map { doc ->
+                                TrackSource(
+                                    id = "tree:${doc.uri}",
+                                    displayName = doc.name ?: "Track",
+                                    lastModified = doc.lastModified(),
+                                    sizeBytes = doc.length(),
+                                    metadataReliable = doc.lastModified() > 0L || doc.length() > 0L,
+                                    folderName = folderName,
+                                    openStream = {
+                                        context.contentResolver.openInputStream(doc.uri)
+                                            ?: throw IllegalStateException("Unable to open ${doc.uri}")
+                                    }
+                                )
+                            }
+                        TrackSubfolder(folderName, tracks)
+                    }
+                TrackSourceListing.Success(TrackDirectorySnapshot(rootTracks, subfolders))
             } catch (e: Exception) {
                 TrackSourceListing.Failure(e)
             }
@@ -424,21 +512,44 @@ object TrackCatalog {
 
         return try {
             val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
-            val files = root.listFiles()
-                ?.filter { it.isFile && it.name.endsWith(".gpx", true) && it.name !in EXCLUDED_GPX_FILE_SET }
+            val entries = root.listFiles()
                 ?.sortedBy { it.name.lowercase() }
-                ?.map { file ->
+                .orEmpty()
+            val rootTracks = entries
+                .filter { it.isFile && it.name.endsWith(".gpx", true) && it.name !in EXCLUDED_GPX_FILE_SET }
+                .map { file ->
                     TrackSource(
                         id = "file:${file.absolutePath}",
                         displayName = file.name,
                         lastModified = file.lastModified(),
                         sizeBytes = file.length(),
                         metadataReliable = true,
+                        folderName = null,
                         openStream = { file.inputStream() }
                     )
                 }
-                .orEmpty()
-            TrackSourceListing.Success(files)
+            val subfolders = entries
+                .filter { it.isDirectory }
+                .sortedBy { it.name.lowercase() }
+                .map { directory ->
+                    val tracks = directory.listFiles()
+                        ?.filter { it.isFile && it.name.endsWith(".gpx", true) && it.name !in EXCLUDED_GPX_FILE_SET }
+                        ?.sortedBy { it.name.lowercase() }
+                        ?.map { file ->
+                            TrackSource(
+                                id = "file:${file.absolutePath}",
+                                displayName = file.name,
+                                lastModified = file.lastModified(),
+                                sizeBytes = file.length(),
+                                metadataReliable = true,
+                                folderName = directory.name,
+                                openStream = { file.inputStream() }
+                            )
+                        }
+                        .orEmpty()
+                    TrackSubfolder(directory.name, tracks)
+                }
+            TrackSourceListing.Success(TrackDirectorySnapshot(rootTracks, subfolders))
         } catch (e: Exception) {
             TrackSourceListing.Failure(e)
         }
