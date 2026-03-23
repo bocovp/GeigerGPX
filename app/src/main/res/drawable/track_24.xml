@@ -1,0 +1,31 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Map Base Layer -->
+    <path
+        android:fillColor="#757575"
+        android:pathData="M20,5L15,2L9,5L4,2V19L9,22L15,19L20,22V5ZM15,17.25L9,20.25V6.75L15,3.75V17.25Z" />
+
+    <!-- Gradient Track (Polyline) -->
+    <path
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M5,16C7,14 10,16 12,14C14,12 13,9 16,8C18,7 20,9 20,9">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="5"
+                android:startY="16"
+                android:endX="20"
+                android:endY="9"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFEB3B" /> <!-- Yellow -->
+                <item android:offset="1.0" android:color="#F44336" /> <!-- Red -->
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>
