@@ -376,7 +376,7 @@ class MainActivity : AppCompatActivity() {
         val doseRateDelta = ci.delta * coeff
 
         val decimalDigits = if (isMeasurementModeEnabled) {
-            if (doseRateDelta < 0.002  * (coeff / 0.1)) 4 else 3
+            if (doseRateDelta < 0.01  * (coeff / 0.1)) 4 else 3
         } else 2
 
         val doseColor = when {
