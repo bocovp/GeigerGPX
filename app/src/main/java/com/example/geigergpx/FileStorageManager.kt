@@ -337,8 +337,8 @@ object FileStorageManager {
         backupFile: String,
         transform: (String) -> String
     ): Boolean {
-        // Create backup
-        if (!copyFile(context, targetFile, backupFile)) {
+        // Create backup - use streaming copy for efficiency
+        if (!copyFileStream(context, targetFile, backupFile)) {  // ← Changed here
             return false
         }
 
