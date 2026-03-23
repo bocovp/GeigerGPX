@@ -26,12 +26,8 @@ class DoseRateMeasurement(
         measurementModeEnabled = !measurementModeEnabled
         if (measurementModeEnabled) {
             measurementStartTimestampMillis = nowMillis
-            measurementTimestampCount = mainCpsBeepCount.toLong()
-            measurementOldestTimestamp = if (mainCpsBeepCount >= 1) {
-                mainCpsBeepTimes[oldestMainCpsIndex()]
-            } else {
-                0L
-            }
+            measurementTimestampCount = 0L
+            measurementOldestTimestamp = 0L
             resetMeasurementCoordinates()
         } else {
             measurementStartTimestampMillis = 0L
