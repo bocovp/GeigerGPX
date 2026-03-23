@@ -8,6 +8,8 @@ import androidx.preference.PreferenceManager
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import android.provider.DocumentsContract
+
 
 /**
  * Centralized file storage abstraction for GeigerGPX.
@@ -398,5 +400,84 @@ object FileStorageManager {
     enum class StorageType {
         SAF,      // Storage Access Framework
         LOCAL     // App-specific external storage
+    }
+
+    /**
+     * Get a displayable file path/identifier for a saved file.
+     * Used for showing "file saved at: ..." messages.
+     */
+    fun getDisplayPath(context: Context, uri: Uri): String {
+        return try {
+            if (configuredTreeUri(context)?.let { uri.toString().contains(it.toString()) } == true) {
+                // SAF: Extract path from document ID
+                val docId = DocumentsContract.getDocumentId(uri)
+                docId.split(":").getOrElse(1) { docId }
+            } else {
+                // Local file: return absolute path
+                uri.path ?: "file"
+            }
+        } catch (e: Exception) {
+            "file"
+        }
+    }
+
+    /**
+     * Get URI for an existing file (for sharing/opening).
+     * Returns null if file doesn't exist.
+     */
+    fun getFileUri(context: Context, fileName: String): Uri? {
+        val doc = findDocumentFile(context, fileName)
+        if (doc != null) return doc.uri
+
+        val file = File(getRootDirectory(context), fileName)
+        return if (file.exists()) Uri.fromFile(file) else null
+    }
+
+    /**
+     * Ensure a file exists, creating it if necessary with initial content.
+     */
+    fun ensureFileExists(
+        context: Context,
+        fileName: String,
+        initialContent: String = ""
+    ): Boolean {
+        if (exists(context, fileName)) return true
+        return writeText(context, fileName, initialContent)
+    }
+
+    /**
+     * Efficient streaming copy for large files without loading entire content into memory.
+     * Use this for large GPX files instead of copyFile().
+     */
+    fun copyFileStream(context: Context, from: String, to: String): Boolean {
+        val inputStream = readStream(context, from) ?: return false
+
+        return try {
+            inputStream.use { input ->
+                val success = writeStream(context, to) { output ->
+                    input.copyTo(output)
+                }
+                success
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Safe rename with copy+delete fallback for cross-filesystem moves.
+     * More reliable than direct rename for SAF operations.
+     */
+    fun moveFile(context: Context, from: String, to: String): Boolean {
+        // Try direct rename first
+        if (renameFile(context, from, to)) return true
+
+        // Fallback: copy then delete
+        if (copyFileStream(context, from, to)) {
+            return deleteFile(context, from)
+        }
+
+        return false
     }
 }
