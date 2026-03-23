@@ -34,8 +34,8 @@ class TrackMapRenderer(
         }
 
         val currentMin = 0.0
-        if (!currentMax.isFinite()) {
-            currentMax = 1.0
+        if (!currentMax.isFinite() || currentMax > 0.5) { // Clipping at 0.5 uSv/h
+            currentMax = 0.5
         }
 
         // Check if the scale itself has changed

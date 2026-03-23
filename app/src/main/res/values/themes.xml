@@ -6,6 +6,14 @@
         <item name="colorPrimaryVariant">@color/purple_700</item>
         <item name="colorAccent">@color/teal_200</item>
         <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
+
+        <item name="actionOverflowMenuStyle">@style/OverflowMenuBelow</item>
+    </style>
+
+
+    <style name="OverflowMenuBelow" parent="Widget.AppCompat.PopupMenu.Overflow">
+        <item name="android:overlapAnchor">false</item>
+        <item name="android:dropDownVerticalOffset">0dp</item>
     </style>
 
 </resources>
