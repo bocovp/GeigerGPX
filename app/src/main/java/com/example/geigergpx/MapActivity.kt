@@ -63,13 +63,11 @@ class MapActivity : AppCompatActivity() {
         val toggleItem = menu?.findItem(R.id.action_toggle_heatmap)
 
         if (isHeatmapMode) {
-            toggleItem?.title = "Show Lines"
-            // Use a generic "list" or "lines" icon to indicate switching back to tracks
-            toggleItem?.setIcon(android.R.drawable.ic_menu_sort_by_size)
+            toggleItem?.title = "Show Gradient Tracks"
+            toggleItem?.setIcon(R.drawable.track_24)
         } else {
             toggleItem?.title = "Show Heatmap"
-            // Use a "view" or "eye" icon to indicate switching to visual heatmap
-            toggleItem?.setIcon(android.R.drawable.ic_menu_view)
+            toggleItem?.setIcon(R.drawable.heatmap_24)
         }
 
         return super.onPrepareOptionsMenu(menu)
