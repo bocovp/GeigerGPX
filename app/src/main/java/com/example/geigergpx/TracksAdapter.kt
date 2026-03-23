@@ -1,22 +1,31 @@
 package com.example.geigergpx
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.example.geigergpx.databinding.ItemTrackBinding
 
 class TracksAdapter(
-    private val onCheckedChanged: (String, Boolean) -> Unit,
-    private val onTrackLongPressed: (TrackListItem, android.view.View) -> Unit
+    private val onTrackCheckedChanged: (String, Boolean) -> Unit,
+    private val onFolderCheckedChanged: (String, Boolean) -> Unit,
+    private val onFolderClicked: (TrackListItem) -> Unit,
+    private val onTrackLongPressed: (TrackListItem, View) -> Unit
 ) : RecyclerView.Adapter<TracksAdapter.TrackViewHolder>() {
 
     private var items: List<TrackListItem> = emptyList()
-    private var selectedIds: Set<String> = emptySet()
+    private var selectedTrackIds: Set<String> = emptySet()
+    private var selectedFolderIds: Set<String> = emptySet()
 
-    fun submit(newItems: List<TrackListItem>, selected: Set<String>) {
+    fun submit(
+        newItems: List<TrackListItem>,
+        selectedTracks: Set<String>,
+        selectedFolders: Set<String>
+    ) {
         items = newItems
-        selectedIds = selected
+        selectedTrackIds = selectedTracks
+        selectedFolderIds = selectedFolders
         notifyDataSetChanged()
     }
 
@@ -35,6 +44,7 @@ class TracksAdapter(
         fun bind(item: TrackListItem) {
             binding.trackTitle.text = item.title
             binding.trackSubtitle.text = item.subtitle
+
             val defaultTitleColor = binding.trackSubtitle.currentTextColor
             val titleColor = if (item.isCurrentTrack) {
                 ContextCompat.getColor(binding.root.context, R.color.status_working)
@@ -44,20 +54,38 @@ class TracksAdapter(
             binding.trackTitle.setTextColor(titleColor)
 
             binding.trackCheckbox.setOnCheckedChangeListener(null)
-            binding.trackCheckbox.isChecked = selectedIds.contains(item.id)
+            binding.trackCheckbox.isChecked = when (item.itemType) {
+                TrackListItemType.TRACK -> selectedTrackIds.contains(item.id)
+                TrackListItemType.FOLDER -> item.folderName != null && selectedFolderIds.contains(item.folderName)
+            }
             binding.trackCheckbox.setOnCheckedChangeListener { _, checked ->
-                selectedIds = if (checked) selectedIds + item.id else selectedIds - item.id
-                onCheckedChanged(item.id, checked)
+                when (item.itemType) {
+                    TrackListItemType.TRACK -> {
+                        selectedTrackIds = if (checked) selectedTrackIds + item.id else selectedTrackIds - item.id
+                        onTrackCheckedChanged(item.id, checked)
+                    }
+                    TrackListItemType.FOLDER -> {
+                        val folderName = item.folderName ?: return@setOnCheckedChangeListener
+                        selectedFolderIds = if (checked) selectedFolderIds + folderName else selectedFolderIds - folderName
+                        onFolderCheckedChanged(folderName, checked)
+                    }
+                }
             }
 
             binding.root.setOnClickListener {
-                val next = !binding.trackCheckbox.isChecked
-                binding.trackCheckbox.isChecked = next
+                when (item.itemType) {
+                    TrackListItemType.TRACK -> binding.trackCheckbox.isChecked = !binding.trackCheckbox.isChecked
+                    TrackListItemType.FOLDER -> onFolderClicked(item)
+                }
             }
 
             binding.root.setOnLongClickListener {
-                onTrackLongPressed(item, binding.root)
-                true
+                if (item.itemType == TrackListItemType.TRACK) {
+                    onTrackLongPressed(item, binding.root)
+                    true
+                } else {
+                    false
+                }
             }
         }
     }
