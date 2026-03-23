@@ -2,12 +2,9 @@ package com.example.geigergpx
 
 import android.content.Context
 import android.location.Location
-import android.net.Uri
-import android.os.Environment
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
-import androidx.documentfile.provider.DocumentFile
 import androidx.preference.PreferenceManager
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
@@ -455,100 +452,42 @@ object TrackCatalog {
         data class Failure(val error: Throwable) : TrackSourceListing
     }
 
+
+    private fun FileStorageManager.StorageFile.isTrackFile(): Boolean {
+        return !isDirectory && name.endsWith(".gpx", ignoreCase = true) && name !in EXCLUDED_GPX_FILE_SET
+    }
+
+    private fun FileStorageManager.StorageFile.toTrackSource(folderName: String?): TrackSource {
+        return TrackSource(
+            id = when (uri.scheme) {
+                "content" -> "tree:$uri"
+                else -> "file:${uri.path}"
+            },
+            displayName = name,
+            lastModified = lastModified,
+            sizeBytes = size,
+            metadataReliable = uri.scheme != "content" || lastModified > 0L || size > 0L,
+            folderName = folderName,
+            openStream = openStream
+        )
+    }
+
     private fun listTrackFiles(context: Context): TrackSourceListing {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
-
-        if (!treeUriStr.isNullOrBlank()) {
-            return try {
-                val treeUri = Uri.parse(treeUriStr)
-                val dirDoc = DocumentFile.fromTreeUri(context, treeUri)
-                    ?: return TrackSourceListing.Success(TrackDirectorySnapshot(emptyList(), emptyList()))
-                val entries = dirDoc.listFiles().sortedBy { it.name?.lowercase() ?: "" }
-                val rootTracks = entries
-                    .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name !in EXCLUDED_GPX_FILE_SET }
-                    .map { doc ->
-                        TrackSource(
-                            id = "tree:${doc.uri}",
-                            displayName = doc.name ?: "Track",
-                            lastModified = doc.lastModified(),
-                            sizeBytes = doc.length(),
-                            metadataReliable = doc.lastModified() > 0L || doc.length() > 0L,
-                            folderName = null,
-                            openStream = {
-                                context.contentResolver.openInputStream(doc.uri)
-                                    ?: throw IllegalStateException("Unable to open ${doc.uri}")
-                            }
-                        )
-                    }
-                val subfolders = entries
-                    .filter { it.isDirectory && !it.name.isNullOrBlank() }
-                    .mapNotNull { directory ->
-                        val folderName = directory.name ?: return@mapNotNull null
-                        val tracks = directory.listFiles()
-                            .filter { it.isFile && it.name?.endsWith(".gpx", true) == true && it.name !in EXCLUDED_GPX_FILE_SET }
-                            .sortedBy { it.name?.lowercase() ?: "" }
-                            .map { doc ->
-                                TrackSource(
-                                    id = "tree:${doc.uri}",
-                                    displayName = doc.name ?: "Track",
-                                    lastModified = doc.lastModified(),
-                                    sizeBytes = doc.length(),
-                                    metadataReliable = doc.lastModified() > 0L || doc.length() > 0L,
-                                    folderName = folderName,
-                                    openStream = {
-                                        context.contentResolver.openInputStream(doc.uri)
-                                            ?: throw IllegalStateException("Unable to open ${doc.uri}")
-                                    }
-                                )
-                            }
-                        TrackSubfolder(folderName, tracks)
-                    }
-                TrackSourceListing.Success(TrackDirectorySnapshot(rootTracks, subfolders))
-            } catch (e: Exception) {
-                TrackSourceListing.Failure(e)
-            }
-        }
-
         return try {
-            val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
-            val entries = root.listFiles()
-                ?.sortedBy { it.name.lowercase() }
-                .orEmpty()
-            val rootTracks = entries
-                .filter { it.isFile && it.name.endsWith(".gpx", true) && it.name !in EXCLUDED_GPX_FILE_SET }
-                .map { file ->
-                    TrackSource(
-                        id = "file:${file.absolutePath}",
-                        displayName = file.name,
-                        lastModified = file.lastModified(),
-                        sizeBytes = file.length(),
-                        metadataReliable = true,
-                        folderName = null,
-                        openStream = { file.inputStream() }
-                    )
-                }
-            val subfolders = entries
+            val rootEntries = FileStorageManager.listFiles(context)
+            val rootTracks = rootEntries
+                .filter { it.isTrackFile() }
+                .map { it.toTrackSource(folderName = null) }
+
+            val subfolders = rootEntries
                 .filter { it.isDirectory }
-                .sortedBy { it.name.lowercase() }
                 .map { directory ->
-                    val tracks = directory.listFiles()
-                        ?.filter { it.isFile && it.name.endsWith(".gpx", true) && it.name !in EXCLUDED_GPX_FILE_SET }
-                        ?.sortedBy { it.name.lowercase() }
-                        ?.map { file ->
-                            TrackSource(
-                                id = "file:${file.absolutePath}",
-                                displayName = file.name,
-                                lastModified = file.lastModified(),
-                                sizeBytes = file.length(),
-                                metadataReliable = true,
-                                folderName = directory.name,
-                                openStream = { file.inputStream() }
-                            )
-                        }
-                        .orEmpty()
+                    val tracks = FileStorageManager.listFilesInDirectory(context, directory.path) { fileName, isDirectory ->
+                        !isDirectory && fileName.endsWith(".gpx", ignoreCase = true) && fileName !in EXCLUDED_GPX_FILE_SET
+                    }.map { it.toTrackSource(folderName = directory.name) }
                     TrackSubfolder(directory.name, tracks)
                 }
+
             TrackSourceListing.Success(TrackDirectorySnapshot(rootTracks, subfolders))
         } catch (e: Exception) {
             TrackSourceListing.Failure(e)

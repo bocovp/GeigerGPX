@@ -1,13 +1,8 @@
 package com.example.geigergpx
 
 import android.content.Context
-import android.net.Uri
-import android.os.Environment
-import androidx.documentfile.provider.DocumentFile
-import androidx.preference.PreferenceManager
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
-import java.io.File
 import java.io.StringReader
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -44,11 +39,11 @@ object PoiLibrary {
     )
 
     fun loadPoiLibrary(context: Context): LoadResult {
-        if (!exists(context, POI_FILE_NAME)) {
+        if (!FileStorageManager.exists(context, POI_FILE_NAME)) {
             return LoadResult(emptyList(), LoadState.MISSING_FILE)
         }
 
-        val xml = readText(context, POI_FILE_NAME).orEmpty()
+        val xml = FileStorageManager.readText(context, POI_FILE_NAME).orEmpty()
         if (xml.isBlank()) {
             return LoadResult(emptyList(), LoadState.EMPTY_LIBRARY)
         }
@@ -113,39 +108,18 @@ object PoiLibrary {
     private fun modifyPoiFile(context: Context, transform: (String) -> String): Boolean {
         ensurePoiFileExists(context)
 
-        if (!copyFile(context, POI_FILE_NAME, POI_BACKUP_FILE_NAME)) {
-            return false
-        }
+        val updated = FileStorageManager.transactionalWrite(
+            context = context,
+            targetFile = POI_FILE_NAME,
+            backupFile = POI_BACKUP_FILE_NAME,
+            transform = transform
+        )
 
-        val original = readText(context, POI_FILE_NAME) ?: emptyPoiXml()
-        val updatedXml = transform(original)
-
-        val saved = writeText(context, POI_FILE_NAME, updatedXml)
-        return if (saved) {
-            deleteFile(context, POI_BACKUP_FILE_NAME)
-            true
-        } else {
-            deleteFile(context, POI_FILE_NAME)
-            restoreBackup(context)
-            false
-        }
-    }
-
-    private fun restoreBackup(context: Context): Boolean {
-        if (renameFile(context, POI_BACKUP_FILE_NAME, POI_FILE_NAME)) {
-            return true
-        }
-        val copied = copyFile(context, POI_BACKUP_FILE_NAME, POI_FILE_NAME)
-        if (copied) {
-            deleteFile(context, POI_BACKUP_FILE_NAME)
-        }
-        return copied
+        return updated
     }
 
     private fun ensurePoiFileExists(context: Context) {
-        if (!exists(context, POI_FILE_NAME)) {
-            writeText(context, POI_FILE_NAME, emptyPoiXml())
-        }
+        FileStorageManager.ensureFileExists(context, POI_FILE_NAME, emptyPoiXml())
     }
 
     private fun parsePoiEntries(xml: String): List<PoiEntry> {
@@ -278,90 +252,4 @@ object PoiLibrary {
             .replace("'", "&apos;")
     }
 
-    private fun exists(context: Context, fileName: String): Boolean {
-        val treeFile = findDocumentFile(context, fileName)
-        if (treeFile != null) {
-            return true
-        }
-        return File(getRootDirectory(context), fileName).exists()
-    }
-
-    private fun readText(context: Context, fileName: String): String? {
-        val doc = findDocumentFile(context, fileName)
-        if (doc != null) {
-            return context.contentResolver.openInputStream(doc.uri)?.bufferedReader()?.use { it.readText() }
-        }
-
-        val file = File(getRootDirectory(context), fileName)
-        if (!file.exists()) return null
-        return file.readText()
-    }
-
-    private fun writeText(context: Context, fileName: String, text: String): Boolean {
-        val treeUri = configuredTreeUri(context)
-        if (treeUri != null) {
-            val root = DocumentFile.fromTreeUri(context, treeUri) ?: return false
-            root.findFile(fileName)?.delete()
-            val outDoc = root.createFile("application/gpx+xml", fileName) ?: return false
-            return runCatching {
-                context.contentResolver.openOutputStream(outDoc.uri)?.bufferedWriter()?.use { writer ->
-                    writer.write(text)
-                } ?: return false
-                true
-            }.getOrDefault(false)
-        }
-
-        val file = File(getRootDirectory(context), fileName)
-        return runCatching {
-            file.parentFile?.mkdirs()
-            file.writeText(text)
-            true
-        }.getOrDefault(false)
-    }
-
-    private fun deleteFile(context: Context, fileName: String): Boolean {
-        val doc = findDocumentFile(context, fileName)
-        if (doc != null) {
-            return doc.delete()
-        }
-        val file = File(getRootDirectory(context), fileName)
-        return !file.exists() || file.delete()
-    }
-
-    private fun renameFile(context: Context, from: String, to: String): Boolean {
-        val doc = findDocumentFile(context, from)
-        if (doc != null) {
-            findDocumentFile(context, to)?.delete()
-            return doc.renameTo(to)
-        }
-        val root = getRootDirectory(context)
-        val src = File(root, from)
-        val dest = File(root, to)
-        if (!src.exists()) return false
-        if (dest.exists()) {
-            dest.delete()
-        }
-        return src.renameTo(dest)
-    }
-
-    private fun copyFile(context: Context, from: String, to: String): Boolean {
-        val content = readText(context, from) ?: return false
-        return writeText(context, to, content)
-    }
-
-    private fun configuredTreeUri(context: Context): Uri? {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val treeUriStr = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
-        return if (treeUriStr.isNullOrBlank()) null else Uri.parse(treeUriStr)
-    }
-
-    private fun findDocumentFile(context: Context, name: String): DocumentFile? {
-        val treeUri = configuredTreeUri(context) ?: return null
-        val root = DocumentFile.fromTreeUri(context, treeUri) ?: return null
-        return root.findFile(name)
-    }
-
-    private fun getRootDirectory(context: Context): File {
-        return context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
-    }
 }
