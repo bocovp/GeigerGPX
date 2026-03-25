@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
@@ -121,6 +122,8 @@ class MapActivity : AppCompatActivity() {
     }
 
     private fun refreshMapTracks(activePoints: List<TrackPoint>) {
+        val showLoading = TrackCatalog.isTrackCacheEmpty(this)
+        binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
         Thread {
             val includeCurrentTrack = viewModel.isTracking.value == true
             val selectedIds = selectedTrackIds()
@@ -146,6 +149,7 @@ class MapActivity : AppCompatActivity() {
 
             runOnUiThread {
                 trackMapRenderer.renderTracks(visibleTracks, isHeatmapMode)
+                binding.loadingLabel.visibility = View.GONE
             }
         }.start()
     }
