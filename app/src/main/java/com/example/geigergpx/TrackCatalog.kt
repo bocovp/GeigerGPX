@@ -221,6 +221,7 @@ object TrackCatalog {
         val stats = statsFromTrackPoints(points)
         synchronized(this) {
             parsedTrackCache[source.id] = CachedParsedTrack(
+                sourceId = source.id,
                 displayName = source.displayName,
                 folderName = source.folderName,
                 stats = stats
