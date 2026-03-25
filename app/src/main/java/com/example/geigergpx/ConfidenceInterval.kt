@@ -9,6 +9,12 @@ import kotlin.text.toDouble
 import kotlin.times
 
 class ConfidenceInterval {
+    enum class DisplayMode {
+        AUTO,
+        INTERVAL,
+        PLUS_MINUS
+    }
+
     val mean: Float
     val delta: Float
     val lowBound: Float
@@ -107,12 +113,18 @@ class ConfidenceInterval {
         highBound = mean + delta + gamma
     }
 
-    fun toText(decimalDigits: Int): String {
+    fun toText(decimalDigits: Int, displayMode: DisplayMode = DisplayMode.AUTO): String {
         if (sampleCount < 2) {
             return "0"
         }
 
-        return if (sampleCount <= 9) {
+        val useInterval = when (displayMode) {
+            DisplayMode.AUTO -> sampleCount <= 9
+            DisplayMode.INTERVAL -> true
+            DisplayMode.PLUS_MINUS -> false
+        }
+
+        return if (useInterval) {
             String.format(Locale.US, "%.${decimalDigits}f … %.${decimalDigits}f", lowBound, highBound)
         } else {
             String.format(Locale.US, "%.${decimalDigits}f ± %.${decimalDigits}f", mean, delta)
