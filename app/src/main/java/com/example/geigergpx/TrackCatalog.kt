@@ -142,7 +142,9 @@ object TrackCatalog {
             else -> cachedTracks.filter { it.folderName == null }
         }
 
-        sources.forEach { source ->
+        val sortedSources = sources.sortedByDescending { it.displayName.lowercase() }
+
+        sortedSources.forEach { source ->
             val shouldIncludeMapTrack = includeMapTracks && (mapTrackIds == null || source.sourceId in mapTrackIds)
             val cached = if (shouldIncludeMapTrack && !source.hasSamples()) {
                 try {
