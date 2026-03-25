@@ -19,6 +19,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.net.Uri
 import android.content.Context
+import android.icu.util.Measure
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
@@ -325,7 +326,8 @@ class MainActivity : AppCompatActivity() {
                 val (counts, seconds) = getCurrentMeasurementCountsAndSeconds()
                 val coeff = PreferenceManager.getDefaultSharedPreferences(this)
                     .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-                val doseRate = ConfidenceInterval(0.0, seconds, counts + 1).scale(coeff).mean
+                val doseRate = ConfidenceInterval(0.0, seconds, counts, false).scale(coeff).mean
+//                  val doseRate = ConfidenceInterval(0.0, seconds, counts + 1).scale(coeff).mean
                 val (latitude, longitude) = TrackingService.consumeMeasurementAverageCoordinates()
 
                 val ok = PoiLibrary.addPoi(
@@ -370,16 +372,35 @@ class MainActivity : AppCompatActivity() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
-        val t1 = latestCpsSnapshot.oldestTimestampMillis.toDouble() / 1000.0
+        var t1: Double
+        var ignoredFirst : Int
+        if (isMeasurementModeEnabled) {
+            // in Measurement mode the first point is inside the time interval
+            t1 = latestCpsSnapshot.measurementStartTimestampMillis.toDouble() / 1000.0 //2026-03-25
+            ignoredFirst = 0
+        } else {
+            // in Live mode the first point starts the interval and should not be accounted for
+            t1 = latestCpsSnapshot.oldestTimestampMillis.toDouble() / 1000.0
+            ignoredFirst = 1
+        }
 
-        val ci = if (onBeep) {
+        val ci = if (latestCpsSnapshot.oldestTimestampMillis == 0L) {
+            // Something not right we have no interval
+            ConfidenceInterval(0.0, 0.0, 0.0, 0.0, 0)
+        } else if (onBeep) {
             val tn = System.currentTimeMillis().toDouble() / 1000.0
             // if onBeep we have only n-1 intervals ot analyze (t1->t2) (t2->t1) ... (t{n-1}->tn)
-            ConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
+            //ConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
+
+            // if onBeep we the last point ends the interval and thus not counted
+            ConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount - ignoredFirst - 1, true) // disregarding t1 and tn
         } else {
             val t_now = System.currentTimeMillis().toDouble() / 1000.0
             // if not onBeep we have n intervals: (t1->t2) (t2->t1) ... (t{n-1}->tn) and (tn->now)
-            ConfidenceInterval(t1, t_now, latestCpsSnapshot.sampleCount + 1)
+            //ConfidenceInterval(t1, t_now, latestCpsSnapshot.sampleCount + 1)
+
+            // if not onBeep the last point is inside the intervsal
+            ConfidenceInterval(t1, t_now, latestCpsSnapshot.sampleCount - ignoredFirst, false) // disregarding t1
         }
 
         val doseRateMean = ci.mean * coeff
