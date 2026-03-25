@@ -15,7 +15,12 @@ object GpxWriter {
 
     fun saveTrack(context: Context, points: List<TrackPoint>): String? {
         if (points.isEmpty()) return null
-        return writeGpxFile(context, points, defaultTimestampFileName())
+        val fileName = defaultTimestampFileName()
+        val result = writeGpxFile(context, points, fileName)
+        if (result != null) {
+            TrackCatalog.onTrackSaved(context, fileName, points)
+        }
+        return result
     }
 
     fun saveBackup(context: Context, points: List<TrackPoint>): String? {
@@ -32,8 +37,19 @@ object GpxWriter {
     fun restoreBackupIfPresent(context: Context): String? {
         if (!FileStorageManager.exists(context, BACKUP_FILE_NAME)) return null
         val newName = defaultRestoredFileName()
+        val oldTrackId = FileStorageManager.getFileUri(context, BACKUP_FILE_NAME)?.let { uri ->
+            if (uri.scheme == "content") "tree:$uri" else "file:${uri.path}"
+        } ?: return null
         return try {
-            if (FileStorageManager.moveFile(context, BACKUP_FILE_NAME, newName)) newName else null
+            if (FileStorageManager.moveFile(context, BACKUP_FILE_NAME, newName)) {
+                val newTrackId = FileStorageManager.getFileUri(context, newName)?.let { uri ->
+                        if (uri.scheme == "content") "tree:$uri" else "file:${uri.path}"
+                    } ?: return null
+                TrackCatalog.onTrackMoved(context, oldTrackId, newTrackId, destinationFolder = null)
+                newName
+            } else {
+                null
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             null
