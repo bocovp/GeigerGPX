@@ -245,15 +245,49 @@ object TrackCatalog {
 
     fun onTrackMoved(context: Context, oldTrackId: String, newTrackId: String, destinationFolder: String?) {
         ensureDiskCacheLoaded(context)
+
+        var shouldPersist = false
+        var needsFallbackLoad = false
+
         synchronized(this) {
-            val existing = parsedTrackCache.remove(oldTrackId) ?: return
-            parsedTrackCache[newTrackId] = existing.copy(
-                sourceId = newTrackId,
-                folderName = destinationFolder
-            )
-            destinationFolder?.let { cachedSubfolders.add(it) }
+            val existing = parsedTrackCache.remove(oldTrackId)
+            if (existing != null) {
+                parsedTrackCache[newTrackId] = existing.copy(
+                    sourceId = newTrackId,
+                    folderName = destinationFolder
+                )
+                destinationFolder?.let { cachedSubfolders.add(it) }
+                shouldPersist = true
+            } else {
+                needsFallbackLoad = true
+            }
         }
-        persistTrackCache(context)
+
+        if (needsFallbackLoad) {
+            val loaded = loadTrackForCacheById(context, newTrackId, destinationFolder)
+            if (loaded != null) {
+                synchronized(this) {
+                    if (newTrackId !in parsedTrackCache) {
+                        parsedTrackCache[newTrackId] = loaded
+                        destinationFolder?.let { cachedSubfolders.add(it) }
+                        shouldPersist = true
+                    }
+                }
+            }
+        }
+
+        if (shouldPersist) {
+            persistTrackCache(context)
+        }
+    }
+
+
+    private fun loadTrackForCacheById(context: Context, trackId: String, folderName: String?): CachedParsedTrack? {
+        val sourceListing = listTrackFiles(context)
+        if (sourceListing !is TrackSourceListing.Success) return null
+        val source = sourceListing.snapshot.allSources().firstOrNull { it.id == trackId } ?: return null
+        val parsed = runCatching { source.openStream().use { parseGpxTrack(it) } }.getOrNull() ?: return null
+        return CachedParsedTrack.from(source.copy(folderName = folderName), parsed)
     }
 
     fun onTrackDeleted(context: Context, trackId: String) {
