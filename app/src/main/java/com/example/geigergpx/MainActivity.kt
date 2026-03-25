@@ -30,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var latestCpsSnapshot = TrackingRepository.CpsSnapshot()
     private var isMeasurementModeEnabled: Boolean = false
+    private var doseRateDisplayMode: ConfidenceInterval.DisplayMode = ConfidenceInterval.DisplayMode.PLUS_MINUS
 
     private val cpsRefreshHandler = Handler(Looper.getMainLooper())
     private val cpsRefreshRunnable = object : Runnable {
@@ -123,6 +124,15 @@ class MainActivity : AppCompatActivity() {
 
         binding.buttonPoi.setOnClickListener {
             openPoi()
+        }
+
+        binding.textCps.setOnClickListener {
+            doseRateDisplayMode = when (doseRateDisplayMode) {
+                ConfidenceInterval.DisplayMode.INTERVAL -> ConfidenceInterval.DisplayMode.PLUS_MINUS
+                ConfidenceInterval.DisplayMode.PLUS_MINUS -> ConfidenceInterval.DisplayMode.INTERVAL
+                ConfidenceInterval.DisplayMode.AUTO -> ConfidenceInterval.DisplayMode.PLUS_MINUS
+            }
+            updateCpsOrDoseLine(false)
         }
 
         observeViewModel()
@@ -388,10 +398,10 @@ class MainActivity : AppCompatActivity() {
         binding.textCps.setTextColor(ContextCompat.getColor(this, doseColor))
 
         if (coeff == 1.0) {
-            val cpsText = ci.toText(decimalDigits)
+            val cpsText = ci.toText(decimalDigits, doseRateDisplayMode)
             binding.textCps.text = "CPS: $cpsText"
         } else {
-            val doseRateText = ci.scale(coeff).toText(decimalDigits)
+            val doseRateText = ci.scale(coeff).toText(decimalDigits, doseRateDisplayMode)
             binding.textCps.text = "Dose rate: $doseRateText μSv/h"
         }
     }
