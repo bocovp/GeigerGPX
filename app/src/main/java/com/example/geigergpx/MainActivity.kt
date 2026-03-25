@@ -22,6 +22,7 @@ import android.content.Context
 import android.icu.util.Measure
 import android.view.Menu
 import android.view.MenuItem
+import android.view.WindowManager
 import android.widget.EditText
 import kotlin.math.roundToInt
 
@@ -32,6 +33,7 @@ class MainActivity : AppCompatActivity() {
     private var latestCpsSnapshot = TrackingRepository.CpsSnapshot()
     private var isMeasurementModeEnabled: Boolean = false
     private var doseRateDisplayMode: ConfidenceInterval.DisplayMode = ConfidenceInterval.DisplayMode.PLUS_MINUS
+    private var keepScreenOnEnabled: Boolean = false
 
     private val cpsRefreshHandler = Handler(Looper.getMainLooper())
     private val cpsRefreshRunnable = object : Runnable {
@@ -141,11 +143,23 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_toolbar_menu, menu)
+        refreshKeepScreenOnMenuItem(menu.findItem(R.id.action_keep_screen_on))
         return true
+    }
+
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        refreshKeepScreenOnMenuItem(menu.findItem(R.id.action_keep_screen_on))
+        return super.onPrepareOptionsMenu(menu)
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_keep_screen_on -> {
+                keepScreenOnEnabled = !keepScreenOnEnabled
+                applyKeepScreenOnFlag()
+                refreshKeepScreenOnMenuItem(item)
+                true
+            }
             R.id.action_map -> {
                 openMap()
                 true
@@ -163,6 +177,26 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun refreshKeepScreenOnMenuItem(item: MenuItem?) {
+        item ?: return
+        val title = if (keepScreenOnEnabled) "Screen stay awake: ON" else "Screen stay awake: OFF"
+        val iconRes = if (keepScreenOnEnabled) {
+            R.drawable.baseline_lock_24
+        } else {
+            R.drawable.baseline_lock_open_24
+        }
+        item.title = title
+        item.setIcon(iconRes)
+    }
+
+    private fun applyKeepScreenOnFlag() {
+        if (keepScreenOnEnabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
@@ -184,6 +218,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        applyKeepScreenOnFlag()
         updateCpsOrDoseLine(false)
         startCpsRefreshLoop()
         startMonitoring()
@@ -192,6 +227,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         stopCpsRefreshLoop()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // Keep monitoring active in background while tracking or while
         // measurement mode is enabled.
         if (viewModel.isTracking.value != true && !isMeasurementModeEnabled) {
