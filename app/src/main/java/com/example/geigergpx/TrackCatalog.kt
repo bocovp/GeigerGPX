@@ -267,7 +267,7 @@ object TrackCatalog {
             val loaded = loadTrackForCacheById(context, newTrackId, destinationFolder)
             if (loaded != null) {
                 synchronized(this) {
-                    if (newTrackId !in parsedTrackCache) {
+                    if (!parsedTrackCache.containsKey(newTrackId)) {
                         parsedTrackCache[newTrackId] = loaded
                         destinationFolder?.let { cachedSubfolders.add(it) }
                         shouldPersist = true
