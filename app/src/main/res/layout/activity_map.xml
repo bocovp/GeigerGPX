@@ -13,6 +13,16 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <TextView
+        android:id="@+id/loadingLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="16dp"
+        android:text="@string/loading_tracks"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <LinearLayout
         android:id="@+id/zoomControls"
         android:layout_width="wrap_content"
