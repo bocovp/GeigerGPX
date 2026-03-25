@@ -49,13 +49,6 @@ class ConfidenceInterval {
         val n = eventsInside         // Total count of events excluding boundaries
         val add = if (eventAtEnd) 1 else 0
 
-        mean = n / duration
-        val z = 1.95996f // Normal distribution quantile for conf. P = 0.95
-        val root = sqrt((n - add).toFloat())
-        delta = mean * z / root // This is simply CI for normal distribution
-//        val gamma = mean * (z * z - 1.0) / (3 * (n - 1)).toDouble() // This follows from Cornish–Fisher expansion for Chi^2 distribution
-//        lowBound = max(0.0, mean - delta + gamma)
-//        highBound = mean + delta + gamma
         if (n <= 12) {
             lowBound = chi2L(n + add) / (2.0f * duration)
             highBound = chi2R(n + 1) / (2.0f * duration)
@@ -63,6 +56,21 @@ class ConfidenceInterval {
             lowBound = 0.0f // never used
             highBound = 0.0f // never used
         }
+
+        mean = n / duration
+        val z = 1.95996f // Normal distribution quantile for conf. P = 0.95
+        if (n == 0) {
+            delta = (highBound - lowBound) / 2
+        } else if (n == 1) {
+            val root = sqrt(n.toFloat())
+            delta = mean * z / root
+        } else {
+            val root = sqrt((n - add).toFloat())
+            delta = mean * z / root // This is simply CI for normal distribution
+        }
+//        val gamma = mean * (z * z - 1.0) / (3 * (n - 1)).toDouble() // This follows from Cornish–Fisher expansion for Chi^2 distribution
+//        lowBound = max(0.0, mean - delta + gamma)
+//        highBound = mean + delta + gamma
     }
 
 
