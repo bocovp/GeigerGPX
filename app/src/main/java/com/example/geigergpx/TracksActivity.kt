@@ -102,7 +102,7 @@ class TracksActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_refresh_tracks -> {
-                TrackCatalog.clearTrackCache(this)
+                TrackCatalog.rebuildTrackCache(this)
                 refreshTrackList()
                 true
             }
@@ -223,9 +223,17 @@ class TracksActivity : AppCompatActivity() {
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val renamed = renameTrack(item, input.text?.toString().orEmpty())
-                if (renamed) {
+                if (renamed != null) {
                     Toast.makeText(this, "File renamed", Toast.LENGTH_SHORT).show()
-                    TrackCatalog.clearTrackCache(this)
+                    TrackCatalog.onTrackRenamed(
+                        context = this,
+                        oldTrackId = item.id,
+                        newTrackId = renamed,
+                        newDisplayName = input.text?.toString().orEmpty().trim().let {
+                            if (it.endsWith(".gpx", ignoreCase = true)) it else "$it.gpx"
+                        }
+                    )
+                    updateSelectedTrackId(item.id, renamed)
                     refreshTrackList()
                 } else {
                     Toast.makeText(this, "Unable to rename file", Toast.LENGTH_SHORT).show()
@@ -243,6 +251,7 @@ class TracksActivity : AppCompatActivity() {
                 val deleted = deleteTrack(item)
                 if (deleted) {
                     removeSelectedTrackId(item.id)
+                    TrackCatalog.onTrackDeleted(this, item.id)
                     Toast.makeText(this, "Deleted", Toast.LENGTH_SHORT).show()
                     refreshTrackList()
                 } else {
@@ -252,40 +261,41 @@ class TracksActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun renameTrack(item: TrackListItem, requestedName: String): Boolean {
-        if (item.isCurrentTrack) return false
+    private fun renameTrack(item: TrackListItem, requestedName: String): String? {
+        if (item.isCurrentTrack) return null
 
         val sanitizedName = requestedName.trim()
             .substringAfterLast('/')
             .substringAfterLast('\\')
-        if (sanitizedName.isBlank()) return false
+        if (sanitizedName.isBlank()) return null
 
         val targetName = if (sanitizedName.endsWith(".gpx", ignoreCase = true)) {
             sanitizedName
         } else {
             "$sanitizedName.gpx"
         }
-        if (targetName == item.title) return true
+        if (targetName == item.title) return item.id
 
         val documentUri = trackDocumentUri(item)
         return when {
             documentUri != null -> {
-                val parent = resolveDocumentDirectory(item.folderName, createIfMissing = false) ?: return false
+                val parent = resolveDocumentDirectory(item.folderName, createIfMissing = false) ?: return null
                 parent.findFile(targetName)
                     ?.takeUnless { it.uri == documentUri }
                     ?.delete()
-                DocumentsContract.renameDocument(contentResolver, documentUri, targetName) != null
+                val renamedUri = DocumentsContract.renameDocument(contentResolver, documentUri, targetName)
+                renamedUri?.let { "tree:$it" }
             }
             item.id.startsWith("file:") -> {
                 val source = File(item.id.removePrefix("file:"))
-                if (!source.exists()) return false
-                val parent = source.parentFile ?: return false
+                if (!source.exists()) return null
+                val parent = source.parentFile ?: return null
                 val destination = File(parent, targetName)
-                if (source.absolutePath == destination.absolutePath) return true
-                if (destination.exists() && !destination.delete()) return false
-                source.renameTo(destination)
+                if (source.absolutePath == destination.absolutePath) return item.id
+                if (destination.exists() && !destination.delete()) return null
+                if (source.renameTo(destination)) "file:${destination.absolutePath}" else null
             }
-            else -> false
+            else -> null
         }
     }
 
@@ -310,7 +320,7 @@ class TracksActivity : AppCompatActivity() {
             else -> null
         }
         if (movedTrackId != null) {
-            TrackCatalog.clearTrackCache(this)
+            TrackCatalog.onTrackMoved(this, item.id, movedTrackId, destinationFolder)
         }
         return movedTrackId
     }
