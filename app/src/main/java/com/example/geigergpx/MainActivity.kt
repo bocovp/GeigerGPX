@@ -129,6 +129,10 @@ class MainActivity : AppCompatActivity() {
             openPoi()
         }
 
+        binding.buttonTracks.setOnClickListener {
+            openTracks()
+        }
+
         binding.textCps.setOnClickListener {
             doseRateDisplayMode = when (doseRateDisplayMode) {
                 ConfidenceInterval.DisplayMode.INTERVAL -> ConfidenceInterval.DisplayMode.PLUS_MINUS
