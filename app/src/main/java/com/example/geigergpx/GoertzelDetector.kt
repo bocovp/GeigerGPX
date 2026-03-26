@@ -19,6 +19,7 @@ class GoertzelDetector(
 ) {
 
     var onBeep: (Float, Int) -> Unit = { _, _ -> }
+    var onWindowAnalyzed: ((main: Float, sideEnergy: Float) -> Unit)? = null
 
     private val coeffMain = coeff(freqMain)
     private val coeffLow = coeff(freqLow)
@@ -49,39 +50,13 @@ class GoertzelDetector(
 
         while (pos + windowSize <= totalInBuffer) {
             val currentWindowGlobalSample = totalSamplesProcessed + pos
+            val (main, sideEnergy) = computeWindowEnergies(pos)
+            onWindowAnalyzed?.invoke(main, sideEnergy)
 
-            var q1M = 0f
-            var q2M = 0f
-            var q1L = 0f
-            var q2L = 0f
-            var q1H = 0f
-            var q2H = 0f
-
-            for (i in 0 until windowSize) {
-                val s = processingBuffer[pos + i].toFloat() * hann[i]
-
-                val q0M = coeffMain * q1M - q2M + s
-                q2M = q1M
-                q1M = q0M
-
-                val q0L = coeffLow * q1L - q2L + s
-                q2L = q1L
-                q1L = q0L
-
-                val q0H = coeffHigh * q1H - q2H + s
-                q2H = q1H
-                q1H = q0H
-            }
-
-            val main = q1M * q1M + q2M * q2M - q1M * q2M * coeffMain
-            var sideEnergy = 1e10f
             var detected = false
             var detectedWeak = false
 
             if (main > magThresholdEnd) {
-                val low = q1L * q1L + q2L * q2L - q1L * q2L * coeffLow
-                val high = q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh
-                sideEnergy = (low + high) / 2f
                 detected = (main > magThreshold) && (main > dominanceThreshold * sideEnergy)
                 detectedWeak = main > dominanceThresholdEnd * sideEnergy
             }
@@ -121,6 +96,41 @@ class GoertzelDetector(
         }
 
         totalSamplesProcessed += pos
+    }
+
+    private fun computeWindowEnergies(pos: Int): Pair<Float, Float> {
+        var q1M = 0f
+        var q2M = 0f
+        var q1L = 0f
+        var q2L = 0f
+        var q1H = 0f
+        var q2H = 0f
+
+        for (i in 0 until windowSize) {
+            val s = processingBuffer[pos + i].toFloat() * hann[i]
+
+            val q0M = coeffMain * q1M - q2M + s
+            q2M = q1M
+            q1M = q0M
+
+            val q0L = coeffLow * q1L - q2L + s
+            q2L = q1L
+            q1L = q0L
+
+            val q0H = coeffHigh * q1H - q2H + s
+            q2H = q1H
+            q1H = q0H
+        }
+
+        val main = q1M * q1M + q2M * q2M - q1M * q2M * coeffMain
+        if (main <= magThresholdEnd) {
+            return Pair(main, 1e10f)
+        }
+
+        val low = q1L * q1L + q2L * q2L - q1L * q2L * coeffLow
+        val high = q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh
+        val sideEnergy = (low + high) / 2f
+        return Pair(main, sideEnergy)
     }
 
     private fun ensureCapacity(required: Int) {
@@ -167,5 +177,67 @@ class GoertzelDetector(
         private const val DEFAULT_TWO_BEEP_MAX = 0.070
         private const val DEFAULT_DOMINANCE_THRESHOLD = 2.0f
         private const val DEFAULT_DOMINANCE_THRESHOLD_END = 1.5f
+
+        class CalibrationSession(
+            private val fallbackThreshold: Float,
+            private val onProgress: (current: Int, total: Int) -> Unit,
+            private val onFinished: (threshold: Float?) -> Unit,
+            private val stageOneDurationSeconds: Int = 5,
+            private val totalBeepCount: Int = 10
+        ) {
+            private val stageOneSamplesTotal = stageOneDurationSeconds * DEFAULT_SAMPLE_RATE
+            private val peaks = mutableListOf<Float>()
+
+            private var stageOneSamplesProcessed = 0
+            private var stageOneMaxMain = 0f
+
+            private var stageOneDetector = GoertzelDetector(magThreshold = 0f).apply {
+                onWindowAnalyzed = { main, sideEnergy ->
+                    if (sideEnergy > 0f && main > DEFAULT_DOMINANCE_THRESHOLD * sideEnergy && main > stageOneMaxMain) {
+                        stageOneMaxMain = main
+                    }
+                }
+            }
+            private var stageTwoDetector: GoertzelDetector? = null
+
+            fun processSamples(samples: ShortArray) {
+                if (samples.isEmpty() || peaks.size >= totalBeepCount) return
+
+                var offset = 0
+                if (stageTwoDetector == null) {
+                    val stageOneRemaining = stageOneSamplesTotal - stageOneSamplesProcessed
+                    val toStageOne = minOf(samples.size, stageOneRemaining)
+                    if (toStageOne > 0) {
+                        stageOneDetector.processSamples(samples.copyOfRange(0, toStageOne))
+                        stageOneSamplesProcessed += toStageOne
+                        offset = toStageOne
+                    }
+
+                    if (stageOneSamplesProcessed >= stageOneSamplesTotal) {
+                        val stageTwoBaseThreshold = (stageOneMaxMain / 2f).takeIf { it > 0f } ?: fallbackThreshold
+                        stageTwoDetector = GoertzelDetector(magThreshold = stageTwoBaseThreshold).apply {
+                            onBeep = { peakMain, _ ->
+                                if (peakMain.isFinite() && peaks.size < totalBeepCount) {
+                                    peaks.add(peakMain)
+                                    onProgress(peaks.size, totalBeepCount)
+                                    if (peaks.size == totalBeepCount) {
+                                        val median = peaks.sorted()[totalBeepCount / 2]
+                                        val rawThreshold = minOf(median / 2.5f, 1e10f)
+                                        val finalThreshold = if (rawThreshold > 0f) rawThreshold else fallbackThreshold
+                                        onFinished(finalThreshold)
+                                    }
+                                }
+                            }
+                        }
+                        stageOneDetector.onWindowAnalyzed = null
+                    }
+                }
+
+                val stageTwo = stageTwoDetector
+                if (stageTwo != null && offset < samples.size) {
+                    stageTwo.processSamples(samples.copyOfRange(offset, samples.size))
+                }
+            }
+        }
     }
 }
