@@ -285,7 +285,7 @@ class AudioBeepDetector(
             onFinished: (threshold: Float?) -> Unit
         ): AudioBeepDetector {
             var detector: AudioBeepDetector? = null
-            val calibrationSession = GoertzelDetector.CalibrationSession(
+            val calibrationSession = GoertzelDetector.Companion.CalibrationSession(
                 fallbackThreshold = DEFAULT_MAG_THRESHOLD,
                 onProgress = onProgress,
                 onFinished = { threshold ->
