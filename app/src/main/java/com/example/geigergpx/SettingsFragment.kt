@@ -41,14 +41,14 @@ class SettingsFragment : PreferenceFragmentCompat() {
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                 android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
-        maxSpeed?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
+        maxSpeed?.summaryProvider = summaryWithUnit("km/h")
 
         val spacing = findPreference<EditTextPreference>("point_spacing_m")
         spacing?.setOnBindEditTextListener { edit ->
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                 android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
-        spacing?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
+        spacing?.summaryProvider = summaryWithUnit("m")
 
         val minCounts = findPreference<EditTextPreference>("min_counts_per_point")
         minCounts?.setOnBindEditTextListener { edit ->
@@ -61,7 +61,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                 android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
-        maxTime?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
+        maxTime?.summaryProvider = summaryWithUnit("s")
 
         val coeff = findPreference<EditTextPreference>("cps_to_usvh")
         coeff?.setOnBindEditTextListener { edit ->
@@ -95,6 +95,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
         thresholdPref?.onLongClick = {
             showManualThresholdDialog(thresholdPref)
+        }
+    }
+
+    private fun summaryWithUnit(unit: String): Preference.SummaryProvider<EditTextPreference> {
+        return Preference.SummaryProvider { pref ->
+            val value = pref.text.orEmpty()
+            if (value.isBlank()) "Not set" else "$value $unit"
         }
     }
 
