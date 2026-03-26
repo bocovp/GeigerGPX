@@ -148,8 +148,8 @@ class PoiActivity : AppCompatActivity() {
         } else {
             "Unknown time"
         }
-        val lat = String.format(Locale.US, "%.5f", poi.latitude)
-        val lon = String.format(Locale.US, "%.5f", poi.longitude)
+        val lat = String.format(Locale.US, "%.6f", poi.latitude)
+        val lon = String.format(Locale.US, "%.6f", poi.longitude)
         return buildString {
             appendLine(poi.description)
             appendLine("Date: $dateTime")
