@@ -8,7 +8,7 @@ import androidx.preference.PreferenceViewHolder
 class LongPressPreference @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
-    defStyleAttr: Int = 0,
+    defStyleAttr: Int = androidx.preference.R.attr.preferenceStyle,
     defStyleRes: Int = 0
 ) : Preference(context, attrs, defStyleAttr, defStyleRes) {
 

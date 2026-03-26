@@ -14,6 +14,8 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
 import androidx.preference.SwitchPreferenceCompat
+import kotlin.math.pow
+import kotlin.text.format
 
 class SettingsFragment : PreferenceFragmentCompat() {
 
@@ -105,6 +107,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
     }
 
+
+
     private fun updateFolderSummary() {
         val chooseFolder = findPreference<Preference>("gpx_folder_picker") ?: return
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
@@ -124,7 +128,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
         return if (value.isNaN()) {
             "Not calibrated"
         } else {
-            "Current threshold: %.2e".format(value)
+            "Current threshold: %.2f dB".format(10.0 * Math.log10(value.toDouble()/100.0))
+            //100.0 is just an arbitrary constant
         }
     }
 
@@ -177,9 +182,10 @@ class SettingsFragment : PreferenceFragmentCompat() {
             inputType = InputType.TYPE_CLASS_NUMBER or
                 InputType.TYPE_NUMBER_FLAG_DECIMAL or
                 InputType.TYPE_NUMBER_FLAG_SIGNED
-            hint = "e.g. 1.23e7"
+            hint = "e.g. 42.1"
             if (!current.isNaN()) {
-                setText(current.toString())
+                val dB = (10.0 * Math.log10(current.toDouble()/100.0))
+                setText(dB.toString())
                 setSelection(text.length)
             }
         }
@@ -191,7 +197,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
             .setPositiveButton("Save") { _, _ ->
                 val value = input.text.toString().trim().toFloatOrNull()
                 if (value != null && value > 0f && value.isFinite()) {
-                    prefs.edit().putFloat(KEY_AUDIO_THRESHOLD, value).apply()
+                    // Going back from "our" deciBells to intensity
+                    val value2 = 10.0.pow(value / 10.0) * 100.0;
+                    prefs.edit().putFloat(KEY_AUDIO_THRESHOLD, value2.toFloat()).apply()
                     thresholdPref.summary = buildThresholdSummary()
                     Toast.makeText(context, "Threshold updated.", Toast.LENGTH_SHORT).show()
                 } else {
