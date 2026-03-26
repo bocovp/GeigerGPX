@@ -10,11 +10,10 @@
         <item name="actionOverflowMenuStyle">@style/OverflowMenuBelow</item>
     </style>
 
-
     <style name="OverflowMenuBelow" parent="Widget.AppCompat.PopupMenu.Overflow">
         <item name="android:overlapAnchor">false</item>
         <item name="android:dropDownVerticalOffset">0dp</item>
     </style>
-
+    
 </resources>
 
