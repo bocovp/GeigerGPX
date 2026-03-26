@@ -11,7 +11,8 @@ import kotlin.concurrent.thread
 class AudioBeepDetector(
     private val magThreshold: Float = DEFAULT_MAG_THRESHOLD,
     private val onBeep: (Float, Int) -> Unit,
-    private val onAudioHealth: (Boolean) -> Unit = {}
+    private val onAudioHealth: (Boolean) -> Unit = {},
+    private val onRawAudio: ((ShortArray) -> Unit)? = null
 ) {
 
     @Volatile
@@ -129,7 +130,9 @@ class AudioBeepDetector(
                         continue
                     }
 
-                    detector.processSamples(audioBuf.copyOf(read))
+                    val samples = audioBuf.copyOf(read)
+                    onRawAudio?.invoke(samples)
+                    detector.processSamples(samples)
 
                 }
             } catch (e: Exception) {
@@ -281,37 +284,30 @@ class AudioBeepDetector(
             onProgress: (current: Int, total: Int) -> Unit,
             onFinished: (threshold: Float?) -> Unit
         ): AudioBeepDetector {
-            val totalBeepCount = 10
-            val peaks = mutableListOf<Float>()
-
             var detector: AudioBeepDetector? = null
-
-            val callback: (Float, Int) -> Unit = { peakMain, _ ->
-                if (peakMain.isFinite() && peaks.size < totalBeepCount) {
-                    peaks.add(peakMain)
-                    onProgress(peaks.size, totalBeepCount)
-
-                    if (peaks.size == totalBeepCount) {
-                        val median = peaks.sorted()[totalBeepCount/2]
-                        val rawThreshold = minOf( median / 2.5f, 1e10f) // 20260319 before: 2.0f 2e9f
-                        val threshold = if (rawThreshold > 0f) rawThreshold else DEFAULT_MAG_THRESHOLD
-
+            val calibrationSession = GoertzelDetector.CalibrationSession(
+                fallbackThreshold = DEFAULT_MAG_THRESHOLD,
+                onProgress = onProgress,
+                onFinished = { threshold ->
+                    if (threshold != null) {
                         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                         prefs.edit()
                             .putFloat(SettingsFragment.KEY_AUDIO_THRESHOLD, threshold)
                             .apply()
-
-                        onFinished(threshold)
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            detector?.stop()
-                        }
+                    }
+                    onFinished(threshold)
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        detector?.stop()
                     }
                 }
-            }
+            )
 
             detector = AudioBeepDetector(
                 magThreshold = DEFAULT_MAG_THRESHOLD / 1000f, // 20260319 before: 10f
-                onBeep = callback
+                onBeep = { _, _ -> },
+                onRawAudio = { samples ->
+                    calibrationSession.processSamples(samples)
+                }
             )
 
             detector.start()
