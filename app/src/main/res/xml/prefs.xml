@@ -1,22 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <Preference
+        android:key="gpx_folder_picker"
+        android:title="Choose save folder"
+        android:summary="Not set (uses app folder)" />
+
+    <Preference
+        android:key="threshold_calibration"
+        android:title="Threshold (press to calibrate)"
+        android:summary="Not calibrated" />
+
+    <EditTextPreference
+        android:key="cps_to_usvh"
+        android:title="CPS to μSv/h coefficient"
+        android:defaultValue="0.1"
+        android:dialogTitle="CPS to μSv/h coefficient" />
+
     <EditTextPreference
         android:key="max_speed_kmh"
-        android:title="Max speed (km/h)"
-        android:defaultValue="30.0"
-        android:dialogTitle="Max speed (km/h)" />
+        android:title="GPS Spoofing detection speed (km/h)"
+        android:defaultValue="30000.0"
+        android:dialogTitle="GPS Spoofing detection speed (km/h)" />
 
     <EditTextPreference
         android:key="point_spacing_m"
-        android:title="Distance between points (m)"
-        android:defaultValue="5.0"
-        android:dialogTitle="Distance between points (m)" />
+        android:title="Min distance between points (m)"
+        android:defaultValue="10.0"
+        android:dialogTitle="Min distance between points (m)" />
 
     <EditTextPreference
         android:key="min_counts_per_point"
         android:title="Min counts per point"
-        android:defaultValue="0"
+        android:defaultValue="10"
         android:dialogTitle="Min counts per point" />
 
     <EditTextPreference
@@ -34,23 +50,7 @@
 
     <androidx.preference.SwitchPreferenceCompat
         android:key="save_dose_rate_in_ele"
-        android:title="Also save dose rate in elevation tag"
+        android:title="Also save dose rate in &lt;ele&gt; tag"
         android:defaultValue="false" />
-
-    <EditTextPreference
-        android:key="cps_to_usvh"
-        android:title="CPS to μSv/h coefficient"
-        android:defaultValue="0.1"
-        android:dialogTitle="CPS to μSv/h coefficient" />
-
-    <Preference
-        android:key="threshold_calibration"
-        android:title="Threshold (press to calibrate)"
-        android:summary="Not calibrated" />
-
-    <Preference
-        android:key="gpx_folder_picker"
-        android:title="Choose save folder"
-        android:summary="Not set (uses app folder)" />
 
 </PreferenceScreen>
