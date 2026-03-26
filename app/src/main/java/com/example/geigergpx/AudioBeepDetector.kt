@@ -281,7 +281,7 @@ class AudioBeepDetector(
 
         fun startCalibration(
             context: Context,
-            onProgress: (current: Int, total: Int) -> Unit,
+            onProgress: (phase: Int, current: Int, total: Int) -> Unit,
             onFinished: (threshold: Float?) -> Unit
         ): AudioBeepDetector {
             var detector: AudioBeepDetector? = null
