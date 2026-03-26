@@ -180,7 +180,7 @@ class GoertzelDetector(
 
         class CalibrationSession(
             private val fallbackThreshold: Float,
-            private val onProgress: (current: Int, total: Int) -> Unit,
+            private val onProgress: (phase: Int, current: Int, total: Int) -> Unit,
             private val onFinished: (threshold: Float?) -> Unit,
             private val stageOneDurationSeconds: Int = 5,
             private val totalBeepCount: Int = 10
@@ -216,10 +216,11 @@ class GoertzelDetector(
                     if (stageOneSamplesProcessed >= stageOneSamplesTotal) {
                         val stageTwoBaseThreshold = (stageOneMaxMain / 2f).takeIf { it > 0f } ?: fallbackThreshold
                         stageTwoDetector = GoertzelDetector(magThreshold = stageTwoBaseThreshold).apply {
+                            onProgress(2, 0, totalBeepCount)
                             onBeep = { peakMain, _ ->
                                 if (peakMain.isFinite() && peaks.size < totalBeepCount) {
                                     peaks.add(peakMain)
-                                    onProgress(peaks.size, totalBeepCount)
+                                    onProgress(2, peaks.size, totalBeepCount)
                                     if (peaks.size == totalBeepCount) {
                                         val median = peaks.sorted()[totalBeepCount / 2]
                                         val rawThreshold = minOf(median / 2.5f, 1e10f)
