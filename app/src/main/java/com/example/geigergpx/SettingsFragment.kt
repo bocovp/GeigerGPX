@@ -2,6 +2,8 @@ package com.example.geigergpx
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.InputType
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -39,14 +41,14 @@ class SettingsFragment : PreferenceFragmentCompat() {
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                 android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
-        maxSpeed?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
+        maxSpeed?.summaryProvider = summaryWithUnit("km/h")
 
         val spacing = findPreference<EditTextPreference>("point_spacing_m")
         spacing?.setOnBindEditTextListener { edit ->
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                 android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
-        spacing?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
+        spacing?.summaryProvider = summaryWithUnit("m")
 
         val minCounts = findPreference<EditTextPreference>("min_counts_per_point")
         minCounts?.setOnBindEditTextListener { edit ->
@@ -59,7 +61,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                 android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
-        maxTime?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
+        maxTime?.summaryProvider = summaryWithUnit("s")
 
         val coeff = findPreference<EditTextPreference>("cps_to_usvh")
         coeff?.setOnBindEditTextListener { edit ->
@@ -85,11 +87,21 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         updateFolderSummary()
 
-        val thresholdPref = findPreference<Preference>("threshold_calibration")
+        val thresholdPref = findPreference<LongPressPreference>("threshold_calibration")
         thresholdPref?.summary = buildThresholdSummary()
         thresholdPref?.setOnPreferenceClickListener {
             startCalibrationDialog(thresholdPref)
             true
+        }
+        thresholdPref?.onLongClick = {
+            showManualThresholdDialog(thresholdPref)
+        }
+    }
+
+    private fun summaryWithUnit(unit: String): Preference.SummaryProvider<EditTextPreference> {
+        return Preference.SummaryProvider { pref ->
+            val value = pref.text.orEmpty()
+            if (value.isBlank()) "Not set" else "$value $unit"
         }
     }
 
@@ -117,12 +129,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun startCalibrationDialog(thresholdPref: Preference) {
-        val total = 10
         val activity = requireActivity()
 
         val dialog = AlertDialog.Builder(activity)
             .setTitle("Calibration")
-            .setMessage("Calibrating... 0/$total")
+            .setMessage("Estimating signal level...")
             .setNegativeButton("Cancel") { d, _ ->
                 calibrationDetector?.stop()
                 calibrationDetector = null
@@ -135,9 +146,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         calibrationDetector = AudioBeepDetector.startCalibration(
             requireContext(),
-            onProgress = { current, totalCount ->
+            onProgress = { phase, current, totalCount ->
                 activity.runOnUiThread {
-                    dialog.setMessage("Calibrating... $current/$totalCount")
+                    if (phase == 2) {
+                        dialog.setMessage("Calibrating... $current/$totalCount")
+                    }
                 }
             },
             onFinished = { _ ->
@@ -153,6 +166,40 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 }
             }
         )
+    }
+
+    private fun showManualThresholdDialog(thresholdPref: Preference) {
+        val context = requireContext()
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val current = prefs.getFloat(KEY_AUDIO_THRESHOLD, Float.NaN)
+
+        val input = EditText(context).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or
+                InputType.TYPE_NUMBER_FLAG_DECIMAL or
+                InputType.TYPE_NUMBER_FLAG_SIGNED
+            hint = "e.g. 1.23e7"
+            if (!current.isNaN()) {
+                setText(current.toString())
+                setSelection(text.length)
+            }
+        }
+
+        AlertDialog.Builder(context)
+            .setTitle("Set threshold manually")
+            .setMessage("Enter a positive threshold value.")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val value = input.text.toString().trim().toFloatOrNull()
+                if (value != null && value > 0f && value.isFinite()) {
+                    prefs.edit().putFloat(KEY_AUDIO_THRESHOLD, value).apply()
+                    thresholdPref.summary = buildThresholdSummary()
+                    Toast.makeText(context, "Threshold updated.", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Invalid threshold value.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     companion object {
