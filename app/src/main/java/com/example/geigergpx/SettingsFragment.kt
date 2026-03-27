@@ -14,6 +14,7 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
 import androidx.preference.SwitchPreferenceCompat
+import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.text.format
 
@@ -33,7 +34,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
     }
 
-    private var calibrationDetector: AudioBeepDetector? = null
+    private var calibrationDetector: CalibrationSession? = null
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.prefs, rootKey)
@@ -107,8 +108,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
     }
 
-
-
     private fun updateFolderSummary() {
         val chooseFolder = findPreference<Preference>("gpx_folder_picker") ?: return
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
@@ -122,13 +121,21 @@ class SettingsFragment : PreferenceFragmentCompat() {
         chooseFolder.summary = doc?.name ?: uriStr
     }
 
+    private fun toDb(intensity: Float): Double {
+        return 10.0 * log10(intensity.toDouble() / 100.0)
+    }
+
+    private fun fromDb(value: Float): Double {
+        return 10.0.pow(value / 10.0) * 100.0
+    }
+
     private fun buildThresholdSummary(): String {
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
         val value = prefs.getFloat(KEY_AUDIO_THRESHOLD, Float.NaN)
         return if (value.isNaN()) {
             "Not calibrated"
         } else {
-            "Current threshold: %.2f dB".format(10.0 * Math.log10(value.toDouble()/100.0))
+            "Current threshold: %.2f dB".format(toDb(value))
             //100.0 is just an arbitrary constant
         }
     }
@@ -149,8 +156,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         dialog.show()
 
-        calibrationDetector = AudioBeepDetector.startCalibration(
-            requireContext(),
+        calibrationDetector = CalibrationSession(
+            context = requireContext(),
             onProgress = { phase, current, totalCount ->
                 activity.runOnUiThread {
                     if (phase == 2) {
@@ -171,6 +178,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 }
             }
         )
+        calibrationDetector?.start()
     }
 
     private fun showManualThresholdDialog(thresholdPref: Preference) {
@@ -184,8 +192,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 InputType.TYPE_NUMBER_FLAG_SIGNED
             hint = "e.g. 42.1"
             if (!current.isNaN()) {
-                val dB = (10.0 * Math.log10(current.toDouble()/100.0))
-                setText(dB.toString())
+                setText("%.2f".format(toDb(current)))
                 setSelection(text.length)
             }
         }
@@ -198,7 +205,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 val value = input.text.toString().trim().toFloatOrNull()
                 if (value != null && value > 0f && value.isFinite()) {
                     // Going back from "our" deciBells to intensity
-                    val value2 = 10.0.pow(value / 10.0) * 100.0;
+                    val value2 = fromDb(value);
                     prefs.edit().putFloat(KEY_AUDIO_THRESHOLD, value2.toFloat()).apply()
                     thresholdPref.summary = buildThresholdSummary()
                     Toast.makeText(context, "Threshold updated.", Toast.LENGTH_SHORT).show()

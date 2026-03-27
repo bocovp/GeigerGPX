@@ -194,8 +194,7 @@
             android:backgroundTint="@color/purple_500"
             android:contentDescription="Map"
             android:padding="16dp"
-            android:src="@drawable/baseline_map_24"
-            android:tint="@color/white" />
+            android:src="@drawable/baseline_map_24"/>
 
         <ImageButton
             android:id="@+id/buttonTracks"
@@ -206,8 +205,7 @@
             android:backgroundTint="@color/purple_500"
             android:contentDescription="Tracks"
             android:padding="16dp"
-            android:src="@drawable/baseline_menu_24"
-            android:tint="@color/white" />
+            android:src="@drawable/baseline_menu_24"/>
 
         <ImageButton
             android:id="@+id/buttonPoi"
@@ -218,8 +216,7 @@
             android:backgroundTint="@color/purple_500"
             android:contentDescription="POI library"
             android:padding="16dp"
-            android:src="@drawable/baseline_place_24"
-            android:tint="@color/white" />
+            android:src="@drawable/baseline_place_24" />
 
     </LinearLayout>
 
