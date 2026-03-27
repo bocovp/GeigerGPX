@@ -10,8 +10,7 @@ import androidx.preference.PreferenceManager
  *
  * Stage 1 — silence listening (default 5 s):
  *   Runs a GoertzelDetector with threshold = 0 to find the loudest dominant
- *   signal present in the environment. This establishes a noise floor ceiling
- *   and seeds the threshold for stage 2.
+ *   signal present in the environment. This establishes the threshold for stage 2.
  *
  * Stage 2 — beep counting:
  *   Runs a GoertzelDetector calibrated from the stage 1 result and collects
@@ -41,10 +40,8 @@ class CalibrationSession(
     private val stageOneDetector = GoertzelDetector(magThreshold = 0f).apply {
         onWindowAnalyzed = { main, sideEnergy ->
             if (sideEnergy > 0f
-                && main > GoertzelDetector.DEFAULT_DOMINANCE_THRESHOLD * sideEnergy
-                && main > stageOneMaxMain
-            ) {
-                stageOneMaxMain = main
+                && main > GoertzelDetector.DEFAULT_DOMINANCE_THRESHOLD * sideEnergy) {
+                if (main > stageOneMaxMain) stageOneMaxMain = main
             }
         }
     }
@@ -96,7 +93,7 @@ class CalibrationSession(
     private fun transitionToStageTwo() {
         stageOneDetector.onWindowAnalyzed = null
 
-        val baseThreshold = (stageOneMaxMain / 2f).takeIf { it > 0f } ?: fallbackThreshold
+        val baseThreshold = (stageOneMaxMain / 2.5f).takeIf { it > 0f } ?: fallbackThreshold
 
         stageTwoDetector = GoertzelDetector(magThreshold = baseThreshold).apply {
             onBeep = { peakMain, _ ->

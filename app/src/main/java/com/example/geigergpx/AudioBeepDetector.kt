@@ -15,45 +15,33 @@ class AudioBeepDetector(
     private val onRawAudio: ((ShortArray) -> Unit)? = null
 ) {
 
-    @Volatile
-    private var running = false
+    @Volatile private var running = false
+    @Volatile private var audioRecord: AudioRecord? = null
     private var workerThread: Thread? = null
-    private var audioRecord: AudioRecord? = null
 
-    private val SAMPLE_RATE = 44100
-    private val WINDOW_SIZE = 175 // aligned: bin 13 is central frequency
-    private val WINDOWS_IN_BUFFER = 64 // 0.25 sec delaly
-
-    private val ZERO_BUFFER_LIMIT = 20
-
-    fun start()
-    {
-
+    fun start() {
         if (running) return
         running = true
 
-        // MODIFIED: create recorder using new API
         val created = createAudioRecord()
         if (created == null) {
             running = false
             return
         }
 
-        val (ar, bufferSize) = created   // MODIFIED
-        audioRecord = ar                 // MODIFIED
+        val (ar, initialBufferSize) = created
+        audioRecord = ar
 
-        try {                            // MODIFIED
+        try {
             ar.startRecording()
-
             if (ar.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
-                Log.e("AudioBeepDetector", "Failed to start recording")
+                Log.e(TAG, "Failed to start recording")
                 ar.release()
                 running = false
                 return
             }
-
-        } catch (e: Exception) {         // MODIFIED
-            Log.e("AudioBeepDetector", "startRecording failed", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "startRecording failed", e)
             ar.release()
             running = false
             return
@@ -62,36 +50,31 @@ class AudioBeepDetector(
         val detector = GoertzelDetector(magThreshold)
         detector.onBeep = onBeep
 
-        workerThread = thread(start = true, name = "BeepDetector")
-        {
-            // Устанавливаем приоритет для работы со звуком
+        workerThread = thread(start = true, name = "BeepDetector") {
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
 
-            val audioBuf = ShortArray(bufferSize)
-            var audioHealthy = true
-
+            var audioBuf        = ShortArray(initialBufferSize)
+            var audioHealthy    = true
             var zeroBufferCount = 0
 
-            try
-            {
-                while (running)
-                {
-                    val currentAr  = audioRecord
+            try {
+                while (running) {
+                    val currentAr = audioRecord
                     if (currentAr == null) {
-                        Thread.sleep(20)   // MODIFIED
+                        Thread.sleep(20)
                         continue
                     }
 
                     if (currentAr.state != AudioRecord.STATE_INITIALIZED) {
-                        Log.e("AudioBeepDetector", "Recorder uninitialized") // MODIFIED
-                        restartAudioRecord()                                  // MODIFIED
+                        Log.e(TAG, "Recorder uninitialized, restarting")
+                        audioBuf = restartAndReallocate(audioBuf) ?: audioBuf
                         continue
                     }
 
                     val read = currentAr.read(audioBuf, 0, audioBuf.size)
                     if (read <= 0) {
                         zeroBufferCount++
-                        Log.e("MYTAG", "Hardware Error: $read")
+                        Log.e(TAG, "Hardware read error: $read")
                         continue
                     }
 
@@ -102,11 +85,10 @@ class AudioBeepDetector(
                             break
                         }
                     }
-
                     if (isZero) {
                         zeroBufferCount++
                         if (audioHealthy) {
-                            Log.d("MYTAG", "Error: empty audioBuff")
+                            Log.d(TAG, "Empty audio buffer")
                             audioHealthy = false
                             onAudioHealth(false)
                         }
@@ -119,38 +101,57 @@ class AudioBeepDetector(
                     }
 
                     if (zeroBufferCount >= ZERO_BUFFER_LIMIT) {
-                        Log.w("AudioBeepDetector", "AudioRecord appears stuck — restarting")
-                        val newBufferSize = restartAudioRecord()
-
-                        if (newBufferSize != null && newBufferSize != bufferSize) {
-                            Log.w("AudioBeepDetector", "Buffer size changed after restart") // MODIFIED
-                        }
-
+                        Log.w(TAG, "AudioRecord appears stuck — restarting")
+                        audioBuf        = restartAndReallocate(audioBuf) ?: audioBuf
                         zeroBufferCount = 0
                         continue
                     }
 
                     val samples = audioBuf.copyOf(read)
-                    onRawAudio?.invoke(samples)
-                    detector.processSamples(samples)
 
+                    if (onRawAudio != null) {
+                        onRawAudio.invoke(samples)
+                    } else {
+                        detector.processSamples(samples)
+                    }
+                    //onRawAudio?.invoke(samples)
+                    //detector.processSamples(samples)
                 }
             } catch (e: Exception) {
-                Log.e("AudioBeepDetector", "Thread error", e)
+                Log.e(TAG, "Worker thread error", e)
             } finally {
-                audioRecord?.let {
-                    try {
-                        if (it.state == AudioRecord.STATE_INITIALIZED) {
-                            it.stop()
-                        }
-                    } catch (_: Exception) {}
-                }
+                // Swap atomically so stop() and finally never release the same instance.
+                releaseRecorder(swapAudioRecord(null))
             }
         }
     }
 
-    private fun createAudioRecord(): Pair<AudioRecord, Int>? {
+    // Restarts AudioRecord and returns a reallocated buffer if the size changed,
+    // or the original buffer if the size is unchanged, or null on failure.
+    private fun restartAndReallocate(current: ShortArray): ShortArray? {
+        val newSize = restartAudioRecord() ?: return null
+        return if (newSize != current.size) ShortArray(newSize) else current
+    }
 
+    // Atomically swaps audioRecord for the given value and returns the old one.
+    @Synchronized
+    private fun swapAudioRecord(new: AudioRecord?): AudioRecord? {
+        val old = audioRecord
+        audioRecord = new
+        return old
+    }
+
+    private fun releaseRecorder(ar: AudioRecord?) {
+        ar ?: return
+        try {
+            if (ar.state == AudioRecord.STATE_INITIALIZED) ar.stop()
+            ar.release()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing AudioRecord", e)
+        }
+    }
+
+    private fun createAudioRecord(): Pair<AudioRecord, Int>? {
         val minBuffer = AudioRecord.getMinBufferSize(
             SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
@@ -158,7 +159,7 @@ class AudioBeepDetector(
         )
 
         if (minBuffer <= 0) {
-            Log.e("AudioBeepDetector", "Invalid minBufferSize: $minBuffer")
+            Log.e(TAG, "Invalid minBufferSize: $minBuffer")
             return null
         }
 
@@ -173,7 +174,7 @@ class AudioBeepDetector(
         )
 
         if (ar.state != AudioRecord.STATE_INITIALIZED) {
-            Log.e("AudioBeepDetector", "AudioRecord initialization failed")
+            Log.e(TAG, "AudioRecord initialization failed")
             ar.release()
             return null
         }
@@ -181,90 +182,66 @@ class AudioBeepDetector(
         return Pair(ar, bufferSize)
     }
 
+    // Only ever called from the worker thread. Uses swapAudioRecord to stay
+    // race-free with stop(), which may run concurrently on the main thread.
     private fun restartAudioRecord(): Int? {
-
-        val old = audioRecord
-        audioRecord = null
-
-        try {
-            old?.let {
-                if (it.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                    it.stop()
-                }
-                it.release()
-            }
-        } catch (e: Exception) {
-            Log.e("AudioBeepDetector", "Error stopping AudioRecord", e)
-        }
+        releaseRecorder(swapAudioRecord(null))
 
         val created = createAudioRecord()
         if (created == null) {
-            Log.e("AudioBeepDetector", "AudioRecord recreation failed")
+            Log.e(TAG, "AudioRecord recreation failed")
             return null
         }
 
         val (newRecorder, bufferSize) = created
 
-        try {
-
+        return try {
             newRecorder.startRecording()
-
             if (newRecorder.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
-                Log.e("AudioBeepDetector", "AudioRecord failed to start")
+                Log.e(TAG, "Restarted AudioRecord failed to start")
                 newRecorder.release()
-                return null
+                null
+            } else {
+                audioRecord = newRecorder
+                bufferSize
             }
-
-            audioRecord = newRecorder
-            return bufferSize
-
         } catch (e: Exception) {
-
-            Log.e("AudioBeepDetector", "Error starting AudioRecord", e)
-
-            try {
-                newRecorder.release()
-            } catch (_: Exception) {}
-
-            return null
+            Log.e(TAG, "Error starting restarted AudioRecord", e)
+            try { newRecorder.release() } catch (_: Exception) {}
+            null
         }
     }
 
     fun stop() {
         running = false
-        // Join the thread first to ensure it's done using the audioRecord
+
+        // Grab and clear the reference BEFORE joining. The worker's finally
+        // block uses swapAudioRecord(null) for the same reason — whichever
+        // runs first gets the live instance; the other gets null and no-ops.
+        val ar = swapAudioRecord(null)
+
         try {
             workerThread?.join(500)
         } catch (e: Exception) {
-            Log.e("AudioBeepDetector", "Error joining thread: ${e.message}")
+            Log.e(TAG, "Error joining worker thread: ${e.message}")
         }
         workerThread = null
 
-        // Release ONLY here after the thread is dead
-        synchronized(this) {
-            try {
-                audioRecord?.let {
-                    if (it.state == AudioRecord.STATE_INITIALIZED) {
-                        it.stop()
-                    }
-                    it.release()
-                }
-            } catch (e: Exception) {
-                Log.e("AudioBeepDetector", "Error releasing AudioRecord: ${e.message}")
-            }
-            audioRecord = null
-        }
+        releaseRecorder(ar)
     }
 
     companion object {
-        private const val WINDOW_SIZE_STATIC = 175
+        private const val TAG              = "AudioBeepDetector"
+        private const val SAMPLE_RATE      = 44100
+        private const val WINDOW_SIZE      = 175    // bin 13 is central frequency
+        private const val WINDOWS_IN_BUFFER = 64   // ~0.25 s buffer
+        private const val ZERO_BUFFER_LIMIT = 20
+
         private const val BASE_MAG = 1e6f
-        private val DEFAULT_MAG_THRESHOLD = (BASE_MAG * WINDOW_SIZE_STATIC).toFloat()
+        const val DEFAULT_MAG_THRESHOLD = BASE_MAG * WINDOW_SIZE
 
         fun createWithPrefs(context: Context, onBeep: (Float, Int) -> Unit): AudioBeepDetector {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-            val stored = prefs.getFloat(SettingsFragment.KEY_AUDIO_THRESHOLD, Float.NaN)
-            val threshold = if (!stored.isNaN() && stored > 0f) stored else DEFAULT_MAG_THRESHOLD
+            val threshold = storedThreshold(context)
             return AudioBeepDetector(threshold, onBeep)
         }
 
@@ -273,45 +250,14 @@ class AudioBeepDetector(
             onBeep: (Float, Int) -> Unit,
             onAudioHealth: (Boolean) -> Unit
         ): AudioBeepDetector {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-            val stored = prefs.getFloat(SettingsFragment.KEY_AUDIO_THRESHOLD, Float.NaN)
-            val threshold = if (!stored.isNaN() && stored > 0f) stored else DEFAULT_MAG_THRESHOLD
+            val threshold = storedThreshold(context)
             return AudioBeepDetector(threshold, onBeep, onAudioHealth)
         }
 
-        fun startCalibration(
-            context: Context,
-            onProgress: (phase: Int, current: Int, total: Int) -> Unit,
-            onFinished: (threshold: Float?) -> Unit
-        ): AudioBeepDetector {
-            var detector: AudioBeepDetector? = null
-            val calibrationSession = GoertzelDetector.Companion.CalibrationSession(
-                fallbackThreshold = DEFAULT_MAG_THRESHOLD,
-                onProgress = onProgress,
-                onFinished = { threshold ->
-                    if (threshold != null) {
-                        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-                        prefs.edit()
-                            .putFloat(SettingsFragment.KEY_AUDIO_THRESHOLD, threshold)
-                            .apply()
-                    }
-                    onFinished(threshold)
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        detector?.stop()
-                    }
-                }
-            )
-
-            detector = AudioBeepDetector(
-                magThreshold = DEFAULT_MAG_THRESHOLD / 1000f, // 20260319 before: 10f
-                onBeep = { _, _ -> },
-                onRawAudio = { samples ->
-                    calibrationSession.processSamples(samples)
-                }
-            )
-
-            detector.start()
-            return detector
+        private fun storedThreshold(context: Context): Float {
+            val stored = PreferenceManager.getDefaultSharedPreferences(context)
+                .getFloat(SettingsFragment.KEY_AUDIO_THRESHOLD, Float.NaN)
+            return if (!stored.isNaN() && stored > 0f) stored else DEFAULT_MAG_THRESHOLD
         }
     }
 }
