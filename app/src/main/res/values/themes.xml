@@ -6,9 +6,7 @@
         <item name="colorOnPrimary">@color/black</item>
         <item name="colorSecondary">@color/teal_200</item>
         <item name="colorOnSecondary">@color/black</item>
-        <item name="statusBarColor" tools:targetApi="l">?attr/colorSurfaceContainer</item>
         <item name="android:statusBarColor" tools:targetApi="l">?attr/colorSurfaceContainer</item>
-        <item name="materialToolbarStyle">@style/Widget.GeigerGpx.Toolbar.Small</item>
         <item name="toolbarStyle">@style/Widget.GeigerGpx.Toolbar.Small</item>
         <item name="materialButtonStyle">@style/Widget.Material3.Button</item>
 
@@ -23,7 +21,6 @@
 
     <style name="OverflowMenuBelow" parent="Widget.AppCompat.PopupMenu.Overflow">
         <item name="android:overlapAnchor">false</item>
-        <item name="android:dropDownVerticalOffset">0dp</item>
     </style>
 
 </resources>
