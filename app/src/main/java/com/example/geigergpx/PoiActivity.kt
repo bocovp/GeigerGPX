@@ -26,9 +26,11 @@ class PoiActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityPoiBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        setSupportActionBar(binding.topAppBar)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = "POI Library"
+        binding.topAppBar.setNavigationOnClickListener { finish() }
 
         binding.poiRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.poiRecyclerView.adapter = adapter
