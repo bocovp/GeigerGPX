@@ -8,4 +8,7 @@
     <string name="no_poi_file_found">No POI.gpx file found</string>
     <string name="no_poi_in_library">No POI in Library</string>
     <string name="refresh">Refresh</string>
+    <string name="zoom_in">Zoom in</string>
+    <string name="zoom_out">Zoom out</string>
+    <string name="dose_rate">Dose rate</string>
 </resources>

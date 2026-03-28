@@ -3,9 +3,9 @@
 
     <style name="Theme.GeigerGpx" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/purple_500</item>
-        <item name="colorPrimaryVariant">@color/purple_700</item>
-        <item name="colorAccent">@color/teal_200</item>
-        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
+        <item name="colorSecondary">@color/teal_200</item>
+        <item name="android:statusBarColor" tools:targetApi="l">@android:color/transparent</item>
+        <item name="android:navigationBarColor">?attr/colorSurface</item>
 
         <item name="actionOverflowMenuStyle">@style/OverflowMenuBelow</item>
     </style>
@@ -16,4 +16,3 @@
     </style>
 
 </resources>
-

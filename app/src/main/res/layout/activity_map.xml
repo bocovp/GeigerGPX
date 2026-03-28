@@ -20,8 +20,8 @@
         android:gravity="center"
         android:padding="16dp"
         android:text="@string/loading_tracks"
+        android:textColor="?attr/colorOnSurface"
         android:visibility="gone"
-        android:textColor="@color/black"
         app:layout_constraintTop_toTopOf="parent" />
 
     <LinearLayout
@@ -38,24 +38,24 @@
             android:id="@+id/zoomInButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:contentDescription="Zoom in"
-            app:backgroundTint="#CCFFFFFF"
+            android:contentDescription="@string/zoom_in"
+            app:backgroundTint="?attr/colorSurfaceContainerHigh"
             app:fabCustomSize="48dp"
             app:maxImageSize="24dp"
             app:srcCompat="@drawable/sharp_add_black_36"
-            app:tint="#212121" />
+            app:tint="?attr/colorOnSurface" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/zoomOutButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:contentDescription="Zoom out"
-            app:backgroundTint="#CCFFFFFF"
+            android:contentDescription="@string/zoom_out"
+            app:backgroundTint="?attr/colorSurfaceContainerHigh"
             app:fabCustomSize="48dp"
             app:maxImageSize="24dp"
             app:srcCompat="@drawable/sharp_remove_black_36"
-            app:tint="#212121" />
+            app:tint="?attr/colorOnSurface" />
     </LinearLayout>
 
     <LinearLayout
@@ -65,7 +65,7 @@
         android:layout_marginStart="12dp"
         android:layout_marginEnd="12dp"
         android:layout_marginBottom="12dp"
-        android:background="#CCFFFFFF"
+        android:background="?attr/colorSurfaceContainerHigh"
         android:orientation="vertical"
         android:padding="10dp"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -75,8 +75,8 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Dose rate"
-            android:textStyle="bold" />
+            android:text="@string/dose_rate"
+            android:textAppearance="?attr/textAppearanceTitleSmall" />
 
         <View
             android:layout_width="match_parent"
@@ -95,6 +95,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="0"
+                android:textAppearance="?attr/textAppearanceBodySmall"
                 android:textColor="#1B5E20" />
 
             <TextView
@@ -104,6 +105,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:text="0.5 uSv/h"
+                android:textAppearance="?attr/textAppearanceBodySmall"
                 android:textColor="#F57F17" />
 
             <TextView
@@ -113,6 +115,7 @@
                 android:layout_weight="1"
                 android:gravity="end"
                 android:text="1.0 uSv/h"
+                android:textAppearance="?attr/textAppearanceBodySmall"
                 android:textColor="#B71C1C" />
 
         </LinearLayout>
