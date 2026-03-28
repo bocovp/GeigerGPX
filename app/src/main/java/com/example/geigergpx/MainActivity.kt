@@ -121,16 +121,24 @@ class MainActivity : AppCompatActivity() {
             showSavePoiDialog()
         }
 
-        binding.buttonMap.setOnClickListener {
-            openMap()
-        }
-
-        binding.buttonPoi.setOnClickListener {
-            openPoi()
-        }
-
-        binding.buttonTracks.setOnClickListener {
-            openTracks()
+        binding.bottomNavigation.selectedItemId = R.id.navigation_home
+        binding.bottomNavigation.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.navigation_home -> true
+                R.id.navigation_map -> {
+                    openMap()
+                    true
+                }
+                R.id.navigation_tracks -> {
+                    openTracks()
+                    true
+                }
+                R.id.navigation_poi -> {
+                    openPoi()
+                    true
+                }
+                else -> false
+            }
         }
 
         binding.textCps.setOnClickListener {
