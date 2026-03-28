@@ -13,14 +13,17 @@ data class PoiUiItem(
 )
 
 class PoiAdapter(
+    private val onPoiCheckedChanged: (String, Boolean) -> Unit,
     private val onLongPress: (PoiUiItem, View) -> Unit
 ) : RecyclerView.Adapter<PoiAdapter.PoiViewHolder>() {
 
     private val items = mutableListOf<PoiUiItem>()
+    private var selectedPoiIds: Set<String> = emptySet()
 
-    fun submit(newItems: List<PoiUiItem>) {
+    fun submit(newItems: List<PoiUiItem>, selectedIds: Set<String>) {
         items.clear()
         items.addAll(newItems)
+        selectedPoiIds = selectedIds
         notifyDataSetChanged()
     }
 
@@ -42,6 +45,18 @@ class PoiAdapter(
         fun bind(item: PoiUiItem) {
             binding.poiTitle.text = item.title
             binding.poiSubtitle.text = item.subtitle
+
+            binding.poiCheckbox.setOnCheckedChangeListener(null)
+            binding.poiCheckbox.isChecked = selectedPoiIds.contains(item.poi.id)
+            binding.poiCheckbox.setOnCheckedChangeListener { _, checked ->
+                selectedPoiIds = if (checked) selectedPoiIds + item.poi.id else selectedPoiIds - item.poi.id
+                onPoiCheckedChanged(item.poi.id, checked)
+            }
+
+            binding.root.setOnClickListener {
+                binding.poiCheckbox.isChecked = !binding.poiCheckbox.isChecked
+            }
+
             binding.root.setOnLongClickListener {
                 onLongPress(item, binding.root)
                 true
