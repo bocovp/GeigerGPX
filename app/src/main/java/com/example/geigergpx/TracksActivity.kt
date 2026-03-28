@@ -42,9 +42,11 @@ class TracksActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityTracksBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        setSupportActionBar(binding.topAppBar)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = currentFolderName?.let { "Tracks: $it" } ?: "Tracks"
+        binding.topAppBar.setNavigationOnClickListener { finish() }
 
         binding.tracksRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.tracksRecyclerView.adapter = adapter
