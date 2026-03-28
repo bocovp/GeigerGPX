@@ -174,50 +174,20 @@
 
 
 
-    <LinearLayout
-        android:id="@+id/bottomNavButtons"
-        android:layout_width="wrap_content"
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNavigation"
+        style="@style/Widget.Material3.NavigationBar"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginBottom="8dp"
-        android:gravity="center"
-        android:orientation="horizontal"
+        android:background="?attr/colorSurfaceContainer"
+        app:itemActiveIndicatorStyle="@style/Widget.Material3.NavigationBar.ActiveIndicator"
+        app:itemIconTint="@color/navigation_bar_item_colors"
+        app:itemTextColor="@color/navigation_bar_item_colors"
+        app:labelVisibilityMode="labeled"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
-
-        <ImageButton
-            android:id="@+id/buttonMap"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginHorizontal="8dp"
-            android:background="@drawable/bottom_nav_circle"
-            android:backgroundTint="@color/purple_500"
-            android:contentDescription="Map"
-            android:padding="16dp"
-            android:src="@drawable/baseline_map_24"/>
-
-        <ImageButton
-            android:id="@+id/buttonTracks"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginHorizontal="8dp"
-            android:background="@drawable/bottom_nav_circle"
-            android:backgroundTint="@color/purple_500"
-            android:contentDescription="Tracks"
-            android:padding="16dp"
-            android:src="@drawable/baseline_menu_24"/>
-
-        <ImageButton
-            android:id="@+id/buttonPoi"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginHorizontal="8dp"
-            android:background="@drawable/bottom_nav_circle"
-            android:backgroundTint="@color/purple_500"
-            android:contentDescription="POI library"
-            android:padding="16dp"
-            android:src="@drawable/baseline_place_24" />
-
-    </LinearLayout>
+        app:layout_constraintStart_toStartOf="parent"
+        app:menu="@menu/main_bottom_nav_menu" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
