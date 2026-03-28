@@ -38,6 +38,15 @@ class GoertzelDetector(
     private var state = State.SILENCE
     private var beepStartSample: Long = 0
     private var currentBeepMaxMain = 0f
+    private var buffersProcessed = 0;
+
+    fun reset() {
+        state = State.SILENCE
+        beepStartSample = 0L
+        currentBeepMaxMain = 0f
+        leftoverSamples = 0
+        totalSamplesProcessed = 0L
+    }
 
     fun processSamples(samples: ShortArray) {
         if (samples.isEmpty()) return
@@ -53,11 +62,11 @@ class GoertzelDetector(
             val (main, sideEnergy) = computeWindowEnergies(pos)
             onWindowAnalyzed?.invoke(main, sideEnergy)
 
-            var detected     = false
+            var detected = false
             var detectedWeak = false
 
             if (main > magThresholdEnd) {
-                detected     = (main > magThreshold   ) && (main > dominanceThreshold * sideEnergy)
+                detected = (main > magThreshold) && (main > dominanceThreshold * sideEnergy)
                 detectedWeak = (main > magThresholdEnd) && (main > dominanceThresholdEnd * sideEnergy)
             }
 
@@ -79,8 +88,12 @@ class GoertzelDetector(
                 }
 
                 state == State.BEEP || state == State.DECAY -> {
-                    val duration =
-                        (currentWindowGlobalSample - beepStartSample).toDouble() / sampleRate
+
+                    if (state == State.DECAY) {
+//                        android.util.Log.e( "MYTAG", "  BEEP END: Main ${"%.2e".format(main)}\tSide ${"%.2e".format(sideEnergy)}")
+                    }
+
+                    val duration = (currentWindowGlobalSample - beepStartSample).toDouble() / sampleRate
                     processBeep(duration, currentBeepMaxMain)
                     state = State.SILENCE
                     currentBeepMaxMain = 0f
@@ -96,6 +109,11 @@ class GoertzelDetector(
         }
 
         totalSamplesProcessed += pos
+
+        buffersProcessed++
+        if (buffersProcessed.mod(4) == 0) {
+            android.util.Log.e("MYTAG", "  ----------------------${samples.size}----------------------------- ")
+        }
     }
 
     private fun computeWindowEnergies(pos: Int): Pair<Float, Float> {
@@ -133,17 +151,27 @@ class GoertzelDetector(
         var newSize = processingBuffer.size
         while (newSize < required) newSize *= 2
         val resized = ShortArray(newSize)
-        System.arraycopy(processingBuffer, 0, resized, 0, leftoverSamples)
+        if (leftoverSamples > 0) {
+            System.arraycopy(processingBuffer, 0, resized, 0, leftoverSamples)
+        }
         processingBuffer = resized
     }
 
     private fun processBeep(duration: Double, peakMain: Float) {
 
-        android.util.Log.e("MYTAG", "Duration ${"%.4f".format(duration)}\tPeak ${"%.2e".format(peakMain)}")
         when {
-            duration in oneBeepMin..oneBeepMax        -> onBeep(peakMain, 1)
-            duration > oneBeepMax && duration <= twoBeepMax -> onBeep(peakMain, 1) // 1 for now
-            else                                            -> onBeep(peakMain, 0)
+            duration in oneBeepMin..oneBeepMax        -> {
+                android.util.Log.e("MYTAG", "1 Duration ${"%.4f".format(duration)}\tPeak ${"%.2e".format(peakMain)}")
+                onBeep(peakMain, 1)
+            }
+            duration > oneBeepMax && duration <= twoBeepMax -> {
+                android.util.Log.e("MYTAG", "2 Duration ${"%.4f".format(duration)}\tPeak ${"%.2e".format(peakMain)}")
+                onBeep(peakMain, 1)
+            } // 1 for now
+            else                                            -> {
+                android.util.Log.e("MYTAG", "  Duration ${"%.4f".format(duration)}\tPeak ${"%.2e".format(peakMain)}")
+                onBeep(peakMain, 0)
+            }
         }
     }
 
@@ -156,15 +184,15 @@ class GoertzelDetector(
 
     companion object {
         const val DEFAULT_SAMPLE_RATE          = 44100
-        const val DEFAULT_FREQ_MAIN            = 3276.0f
+        const val DEFAULT_FREQ_MAIN            = 3276.0f // bin 13 is central frequency
         const val DEFAULT_WINDOW_SIZE          = 175
         const val DEFAULT_FREQ_LOW             = DEFAULT_FREQ_MAIN - 252f
         const val DEFAULT_FREQ_HIGH            = DEFAULT_FREQ_MAIN + 252f
         const val DEFAULT_STEP_SIZE            = 32
-        const val DEFAULT_ONE_BEEP_MIN         = 0.020
+        const val DEFAULT_ONE_BEEP_MIN         = 0.019
         const val DEFAULT_ONE_BEEP_MAX         = 0.035
         const val DEFAULT_TWO_BEEP_MAX         = 0.070
         const val DEFAULT_DOMINANCE_THRESHOLD     = 2.0f
-        const val DEFAULT_DOMINANCE_THRESHOLD_END = 1.5f
+        const val DEFAULT_DOMINANCE_THRESHOLD_END = 1.1f // 1.5f
     }
 }

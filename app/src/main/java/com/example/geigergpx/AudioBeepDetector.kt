@@ -12,6 +12,11 @@ class AudioBeepDetector(
     private val magThreshold: Float = DEFAULT_MAG_THRESHOLD,
     private val onBeep: (Float, Int) -> Unit,
     private val onAudioHealth: (Boolean) -> Unit = {},
+    /**
+     * If provided, raw audio samples are forwarded to this callback instead of
+     * being processed by the internal [GoertzelDetector]. Intended for external
+     * audio consumers (e.g. recording, visualization) that replace built-in detection.
+     */
     private val onRawAudio: ((ShortArray) -> Unit)? = null
 ) {
 
@@ -67,7 +72,7 @@ class AudioBeepDetector(
 
                     if (currentAr.state != AudioRecord.STATE_INITIALIZED) {
                         Log.e(TAG, "Recorder uninitialized, restarting")
-                        audioBuf = restartAndReallocate(audioBuf) ?: audioBuf
+                        audioBuf = restartAndReallocate(audioBuf, detector) ?: audioBuf
                         continue
                     }
 
@@ -101,8 +106,8 @@ class AudioBeepDetector(
                     }
 
                     if (zeroBufferCount >= ZERO_BUFFER_LIMIT) {
-                        Log.w(TAG, "AudioRecord appears stuck — restarting")
-                        audioBuf        = restartAndReallocate(audioBuf) ?: audioBuf
+                        Log.w(TAG, "AudioRecord appears stuck —w restarting")
+                        audioBuf = restartAndReallocate(audioBuf, detector) ?: audioBuf
                         zeroBufferCount = 0
                         continue
                     }
@@ -112,6 +117,7 @@ class AudioBeepDetector(
                     if (onRawAudio != null) {
                         onRawAudio.invoke(samples)
                     } else {
+//                        Log.w(TAG, "read $read\t Thread if: ${Thread.currentThread().id} Configured Rate: ${currentAr.sampleRate} Hz")
                         detector.processSamples(samples)
                     }
                     //onRawAudio?.invoke(samples)
@@ -128,8 +134,10 @@ class AudioBeepDetector(
 
     // Restarts AudioRecord and returns a reallocated buffer if the size changed,
     // or the original buffer if the size is unchanged, or null on failure.
-    private fun restartAndReallocate(current: ShortArray): ShortArray? {
+    private fun restartAndReallocate(current: ShortArray,
+                                     detector: GoertzelDetector): ShortArray? {
         val newSize = restartAudioRecord() ?: return null
+        detector.reset()             // clear stale state before new stream
         return if (newSize != current.size) ShortArray(newSize) else current
     }
 
@@ -232,8 +240,9 @@ class AudioBeepDetector(
 
     companion object {
         private const val TAG              = "AudioBeepDetector"
-        private const val SAMPLE_RATE      = 44100
-        private const val WINDOW_SIZE      = 175    // bin 13 is central frequency
+
+        private const val WINDOW_SIZE = GoertzelDetector.DEFAULT_WINDOW_SIZE
+        private const val SAMPLE_RATE = GoertzelDetector.DEFAULT_SAMPLE_RATE
         private const val WINDOWS_IN_BUFFER = 64   // ~0.25 s buffer
         private const val ZERO_BUFFER_LIMIT = 20
 
