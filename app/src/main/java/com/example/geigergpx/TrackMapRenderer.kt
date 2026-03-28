@@ -1,6 +1,7 @@
 package com.example.geigergpx
 
 import android.widget.TextView
+import androidx.preference.PreferenceManager
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.TileSystem
@@ -213,7 +214,12 @@ class TrackMapRenderer(
         val mapLatitude = mapView.mapCenter.latitude
         val metersPerPixel = TileSystem.GroundResolution(mapLatitude, zoomLevel)
         val minDistanceMeters = metersPerPixel * 10.0
-        val generalizer = TrackGeneralizer(minDistanceMeters)
+
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
+        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+
+
+        val generalizer = TrackGeneralizer(minDistanceMeters, coeff)
 
         generalizedTracksById.clear()
         tracks.forEach { track ->

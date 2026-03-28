@@ -2,7 +2,8 @@ package com.example.geigergpx
 
 import org.osmdroid.util.GeoPoint
 
-class TrackGeneralizer(private val minDistanceMeters: Double) {
+class TrackGeneralizer(private val minDistanceMeters: Double,
+    private val coeff: Double) {
 
     fun generalize(track: MapTrack): MapTrack {
         if (track.points.size < 2) return track
@@ -23,7 +24,7 @@ class TrackGeneralizer(private val minDistanceMeters: Double) {
             val averagedPoint = TrackSample(
                 latitude = latSum / averagedPoints,
                 longitude = lonSum / averagedPoints,
-                doseRate = if (secondsSum > 0.0) countsSum / secondsSum else 0.0,
+                doseRate = if (secondsSum > 0.0) countsSum * coeff / secondsSum else 0.0,
                 counts = countsSum,
                 seconds = secondsSum
             )
@@ -42,16 +43,14 @@ class TrackGeneralizer(private val minDistanceMeters: Double) {
             val distanceMeters = GeoPoint(sourcePoint.latitude, sourcePoint.longitude)
                 .distanceToAsDouble(GeoPoint(lastGeneralizedPoint.latitude, lastGeneralizedPoint.longitude))
 
-            if (distanceMeters < minDistanceMeters) {
-                latSum += sourcePoint.latitude
-                lonSum += sourcePoint.longitude
-                countsSum += sourcePoint.counts
-                secondsSum += sourcePoint.seconds
-                averagedPoints += 1
-            } else {
+            latSum += sourcePoint.latitude
+            lonSum += sourcePoint.longitude
+            countsSum += sourcePoint.counts
+            secondsSum += sourcePoint.seconds
+            averagedPoints += 1
+
+            if (distanceMeters >= minDistanceMeters) {
                 flushAveragedPoint()
-                generalized += sourcePoint
-                lastGeneralizedPoint = sourcePoint
             }
         }
 
