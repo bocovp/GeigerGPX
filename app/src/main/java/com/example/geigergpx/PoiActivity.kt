@@ -20,7 +20,7 @@ import java.util.Locale
 class PoiActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityPoiBinding
-    private val adapter by lazy { PoiAdapter(::onPoiLongPressed) }
+    private val adapter by lazy { PoiAdapter(::onPoiToggled, ::onPoiLongPressed) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +33,11 @@ class PoiActivity : AppCompatActivity() {
         binding.poiRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.poiRecyclerView.adapter = adapter
 
+        refreshPoiList()
+    }
+
+    override fun onResume() {
+        super.onResume()
         refreshPoiList()
     }
 
@@ -55,8 +60,9 @@ class PoiActivity : AppCompatActivity() {
                     subtitle = formatSubtitle(poi)
                 )
             }
+            val selectedPoiIds = ensurePoiSelectionInitialized(result.entries.map { it.id }.toSet())
             runOnUiThread {
-                adapter.submit(items)
+                adapter.submit(items, selectedPoiIds)
                 val emptyMessageRes = when (result.state) {
                     PoiLibrary.LoadState.MISSING_FILE -> R.string.no_poi_file_found
                     PoiLibrary.LoadState.EMPTY_LIBRARY -> R.string.no_poi_in_library
@@ -70,23 +76,60 @@ class PoiActivity : AppCompatActivity() {
     }
 
     private fun formatSubtitle(poi: PoiEntry): String {
-        val date = if (poi.timestampMillis > 0L) {
-            SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(poi.timestampMillis))
+        val dateTime = if (poi.timestampMillis > 0L) {
+            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(poi.timestampMillis))
         } else {
-            "Unknown date"
+            "Unknown time"
         }
-        val lat = String.format(Locale.US, "%.5f", poi.latitude)
-        val lon = String.format(Locale.US, "%.5f", poi.longitude)
-        return "$date   $lat $lon   ${formatDoseRateText(poi)} μSv/h"
+        return "$dateTime   ${formatDoseRateText(poi)} μSv/h"
     }
 
     private fun formatDoseRateText(poi: PoiEntry): String {
         val coeff = PreferenceManager.getDefaultSharedPreferences(this)
             .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
-        //val ci = ConfidenceInterval(0.0, poi.seconds, poi.counts + 1).scale(coeff)
         val ci = ConfidenceInterval(0.0, poi.seconds, poi.counts, false).scale(coeff)
         return ci.toText(decimalDigits = 4)
+    }
+
+    private fun onPoiToggled(poiId: String, visible: Boolean) {
+        val selected = selectedPoiIds().toMutableSet()
+        if (visible) {
+            selected.add(poiId)
+        } else {
+            selected.remove(poiId)
+        }
+        PreferenceManager.getDefaultSharedPreferences(this)
+            .edit()
+            .putBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
+            .putStringSet(PREF_MAP_VISIBLE_POI_IDS, selected)
+            .apply()
+    }
+
+    private fun ensurePoiSelectionInitialized(allPoiIds: Set<String>): Set<String> {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val initialized = prefs.getBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, false)
+        if (!initialized) {
+            prefs.edit()
+                .putBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
+                .putStringSet(PREF_MAP_VISIBLE_POI_IDS, allPoiIds)
+                .apply()
+            return allPoiIds
+        }
+
+        val selected = prefs.getStringSet(PREF_MAP_VISIBLE_POI_IDS, emptySet())?.toSet() ?: emptySet()
+        val sanitized = selected.intersect(allPoiIds)
+        if (sanitized != selected) {
+            prefs.edit().putStringSet(PREF_MAP_VISIBLE_POI_IDS, sanitized).apply()
+        }
+        return sanitized
+    }
+
+    private fun selectedPoiIds(): Set<String> {
+        return PreferenceManager.getDefaultSharedPreferences(this)
+            .getStringSet(PREF_MAP_VISIBLE_POI_IDS, emptySet())
+            ?.toSet()
+            ?: emptySet()
     }
 
     private fun onPoiLongPressed(item: PoiUiItem, anchor: View) {
@@ -170,6 +213,11 @@ class PoiActivity : AppCompatActivity() {
                 val deleted = PoiLibrary.removePoi(this, item.poi)
                 if (deleted) {
                     Toast.makeText(this, "POI removed", Toast.LENGTH_SHORT).show()
+                    val selected = selectedPoiIds().toMutableSet().apply { remove(item.poi.id) }
+                    PreferenceManager.getDefaultSharedPreferences(this)
+                        .edit()
+                        .putStringSet(PREF_MAP_VISIBLE_POI_IDS, selected)
+                        .apply()
                     refreshPoiList()
                 } else {
                     Toast.makeText(this, "Unable to remove POI", Toast.LENGTH_SHORT).show()
@@ -179,6 +227,9 @@ class PoiActivity : AppCompatActivity() {
     }
 
     companion object {
+        const val PREF_MAP_VISIBLE_POI_IDS = "map_visible_poi_ids"
+        const val PREF_MAP_VISIBLE_POI_IDS_INITIALIZED = "map_visible_poi_ids_initialized"
+
         private const val MENU_RENAME = 1
         private const val MENU_SHARE = 2
         private const val MENU_DELETE = 3
