@@ -140,8 +140,6 @@ class TrackMapRenderer(
         }
 
         val renderFingerprint = buildString {
-            append(isHeatmapMode)
-            append('|')
             append(activeTrackIds.sorted().joinToString(","))
             append('|')
             append(pois.map { it.id }.sorted().joinToString(","))
