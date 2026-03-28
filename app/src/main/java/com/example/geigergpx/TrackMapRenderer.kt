@@ -12,33 +12,37 @@ class TrackMapRenderer(
 ) {
 
     private val trackOverlays = mutableMapOf<String, GradientTrackOverlay>()
+    private var poiOverlay: PoiOverlay? = null
     private var heatmapOverlay: HeatmapOverlay? = null
     private val renderedPointCounts = mutableMapOf<String, Int>()
     private var lastMaxDose = Double.NEGATIVE_INFINITY
-    private var lastRenderedTrackIds: Set<String> = emptySet()
+    private var lastRenderFingerprint: String = ""
 
-    fun renderTracks(tracks: List<MapTrack>,
-                     isHeatmapMode: Boolean) {
-
+    fun renderTracks(
+        tracks: List<MapTrack>,
+        pois: List<PoiMapItem>,
+        isHeatmapMode: Boolean
+    ) {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
         val doseCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
-        val activeIds = tracks.map { it.id }.toSet()
+        val activeTrackIds = tracks.map { it.id }.toSet()
 
-        // 1. Calculate current global scale
         var currentMax = Double.NEGATIVE_INFINITY
         tracks.forEach { track ->
             track.points.forEach { sample ->
                 if (sample.doseRate > currentMax) currentMax = sample.doseRate
             }
         }
+        pois.forEach { poi ->
+            if (poi.doseRateForColor > currentMax) currentMax = poi.doseRateForColor
+        }
 
         val currentMin = 0.0
-        if (!currentMax.isFinite() || currentMax > 0.5) { // Clipping at 0.5 uSv/h
+        if (!currentMax.isFinite() || currentMax > 0.5) {
             currentMax = 0.5
         }
 
-        // Check if the scale itself has changed
         val scaleChanged = currentMax != lastMaxDose
         lastMaxDose = currentMax
 
@@ -50,54 +54,55 @@ class TrackMapRenderer(
         var latestPoint: GeoPoint? = null
         var shouldInvalidate = false
 
-        // 2. Mode Branching
         if (isHeatmapMode) {
-            // --- HEATMAP MODE ---
-
-            // A. Clean up Line Overlays if they exist
             if (trackOverlays.isNotEmpty()) {
                 trackOverlays.values.forEach { mapView.overlays.remove(it) }
                 trackOverlays.clear()
                 renderedPointCounts.clear()
             }
+            poiOverlay?.let {
+                mapView.overlays.remove(it)
+                poiOverlay = null
+            }
 
-            // B. Initialize or Update Heatmap Overlay
-            // We pass the coefficient here to ensure the overlay uses the latest setting
             val overlay = heatmapOverlay ?: HeatmapOverlay(doseCoefficient).also {
                 mapView.overlays.add(it)
                 heatmapOverlay = it
             }
-
-            // CRITICAL: Always update the coefficient from settings
-            // This ensures that if the user changed settings, the existing overlay updates.
             overlay.doseCoefficient = doseCoefficient
 
-            // C. Update Data
-            // We pass ALL tracks to the single overlay
-            overlay.tracks = tracks
+            val poiTrack = MapTrack(
+                id = "__pois__",
+                title = "POIs",
+                points = pois.map {
+                    TrackSample(
+                        latitude = it.latitude,
+                        longitude = it.longitude,
+                        doseRate = it.doseRateForColor,
+                        counts = it.counts,
+                        seconds = it.seconds
+                    )
+                }
+            )
+            overlay.tracks = if (pois.isEmpty()) tracks else tracks + poiTrack
             overlay.minDose = currentMin
             overlay.maxDose = currentMax
 
-            // Always invalidate in heatmap mode as grid needs recalc if tracks change
             shouldInvalidate = true
 
-            // Capture latest point for auto-center logic
             if (tracks.isNotEmpty() && tracks.last().points.isNotEmpty()) {
                 val lastP = tracks.last().points.last()
                 latestPoint = GeoPoint(lastP.latitude, lastP.longitude)
+            } else if (pois.isNotEmpty()) {
+                latestPoint = GeoPoint(pois.last().latitude, pois.last().longitude)
             }
-
         } else {
-            // --- LINE MODE ---
             heatmapOverlay?.let {
                 mapView.overlays.remove(it)
                 heatmapOverlay = null
             }
 
-            // B. Clean up deleted tracks
-            removeDeletedTracks(activeIds)
-
-            // C. Draw/Update individual lines
+            removeDeletedTracks(activeTrackIds)
 
             tracks.forEach { track ->
                 val trackPoints = track.points
@@ -106,8 +111,6 @@ class TrackMapRenderer(
                 latestPoint = GeoPoint(trackPoints.last().latitude, trackPoints.last().longitude)
 
                 val previousCount = renderedPointCounts[track.id] ?: 0
-
-                // 2. Update if point count changed OR if global scale changed
                 if (previousCount != trackPoints.size || scaleChanged) {
                     val overlay = trackOverlays.getOrPut(track.id) {
                         GradientTrackOverlay().also { mapView.overlays.add(it) }
@@ -121,13 +124,32 @@ class TrackMapRenderer(
                     shouldInvalidate = true
                 }
             }
+
+            val overlay = poiOverlay ?: PoiOverlay().also {
+                mapView.overlays.add(it)
+                poiOverlay = it
+                shouldInvalidate = true
+            }
+            overlay.points = pois
+            overlay.minDose = currentMin
+            overlay.maxDose = currentMax
+            if (pois.isNotEmpty()) {
+                latestPoint = GeoPoint(pois.last().latitude, pois.last().longitude)
+            }
+            shouldInvalidate = true
         }
 
-        // 3. Auto-center / fit logic
-        val trackSetChanged = activeIds != lastRenderedTrackIds
-        if (trackSetChanged) {
-            fitToTracks(tracks, latestPoint)
-            lastRenderedTrackIds = activeIds
+        val renderFingerprint = buildString {
+            append(isHeatmapMode)
+            append('|')
+            append(activeTrackIds.sorted().joinToString(","))
+            append('|')
+            append(pois.map { it.id }.sorted().joinToString(","))
+        }
+        val datasetChanged = renderFingerprint != lastRenderFingerprint
+        if (datasetChanged) {
+            fitToSelection(tracks, pois, latestPoint)
+            lastRenderFingerprint = renderFingerprint
             shouldInvalidate = true
         }
 
@@ -136,11 +158,21 @@ class TrackMapRenderer(
         }
     }
 
-    private fun fitToTracks(tracks: List<MapTrack>, fallbackPoint: GeoPoint?) {
-        val geoPoints = tracks
+    private fun fitToSelection(tracks: List<MapTrack>, pois: List<PoiMapItem>, fallbackPoint: GeoPoint?) {
+        val trackGeoPoints = tracks
             .flatMap { track -> track.points }
             .map { sample -> GeoPoint(sample.latitude, sample.longitude) }
 
+        if (trackGeoPoints.isNotEmpty()) {
+            fitToPoints(trackGeoPoints, fallbackPoint)
+            return
+        }
+
+        val poiGeoPoints = pois.map { poi -> GeoPoint(poi.latitude, poi.longitude) }
+        fitToPoints(poiGeoPoints, fallbackPoint)
+    }
+
+    private fun fitToPoints(geoPoints: List<GeoPoint>, fallbackPoint: GeoPoint?) {
         when {
             geoPoints.size > 1 -> {
                 val boundingBox = BoundingBox.fromGeoPointsSafe(geoPoints)
