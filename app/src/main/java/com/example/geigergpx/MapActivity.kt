@@ -14,6 +14,7 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicInteger
 
 class MapActivity : AppCompatActivity() {
 
@@ -23,6 +24,7 @@ class MapActivity : AppCompatActivity() {
 
     private var isHeatmapMode: Boolean = false
     private var latestActivePoints: List<TrackPoint> = emptyList()
+    private val mapLoadRequestSequence = AtomicInteger(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -118,8 +120,8 @@ class MapActivity : AppCompatActivity() {
     }
 
     private fun refreshMapTracks(activePoints: List<TrackPoint>) {
-        val showLoading = TrackCatalog.isTrackCacheEmpty(this)
-        binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
+        val requestId = mapLoadRequestSequence.incrementAndGet()
+        binding.loadingLabel.visibility = View.VISIBLE
         Thread {
             val includeCurrentTrack = viewModel.isTracking.value == true
             val selectedTrackIds = selectedTrackIds()
@@ -168,6 +170,9 @@ class MapActivity : AppCompatActivity() {
             }
 
             runOnUiThread {
+                if (requestId != mapLoadRequestSequence.get()) {
+                    return@runOnUiThread
+                }
                 trackMapRenderer.renderTracks(
                     tracks = visibleTracks,
                     pois = poiMapItems,
