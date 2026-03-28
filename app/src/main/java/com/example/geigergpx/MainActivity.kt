@@ -216,14 +216,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupToolbarTitleLongPress() {
-        val actionBarView = window.decorView.findViewById<View>(androidx.appcompat.R.id.action_bar) ?: return
-        val titleView = actionBarView.findViewById<TextView>(androidx.appcompat.R.id.action_bar_title) ?: return
-        titleView.setOnLongClickListener {
-            if (!isToolbarTitleHidden) {
-                isToolbarTitleHidden = true
-                applyToolbarTitleVisibility()
+        val toolbar = findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar) ?: return
+
+        // 2. The title view might not be ready immediately, so use .post()
+        toolbar.post {
+            for (i in 0 until toolbar.childCount) {
+                val child = toolbar.getChildAt(i)
+                // 3. Find the child that is a TextView and matches the current title
+                if (child is TextView && child.text == supportActionBar?.title) {
+                    child.setOnLongClickListener {
+                        isToolbarTitleHidden = true
+                        applyToolbarTitleVisibility()
+                        true
+                    }
+                    break
+                }
             }
-            true
         }
     }
 
