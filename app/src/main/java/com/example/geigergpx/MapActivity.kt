@@ -13,6 +13,7 @@ import com.example.geigergpx.databinding.ActivityMapBinding
 import org.osmdroid.config.Configuration
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import java.util.Locale
 
 class MapActivity : AppCompatActivity() {
 
@@ -77,13 +78,8 @@ class MapActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_toggle_heatmap -> {
-                // 1. Flip the state
                 isHeatmapMode = !isHeatmapMode
-
-                // 2. Refresh the menu to update Icon/Text
                 invalidateOptionsMenu()
-
-                // 3. Refresh the map with the new mode
                 refreshMapTracks(latestActivePoints)
                 true
             }
@@ -126,9 +122,9 @@ class MapActivity : AppCompatActivity() {
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
         Thread {
             val includeCurrentTrack = viewModel.isTracking.value == true
-            val selectedIds = selectedTrackIds()
+            val selectedTrackIds = selectedTrackIds()
             val selectedFolders = selectedFolderIds()
-            val mapTrackIds = selectedIds.ifEmpty { setOf(TrackCatalog.currentTrackId()) }
+            val mapTrackIds = selectedTrackIds.ifEmpty { setOf(TrackCatalog.currentTrackId()) }
             val allItems = TrackCatalog.loadTrackListItems(
                 context = this,
                 activePoints = activePoints,
@@ -141,17 +137,63 @@ class MapActivity : AppCompatActivity() {
                 .filter { item ->
                     when {
                         item.itemType != TrackListItemType.TRACK -> false
-                        item.folderName != null -> selectedIds.contains(item.id) && selectedFolders.contains(item.folderName)
-                        else -> selectedIds.contains(item.id) || (selectedIds.isEmpty() && item.defaultVisible)
+                        item.folderName != null -> selectedTrackIds.contains(item.id) && selectedFolders.contains(item.folderName)
+                        else -> selectedTrackIds.contains(item.id) || (selectedTrackIds.isEmpty() && item.defaultVisible)
                     }
                 }
                 .mapNotNull { it.mapTrack }
 
+            val allPois = PoiLibrary.loadPoiLibrary(this).entries
+            val selectedPoiIds = ensurePoiSelectionInitialized(allPois.map { it.id }.toSet())
+            val visiblePois = allPois.filter { it.id in selectedPoiIds }
+
+            val coeff = PreferenceManager.getDefaultSharedPreferences(this)
+                .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+            val showCpsUnit = kotlin.math.abs(coeff - 1.0) < 1e-9
+            val poiMapItems = visiblePois.map { poi ->
+                val cps = if (poi.seconds > 0.0001) poi.counts / poi.seconds else 0.0
+                val doseRate = cps * coeff
+                val value = if (showCpsUnit) cps else doseRate
+                val unit = if (showCpsUnit) "cps" else "μSv/h"
+                PoiMapItem(
+                    id = poi.id,
+                    name = poi.description,
+                    latitude = poi.latitude,
+                    longitude = poi.longitude,
+                    doseRateForColor = doseRate,
+                    counts = poi.counts,
+                    seconds = poi.seconds,
+                    doseLabel = String.format(Locale.US, "%.3f %s", value, unit)
+                )
+            }
+
             runOnUiThread {
-                trackMapRenderer.renderTracks(visibleTracks, isHeatmapMode)
+                trackMapRenderer.renderTracks(
+                    tracks = visibleTracks,
+                    pois = poiMapItems,
+                    isHeatmapMode = isHeatmapMode
+                )
                 binding.loadingLabel.visibility = View.GONE
             }
         }.start()
+    }
+
+    private fun ensurePoiSelectionInitialized(allPoiIds: Set<String>): Set<String> {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val initialized = prefs.getBoolean(PoiActivity.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, false)
+        if (!initialized) {
+            prefs.edit()
+                .putBoolean(PoiActivity.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
+                .putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, allPoiIds)
+                .apply()
+            return allPoiIds
+        }
+        val selected = prefs.getStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, emptySet())?.toSet() ?: emptySet()
+        val sanitized = selected.intersect(allPoiIds)
+        if (sanitized != selected) {
+            prefs.edit().putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, sanitized).apply()
+        }
+        return sanitized
     }
 
     private fun selectedTrackIds(): Set<String> {
