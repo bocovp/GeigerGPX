@@ -3,6 +3,7 @@ package com.example.geigergpx
 import android.widget.TextView
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.util.TileSystem
 import org.osmdroid.views.MapView
 
 class TrackMapRenderer(
@@ -15,8 +16,10 @@ class TrackMapRenderer(
     private var poiOverlay: PoiOverlay? = null
     private var heatmapOverlay: HeatmapOverlay? = null
     private val renderedPointCounts = mutableMapOf<String, Int>()
+    private val generalizedTracksById = mutableMapOf<String, List<TrackSample>>()
     private var lastMaxDose = Double.NEGATIVE_INFINITY
     private var lastRenderFingerprint: String = ""
+    private var lastGeneralizationZoomLevel: Double? = null
 
     fun renderTracks(
         tracks: List<MapTrack>,
@@ -27,6 +30,14 @@ class TrackMapRenderer(
         val doseCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         val activeTrackIds = tracks.map { it.id }.toSet()
+        val currentZoomLevel = mapView.zoomLevelDouble
+        val zoomChangedForGeneralization = lastGeneralizationZoomLevel == null ||
+            kotlin.math.abs((lastGeneralizationZoomLevel ?: currentZoomLevel) - currentZoomLevel) > 1e-9
+
+        if (zoomChangedForGeneralization) {
+            recalculateGeneralizedTracks(tracks, currentZoomLevel)
+            lastGeneralizationZoomLevel = currentZoomLevel
+        }
 
         var currentMax = Double.NEGATIVE_INFINITY
         tracks.forEach { track ->
@@ -105,7 +116,7 @@ class TrackMapRenderer(
             removeDeletedTracks(activeTrackIds)
 
             tracks.forEach { track ->
-                val trackPoints = track.points
+                val trackPoints = generalizedTracksById[track.id] ?: track.points
                 if (trackPoints.isEmpty()) return@forEach
 
                 latestPoint = GeoPoint(trackPoints.last().latitude, trackPoints.last().longitude)
@@ -194,6 +205,19 @@ class TrackMapRenderer(
                 mapView.overlays.remove(it)
             }
             renderedPointCounts.remove(id)
+            generalizedTracksById.remove(id)
+        }
+    }
+
+    private fun recalculateGeneralizedTracks(tracks: List<MapTrack>, zoomLevel: Double) {
+        val mapLatitude = mapView.mapCenter.latitude
+        val metersPerPixel = TileSystem.GroundResolution(mapLatitude, zoomLevel)
+        val minDistanceMeters = metersPerPixel * 10.0
+        val generalizer = TrackGeneralizer(minDistanceMeters)
+
+        generalizedTracksById.clear()
+        tracks.forEach { track ->
+            generalizedTracksById[track.id] = generalizer.generalize(track).points
         }
     }
 }

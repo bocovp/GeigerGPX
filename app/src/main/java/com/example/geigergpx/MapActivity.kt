@@ -11,6 +11,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import com.example.geigergpx.databinding.ActivityMapBinding
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import java.util.Locale
@@ -42,6 +45,14 @@ class MapActivity : AppCompatActivity() {
         binding.mapView.zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
         binding.zoomInButton.setOnClickListener { binding.mapView.controller.zoomIn() }
         binding.zoomOutButton.setOnClickListener { binding.mapView.controller.zoomOut() }
+        binding.mapView.addMapListener(object : MapListener {
+            override fun onScroll(event: ScrollEvent?): Boolean = false
+
+            override fun onZoom(event: ZoomEvent?): Boolean {
+                refreshMapTracks(latestActivePoints)
+                return false
+            }
+        })
 
         val tvHalf = findViewById<TextView>(R.id.tvHalfDose)
         val tvMax = findViewById<TextView>(R.id.tvMaxDose)
