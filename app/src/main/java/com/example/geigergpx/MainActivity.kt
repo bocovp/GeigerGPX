@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -24,6 +25,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.WindowManager
 import android.widget.EditText
+import android.widget.TextView
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
@@ -34,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private var isMeasurementModeEnabled: Boolean = false
     private var doseRateDisplayMode: ConfidenceInterval.DisplayMode = ConfidenceInterval.DisplayMode.PLUS_MINUS
     private var keepScreenOnEnabled: Boolean = false
+    private var isToolbarTitleHidden: Boolean = false
 
     private val cpsRefreshHandler = Handler(Looper.getMainLooper())
     private val cpsRefreshRunnable = object : Runnable {
@@ -68,6 +71,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        isToolbarTitleHidden = savedInstanceState?.getBoolean(KEY_TOOLBAR_TITLE_HIDDEN, false) ?: false
+        applyToolbarTitleVisibility()
+        binding.root.post { setupToolbarTitleLongPress() }
 
         val restoredName = (application as GeigerGpxApp).consumeRestoredBackupName()
         if (restoredName != null) {
@@ -145,6 +151,11 @@ class MainActivity : AppCompatActivity() {
         observeViewModel()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(KEY_TOOLBAR_TITLE_HIDDEN, isToolbarTitleHidden)
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_toolbar_menu, menu)
         refreshKeepScreenOnMenuItem(menu.findItem(R.id.action_keep_screen_on))
@@ -204,6 +215,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupToolbarTitleLongPress() {
+        val actionBarView = window.decorView.findViewById<View>(androidx.appcompat.R.id.action_bar) ?: return
+        val titleView = actionBarView.findViewById<TextView>(androidx.appcompat.R.id.action_bar_title) ?: return
+        titleView.setOnLongClickListener {
+            if (!isToolbarTitleHidden) {
+                isToolbarTitleHidden = true
+                applyToolbarTitleVisibility()
+            }
+            true
+        }
+    }
+
+    private fun applyToolbarTitleVisibility() {
+        if (isToolbarTitleHidden) {
+            supportActionBar?.title = ""
+        } else {
+            val appLabel = applicationInfo.loadLabel(packageManager).toString()
+            supportActionBar?.title = appLabel
+        }
+    }
+
     private fun openMap() {
         startActivity(Intent(this, MapActivity::class.java))
     }
@@ -237,6 +269,10 @@ class MainActivity : AppCompatActivity() {
         if (viewModel.isTracking.value != true && !isMeasurementModeEnabled) {
             stopMonitoring()
         }
+    }
+
+    companion object {
+        private const val KEY_TOOLBAR_TITLE_HIDDEN = "toolbar_title_hidden"
     }
 
     private fun startCpsRefreshLoop() {
