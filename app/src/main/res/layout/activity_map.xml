@@ -21,6 +21,7 @@
         android:padding="16dp"
         android:text="@string/loading_tracks"
         android:visibility="gone"
+        android:textColor="@color/black"
         app:layout_constraintTop_toTopOf="parent" />
 
     <LinearLayout
