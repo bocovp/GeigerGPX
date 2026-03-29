@@ -90,8 +90,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     showCancelTrackConfirmation()
                 }
-            } else if (ensurePermissions()) {
-                checkBatteryOptimizations()
+            } else if (ensureTrackingPrerequisites()) {
                 startTracking()
             }
         }
@@ -156,6 +155,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         observeViewModel()
+        requestPermissionsOnAppStart()
     }
 
 
@@ -552,7 +552,26 @@ class MainActivity : AppCompatActivity() {
         startService(intent)
     }
 
-    private fun ensurePermissions(): Boolean {
+    private fun requestPermissionsOnAppStart() {
+        ensurePermissions()
+        requestIgnoreBatteryOptimizations()
+    }
+
+    private fun ensureTrackingPrerequisites(): Boolean {
+        val missingRuntimePermissions = getMissingRuntimePermissions()
+        val isBatteryOptimizationIgnored = isIgnoringBatteryOptimizations()
+        if (missingRuntimePermissions.isEmpty() && isBatteryOptimizationIgnored) {
+            return true
+        }
+
+        showPermissionsExplanationAndRequestAgain(
+            missingRuntimePermissions = missingRuntimePermissions,
+            needsBatteryOptimizationExemption = !isBatteryOptimizationIgnored
+        )
+        return false
+    }
+
+    private fun getMissingRuntimePermissions(): List<String> {
         val needed = mutableListOf<String>()
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
@@ -565,6 +584,11 @@ class MainActivity : AppCompatActivity() {
             needed += Manifest.permission.RECORD_AUDIO
         }
 
+        return needed
+    }
+
+    private fun ensurePermissions(): Boolean {
+        val needed = getMissingRuntimePermissions()
         return if (needed.isNotEmpty()) {
             permissionLauncher.launch(needed.toTypedArray())
             false
@@ -589,23 +613,49 @@ class MainActivity : AppCompatActivity() {
         startService(intent)
     }
 
-    private fun checkBatteryOptimizations() {
+    private fun isIgnoringBatteryOptimizations(): Boolean {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        val packageName = packageName
+        return pm.isIgnoringBatteryOptimizations(packageName)
+    }
 
-        // Check if the app is already "Unrestricted" (ignored by battery optimizations)
-        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-            AlertDialog.Builder(this)
-                .setTitle("Background Battery Usage")
-                .setMessage("To record radiation in the background, battery usage must be set to 'Unrestricted'. Otherwise, Android will stop the app after 10 minutes.")
-                .setPositiveButton("Set to Unrestricted") { _, _ ->
-                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = Uri.parse("package:$packageName")
-                    }
-                    startActivity(intent)
-                }
-                .setNegativeButton("Ignore") { dialog, _ -> dialog.dismiss() }
-                .show()
+    private fun requestIgnoreBatteryOptimizations() {
+        if (isIgnoringBatteryOptimizations()) {
+            return
         }
+
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            data = Uri.parse("package:$packageName")
+        }
+        startActivity(intent)
+    }
+
+    private fun showPermissionsExplanationAndRequestAgain(
+        missingRuntimePermissions: List<String>,
+        needsBatteryOptimizationExemption: Boolean
+    ) {
+        val reasons = mutableListOf<String>()
+        if (Manifest.permission.ACCESS_FINE_LOCATION in missingRuntimePermissions) {
+            reasons += "Location access is required to save GPX points."
+        }
+        if (Manifest.permission.RECORD_AUDIO in missingRuntimePermissions) {
+            reasons += "Microphone access is required to detect Geiger counter clicks."
+        }
+        if (needsBatteryOptimizationExemption) {
+            reasons += "Battery usage must be set to 'Unrestricted' so Android does not stop tracking in the background."
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Permissions required")
+            .setMessage(reasons.joinToString("\n\n"))
+            .setPositiveButton("Grant permissions") { _, _ ->
+                if (missingRuntimePermissions.isNotEmpty()) {
+                    permissionLauncher.launch(missingRuntimePermissions.toTypedArray())
+                }
+                if (needsBatteryOptimizationExemption) {
+                    requestIgnoreBatteryOptimizations()
+                }
+            }
+            .setNegativeButton("Not now", null)
+            .show()
     }
 }
