@@ -87,9 +87,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                 android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
-        alertDoseRate?.summaryProvider = Preference.SummaryProvider<EditTextPreference> {
-            buildAlertDoseRateSummary()
-        }
         updateAlertDoseRateSummary()
 
         val saveInEle = findPreference<SwitchPreferenceCompat>("save_dose_rate_in_ele")
@@ -154,7 +151,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun updateAlertDoseRateSummary() {
-        findPreference<EditTextPreference>("alert_dose_rate")?.notifyChanged()
+        findPreference<EditTextPreference>("alert_dose_rate")?.summary = buildAlertDoseRateSummary()
     }
 
     private fun buildAlertDoseRateSummary(): String {
