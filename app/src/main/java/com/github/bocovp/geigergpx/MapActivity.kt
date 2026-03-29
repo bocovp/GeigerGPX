@@ -1,4 +1,4 @@
-package com.example.geigergpx
+package com.github.bocovp.geigergpx
 
 import android.content.Intent
 import android.os.Bundle
@@ -9,7 +9,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
-import com.example.geigergpx.databinding.ActivityMapBinding
+import com.github.bocovp.geigergpx.databinding.ActivityMapBinding
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent

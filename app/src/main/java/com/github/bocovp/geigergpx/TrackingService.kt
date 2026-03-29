@@ -1,4 +1,4 @@
-package com.example.geigergpx
+package com.github.bocovp.geigergpx
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -38,12 +38,12 @@ class TrackingService : Service() {
         @Volatile
         private var runningInstance: TrackingService? = null
 
-        const val ACTION_START_MONITORING = "com.example.geigergpx.START_MONITORING"
-        const val ACTION_STOP_MONITORING  = "com.example.geigergpx.STOP_MONITORING"
-        const val ACTION_START = "com.example.geigergpx.START"
-        const val ACTION_STOP  = "com.example.geigergpx.STOP"
-        const val ACTION_CANCEL_TRACK = "com.example.geigergpx.CANCEL_TRACK"
-        const val ACTION_TOGGLE_MEASUREMENT_MODE = "com.example.geigergpx.TOGGLE_MEASUREMENT_MODE"
+        const val ACTION_START_MONITORING = "com.github.bocovp.geigergpx.START_MONITORING"
+        const val ACTION_STOP_MONITORING  = "com.github.bocovp.geigergpx.STOP_MONITORING"
+        const val ACTION_START = "com.github.bocovp.geigergpx.START"
+        const val ACTION_STOP  = "com.github.bocovp.geigergpx.STOP"
+        const val ACTION_CANCEL_TRACK = "com.github.bocovp.geigergpx.CANCEL_TRACK"
+        const val ACTION_TOGGLE_MEASUREMENT_MODE = "com.github.bocovp.geigergpx.TOGGLE_MEASUREMENT_MODE"
         const val NOTIF_ID = 1001
 
         // 10 minutes
