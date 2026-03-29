@@ -9,11 +9,12 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.EditText
-import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.FileProvider
+import androidx.core.view.MenuCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
@@ -178,22 +179,29 @@ class TracksActivity : AppCompatActivity() {
         val popup = PopupMenu(this, anchor)
         val menu = popup.menu
         val moveActions = linkedMapOf<Int, String?>()
+        popup.setForceShowIcon(true)
+        MenuCompat.setGroupDividerEnabled(menu, true)
 
         if (!item.isCurrentTrack) {
-            menu.add(Menu.NONE, MENU_RENAME, Menu.NONE, "Rename file")
-            menu.add(Menu.NONE, MENU_DELETE, Menu.NONE, "Delete")
+            menu.add(MENU_GROUP_PRIMARY, MENU_RENAME, Menu.NONE, "Rename file")
+                .setIcon(R.drawable.baseline_edit_24)
+            menu.add(MENU_GROUP_PRIMARY, MENU_DELETE, Menu.NONE, "Delete")
+                .setIcon(R.drawable.baseline_delete_24)
 
             var nextMoveId = MENU_MOVE_BASE
             availableMoveTargets(item.folderName).forEach { targetFolder ->
                 val title = targetFolder?.let { "Move to $it" } ?: "Move to main folder"
-                menu.add(Menu.NONE, nextMoveId, Menu.NONE, title)
+                menu.add(MENU_GROUP_MOVE, nextMoveId, Menu.NONE, title)
+                    .setIcon(R.drawable.baseline_drive_file_move_24)
                 moveActions[nextMoveId] = targetFolder
                 nextMoveId += 1
             }
         }
 
-        menu.add(Menu.NONE, MENU_OPEN_DEFAULT, Menu.NONE, "Open in default app")
-        menu.add(Menu.NONE, MENU_SHARE, Menu.NONE, "Share")
+        menu.add(MENU_GROUP_PRIMARY, MENU_OPEN_DEFAULT, Menu.NONE, "Open in default app")
+            .setIcon(R.drawable.baseline_open_in_new_24)
+        menu.add(MENU_GROUP_PRIMARY, MENU_SHARE, Menu.NONE, "Share")
+            .setIcon(R.drawable.baseline_share_24)
 
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
@@ -517,6 +525,8 @@ class TracksActivity : AppCompatActivity() {
         const val PREF_MAP_VISIBLE_SUBFOLDER_NAMES = "map_visible_subfolder_names"
         const val EXTRA_SUBFOLDER_NAME = "extra_subfolder_name"
 
+        private const val MENU_GROUP_PRIMARY = 1
+        private const val MENU_GROUP_MOVE = 2
         private const val MENU_RENAME = 1
         private const val MENU_DELETE = 2
         private const val MENU_OPEN_DEFAULT = 3
