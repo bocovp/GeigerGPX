@@ -19,6 +19,11 @@ import kotlin.math.pow
 import kotlin.text.format
 
 class SettingsFragment : PreferenceFragmentCompat() {
+    private val settingsPrefListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "cps_to_usvh" || key == "dose_rate_avg_timestamps_n" || key == "alert_dose_rate") {
+            updateAlertDoseRateSummary()
+        }
+    }
 
     private val folderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
@@ -77,6 +82,16 @@ class SettingsFragment : PreferenceFragmentCompat() {
         val avgTimestamps = findPreference<ListPreference>("dose_rate_avg_timestamps_n")
         avgTimestamps?.summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
 
+        val alertDoseRate = findPreference<EditTextPreference>("alert_dose_rate")
+        alertDoseRate?.setOnBindEditTextListener { edit ->
+            edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+        alertDoseRate?.summaryProvider = Preference.SummaryProvider<EditTextPreference> {
+            buildAlertDoseRateSummary()
+        }
+        updateAlertDoseRateSummary()
+
         val saveInEle = findPreference<SwitchPreferenceCompat>("save_dose_rate_in_ele")
         saveInEle?.summaryProvider = Preference.SummaryProvider<SwitchPreferenceCompat> { pref ->
             if (pref.isChecked) "Enabled" else "Disabled"
@@ -107,6 +122,17 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        preferenceManager.sharedPreferences?.registerOnSharedPreferenceChangeListener(settingsPrefListener)
+        updateAlertDoseRateSummary()
+    }
+
+    override fun onPause() {
+        preferenceManager.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(settingsPrefListener)
+        super.onPause()
+    }
+
     private fun summaryWithUnit(unit: String): Preference.SummaryProvider<EditTextPreference> {
         return Preference.SummaryProvider { pref ->
             val value = pref.text.orEmpty()
@@ -125,6 +151,31 @@ class SettingsFragment : PreferenceFragmentCompat() {
         val uri = android.net.Uri.parse(uriStr)
         val doc = DocumentFile.fromTreeUri(requireContext(), uri)
         chooseFolder.summary = doc?.name ?: uriStr
+    }
+
+    private fun updateAlertDoseRateSummary() {
+        findPreference<EditTextPreference>("alert_dose_rate")?.summary = buildAlertDoseRateSummary()
+    }
+
+    private fun buildAlertDoseRateSummary(): String {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        val alertValue = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
+        val normalizedAlert = if (alertValue == 0.0) 0.0 else alertValue
+        if (normalizedAlert <= 0.0) {
+            return "Not set"
+        }
+
+        val avgTimestamps = prefs.getString("dose_rate_avg_timestamps_n", "10")?.toIntOrNull() ?: 10
+        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val falseAlarmRate = ConfidenceInterval.getFalseAlarmRate(normalizedAlert, avgTimestamps, coeff)
+        val unit = if (coeff == 1.0) "cps" else "μSv/h"
+        return String.format(
+            java.util.Locale.US,
+            "%.2f %s      False alarms: %.1f / hour",
+            normalizedAlert,
+            unit,
+            falseAlarmRate
+        )
     }
 
     private fun toDb(intensity: Float): Double {

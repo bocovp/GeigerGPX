@@ -32,6 +32,12 @@
             android:entryValues="@array/dose_rate_avg_timestamps_values"
             android:defaultValue="10" />
 
+        <EditTextPreference
+            android:key="alert_dose_rate"
+            android:title="Alert at dose rate"
+            android:defaultValue="0"
+            android:dialogTitle="Alert at dose rate" />
+
     </PreferenceCategory>
 
     <PreferenceCategory
