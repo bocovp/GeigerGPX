@@ -10,21 +10,25 @@
 
     <item
         android:id="@+id/action_map"
+        android:icon="@drawable/baseline_map_24"
         android:title="Map"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_poi"
+        android:icon="@drawable/baseline_place_24"
         android:title="POI"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_tracks"
+        android:icon="@drawable/baseline_track_24"
         android:title="Tracks"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_settings"
+        android:icon="@drawable/baseline_settings_24"
         android:title="Settings"
         app:showAsAction="never" />
 </menu>

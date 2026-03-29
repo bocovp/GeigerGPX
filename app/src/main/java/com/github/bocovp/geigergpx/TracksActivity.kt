@@ -46,6 +46,8 @@ class TracksActivity : AppCompatActivity() {
         setSupportActionBar(binding.topAppBar)
 
         supportActionBar?.title = currentFolderName?.let { "Tracks: $it" } ?: "Tracks"
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        binding.topAppBar.setNavigationOnClickListener { finish() }
 
         binding.bottomNavigation.selectedItemId = R.id.navigation_tracks
         binding.bottomNavigation.setOnItemSelectedListener { item ->
@@ -129,6 +131,10 @@ class TracksActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            android.R.id.home -> {
+                finish()
+                true
+            }
             R.id.action_refresh_tracks -> {
                 TrackCatalog.rebuildTrackCache(this)
                 refreshTrackList()
