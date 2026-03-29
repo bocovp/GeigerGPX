@@ -49,7 +49,7 @@ class TracksActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.topAppBar.setNavigationOnClickListener { finish() }
 
-        binding.bottomNavigation.selectedItemId = R.id.navigation_tracks
+        syncBottomNavigationSelection()
         binding.bottomNavigation.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.navigation_home -> {
@@ -88,6 +88,11 @@ class TracksActivity : AppCompatActivity() {
         viewModel.isTracking.observe(this) {
             refreshTrackList()
         }
+    }
+
+
+    private fun syncBottomNavigationSelection() {
+        binding.bottomNavigation.menu.findItem(R.id.navigation_tracks)?.isChecked = true
     }
 
     private fun refreshTrackList() {
@@ -524,6 +529,11 @@ class TracksActivity : AppCompatActivity() {
             .edit()
             .putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selected)
             .apply()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        syncBottomNavigationSelection()
     }
 
     companion object {

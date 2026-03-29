@@ -32,7 +32,7 @@ class PoiActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.topAppBar.setNavigationOnClickListener { finish() }
 
-        binding.bottomNavigation.selectedItemId = R.id.navigation_poi
+        syncBottomNavigationSelection()
         binding.bottomNavigation.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.navigation_home -> {
@@ -60,6 +60,7 @@ class PoiActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        syncBottomNavigationSelection()
         refreshPoiList()
     }
 
@@ -68,6 +69,11 @@ class PoiActivity : AppCompatActivity() {
         return true
     }
 
+
+
+    private fun syncBottomNavigationSelection() {
+        binding.bottomNavigation.menu.findItem(R.id.navigation_poi)?.isChecked = true
+    }
 
     private fun refreshPoiList() {
         binding.loadingLabel.setText(R.string.loading_poi_library)
