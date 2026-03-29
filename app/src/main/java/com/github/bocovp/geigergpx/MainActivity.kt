@@ -126,7 +126,7 @@ class MainActivity : AppCompatActivity() {
             showSavePoiDialog()
         }
 
-        binding.bottomNavigation.selectedItemId = R.id.navigation_home
+        syncBottomNavigationSelection()
         binding.bottomNavigation.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.navigation_home -> true
@@ -156,6 +156,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         observeViewModel()
+    }
+
+
+    private fun syncBottomNavigationSelection() {
+        binding.bottomNavigation.menu.findItem(R.id.navigation_home)?.isChecked = true
     }
 
     private fun applyToolbarTitleVisibility() {
@@ -269,7 +274,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        binding.bottomNavigation.selectedItemId = R.id.navigation_home
+        syncBottomNavigationSelection()
         applyKeepScreenOnFlag()
         updateCpsOrDoseLine(false)
         startCpsRefreshLoop()
