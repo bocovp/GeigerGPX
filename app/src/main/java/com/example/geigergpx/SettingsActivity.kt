@@ -2,18 +2,28 @@ package com.example.geigergpx
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import com.example.geigergpx.databinding.ActivitySettingsBinding
 
 class SettingsActivity : AppCompatActivity() {
+
+    private lateinit var binding: ActivitySettingsBinding
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        binding = ActivitySettingsBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        setSupportActionBar(binding.topAppBar)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = "Settings"
 
-        supportFragmentManager
-            .beginTransaction()
-            .replace(android.R.id.content, SettingsFragment())
-            .commit()
+        if (savedInstanceState == null) {
+            supportFragmentManager
+                .beginTransaction()
+                .replace(R.id.settingsContainer, SettingsFragment())
+                .commit()
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {
