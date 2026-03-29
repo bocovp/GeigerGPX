@@ -29,6 +29,8 @@ class PoiActivity : AppCompatActivity() {
         setSupportActionBar(binding.topAppBar)
 
         supportActionBar?.title = "POI Library"
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        binding.topAppBar.setNavigationOnClickListener { finish() }
 
         binding.bottomNavigation.selectedItemId = R.id.navigation_poi
         binding.bottomNavigation.setOnItemSelectedListener { item ->
@@ -59,6 +61,11 @@ class PoiActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshPoiList()
+    }
+
+    override fun onSupportNavigateUp(): Boolean {
+        finish()
+        return true
     }
 
 
