@@ -44,9 +44,34 @@ class TracksActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.topAppBar)
 
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = currentFolderName?.let { "Tracks: $it" } ?: "Tracks"
-        binding.topAppBar.setNavigationOnClickListener { finish() }
+
+        binding.bottomNavigation.selectedItemId = R.id.navigation_tracks
+        binding.bottomNavigation.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.navigation_home -> {
+                    startActivity(Intent(this, MainActivity::class.java))
+                    true
+                }
+                R.id.navigation_map -> {
+                    startActivity(Intent(this, MapActivity::class.java))
+                    true
+                }
+                R.id.navigation_tracks -> {
+                    if (currentFolderName == null) {
+                        true
+                    } else {
+                        startActivity(Intent(this, TracksActivity::class.java))
+                        true
+                    }
+                }
+                R.id.navigation_poi -> {
+                    startActivity(Intent(this, PoiActivity::class.java))
+                    true
+                }
+                else -> false
+            }
+        }
 
         binding.tracksRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.tracksRecyclerView.adapter = adapter
@@ -112,10 +137,6 @@ class TracksActivity : AppCompatActivity() {
         }
     }
 
-    override fun onSupportNavigateUp(): Boolean {
-        finish()
-        return true
-    }
 
     private fun onTrackToggled(trackId: String, visible: Boolean) {
         val selected = selectedTrackIds().toMutableSet()
