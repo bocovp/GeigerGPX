@@ -42,14 +42,14 @@ class SettingsFragment : PreferenceFragmentCompat() {
         val maxSpeed = findPreference<EditTextPreference>("max_speed_kmh")
         maxSpeed?.setOnBindEditTextListener { edit ->
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
         maxSpeed?.summaryProvider = summaryWithUnit("km/h")
 
         val spacing = findPreference<EditTextPreference>("point_spacing_m")
         spacing?.setOnBindEditTextListener { edit ->
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
         spacing?.summaryProvider = summaryWithUnit("m")
 
@@ -62,15 +62,15 @@ class SettingsFragment : PreferenceFragmentCompat() {
         val maxTime = findPreference<EditTextPreference>("max_time_without_counts_s")
         maxTime?.setOnBindEditTextListener { edit ->
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
         maxTime?.summaryProvider = summaryWithUnit("s")
 
         val coeff = findPreference<EditTextPreference>("cps_to_usvh")
         coeff?.setOnBindEditTextListener { edit ->
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or
-                android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or
+                    android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
         }
         coeff?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
 
@@ -91,13 +91,19 @@ class SettingsFragment : PreferenceFragmentCompat() {
         updateFolderSummary()
 
         val thresholdPref = findPreference<LongPressPreference>("threshold_calibration")
-        thresholdPref?.summary = buildThresholdSummary()
-        thresholdPref?.setOnPreferenceClickListener {
-            startCalibrationDialog(thresholdPref)
-            true
-        }
-        thresholdPref?.onLongClick = {
-            showManualThresholdDialog(thresholdPref)
+
+        thresholdPref?.let { pref ->
+            // Inside this block, 'pref' is a non-nullable LongPressPreference
+            pref.summary = buildThresholdSummary()
+
+            pref.setOnPreferenceClickListener {
+                startCalibrationDialog(pref)
+                true
+            }
+
+            pref.onLongClick = {
+                showManualThresholdDialog(pref)
+            }
         }
     }
 
@@ -140,7 +146,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
     }
 
-    private fun startCalibrationDialog(thresholdPref: Preference) {
+    private fun startCalibrationDialog(thresholdPref: LongPressPreference) {
         val activity = requireActivity()
 
         val dialog = AlertDialog.Builder(activity)
@@ -181,7 +187,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         calibrationDetector?.start()
     }
 
-    private fun showManualThresholdDialog(thresholdPref: Preference) {
+    private fun showManualThresholdDialog(thresholdPref: LongPressPreference) {
         val context = requireContext()
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val current = prefs.getFloat(KEY_AUDIO_THRESHOLD, Float.NaN)

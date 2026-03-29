@@ -1,25 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <PreferenceCategory
         android:key="signal_detection_section"
-        android:title="Signal detection">
+        android:title="Signal detection"
+        app:iconSpaceReserved="false">
 
         <com.github.bocovp.geigergpx.LongPressPreference
             android:key="threshold_calibration"
             android:title="Threshold (press to calibrate)"
-            android:summary="Not calibrated" />
+            android:summary="Not calibrated"/>
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="dose_rate_measurement_section"
+        android:title="Dose rate measurement"
+        app:iconSpaceReserved="false">
 
         <EditTextPreference
             android:key="cps_to_usvh"
             android:title="CPS to μSv/h coefficient"
             android:defaultValue="0.1"
             android:dialogTitle="CPS to μSv/h coefficient" />
+
+        <ListPreference
+            android:key="dose_rate_avg_timestamps_n"
+            android:title="Timestamps for dose rate averaging"
+            android:entries="@array/dose_rate_avg_timestamps_entries"
+            android:entryValues="@array/dose_rate_avg_timestamps_values"
+            android:defaultValue="10" />
+
     </PreferenceCategory>
 
     <PreferenceCategory
         android:key="track_recording_section"
-        android:title="Track recording">
+        android:title="Track recording"
+        app:iconSpaceReserved="false">
 
         <Preference
             android:key="gpx_folder_picker"
@@ -49,13 +67,6 @@
             android:title="Max time without counts"
             android:defaultValue="10"
             android:dialogTitle="Max time without counts (s)" />
-
-        <ListPreference
-            android:key="dose_rate_avg_timestamps_n"
-            android:title="Timestamps for dose rate averaging"
-            android:entries="@array/dose_rate_avg_timestamps_entries"
-            android:entryValues="@array/dose_rate_avg_timestamps_values"
-            android:defaultValue="10" />
 
         <androidx.preference.SwitchPreferenceCompat
             android:key="save_dose_rate_in_ele"

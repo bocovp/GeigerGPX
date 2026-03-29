@@ -10,7 +10,7 @@
 
     <item
         android:id="@+id/action_tracks"
-        android:icon="@drawable/baseline_menu_24"
+        android:icon="@drawable/baseline_track_24"
         android:title="Tracks"
         app:showAsAction="always"
         app:iconTint="?attr/colorControlNormal" />
