@@ -6,10 +6,10 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.View
 import android.widget.EditText
-import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.PopupMenu
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.bocovp.geigergpx.databinding.ActivityPoiBinding
@@ -151,9 +151,13 @@ class PoiActivity : AppCompatActivity() {
     private fun onPoiLongPressed(item: PoiUiItem, anchor: View) {
         val popup = PopupMenu(this, anchor)
         val menu = popup.menu
+        popup.setForceShowIcon(true)
         menu.add(Menu.NONE, MENU_RENAME, Menu.NONE, "Rename")
+            .setIcon(R.drawable.baseline_edit_24)
         menu.add(Menu.NONE, MENU_SHARE, Menu.NONE, "Share")
+            .setIcon(R.drawable.baseline_share_24)
         menu.add(Menu.NONE, MENU_DELETE, Menu.NONE, "Delete")
+            .setIcon(R.drawable.baseline_delete_24)
 
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
