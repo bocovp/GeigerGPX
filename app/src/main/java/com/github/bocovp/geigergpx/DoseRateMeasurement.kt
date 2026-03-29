@@ -21,6 +21,13 @@ class DoseRateMeasurement(
     private var latSum: Double = 0.0
     private var lonSum: Double = 0.0
     private var latLonCount: Int = 0
+    private var alertDoseRate: Double = 0.0
+    private var cpsToUsvhCoefficient: Double = 1.0
+
+    data class AlertEvent(
+        val soundCount: Int,
+        val meanDoseRate: Double
+    )
 
     fun toggleMeasurementMode(nowMillis: Long = System.currentTimeMillis()): Boolean = synchronized(mainCpsLock) {
         measurementModeEnabled = !measurementModeEnabled
@@ -75,9 +82,16 @@ class DoseRateMeasurement(
         }
     }
 
-    fun processBeep(beepCount: Int, nowProvider: () -> Long = System::currentTimeMillis) {
-        if (beepCount <= 0) return
+    fun updateAlertConfig(alertDoseRate: Double, cpsToUsvhCoefficient: Double) {
         synchronized(mainCpsLock) {
+            this.alertDoseRate = if (alertDoseRate > 0.0) alertDoseRate else 0.0
+            this.cpsToUsvhCoefficient = cpsToUsvhCoefficient
+        }
+    }
+
+    fun processBeep(beepCount: Int, nowProvider: () -> Long = System::currentTimeMillis): AlertEvent? {
+        if (beepCount <= 0) return null
+        return synchronized(mainCpsLock) {
             repeat(beepCount) {
                 mainCpsBeepTimes[mainCpsBeepNextIndex] = nowProvider()
                 val beepTime = mainCpsBeepTimes[mainCpsBeepNextIndex]
@@ -92,27 +106,11 @@ class DoseRateMeasurement(
                     measurementTimestampCount += 1L
                 }
             }
+            evaluateAlertLocked()
         }
     }
 
-    fun calculateMainScreenCps(): Double = synchronized(mainCpsLock) {
-        if (measurementModeEnabled) {
-            if (measurementTimestampCount < 2L || measurementOldestTimestamp == 0L) {
-                return@synchronized 0.0
-            }
-            val newest = newestMainCpsTimestamp() ?: return@synchronized 0.0
-            val deltaSeconds = (newest - measurementOldestTimestamp) / 1000.0
-            if (deltaSeconds <= 0.0) return@synchronized 0.0
-            return@synchronized (measurementTimestampCount - 1).toDouble() / deltaSeconds
-        }
-
-        if (mainCpsBeepCount < 2) return@synchronized 0.0
-        val newest = newestMainCpsTimestamp() ?: return@synchronized 0.0
-        val oldest = mainCpsBeepTimes[oldestMainCpsIndex()]
-        val deltaSeconds = (newest - oldest) / 1000.0
-        if (deltaSeconds <= 0.0) return@synchronized 0.0
-        (mainCpsBeepCount - 1).toDouble() / deltaSeconds
-    }
+    fun calculateMainScreenCps(): Double = synchronized(mainCpsLock) { calculateMainScreenCpsLocked() }
 
     fun currentSampleCount(): Int = synchronized(mainCpsLock) {
         if (measurementModeEnabled) measurementTimestampCount.toInt() else mainCpsBeepCount
@@ -166,6 +164,41 @@ class DoseRateMeasurement(
 
     private fun oldestMainCpsIndex(): Int {
         return if (mainCpsBeepCount == windowSize) mainCpsBeepNextIndex else 0
+    }
+
+    private fun evaluateAlertLocked(): AlertEvent? {
+        if (measurementModeEnabled) return null
+        if (alertDoseRate <= 0.0) return null
+
+        val meanDoseRate = calculateMainScreenCpsLocked() * cpsToUsvhCoefficient
+        if (meanDoseRate < alertDoseRate) return null
+
+        val ratio = meanDoseRate / alertDoseRate
+        val soundCount = when {
+            ratio >= 3.0 -> 3
+            ratio >= 2.0 -> 2
+            else -> 1
+        }
+        return AlertEvent(soundCount = soundCount, meanDoseRate = meanDoseRate)
+    }
+
+    private fun calculateMainScreenCpsLocked(): Double {
+        if (measurementModeEnabled) {
+            if (measurementTimestampCount < 2L || measurementOldestTimestamp == 0L) {
+                return 0.0
+            }
+            val newest = newestMainCpsTimestamp() ?: return 0.0
+            val deltaSeconds = (newest - measurementOldestTimestamp) / 1000.0
+            if (deltaSeconds <= 0.0) return 0.0
+            return (measurementTimestampCount - 1).toDouble() / deltaSeconds
+        }
+
+        if (mainCpsBeepCount < 2) return 0.0
+        val newest = newestMainCpsTimestamp() ?: return 0.0
+        val oldest = mainCpsBeepTimes[oldestMainCpsIndex()]
+        val deltaSeconds = (newest - oldest) / 1000.0
+        if (deltaSeconds <= 0.0) return 0.0
+        return (mainCpsBeepCount - 1).toDouble() / deltaSeconds
     }
 
     private fun resetMeasurementCoordinates() {
