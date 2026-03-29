@@ -9,6 +9,7 @@ import android.os.Looper
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.view.menu.MenuBuilder
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
@@ -156,6 +157,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_toolbar_menu, menu)
+        if (menu is MenuBuilder) {
+            menu.setOptionalIconsVisible(true)
+        }
         refreshKeepScreenOnMenuItem(menu.findItem(R.id.action_keep_screen_on))
         return true
     }
