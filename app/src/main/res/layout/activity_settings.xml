@@ -13,7 +13,7 @@
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/settingsContainer"
-        android:name="com.example.geigergpx.SettingsFragment"
+        android:name="com.github.bocovp.geigergpx.SettingsFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 

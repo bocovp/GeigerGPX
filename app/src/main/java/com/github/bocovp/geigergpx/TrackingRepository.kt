@@ -1,4 +1,4 @@
-package com.example.geigergpx
+package com.github.bocovp.geigergpx
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData

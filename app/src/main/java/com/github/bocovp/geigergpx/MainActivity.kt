@@ -1,4 +1,4 @@
-package com.example.geigergpx
+package com.github.bocovp.geigergpx
 
 import android.Manifest
 import android.content.Intent
@@ -13,7 +13,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
-import com.example.geigergpx.databinding.ActivityMainBinding
+import com.github.bocovp.geigergpx.databinding.ActivityMainBinding
 import android.widget.Toast
 import android.os.PowerManager
 import android.provider.Settings
