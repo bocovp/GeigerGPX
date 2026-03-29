@@ -6,7 +6,7 @@
 
     <!-- Map Base Layer -->
     <path
-        android:fillColor="@android:color/white"
+        android:fillColor="?attr/colorOnSurface"
         android:pathData="M20,5L15,2L9,5L4,2V19L9,22L15,19L20,22V5ZM15,17.25L9,20.25V6.75L15,3.75V17.25Z" />
 
     <!-- Density Plot Overlays (Stylized Heatmap Points) -->

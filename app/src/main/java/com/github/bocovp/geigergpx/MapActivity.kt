@@ -82,7 +82,7 @@ class MapActivity : AppCompatActivity() {
             toggleItem?.setIcon(R.drawable.track_24)
         } else {
             toggleItem?.title = "Show Heatmap"
-            toggleItem?.setIcon(R.drawable.heatmap_24)
+            toggleItem?.setIcon(R.drawable.baseline_heatmap_24)
         }
 
         return super.onPrepareOptionsMenu(menu)
