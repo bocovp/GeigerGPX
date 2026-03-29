@@ -48,7 +48,7 @@ class ConfidenceInterval {
     }
 
     fun chi2R(n: Int): Float {
-        return if (n <= 11) CHI2_R[n] else chi2(2*n,Z_95)
+        return if (n <= 11) CHI2_R[n] else chi2(2*n, Z_95)
     }
 
     constructor(tStart: Double, tEnd: Double, eventsInside: Int, eventAtEnd:Boolean){
