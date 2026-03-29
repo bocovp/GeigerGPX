@@ -154,7 +154,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun updateAlertDoseRateSummary() {
-        findPreference<EditTextPreference>("alert_dose_rate")?.summary = buildAlertDoseRateSummary()
+        findPreference<EditTextPreference>("alert_dose_rate")?.notifyChanged()
     }
 
     private fun buildAlertDoseRateSummary(): String {
