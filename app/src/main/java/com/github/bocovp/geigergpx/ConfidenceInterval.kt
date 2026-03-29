@@ -9,6 +9,17 @@ import kotlin.text.toDouble
 import kotlin.times
 
 class ConfidenceInterval {
+    companion object {
+        @JvmStatic
+        fun getFalseAlarmRate(
+            alertDoseRate: Double,
+            avgTimestamps: Int,
+            cpsToUsvhCoefficient: Double
+        ): Double {
+            return 0.0
+        }
+    }
+
     enum class DisplayMode {
         AUTO,
         INTERVAL,

@@ -12,6 +12,8 @@ import android.os.Build
 import android.os.IBinder
 import android.app.PendingIntent
 import android.content.pm.ServiceInfo
+import android.media.Ringtone
+import android.media.RingtoneManager
 import androidx.core.app.NotificationCompat
 import androidx.preference.PreferenceManager
 import com.google.android.gms.location.LocationCallback
@@ -95,6 +97,10 @@ class TrackingService : Service() {
     @Volatile private var spacingM: Double = 5.0
     @Volatile private var minCountsPerPoint: Int = 0
     @Volatile private var maxTimeWithoutCountsS: Double = 1.0
+    @Volatile private var alertDoseRate: Double = 0.0
+    @Volatile private var cpsToUsvhCoefficient: Double = 1.0
+    private var alertRingtone: Ringtone? = null
+    private var lastAlertAtMillis: Long = 0L
 
     private val doseRateMeasurement = DoseRateMeasurement()
 
@@ -104,7 +110,9 @@ class TrackingService : Service() {
             "point_spacing_m",
             "min_counts_per_point",
             "max_time_without_counts_s",
-            "dose_rate_avg_timestamps_n" -> loadTrackingPrefs()
+            "dose_rate_avg_timestamps_n",
+            "alert_dose_rate",
+            "cps_to_usvh" -> loadTrackingPrefs()
         }
     }
 
@@ -126,6 +134,8 @@ class TrackingService : Service() {
         stopBackupLoop()
         fusedLocation.removeLocationUpdates(locationCallback)
         stopBeepDetector()
+        alertRingtone?.stop()
+        alertRingtone = null
         serviceScope.cancel()
         prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
         super.onDestroy()
@@ -136,6 +146,9 @@ class TrackingService : Service() {
         spacingM = prefs.getString("point_spacing_m", "5.0")?.toDoubleOrNull() ?: 5.0
         minCountsPerPoint = prefs.getString("min_counts_per_point", "0")?.toIntOrNull() ?: 0
         maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")?.toDoubleOrNull() ?: 1.0
+        cpsToUsvhCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val configuredAlertDoseRate = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
+        alertDoseRate = if (configuredAlertDoseRate > 0.0) configuredAlertDoseRate else 0.0
 
         val allowedSizes = setOf(5, 10, 20, 50, 100)
         val requestedWindowSize = prefs.getString("dose_rate_avg_timestamps_n", "10")
@@ -143,6 +156,10 @@ class TrackingService : Service() {
             ?.takeIf { it in allowedSizes }
             ?: 10
         doseRateMeasurement.updateMainCpsWindowSize(requestedWindowSize)
+        doseRateMeasurement.updateAlertConfig(
+            alertDoseRate = alertDoseRate,
+            cpsToUsvhCoefficient = cpsToUsvhCoefficient
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -518,8 +535,9 @@ class TrackingService : Service() {
             onBeep = { _, count ->
                 if (count > 0) {
                     repo.incrementTotalCounts(count)
-                    doseRateMeasurement.processBeep(count)
+                    val alertEvent = doseRateMeasurement.processBeep(count)
                     repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true) // ????????????????????
+                    alertEvent?.let { dispatchDoseRateAlert(it) }
                 }
             },
             onAudioHealth = { healthy ->
@@ -531,6 +549,63 @@ class TrackingService : Service() {
     private fun stopBeepDetector() {
         audioBeepDetector?.stop()
         audioBeepDetector = null
+    }
+
+    private fun dispatchDoseRateAlert(alertEvent: DoseRateMeasurement.AlertEvent) {
+        val now = System.currentTimeMillis()
+        if (now - lastAlertAtMillis < 500L) return
+        lastAlertAtMillis = now
+
+        playAlertSound(alertEvent.soundCount)
+        showDoseRateAlertNotification(alertEvent.meanDoseRate)
+    }
+
+    private fun playAlertSound(soundCount: Int) {
+        if (soundCount <= 0) return
+        if (alertRingtone == null) {
+            val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            alertRingtone = RingtoneManager.getRingtone(this, defaultSoundUri)
+        }
+
+        val ringtone = alertRingtone ?: return
+        serviceScope.launch(Dispatchers.Main) {
+            repeat(soundCount) { index ->
+                try {
+                    ringtone.play()
+                } catch (_: Exception) {
+                    return@launch
+                }
+                if (index < soundCount - 1) {
+                    delay(400L)
+                }
+            }
+        }
+    }
+
+    private fun showDoseRateAlertNotification(meanDoseRate: Double) {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "geigergpx_alert_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Dose rate alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            nm.createNotificationChannel(channel)
+        }
+
+        val unit = if (cpsToUsvhCoefficient == 1.0) "cps" else "μSv/h"
+        val message = String.format(Locale.US, "Dose rate %.2f %s", meanDoseRate, unit)
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Radiation alert")
+            .setContentText(message)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+        nm.notify(2002, notification)
     }
 
     // -------------------------------------------------------------------------
