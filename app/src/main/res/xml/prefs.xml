@@ -5,7 +5,7 @@
         android:key="signal_detection_section"
         android:title="Signal detection">
 
-        <com.example.geigergpx.LongPressPreference
+        <com.github.bocovp.geigergpx.LongPressPreference
             android:key="threshold_calibration"
             android:title="Threshold (press to calibrate)"
             android:summary="Not calibrated" />

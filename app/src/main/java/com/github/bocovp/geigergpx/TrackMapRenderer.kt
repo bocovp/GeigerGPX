@@ -1,4 +1,4 @@
-package com.example.geigergpx
+package com.github.bocovp.geigergpx
 
 import android.widget.TextView
 import androidx.preference.PreferenceManager

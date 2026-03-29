@@ -1,10 +1,10 @@
-package com.example.geigergpx
+package com.github.bocovp.geigergpx
 
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
-import com.example.geigergpx.databinding.ItemPoiBinding
+import com.github.bocovp.geigergpx.databinding.ItemPoiBinding
 
 data class PoiUiItem(
     val poi: PoiEntry,
