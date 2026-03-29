@@ -1,4 +1,4 @@
-package com.example.geigergpx
+package com.github.bocovp.geigergpx
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -18,7 +18,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.example.geigergpx.databinding.ActivityTracksBinding
+import com.github.bocovp.geigergpx.databinding.ActivityTracksBinding
 import java.io.File
 
 class TracksActivity : AppCompatActivity() {

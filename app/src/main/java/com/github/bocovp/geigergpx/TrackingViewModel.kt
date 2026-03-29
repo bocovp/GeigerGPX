@@ -1,4 +1,4 @@
-package com.example.geigergpx
+package com.github.bocovp.geigergpx
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel

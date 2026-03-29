@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.example.geigergpx'
+    namespace 'com.github.bocovp.geigergpx'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.example.geigergpx"
+        applicationId "com.github.bocovp.geigergpx"
         minSdk 26
         targetSdk 34
         versionCode 1

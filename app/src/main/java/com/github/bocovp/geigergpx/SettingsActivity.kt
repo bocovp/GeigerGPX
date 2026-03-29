@@ -1,8 +1,8 @@
-package com.example.geigergpx
+package com.github.bocovp.geigergpx
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import com.example.geigergpx.databinding.ActivitySettingsBinding
+import com.github.bocovp.geigergpx.databinding.ActivitySettingsBinding
 
 class SettingsActivity : AppCompatActivity() {
 
