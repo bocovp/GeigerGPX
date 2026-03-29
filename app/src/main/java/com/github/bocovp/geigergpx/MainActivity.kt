@@ -25,6 +25,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.WindowManager
 import android.widget.EditText
+import android.widget.TextView
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
@@ -70,6 +71,8 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         setSupportActionBar(binding.topAppBar)
+        applyToolbarTitleVisibility()
+        setupToolbarTitleLongPress()
 
         val restoredName = (application as GeigerGpxApp).consumeRestoredBackupName()
         if (restoredName != null) {
@@ -153,6 +156,37 @@ class MainActivity : AppCompatActivity() {
         }
 
         observeViewModel()
+    }
+
+    private fun applyToolbarTitleVisibility() {
+        val app = application as GeigerGpxApp
+        binding.topAppBar.title = if (app.isMainToolbarTitleHidden) "" else getString(R.string.app_name)
+    }
+
+    private fun setupToolbarTitleLongPress() {
+        binding.topAppBar.post {
+            val titleView = findToolbarTitleTextView() ?: return@post
+            titleView.setOnLongClickListener {
+                val app = application as GeigerGpxApp
+                if (!app.isMainToolbarTitleHidden) {
+                    app.isMainToolbarTitleHidden = true
+                    applyToolbarTitleVisibility()
+                    Toast.makeText(this, "App name hidden until next launch", Toast.LENGTH_SHORT).show()
+                }
+                true
+            }
+        }
+    }
+
+    private fun findToolbarTitleTextView(): TextView? {
+        val toolbarTitle = binding.topAppBar.title?.toString() ?: return null
+        for (index in 0 until binding.topAppBar.childCount) {
+            val child = binding.topAppBar.getChildAt(index)
+            if (child is TextView && child.text.toString() == toolbarTitle) {
+                return child
+            }
+        }
+        return null
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
