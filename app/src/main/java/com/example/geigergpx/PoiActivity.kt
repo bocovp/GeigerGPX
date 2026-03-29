@@ -28,9 +28,27 @@ class PoiActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.topAppBar)
 
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = "POI Library"
-        binding.topAppBar.setNavigationOnClickListener { finish() }
+
+        binding.bottomNavigation.selectedItemId = R.id.navigation_poi
+        binding.bottomNavigation.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.navigation_home -> {
+                    startActivity(Intent(this, MainActivity::class.java))
+                    true
+                }
+                R.id.navigation_map -> {
+                    startActivity(Intent(this, MapActivity::class.java))
+                    true
+                }
+                R.id.navigation_tracks -> {
+                    startActivity(Intent(this, TracksActivity::class.java))
+                    true
+                }
+                R.id.navigation_poi -> true
+                else -> false
+            }
+        }
 
         binding.poiRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.poiRecyclerView.adapter = adapter
@@ -43,10 +61,6 @@ class PoiActivity : AppCompatActivity() {
         refreshPoiList()
     }
 
-    override fun onSupportNavigateUp(): Boolean {
-        finish()
-        return true
-    }
 
     private fun refreshPoiList() {
         binding.loadingLabel.setText(R.string.loading_poi_library)
