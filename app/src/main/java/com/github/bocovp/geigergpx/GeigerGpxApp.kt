@@ -5,6 +5,7 @@ import android.app.Application
 class GeigerGpxApp : Application() {
     val trackingRepository: TrackingRepository by lazy { TrackingRepository() }
     private var restoredBackupName: String? = null
+    var isMainToolbarTitleHidden: Boolean = false
 
     override fun onCreate() {
         super.onCreate()
