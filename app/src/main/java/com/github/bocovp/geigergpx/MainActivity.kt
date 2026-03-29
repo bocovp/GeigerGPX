@@ -231,6 +231,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        binding.bottomNavigation.selectedItemId = R.id.navigation_home
         applyKeepScreenOnFlag()
         updateCpsOrDoseLine(false)
         startCpsRefreshLoop()
