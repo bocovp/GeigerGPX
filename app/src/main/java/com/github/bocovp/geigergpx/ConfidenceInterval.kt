@@ -2,6 +2,8 @@ package com.github.bocovp.geigergpx
 
 import java.util.Locale
 import kotlin.div
+import kotlin.math.absoluteValue
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -10,13 +12,39 @@ import kotlin.times
 
 class ConfidenceInterval {
     companion object {
-        @JvmStatic
         fun getFalseAlarmRate(
             alertDoseRate: Double,
             avgTimestamps: Int,
-            cpsToUsvhCoefficient: Double
+            cps2uSvhCoefficient: Double
         ): Double {
-            return 0.0
+            // Have to work in cps here!
+            val lambda = 1.0 // background cps
+            val A = alertDoseRate / cps2uSvhCoefficient // Alert cps
+            val K = avgTimestamps
+            val T = 3600.0 // 1 hour
+            return expectedKLengthEvents(lambda, A, K, T)
+        }
+
+        /**
+         * lambda: event rate
+         * A: ratio K/t (where A >= 1.5 * lambda)
+         * K: number of consecutive events
+         * T: total time range
+         */
+        fun expectedKLengthEvents(lambda: Double, A: Double, K: Int, T: Double): Double {
+            val mu = (lambda * K) / A
+
+            var currentTerm = exp(-mu)
+            var pLessThanK  = currentTerm
+
+            for (j in 1 until K) {
+                currentTerm *= (mu / j)
+                pLessThanK  += currentTerm
+            }
+
+            val pOccurence = (1.0 - pLessThanK).coerceAtLeast(0.0)
+
+            return (lambda * T) * pOccurence
         }
     }
 
