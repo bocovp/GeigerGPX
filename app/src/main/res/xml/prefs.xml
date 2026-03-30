@@ -21,9 +21,9 @@
 
         <EditTextPreference
             android:key="cps_to_usvh"
-            android:title="CPS to μSv/h coefficient"
+            android:title="Conversion factor"
             android:defaultValue="0.1"
-            android:dialogTitle="CPS to μSv/h coefficient" />
+            android:dialogTitle="Conversion factor (in μSv/h per cps)" />
 
         <ListPreference
             android:key="dose_rate_avg_timestamps_n"

@@ -77,7 +77,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                     android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or
                     android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
         }
-        coeff?.summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
+        coeff?.summaryProvider = summaryWithUnit("μSv/h per cps")
 
         val avgTimestamps = findPreference<ListPreference>("dose_rate_avg_timestamps_n")
         avgTimestamps?.summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
