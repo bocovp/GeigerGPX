@@ -1,3 +1,5 @@
+(* ::Package:: *)
+
 (* ================================================================
    GoertzelDetector.wl
    Mathematica port of GoertzelDetector.kt for coefficient tuning.
@@ -5,59 +7,68 @@
    USAGE:
      1. Set audioFile to your .wav path (mono recommended; if stereo,
         only the first channel is used).
-     2. Adjust magThreshold first — it is the primary tuning knob.
+     2. Adjust magThreshold first \[LongDash] it is the primary tuning knob.
      3. Run all cells; a spectrogram with red beep-start markers appears
         at the bottom, followed by a summary table.
    ================================================================ *)
 
 (* ----------------------------------------------------------------
-   § 1  Tunable parameters  (mirror the Kotlin companion object)
+   \[Section] 1  Tunable parameters  (mirror the Kotlin companion object)
    ---------------------------------------------------------------- *)
 
 sampleRate            = 44100;          (* Hz *)
-freqMain              = 3276.0;         (* target beep frequency, Hz  — "bin 13" *)
+freqMain              = 3276.0;         (* target beep frequency, Hz  \[LongDash] "bin 13" *)
 freqLow               = freqMain - 252.0;          (* lower side-band *)
 freqHigh              = freqMain + 252.0;          (* upper side-band *)
 windowSize            = 175;            (* Goertzel window, samples *)
 stepSize              = 32;             (* sliding-window hop, samples *)
 
-(* Primary detection gate — most important knob to tune.
-   The Kotlin code receives Int16 samples (±32768); AudioData[]
-   returns normalised floats (±1).  The loader below re-scales to
+(* Primary detection gate \[LongDash] most important knob to tune.
+   The Kotlin code receives Int16 samples (\[PlusMinus]32768); AudioData[]
+   returns normalised floats (\[PlusMinus]1).  The loader below re-scales to
    Int16 range, so this threshold is directly comparable to the
    Android value. *)
-magThreshold          = 5.0*^9;         (* ← tune me *)
+magThreshold          = 5.0*^9;         (* \[LeftArrow] tune me *)
+magThreshold          = 5.0*^11;         (* \[LeftArrow] tune me *)
 
-dominanceThreshold    = 2.0;            (* SILENCE→BEEP: main > this × sideEnergy *)
-dominanceThresholdEnd = 1.1;            (* BEEP→DECAY  : main > this × sideEnergy *)
+dominanceThreshold    = 2.0;            (* SILENCE\[RightArrow]BEEP: main > this \[Times] sideEnergy *)
+dominanceThresholdEnd = 1.1;            (* BEEP\[RightArrow]DECAY  : main > this \[Times] sideEnergy *)
 
-oneBeepMin            = 0.019;          (* valid single-beep min duration, s *)
-oneBeepMax            = 0.035;          (* valid single-beep max duration, s *)
-twoBeepMax            = 0.070;          (* upper bound for a double-beep, s  *)
+oneBeepMin            = 0.025-0.005;          (* valid single-beep min duration, s *)
+oneBeepMax            = 0.025+0.005;          (* valid single-beep max duration, s *)
 
-(* Derived — intentionally mirrors  magThresholdEnd = magThreshold / 2f  *)
+twoBeepMin            = 0.025*2-0.01;          (* upper bound for a double-beep, s  *)
+twoBeepMax            = 0.025*2+0.01;          (* upper bound for a double-beep, s  *)
+
+threeBeepMin            = 0.025*3-0.01;          (* upper bound for a double-beep, s  *)
+threeBeepMax            = 0.025*3+0.01;          (* upper bound for a double-beep, s  *)
+
+fourBeepMin            = 0.025*4-0.01;          (* upper bound for a double-beep, s  *)
+fourBeepMax            = 0.025*4+0.01;          (* upper bound for a double-beep, s  *)
+
+(* Derived \[LongDash] intentionally mirrors  magThresholdEnd = magThreshold / 2f  *)
 magThresholdEnd = magThreshold / 2.0;
 
 
 (* ----------------------------------------------------------------
-   § 2  Goertzel helpers
+   \[Section] 2  Goertzel helpers
    ---------------------------------------------------------------- *)
 
-(* Resonator coefficient:  2 cos(2π f / fs) *)
+(* Resonator coefficient:  2 cos(2\[Pi] f / fs) *)
 goertzelCoeff[freq_] := 2.0 Cos[2.0 Pi freq / sampleRate];
 
 coeffMain = goertzelCoeff[freqMain];
 coeffLow  = goertzelCoeff[freqLow];
 coeffHigh = goertzelCoeff[freqHigh];
 
-(* Hann window — identical formula to the Kotlin FloatArray initialiser *)
+(* Hann window \[LongDash] identical formula to the Kotlin FloatArray initialiser *)
 hannWindow = N @ Table[
   0.5 - 0.5 Cos[2.0 Pi i / (windowSize - 1)],
   {i, 0, windowSize - 1}
 ];
 
 (* Run the Goertzel recurrence on a pre-windowed block and return
-   the squared-magnitude energy:  q1²  +  q2²  −  q1·q2·coeff      *)
+   the squared-magnitude energy:  q1\.b2  +  q2\.b2  \[Minus]  q1\[CenterDot]q2\[CenterDot]coeff      *)
 goertzelEnergy[windowed_List, coeff_Real] :=
   Module[{q1 = 0.0, q2 = 0.0, q0},
     Scan[
@@ -84,13 +95,13 @@ computeWindowEnergies[samples_List, pos_Integer] :=
 
 
 (* ----------------------------------------------------------------
-   § 3  State machine  (SILENCE / BEEP / DECAY)
+   \[Section] 3  State machine  (SILENCE / BEEP / DECAY)
    ---------------------------------------------------------------- *)
 
 (* Processes the full flat sample list and returns an Association:
-     "beeps"        → list of Association per detected beep
-     "energies"     → {main, side} per window (for diagnostics)
-     "windowStarts" → 1-based sample index of each window          *)
+     "beeps"        \[RightArrow] list of Association per detected beep
+     "energies"     \[RightArrow] {main, side} per window (for diagnostics)
+     "windowStarts" \[RightArrow] 1-based sample index of each window          *)
 processAudio[samples_List] :=
   Module[
     {n, windowStarts, nW, energies,
@@ -151,13 +162,15 @@ processAudio[samples_List] :=
              matching:  (currentWindowGlobalSample - beepStartSample) / sampleRate  *)
           duration = (pos - beepStartSample) / N[sampleRate];
           beepType = Which[
-            oneBeepMin <= duration <= oneBeepMax,           1,   (* single beep *)
-            duration > oneBeepMax && duration <= twoBeepMax, 1,  (* double beep — kept as 1 matching Kotlin "// 1 for now" *)
-            True,                                            0   (* too short or too long *)
+            oneBeepMin <= duration <= oneBeepMax,           1,       (* single beep *)            
+            duration > twoBeepMin && duration <= twoBeepMax, 2,     (* double beep \[LongDash] kept as 1 matching Kotlin "// 1 for now" *)
+            duration > threeBeepMin && duration <= threeBeepMax, 3, (* triple beep \[LongDash] kept as 1 matching Kotlin "// 1 for now" *)
+            duration > fourBeepMin && duration <= fourBeepMax, 4,   (* triple beep \[LongDash] kept as 1 matching Kotlin "// 1 for now" *)
+            True,                                            0      (* too short or too long *)
           ];
           AppendTo[beeps,
             <|
-              "startTime" -> (beepStartSample - 1) / N[sampleRate],  (* convert 1-based idx → seconds *)
+              "startTime" -> (beepStartSample - 1) / N[sampleRate],  (* convert 1-based idx \[RightArrow] seconds *)
               "duration"  -> duration,
               "peak"      -> currentBeepMaxMain,
               "type"      -> beepType
@@ -175,25 +188,31 @@ processAudio[samples_List] :=
   ];
 
 
+AudioData[audio][[1]]
+
+
 (* ----------------------------------------------------------------
-   § 4  Load audio  —  change the path below
+   \[Section] 4  Load audio  \[LongDash]  change the path below
    ---------------------------------------------------------------- *)
 
-audioFile = "/path/to/your/audio.wav";    (* ← SET THIS *)
+audioFile = "O:\\Temp\\FastBeeps.wav";    (* \[LeftArrow] SET THIS *)
 
-audio      = Import[audioFile];
+audio  = Import[audioFile];
+audio  = First[AudioSplit[audio,3]];
+
+
 fs         = Round[First @ AudioSampleRate[audio]];  (* verify sample rate *)
 If[fs =!= sampleRate,
   Print["WARNING: file sample rate (", fs, " Hz) differs from sampleRate (",
         sampleRate, " Hz).  Update sampleRate above or resample the file."]
 ];
 
-(* Re-scale ±1 floats → Int16 range so magThreshold is directly comparable
+(* Re-scale \[PlusMinus]1 floats \[RightArrow] Int16 range so magThreshold is directly comparable
    to the Android value.  If the file is stereo, take channel 1. *)
 rawSamples = N[AudioData[audio][[1]] * 32768.0];
 
 (* ----------------------------------------------------------------
-   § 5  Run detector
+   \[Section] 5  Run detector
    ---------------------------------------------------------------- *)
 
 result       = processAudio[rawSamples];
@@ -218,35 +237,49 @@ If[Length[beeps] > 0,
     ],
     TableHeadings -> {None, {"Start (s)", "Duration (s)", "Peak", "Type"}}
   ]],
-  Print["No beeps detected — lower magThreshold and re-run."]
+  Print["No beeps detected \[LongDash] lower magThreshold and re-run."]
 ];
 
 
+Length[beeps]->Total["type"/.beeps]
+
+
+Length[beeps]->Total["type"/.beeps]
+Histogram["duration"/.beeps,{0,0.06,0.0005}]
+
+
+n
+
+
+m=Length[rawSamples]
+n=2^Round[Log2[Sqrt[m]]+1]
+\!\(TraditionalForm\`d = Round[%/3]\)
+
+
 (* ----------------------------------------------------------------
-   § 6  Spectrogram with red beep-start markers
+   \[Section] 6  Spectrogram with red beep-start markers
    ---------------------------------------------------------------- *)
 
 totalDuration = Length[rawSamples] / N[sampleRate];
 freqAxisMax   = 8000;  (* Hz shown on the frequency axis *)
 
-(* Build spectrogram — SampleRate option ensures correct time axis *)
+(* Build spectrogram \[LongDash] SampleRate option ensures correct time axis *)
 spec = Spectrogram[
-  audio,
-  WindowingFunction -> "Hann",
+  audio,512,171,
   PlotRange         -> {{0, totalDuration}, {0, freqAxisMax}},
   ColorFunction     -> "SolarColors",
   FrameLabel        -> {"Time (s)", "Frequency (Hz)"},
   PlotLabel         -> Style["Spectrogram  |  red lines = detected beep starts", 14],
-  ImageSize         -> {900, 350},
-  AspectRatio       -> 1/3
+  ImageSize         -> {500*5*totalDuration, 500},
+  AspectRatio       -> 1/(5*totalDuration)
 ];
 
 (* Vertical red lines at each beep start time *)
 beepOverlay = If[Length[beeps] > 0,
   Graphics[{
-    Red, Thick, Opacity[0.85],
-    Table[
-      Line[{{b["startTime"], 0}, {b["startTime"], freqAxisMax}}],
+        Green, Table[
+      {Line[{{b["startTime"], 2500}, {b["startTime"], 2000}, {b["startTime"]+b["duration"], 2000}, {b["startTime"]+b["duration"], 2500}}],
+      Text[b["type"]//ToString,{b["startTime"]+b["duration"]/2, 1800}]},
       {b, beeps}
     ]
   }],
@@ -257,7 +290,7 @@ Show[spec, beepOverlay]
 
 
 (* ----------------------------------------------------------------
-   § 7  Optional: energy trace plot (useful for threshold tuning)
+   \[Section] 7  Optional: energy trace plot (useful for threshold tuning)
    ---------------------------------------------------------------- *)
 
 windowTimestamps = (windowStarts - 1) / N[sampleRate];   (* seconds *)
@@ -276,7 +309,7 @@ ListLogPlot[
   PlotStyle     -> {Blue, Gray, {Red, Dashed}, {Orange, Dashed}},
   PlotLegends   -> {"main energy", "side energy", "magThreshold", "magThresholdEnd"},
   FrameLabel    -> {"Time (s)", "Goertzel energy"},
-  PlotLabel     -> "Energy trace — adjust magThreshold until red dashed line bisects beep peaks",
+  PlotLabel     -> "Energy trace \[LongDash] adjust magThreshold until red dashed line bisects beep peaks",
   ImageSize     -> {900, 250},
   AspectRatio   -> 1/4
 ]
