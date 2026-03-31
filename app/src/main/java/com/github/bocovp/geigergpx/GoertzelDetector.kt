@@ -13,7 +13,12 @@ class GoertzelDetector(
     private val stepSize: Int = DEFAULT_STEP_SIZE,
     private val oneBeepMin: Double = DEFAULT_ONE_BEEP_MIN,
     private val oneBeepMax: Double = DEFAULT_ONE_BEEP_MAX,
+    private val twoBeepMin: Double = DEFAULT_TWO_BEEP_MIN,
     private val twoBeepMax: Double = DEFAULT_TWO_BEEP_MAX,
+    private val threeBeepMin: Double = DEFAULT_THREE_BEEP_MIN,
+    private val threeBeepMax: Double = DEFAULT_THREE_BEEP_MAX,
+    private val fourBeepMin: Double = DEFAULT_FOUR_BEEP_MIN,
+    private val fourBeepMax: Double = DEFAULT_FOUR_BEEP_MAX,
     private val dominanceThreshold: Float = DEFAULT_DOMINANCE_THRESHOLD,
     private val dominanceThresholdEnd: Float = DEFAULT_DOMINANCE_THRESHOLD_END
 ) {
@@ -159,16 +164,24 @@ class GoertzelDetector(
 
     private fun processBeep(duration: Double, peakMain: Float) {
 
-        when {
-            duration in oneBeepMin..oneBeepMax        -> {
+        when (duration) {
+            in oneBeepMin..oneBeepMax -> {
                 android.util.Log.e("MYTAG", "1 Duration ${"%.4f".format(duration)}\tPeak ${"%.2e".format(peakMain)}")
                 onBeep(peakMain, 1)
             }
-            duration > oneBeepMax && duration <= twoBeepMax -> {
+            in twoBeepMin..twoBeepMax -> {
                 android.util.Log.e("MYTAG", "2 Duration ${"%.4f".format(duration)}\tPeak ${"%.2e".format(peakMain)}")
-                onBeep(peakMain, 1)
-            } // 1 for now
-            else                                            -> {
+                onBeep(peakMain, 2)
+            }
+            in threeBeepMin..threeBeepMax -> {
+                android.util.Log.e("MYTAG", "3 Duration ${"%.4f".format(duration)}\tPeak ${"%.2e".format(peakMain)}")
+                onBeep(peakMain, 3)
+            }
+            in fourBeepMin..fourBeepMax -> {
+                android.util.Log.e("MYTAG", "4 Duration ${"%.4f".format(duration)}\tPeak ${"%.2e".format(peakMain)}")
+                onBeep(peakMain, 4)
+            }
+            else -> {
                 android.util.Log.e("MYTAG", "  Duration ${"%.4f".format(duration)}\tPeak ${"%.2e".format(peakMain)}")
                 onBeep(peakMain, 0)
             }
@@ -189,9 +202,17 @@ class GoertzelDetector(
         const val DEFAULT_FREQ_LOW             = DEFAULT_FREQ_MAIN - 252f
         const val DEFAULT_FREQ_HIGH            = DEFAULT_FREQ_MAIN + 252f
         const val DEFAULT_STEP_SIZE            = 32
-        const val DEFAULT_ONE_BEEP_MIN         = 0.019
-        const val DEFAULT_ONE_BEEP_MAX         = 0.035
-        const val DEFAULT_TWO_BEEP_MAX         = 0.070
+        const val DEFAULT_ONE_BEEP_MIN         = 0.025 - 0.005
+        const val DEFAULT_ONE_BEEP_MAX         = 0.025 + 0.005
+
+        const val DEFAULT_TWO_BEEP_MIN         = 0.025*2.0 - 0.01
+        const val DEFAULT_TWO_BEEP_MAX         = 0.025*2.0 + 0.01
+
+        const val DEFAULT_THREE_BEEP_MIN       = 0.025*3.0 - 0.01
+        const val DEFAULT_THREE_BEEP_MAX       = 0.025*3.0 + 0.01
+
+        const val DEFAULT_FOUR_BEEP_MIN        = 0.025*4.0 - 0.01
+        const val DEFAULT_FOUR_BEEP_MAX        = 0.025*4.0 + 0.01
         const val DEFAULT_DOMINANCE_THRESHOLD     = 2.0f
         const val DEFAULT_DOMINANCE_THRESHOLD_END = 1.1f // 1.5f
     }
