@@ -174,10 +174,12 @@ class AudioBeepDetector(
     }
 
     private fun createAudioRecord(): Pair<AudioRecord, Int>? {
-        configureBluetoothAudioRouting()
-        val audioSource = if (bluetoothMicRoutingActive) {
+        val bluetoothRoutingEnabled = configureBluetoothAudioRouting()
+        val audioSource = if (bluetoothRoutingEnabled) {
+            Log.i(TAG, "Creating AudioRecord with VOICE_COMMUNICATION source for Bluetooth mic")
             MediaRecorder.AudioSource.VOICE_COMMUNICATION
         } else {
+            Log.i(TAG, "Creating AudioRecord with MIC source")
             MediaRecorder.AudioSource.MIC
         }
 
@@ -203,11 +205,12 @@ class AudioBeepDetector(
         )
 
         if (ar.state != AudioRecord.STATE_INITIALIZED) {
-            Log.e(TAG, "AudioRecord initialization failed")
+            Log.e(TAG, "AudioRecord initialization failed with source=$audioSource")
             ar.release()
             return null
         }
 
+        Log.i(TAG, "AudioRecord created successfully with audioSource=$audioSource")
         return Pair(ar, bufferSize)
     }
 
@@ -260,11 +263,16 @@ class AudioBeepDetector(
         resetBluetoothAudioRouting()
     }
 
-    private fun configureBluetoothAudioRouting() {
-        val ctx = context ?: return
-        if (!useBluetoothMicIfAvailable) return
+    private fun configureBluetoothAudioRouting(): Boolean {
+        val ctx = context ?: return false
+        bluetoothMicRoutingActive = false
 
-        val am = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        if (!useBluetoothMicIfAvailable) {
+            Log.d(TAG, "Bluetooth mic usage disabled by preference")
+            return false
+        }
+
+        val am = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
         if (previousAudioMode == null) {
             previousAudioMode = am.mode
         }
@@ -274,29 +282,36 @@ class AudioBeepDetector(
             != PackageManager.PERMISSION_GRANTED
         ) {
             Log.i(TAG, "BLUETOOTH_CONNECT not granted, skipping Bluetooth microphone routing")
-            return
+            return false
         }
 
         val btDevice = findBluetoothMic(am)
         if (btDevice == null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val deviceTypes = am.availableCommunicationDevices.joinToString { it.type.toString() }
-                Log.d(TAG, "No connected Bluetooth microphone found. availableCommunicationDevices types=[$deviceTypes]")
-            } else {
-                Log.d(TAG, "No connected Bluetooth microphone found")
+            val legacyScoEnabled = tryEnableLegacyBluetoothSco(am)
+            if (!legacyScoEnabled) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val deviceTypes = am.availableCommunicationDevices.joinToString { it.type.toString() }
+                    Log.d(TAG, "No connected Bluetooth microphone found. availableCommunicationDevices types=[$deviceTypes]")
+                } else {
+                    Log.d(TAG, "No connected Bluetooth microphone found")
+                }
             }
-            return
+            return legacyScoEnabled
         }
 
         am.mode = AudioManager.MODE_IN_COMMUNICATION
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val selected = am.setCommunicationDevice(btDevice)
             if (!selected) {
-                Log.w(TAG, "Failed to switch communication device to Bluetooth mic")
-                bluetoothMicRoutingActive = false
-                return
+                Log.w(TAG, "Failed to switch communication device to Bluetooth mic; trying SCO fallback")
+                val fallbackScoEnabled = tryEnableLegacyBluetoothSco(am)
+                if (!fallbackScoEnabled) {
+                    return false
+                }
+                return true
             }
             bluetoothMicRoutingActive = true
+            Log.i(TAG, "Communication device switched to Bluetooth mic")
         }
 
         if (btDevice.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO && am.isBluetoothScoAvailableOffCall) {
@@ -306,6 +321,32 @@ class AudioBeepDetector(
             am.isBluetoothScoOn = true
             scoEnabledByDetector = true
             Log.i(TAG, "Bluetooth SCO mode enabled for microphone input")
+        }
+        return true
+    }
+
+    private fun tryEnableLegacyBluetoothSco(am: AudioManager): Boolean {
+        if (!am.isBluetoothScoAvailableOffCall) return false
+
+        @Suppress("DEPRECATION")
+        val bluetoothLikelyConnected = am.isBluetoothA2dpOn || am.isBluetoothScoOn
+        if (!bluetoothLikelyConnected && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return false
+        }
+
+        return try {
+            am.mode = AudioManager.MODE_IN_COMMUNICATION
+            @Suppress("DEPRECATION")
+            am.startBluetoothSco()
+            @Suppress("DEPRECATION")
+            am.isBluetoothScoOn = true
+            scoEnabledByDetector = true
+            bluetoothMicRoutingActive = true
+            Log.i(TAG, "Bluetooth SCO fallback enabled for microphone input")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to enable Bluetooth SCO fallback", e)
+            false
         }
     }
 
