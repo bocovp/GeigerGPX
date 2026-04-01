@@ -103,6 +103,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         updateFolderSummary()
 
         val thresholdPref = findPreference<LongPressPreference>("threshold_calibration")
+        val useBluetoothMic = findPreference<SwitchPreferenceCompat>(KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE)
 
         thresholdPref?.let { pref ->
             // Inside this block, 'pref' is a non-nullable LongPressPreference
@@ -116,6 +117,10 @@ class SettingsFragment : PreferenceFragmentCompat() {
             pref.onLongClick = {
                 showManualThresholdDialog(pref)
             }
+        }
+
+        useBluetoothMic?.summaryProvider = Preference.SummaryProvider<SwitchPreferenceCompat> { pref ->
+            if (pref.isChecked) "Enabled" else "Disabled"
         }
     }
 
@@ -274,5 +279,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
     companion object {
         const val KEY_GPX_TREE_URI = "gpx_tree_uri"
         const val KEY_AUDIO_THRESHOLD = "audio_threshold"
+        const val KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE = "use_bluetooth_mic_if_available"
     }
 }
