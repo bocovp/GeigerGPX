@@ -51,7 +51,10 @@ class CalibrationSession(
     // The detector is constructed once and held for the full lifetime of this
     // session. There is no nullable var — stop() always has a valid reference.
     private val detector = AudioBeepDetector(
+        context = context.applicationContext,
         magThreshold = fallbackThreshold / 1000f,
+        useBluetoothMicIfAvailable = PreferenceManager.getDefaultSharedPreferences(context)
+            .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true),
         onBeep = { _, _ -> },
         onRawAudio = { samples -> processSamples(samples) }
     )
