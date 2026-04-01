@@ -12,6 +12,11 @@
             android:title="Threshold (press to calibrate)"
             android:summary="Not calibrated"/>
 
+        <androidx.preference.SwitchPreferenceCompat
+            android:key="use_bluetooth_mic_if_available"
+            android:title="Use Bluetooth mic if available"
+            android:defaultValue="true" />
+
     </PreferenceCategory>
 
     <PreferenceCategory
