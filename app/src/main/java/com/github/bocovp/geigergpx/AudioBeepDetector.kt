@@ -33,6 +33,7 @@ class AudioBeepDetector(
     private var workerThread: Thread? = null
     private var previousAudioMode: Int? = null
     private var scoEnabledByDetector = false
+    private var bluetoothMicRoutingActive = false
 
     fun start() {
         if (running) return
@@ -174,6 +175,11 @@ class AudioBeepDetector(
 
     private fun createAudioRecord(): Pair<AudioRecord, Int>? {
         configureBluetoothAudioRouting()
+        val audioSource = if (bluetoothMicRoutingActive) {
+            MediaRecorder.AudioSource.VOICE_COMMUNICATION
+        } else {
+            MediaRecorder.AudioSource.MIC
+        }
 
         val minBuffer = AudioRecord.getMinBufferSize(
             SAMPLE_RATE,
@@ -189,7 +195,7 @@ class AudioBeepDetector(
         val bufferSize = maxOf(minBuffer, WINDOW_SIZE * WINDOWS_IN_BUFFER)
 
         val ar = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
+            audioSource,
             SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
@@ -273,7 +279,12 @@ class AudioBeepDetector(
 
         val btDevice = findBluetoothMic(am)
         if (btDevice == null) {
-            Log.d(TAG, "No connected Bluetooth microphone found")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val deviceTypes = am.availableCommunicationDevices.joinToString { it.type.toString() }
+                Log.d(TAG, "No connected Bluetooth microphone found. availableCommunicationDevices types=[$deviceTypes]")
+            } else {
+                Log.d(TAG, "No connected Bluetooth microphone found")
+            }
             return
         }
 
@@ -282,7 +293,10 @@ class AudioBeepDetector(
             val selected = am.setCommunicationDevice(btDevice)
             if (!selected) {
                 Log.w(TAG, "Failed to switch communication device to Bluetooth mic")
+                bluetoothMicRoutingActive = false
+                return
             }
+            bluetoothMicRoutingActive = true
         }
 
         if (btDevice.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO && am.isBluetoothScoAvailableOffCall) {
@@ -313,15 +327,14 @@ class AudioBeepDetector(
             am.mode = it
             previousAudioMode = null
         }
+        bluetoothMicRoutingActive = false
     }
 
     private fun findBluetoothMic(audioManager: AudioManager): AudioDeviceInfo? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             return audioManager.availableCommunicationDevices.firstOrNull { device ->
-                device.isSource && (
-                    device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-                        device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
-                    )
+                device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                    device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
             }
         }
         return null
