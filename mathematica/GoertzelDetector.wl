@@ -16,35 +16,35 @@
    \[Section] 1  Tunable parameters  (mirror the Kotlin companion object)
    ---------------------------------------------------------------- *)
 
-sampleRate            = 44100;          (* Hz *)
-freqMain              = 3276.0;         (* target beep frequency, Hz  \[LongDash] "bin 13" *)
-freqLow               = freqMain - 252.0;          (* lower side-band *)
-freqHigh              = freqMain + 252.0;          (* upper side-band *)
-windowSize            = 175;            (* Goertzel window, samples *)
-stepSize              = 32;             (* sliding-window hop, samples *)
+sampleRate            = 44100;             (* Hz *)
+freqMain              = 3276.0;            (* target beep frequency, Hz  \[LongDash] "bin 13" *)
+freqLow               = freqMain - 252.0;  (* lower side-band *)
+freqHigh              = freqMain + 252.0;  (* upper side-band *)
+windowSize            = 175;               (* Goertzel window, samples *)
+stepSize              = 32;                (* sliding-window hop, samples *)
 
 (* Primary detection gate \[LongDash] most important knob to tune.
    The Kotlin code receives Int16 samples (\[PlusMinus]32768); AudioData[]
    returns normalised floats (\[PlusMinus]1).  The loader below re-scales to
    Int16 range, so this threshold is directly comparable to the
    Android value. *)
-magThreshold          = 5.0*^9;         (* \[LeftArrow] tune me *)
-magThreshold          = 5.0*^11;         (* \[LeftArrow] tune me *)
+magThreshold          = 5.0*^9;                (* \[LeftArrow] tune me *)
+magThreshold          = 5.0*^11;               (* \[LeftArrow] tune me *)
 
-dominanceThreshold    = 2.0;            (* SILENCE\[RightArrow]BEEP: main > this \[Times] sideEnergy *)
-dominanceThresholdEnd = 1.1;            (* BEEP\[RightArrow]DECAY  : main > this \[Times] sideEnergy *)
+dominanceThreshold    = 2.0;                   (* SILENCE\[RightArrow]BEEP: main > this \[Times] sideEnergy *)
+dominanceThresholdEnd = 1.1;                   (* BEEP\[RightArrow]DECAY  : main > this \[Times] sideEnergy *)
 
-oneBeepMin            = 0.025-0.005;          (* valid single-beep min duration, s *)
-oneBeepMax            = 0.025+0.005;          (* valid single-beep max duration, s *)
+oneBeepMin            = 0.025-0.005;           (* valid single-beep min duration, s *)
+oneBeepMax            = 0.025+0.005;           (* valid single-beep max duration, s *)
 
 twoBeepMin            = 0.025*2-0.01;          (* upper bound for a double-beep, s  *)
 twoBeepMax            = 0.025*2+0.01;          (* upper bound for a double-beep, s  *)
 
-threeBeepMin            = 0.025*3-0.01;          (* upper bound for a double-beep, s  *)
-threeBeepMax            = 0.025*3+0.01;          (* upper bound for a double-beep, s  *)
+threeBeepMin          = 0.025*3-0.01;          (* upper bound for a double-beep, s  *)
+threeBeepMax          = 0.025*3+0.01;          (* upper bound for a double-beep, s  *)
 
-fourBeepMin            = 0.025*4-0.01;          (* upper bound for a double-beep, s  *)
-fourBeepMax            = 0.025*4+0.01;          (* upper bound for a double-beep, s  *)
+fourBeepMin           = 0.025*4-0.01;          (* upper bound for a double-beep, s  *)
+fourBeepMax           = 0.025*4+0.01;          (* upper bound for a double-beep, s  *)
 
 (* Derived \[LongDash] intentionally mirrors  magThresholdEnd = magThreshold / 2f  *)
 magThresholdEnd = magThreshold / 2.0;
@@ -90,7 +90,7 @@ computeWindowEnergies[samples_List, pos_Integer] :=
     main = goertzelEnergy[w, coeffMain];
     low  = goertzelEnergy[w, coeffLow];
     high = goertzelEnergy[w, coeffHigh];
-    {main, (low + high) / 2.0}
+    {main, low, high}
   ];
 
 
@@ -127,7 +127,9 @@ processAudio[samples_List] :=
     Do[
       pos  = windowStarts[[k]];
       main = energies[[k, 1]];
-      side = energies[[k, 2]];
+      low = energies[[k, 2]];
+      high = energies[[k, 3]];
+      side = (low + high) / 2;
 
       (* Mirror the Kotlin guard:  only evaluate gates when above half-threshold *)
       If[main > magThresholdEnd,
@@ -188,9 +190,6 @@ processAudio[samples_List] :=
   ];
 
 
-AudioData[audio][[1]]
-
-
 (* ----------------------------------------------------------------
    \[Section] 4  Load audio  \[LongDash]  change the path below
    ---------------------------------------------------------------- *)
@@ -221,7 +220,9 @@ energies     = result["energies"];
 windowStarts = result["windowStarts"];
 
 Print["Total windows analysed : ", Length[windowStarts]];
-Print["Detected beeps          : ", Length[beeps]];
+Print["Detected beeps          : ", Length[beeps]->Total["type"/.beeps]];
+
+
 
 (* Summary table *)
 If[Length[beeps] > 0,
@@ -239,21 +240,6 @@ If[Length[beeps] > 0,
   ]],
   Print["No beeps detected \[LongDash] lower magThreshold and re-run."]
 ];
-
-
-Length[beeps]->Total["type"/.beeps]
-
-
-Length[beeps]->Total["type"/.beeps]
-Histogram["duration"/.beeps,{0,0.06,0.0005}]
-
-
-n
-
-
-m=Length[rawSamples]
-n=2^Round[Log2[Sqrt[m]]+1]
-\!\(TraditionalForm\`d = Round[%/3]\)
 
 
 (* ----------------------------------------------------------------

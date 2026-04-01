@@ -1,0 +1,893 @@
+(* Content-type: application/vnd.wolfram.cdf.text *)
+
+(*** Wolfram CDF File ***)
+(* http://www.wolfram.com/cdf *)
+
+(* CreatedBy='Wolfram 14.3' *)
+
+(*************************************************************************)
+(*                                                                       *)
+(*                                                                       *)
+(*  This file was created under the Wolfram Enterprise licensing terms.  *)
+(*                                                                       *)
+(*       For additional information concerning CDF licensing see:        *)
+(*                                                                       *)
+(*        www.wolfram.com/cdf/adopting-cdf/licensing-options.html        *)
+(*                                                                       *)
+(*                                                                       *)
+(*                                                                       *)
+(*************************************************************************)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[      1060,         20]
+NotebookDataLength[     33651,        872]
+NotebookOptionsPosition[     33961,        867]
+NotebookOutlinePosition[     34367,        883]
+CellTagsIndexPosition[     34324,        880]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", " ", 
+   RowBox[{"::", "Package", "::"}], "*)"}], 
+  RowBox[{"(*", " ", 
+   RowBox[{"::", "Title", "::"}], "*)"}], 
+  RowBox[{"(*", 
+   RowBox[{
+    RowBox[{"Poisson", " ", "Rate", " ", 
+     RowBox[{"Estimation", ":", 
+      RowBox[{"N", "-", 
+       RowBox[{"Event", " ", "Window"}]}]}]}], ",", "EMA", ",", 
+    RowBox[{
+     RowBox[{"and", " ", "Recursive", " ", "Log"}], "-", "Intensity"}]}], 
+   "*)"}], 
+  RowBox[{"(*", 
+   RowBox[{"--", 
+    RowBox[{"--", 
+     RowBox[{"--", 
+      RowBox[{"--", 
+       RowBox[{"--", 
+        RowBox[{"--", 
+         RowBox[{"--", 
+          RowBox[{"--", 
+           RowBox[{"--", "--"}]}]}]}]}]}]}]}]}], "*)"}], 
+  RowBox[{"(*", 
+   RowBox[{"Sample", " ", 
+    RowBox[{"Input", ":", "timestamps"}]}], "*)"}], 
+  RowBox[{"(*", 
+   RowBox[{
+   "Replace", " ", "this", " ", "with", " ", "your", " ", "actual", " ", 
+    "data"}], "*)"}], 
+  RowBox[{
+   RowBox[{
+    RowBox[{"timestamps", "=", 
+     RowBox[{"{", 
+      RowBox[{
+      "0.5", ",", "1.2", ",", "1.9", ",", "2.1", ",", "3.5", ",", "3.7", ",", 
+       "4.0", ",", "4.5", ",", "5.2", ",", "6.0", ",", "6.5", ",", "7.1", ",",
+        "8.0", ",", "9.0"}], "}"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"timestamps", " ", "=", 
+     RowBox[{
+      RowBox[{"Join", "[", " ", 
+       RowBox[{
+        RowBox[{"RandomReal", "[", 
+         RowBox[{
+          RowBox[{"{", 
+           RowBox[{"0", ",", "10"}], "}"}], ",", "100"}], "]"}], ",", 
+        RowBox[{"RandomReal", "[", 
+         RowBox[{
+          RowBox[{"{", 
+           RowBox[{"4", ",", "6"}], "}"}], ",", 
+          RowBox[{
+           RowBox[{"(", 
+            RowBox[{"4", "-", "1"}], ")"}], 
+           FractionBox["2", "10"], "*", "100"}]}], "]"}]}], "]"}], "//", 
+      "Sort"}]}], ";"}], "\[IndentingNewLine]", "\[IndentingNewLine]", "\n", 
+   RowBox[{"(*", 
+    RowBox[{"--", 
+     RowBox[{"--", 
+      RowBox[{"--", 
+       RowBox[{"--", 
+        RowBox[{"--", 
+         RowBox[{"--", 
+          RowBox[{"--", 
+           RowBox[{"--", 
+            RowBox[{"--", "--"}]}]}]}]}]}]}]}]}], "*)"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{"(*", 
+    RowBox[{"Function", ":", 
+     RowBox[{"N", "-", 
+      RowBox[{"event", " ", "window", " ", "estimator"}]}]}], "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"NEventWindowHyperbolic", "[", 
+     RowBox[{"tstamps_", ",", 
+      RowBox[{"nWindow_", ":", "10"}], ",", 
+      RowBox[{"dt_", ":", "0.01"}]}], "]"}], ":=", 
+    RowBox[{"Module", "[", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"tvec", ",", 
+        RowBox[{"lambda", "=", 
+         RowBox[{"{", "}"}]}], ",", 
+        RowBox[{"var", "=", 
+         RowBox[{"{", "}"}]}], ",", 
+        RowBox[{"N", "=", 
+         RowBox[{"Length", "[", "tstamps", "]"}]}], ",", "tNow", ",", "iLast",
+         ",", "idxOldest", ",", "effectiveN"}], "}"}], ",", 
+      RowBox[{"(*", 
+       RowBox[{
+       "dense", " ", "time", " ", "vector", " ", "slightly", " ", "before", " ",
+         "first", " ", "event", " ", "to", " ", "avoid", " ", "zero"}], 
+       "*)"}], 
+      RowBox[{
+       RowBox[{"tvec", "=", 
+        RowBox[{"Range", "[", 
+         RowBox[{
+          RowBox[{
+           RowBox[{"tstamps", "[", 
+            RowBox[{"[", "1", "]"}], "]"}], "+", 
+           RowBox[{"10", "^", 
+            RowBox[{"-", "6"}]}]}], ",", 
+          RowBox[{
+           RowBox[{"Last", "[", "tstamps", "]"}], "+", "0.5"}], ",", "dt"}], 
+         "]"}]}], ";", "\[IndentingNewLine]", 
+       RowBox[{"Do", "[", 
+        RowBox[{
+         RowBox[{
+          RowBox[{"tNow", "=", 
+           RowBox[{"tvec", "[", 
+            RowBox[{"[", "i", "]"}], "]"}]}], ";", "\[IndentingNewLine]", 
+          RowBox[{"(*", 
+           RowBox[{
+            RowBox[{
+            "find", " ", "the", " ", "index", " ", "of", " ", "last", " ", 
+             "event"}], "<=", "tNow"}], "*)"}], 
+          RowBox[{"iLast", "=", 
+           RowBox[{"Max", "[", 
+            RowBox[{"Select", "[", 
+             RowBox[{
+              RowBox[{"Range", "[", "N", "]"}], ",", 
+              RowBox[{
+               RowBox[{
+                RowBox[{"tstamps", "[", 
+                 RowBox[{"[", "#", "]"}], "]"}], "<=", "tNow"}], "&"}]}], 
+             "]"}], "]"}]}], ";", "\[IndentingNewLine]", 
+          RowBox[{"(*", 
+           RowBox[{
+           "determine", " ", "oldest", " ", "event", " ", "in", " ", "the", " ",
+             "window"}], "*)"}], 
+          RowBox[{"idxOldest", "=", 
+           RowBox[{"Max", "[", 
+            RowBox[{"1", ",", 
+             RowBox[{"iLast", "-", "nWindow", "+", "1"}]}], "]"}]}], ";", 
+          "\[IndentingNewLine]", 
+          RowBox[{"(*", 
+           RowBox[{
+           "effective", " ", "number", " ", "of", " ", "events", " ", "in", " ",
+             "window", " ", 
+            RowBox[{"(", 
+             RowBox[{"avoid", " ", "zero", " ", "at", " ", "start"}], ")"}]}],
+            "*)"}], 
+          RowBox[{"effectiveN", "=", 
+           RowBox[{"Max", "[", 
+            RowBox[{"1", ",", 
+             RowBox[{"iLast", "-", "idxOldest", "+", "1"}]}], "]"}]}], ";", 
+          "\[IndentingNewLine]", 
+          RowBox[{"(*", 
+           RowBox[{
+            RowBox[{"compute", " ", "rate"}], ",", 
+            RowBox[{
+            "safe", " ", "from", " ", "division", " ", "by", " ", "zero"}]}], 
+           "*)"}], 
+          RowBox[{"AppendTo", "[", 
+           RowBox[{"lambda", ",", 
+            RowBox[{"effectiveN", "/", 
+             RowBox[{"Max", "[", 
+              RowBox[{
+               RowBox[{"10", "^", 
+                RowBox[{"-", "6"}]}], ",", 
+               RowBox[{"tNow", "-", 
+                RowBox[{"tstamps", "[", 
+                 RowBox[{"[", "idxOldest", "]"}], "]"}]}]}], "]"}]}]}], "]"}],
+           ";", "\[IndentingNewLine]", 
+          RowBox[{"(*", 
+           RowBox[{"variance", " ", "proxy"}], "*)"}], 
+          RowBox[{"AppendTo", "[", 
+           RowBox[{"var", ",", 
+            RowBox[{
+             RowBox[{
+              RowBox[{"lambda", "[", 
+               RowBox[{"[", 
+                RowBox[{"-", "1"}], "]"}], "]"}], "^", "2"}], "/", 
+             "effectiveN"}]}], "]"}], ";"}], ",", 
+         RowBox[{"{", 
+          RowBox[{"i", ",", 
+           RowBox[{"Length", "[", "tvec", "]"}]}], "}"}]}], "]"}], ";", 
+       "\[IndentingNewLine]", 
+       RowBox[{"{", 
+        RowBox[{"tvec", ",", "lambda", ",", "var"}], "}"}]}]}], "]"}]}], "\n", 
+   RowBox[{"(*", 
+    RowBox[{"--", 
+     RowBox[{"--", 
+      RowBox[{"--", 
+       RowBox[{"--", 
+        RowBox[{"--", 
+         RowBox[{"--", 
+          RowBox[{"--", 
+           RowBox[{"--", 
+            RowBox[{"--", "--"}]}]}]}]}]}]}]}]}], "*)"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{"(*", 
+    RowBox[{"Function", ":", 
+     RowBox[{"EMA", " ", "estimator"}]}], "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"RecursiveLogIntensity", "[", 
+     RowBox[{"tstamps_", ",", 
+      RowBox[{"q_", ":", "0.01"}], ",", 
+      RowBox[{"dt_", ":", "0.01"}]}], "]"}], ":=", 
+    RowBox[{"Module", "[", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{
+        RowBox[{"N", "=", 
+         RowBox[{"Length", "[", "tstamps", "]"}]}], ",", "tvec", ",", 
+        RowBox[{"lambda", "=", 
+         RowBox[{"{", "}"}]}], ",", 
+        RowBox[{"var", "=", 
+         RowBox[{"{", "}"}]}], ",", 
+        RowBox[{"m", "=", "0."}], ",", 
+        RowBox[{"P", "=", "0."}], ",", 
+        RowBox[{"tPrev", "=", "0"}], ",", 
+        RowBox[{"i", "=", "1"}], ",", "tNow"}], "}"}], ",", 
+      RowBox[{
+       RowBox[{"tvec", "=", 
+        RowBox[{"Range", "[", 
+         RowBox[{"0", ",", 
+          RowBox[{
+           RowBox[{"Last", "[", "tstamps", "]"}], "+", "1"}], ",", "dt"}], 
+         "]"}]}], ";", "\[IndentingNewLine]", 
+       RowBox[{"Do", "[", 
+        RowBox[{
+         RowBox[{
+          RowBox[{"tNow", "=", 
+           RowBox[{"tvec", "[", 
+            RowBox[{"[", "j", "]"}], "]"}]}], ";", "\[IndentingNewLine]", 
+          RowBox[{"(*", 
+           RowBox[{"propagate", " ", "variance", " ", "between", " ", 
+            RowBox[{"events", ":", 
+             RowBox[{"additive", " ", "process", " ", "noise"}]}]}], "*)"}], 
+          RowBox[{"P", "=", 
+           RowBox[{"P", "+", 
+            RowBox[{"q", "*", "dt"}]}]}], ";", "\[IndentingNewLine]", 
+          RowBox[{"(*", 
+           RowBox[{"handle", " ", "events", " ", "exactly"}], "*)"}], 
+          RowBox[{"While", "[", 
+           RowBox[{
+            RowBox[{
+             RowBox[{"i", "<=", "N"}], "&&", 
+             RowBox[{
+              RowBox[{"tstamps", "[", 
+               RowBox[{"[", "i", "]"}], "]"}], "<=", "tNow"}]}], ",", 
+            RowBox[{"(*", 
+             RowBox[{"EKF", "-", 
+              RowBox[{"like", " ", "update", " ", "for", " ", "log"}], "-", 
+              "intensity"}], "*)"}], 
+            RowBox[{
+             RowBox[{"m", "=", 
+              RowBox[{"m", "+", 
+               RowBox[{
+                RowBox[{"P", "/", 
+                 RowBox[{"(", 
+                  RowBox[{"1", "+", 
+                   RowBox[{"P", "*", 
+                    RowBox[{"Exp", "[", "m", "]"}]}]}], ")"}]}], "*", 
+                RowBox[{"(", 
+                 RowBox[{"1", "-", 
+                  RowBox[{"Exp", "[", "m", "]"}]}], ")"}]}]}]}], ";", 
+             "\[IndentingNewLine]", 
+             RowBox[{"P", "=", 
+              RowBox[{"P", "-", 
+               RowBox[{
+                RowBox[{"P", "^", "2"}], "*", 
+                RowBox[{
+                 RowBox[{"Exp", "[", "m", "]"}], "/", 
+                 RowBox[{"(", 
+                  RowBox[{"1", "+", 
+                   RowBox[{"P", "*", 
+                    RowBox[{"Exp", "[", "m", "]"}]}]}], ")"}]}]}]}]}], ";", 
+             "\[IndentingNewLine]", 
+             RowBox[{"i", "++"}], ";"}]}], "]"}], ";", "\[IndentingNewLine]", 
+          RowBox[{"(*", 
+           RowBox[{"store", " ", "rate", " ", "and", " ", "variance"}], 
+           "*)"}], 
+          RowBox[{"AppendTo", "[", 
+           RowBox[{"lambda", ",", 
+            RowBox[{"Exp", "[", "m", "]"}]}], "]"}], ";", 
+          "\[IndentingNewLine]", 
+          RowBox[{"AppendTo", "[", 
+           RowBox[{"var", ",", 
+            RowBox[{
+             RowBox[{
+              RowBox[{"Exp", "[", "m", "]"}], "^", "2"}], "*", "P"}]}], "]"}],
+           ";"}], " ", 
+         RowBox[{"(*", 
+          RowBox[{
+           RowBox[{"approximate", " ", "log"}], "-", 
+           RowBox[{"normal", " ", "variance"}]}], "*)"}], ",", 
+         RowBox[{"{", 
+          RowBox[{"j", ",", 
+           RowBox[{"Length", "[", "tvec", "]"}]}], "}"}]}], "]"}], ";", 
+       "\[IndentingNewLine]", 
+       RowBox[{"{", 
+        RowBox[{"tvec", ",", "lambda", ",", "var"}], "}"}]}]}], "]"}]}], 
+   "\[IndentingNewLine]", "\[IndentingNewLine]", "\[IndentingNewLine]", 
+   RowBox[{"(*", 
+    RowBox[{"--", 
+     RowBox[{"--", 
+      RowBox[{"--", 
+       RowBox[{"--", 
+        RowBox[{"--", 
+         RowBox[{"--", 
+          RowBox[{"--", 
+           RowBox[{"--", 
+            RowBox[{"--", "--"}]}]}]}]}]}]}]}]}], "*)"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{"(*", 
+    RowBox[{"Function", ":", 
+     RowBox[{
+      RowBox[{"Recursive", " ", "Log"}], "-", 
+      RowBox[{"Intensity", " ", "estimator"}]}]}], "*)"}], "\n", 
+   RowBox[{
+    RowBox[{"RecursiveLogIntensity", "[", 
+     RowBox[{"tstamps_", ",", 
+      RowBox[{"q_", ":", "0.05"}]}], "]"}], ":=", 
+    RowBox[{"Module", "[", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{
+        RowBox[{"m", "=", "0.0"}], ",", 
+        RowBox[{"(*", 
+         RowBox[{
+          RowBox[{"Initial", " ", "log"}], "-", "intensity"}], "*)"}], 
+        RowBox[{"P", "=", "1.0"}], ",", 
+        RowBox[{"(*", 
+         RowBox[{"Initial", " ", "variance"}], "*)"}], 
+        RowBox[{"lastT", "=", "0.0"}], ",", "results"}], "}"}], ",", 
+      RowBox[{
+       RowBox[{"results", "=", 
+        RowBox[{
+         RowBox[{"Reap", "[", 
+          RowBox[{"Do", "[", 
+           RowBox[{
+            RowBox[{"Module", "[", 
+             RowBox[{
+              RowBox[{"{", 
+               RowBox[{"dt", "=", 
+                RowBox[{"ev", "-", "lastT"}]}], "}"}], ",", 
+              RowBox[{"(*", 
+               RowBox[{"1.", " ", 
+                RowBox[{"PREDICT", ":", 
+                 RowBox[{"Between", " ", "events"}]}]}], "*)"}], 
+              RowBox[{"(*", 
+               RowBox[{
+               "Variance", " ", "grows", " ", "with", " ", "process", " ", 
+                "noise"}], "*)"}], 
+              RowBox[{
+               RowBox[{"P", "=", 
+                RowBox[{"P", "+", 
+                 RowBox[{"q", "*", "dt"}]}]}], ";", "\[IndentingNewLine]", 
+               RowBox[{"(*", 
+                RowBox[{"Log", "-", 
+                 RowBox[{
+                 "intensity", " ", "decays", " ", "because", " ", "NO", " ", 
+                  "event", " ", "happened", " ", "during", " ", "dt"}]}], 
+                "*)"}], 
+               RowBox[{"m", "=", 
+                RowBox[{"m", "-", 
+                 RowBox[{"P", "*", 
+                  RowBox[{"Exp", "[", "m", "]"}], "*", "dt"}]}]}], ";", 
+               "\[IndentingNewLine]", 
+               RowBox[{"(*", 
+                RowBox[{"2.", " ", 
+                 RowBox[{"UPDATE", ":", 
+                  RowBox[{"At", " ", "the", " ", "event"}]}]}], "*)"}], 
+               RowBox[{"(*", 
+                RowBox[{
+                 RowBox[{
+                  RowBox[{"The", "'"}], 
+                  RowBox[{"jump", "'"}], " ", "in", " ", "log"}], "-", 
+                 RowBox[{"intensity", ".", 
+                  RowBox[{"Note", ":", 
+                   RowBox[{
+                    RowBox[{"(", 
+                    RowBox[{"1", "+", "P"}], ")"}], " ", "is", " ", "a", " ", 
+                    "standard", " ", "approximation", " ", "for", " ", "the", 
+                    " ", "denominator"}]}]}]}], "*)"}], 
+               RowBox[{"m", "=", 
+                RowBox[{"m", "+", "P"}]}], ";", "\[IndentingNewLine]", 
+               RowBox[{"P", "=", 
+                RowBox[{"P", "/", 
+                 RowBox[{"(", 
+                  RowBox[{"1", "+", "P"}], ")"}]}]}], ";", 
+               "\[IndentingNewLine]", 
+               RowBox[{"Sow", "[", 
+                RowBox[{"{", 
+                 RowBox[{"ev", ",", 
+                  RowBox[{"Exp", "[", "m", "]"}], ",", 
+                  RowBox[{"Sqrt", "[", 
+                   RowBox[{"P", "*", 
+                    RowBox[{
+                    RowBox[{"Exp", "[", "m", "]"}], "^", "2"}]}], "]"}]}], 
+                 "}"}], "]"}], ";", "\[IndentingNewLine]", 
+               RowBox[{"lastT", "=", "ev"}], ";"}]}], "]"}], ",", 
+            RowBox[{"{", 
+             RowBox[{"ev", ",", "tstamps"}], "}"}]}], "]"}], "]"}], "[", 
+         RowBox[{"[", 
+          RowBox[{
+           RowBox[{"-", "1"}], ",", "1"}], "]"}], "]"}]}], ";", 
+       "\[IndentingNewLine]", "results"}]}], "]"}]}], "\[IndentingNewLine]", 
+   "\[IndentingNewLine]", 
+   RowBox[{"(*", 
+    RowBox[{"--", 
+     RowBox[{"--", 
+      RowBox[{"--", 
+       RowBox[{"--", 
+        RowBox[{"--", 
+         RowBox[{"--", 
+          RowBox[{"--", 
+           RowBox[{"--", 
+            RowBox[{"--", "--"}]}]}]}]}]}]}]}]}], "*)"}], "\n", 
+   RowBox[{"(*", 
+    RowBox[{"Interactive", " ", "visualization"}], "*)"}], "\[IndentingNewLine]", 
+   RowBox[{"Manipulate", "[", 
+    RowBox[{
+     RowBox[{"Module", "[", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{
+        "nResult", ",", "emaResult", ",", "logResult", ",", "ciUp", ",", 
+         "ciDown", ",", "plots"}], "}"}], ",", 
+       RowBox[{"(*", 
+        RowBox[{"Compute", " ", "estimators"}], "*)"}], 
+       RowBox[{
+        RowBox[{"nResult", "=", 
+         RowBox[{"NEventWindowHyperbolic", "[", 
+          RowBox[{"timestamps", ",", "nWindow"}], "]"}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{"emaResult", "=", 
+         RowBox[{"EMAEstimation", "[", 
+          RowBox[{"timestamps", ",", "tau", ",", "dt"}], "]"}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{"logResult", "=", 
+         RowBox[{"RecursiveLogIntensity", "[", 
+          RowBox[{"timestamps", ",", "q", ",", "dt"}], "]"}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{"(*", 
+         RowBox[{"Compute", " ", "CI", " ", "lines"}], "*)"}], 
+        RowBox[{"ciUpEMA", "=", 
+         RowBox[{
+          RowBox[{"emaResult", "[", 
+           RowBox[{"[", "2", "]"}], "]"}], "+", 
+          RowBox[{"1.96", " ", 
+           RowBox[{"Sqrt", "[", 
+            RowBox[{"emaResult", "[", 
+             RowBox[{"[", "3", "]"}], "]"}], "]"}]}]}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{"ciDownEMA", "=", 
+         RowBox[{
+          RowBox[{"emaResult", "[", 
+           RowBox[{"[", "2", "]"}], "]"}], "-", 
+          RowBox[{"1.96", " ", 
+           RowBox[{"Sqrt", "[", 
+            RowBox[{"emaResult", "[", 
+             RowBox[{"[", "3", "]"}], "]"}], "]"}]}]}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{"ciUpLog", "=", 
+         RowBox[{
+          RowBox[{"logResult", "[", 
+           RowBox[{"[", "2", "]"}], "]"}], "+", 
+          RowBox[{"1.96", " ", 
+           RowBox[{"Sqrt", "[", 
+            RowBox[{"logResult", "[", 
+             RowBox[{"[", "3", "]"}], "]"}], "]"}]}]}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{"ciDownLog", "=", 
+         RowBox[{
+          RowBox[{"logResult", "[", 
+           RowBox[{"[", "2", "]"}], "]"}], "-", 
+          RowBox[{"1.96", " ", 
+           RowBox[{"Sqrt", "[", 
+            RowBox[{"logResult", "[", 
+             RowBox[{"[", "3", "]"}], "]"}], "]"}]}]}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{"plots", "=", 
+         RowBox[{"{", 
+          RowBox[{"(*", 
+           RowBox[{"Vertical", " ", "lines", " ", "for", " ", "events"}], 
+           "*)"}], 
+          RowBox[{
+           RowBox[{"{", 
+            RowBox[{"Red", ",", 
+             RowBox[{"Table", "[", 
+              RowBox[{
+               RowBox[{"Line", "[", 
+                RowBox[{"{", 
+                 RowBox[{
+                  RowBox[{"{", 
+                   RowBox[{"t", ",", "0"}], "}"}], ",", 
+                  RowBox[{"{", 
+                   RowBox[{"t", ",", 
+                    RowBox[{"Max", "[", 
+                    RowBox[{"logResult", "[", 
+                    RowBox[{"[", "2", "]"}], "]"}], "]"}]}], "}"}]}], "}"}], 
+                "]"}], ",", 
+               RowBox[{"{", 
+                RowBox[{"t", ",", "timestamps"}], "}"}]}], "]"}]}], "}"}], ",", 
+           RowBox[{"(*", 
+            RowBox[{"N", "-", 
+             RowBox[{"event", " ", "window", " ", "estimate"}]}], "*)"}], 
+           RowBox[{"{", 
+            RowBox[{"Blue", ",", "Thick", ",", 
+             RowBox[{"Line", "[", 
+              RowBox[{"Transpose", "[", 
+               RowBox[{"{", 
+                RowBox[{
+                 RowBox[{"nResult", "[", 
+                  RowBox[{"[", "1", "]"}], "]"}], ",", 
+                 RowBox[{"nResult", "[", 
+                  RowBox[{"[", "2", "]"}], "]"}]}], "}"}], "]"}], "]"}]}], 
+            "}"}], ",", 
+           RowBox[{"(*", 
+            RowBox[{
+             RowBox[{"EMA", " ", "estimate"}], "+", "CI"}], "*)"}], 
+           RowBox[{"{", 
+            RowBox[{"Green", ",", "Thick", ",", 
+             RowBox[{"Line", "[", 
+              RowBox[{"Transpose", "[", 
+               RowBox[{"{", 
+                RowBox[{
+                 RowBox[{"emaResult", "[", 
+                  RowBox[{"[", "1", "]"}], "]"}], ",", 
+                 RowBox[{"emaResult", "[", 
+                  RowBox[{"[", "2", "]"}], "]"}]}], "}"}], "]"}], "]"}]}], 
+            "}"}], ",", 
+           RowBox[{"{", 
+            RowBox[{"Green", ",", "Dashed", ",", 
+             RowBox[{"Line", "[", 
+              RowBox[{"Transpose", "[", 
+               RowBox[{"{", 
+                RowBox[{
+                 RowBox[{"emaResult", "[", 
+                  RowBox[{"[", "1", "]"}], "]"}], ",", "ciUpEMA"}], "}"}], 
+               "]"}], "]"}]}], "}"}], ",", 
+           RowBox[{"{", 
+            RowBox[{"Green", ",", "Dashed", ",", 
+             RowBox[{"Line", "[", 
+              RowBox[{"Transpose", "[", 
+               RowBox[{"{", 
+                RowBox[{
+                 RowBox[{"emaResult", "[", 
+                  RowBox[{"[", "1", "]"}], "]"}], ",", "ciDownEMA"}], "}"}], 
+               "]"}], "]"}]}], "}"}], ",", 
+           RowBox[{"(*", 
+            RowBox[{
+             RowBox[{"Recursive", " ", "Log"}], "-", 
+             RowBox[{"Intensity", " ", "estimate"}], "+", "CI"}], "*)"}], 
+           RowBox[{"{", 
+            RowBox[{"Purple", ",", "Thick", ",", 
+             RowBox[{"Line", "[", 
+              RowBox[{"Transpose", "[", 
+               RowBox[{"{", 
+                RowBox[{
+                 RowBox[{"logResult", "[", 
+                  RowBox[{"[", "1", "]"}], "]"}], ",", 
+                 RowBox[{"logResult", "[", 
+                  RowBox[{"[", "2", "]"}], "]"}]}], "}"}], "]"}], "]"}]}], 
+            "}"}], ",", 
+           RowBox[{"{", 
+            RowBox[{"Purple", ",", "Dashed", ",", 
+             RowBox[{"Line", "[", 
+              RowBox[{"Transpose", "[", 
+               RowBox[{"{", 
+                RowBox[{
+                 RowBox[{"logResult", "[", 
+                  RowBox[{"[", "1", "]"}], "]"}], ",", "ciUpLog"}], "}"}], 
+               "]"}], "]"}]}], "}"}], ",", 
+           RowBox[{"{", 
+            RowBox[{"Purple", ",", "Dashed", ",", 
+             RowBox[{"Line", "[", 
+              RowBox[{"Transpose", "[", 
+               RowBox[{"{", 
+                RowBox[{
+                 RowBox[{"logResult", "[", 
+                  RowBox[{"[", "1", "]"}], "]"}], ",", "ciDownLog"}], "}"}], 
+               "]"}], "]"}]}], "}"}]}], "}"}]}], ";", "\[IndentingNewLine]", 
+        RowBox[{"Show", "[", 
+         RowBox[{
+          RowBox[{"Graphics", "[", 
+           RowBox[{"plots", ",", 
+            RowBox[{"PlotRange", "->", "All"}], ",", 
+            RowBox[{"Axes", "->", "True"}], ",", 
+            RowBox[{"Frame", "->", "True"}], ",", 
+            RowBox[{"FrameLabel", "->", 
+             RowBox[{"{", 
+              RowBox[{"\"\<Time\>\"", ",", "\"\<Estimated Rate\>\""}], 
+              "}"}]}], ",", 
+            RowBox[{"ImageSize", "->", "Large"}]}], "]"}], ",", 
+          RowBox[{"PlotRange", "->", 
+           RowBox[{"{", 
+            RowBox[{
+             RowBox[{"{", 
+              RowBox[{"0", ",", 
+               RowBox[{
+                RowBox[{"Last", "[", "timestamps", "]"}], "+", "1"}]}], "}"}],
+              ",", "Automatic"}], "}"}]}], ",", 
+          RowBox[{"AspectRatio", "->", 
+           RowBox[{"2", "/", "3"}]}]}], "]"}]}]}], "]"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"nWindow", ",", "10", ",", "\"\<N-event window size\>\""}], 
+        "}"}], ",", "1", ",", "20", ",", "1"}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"tau", ",", "1.0", ",", "\"\<EMA tau\>\""}], "}"}], ",", 
+       "0.1", ",", "5", ",", "0.1"}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{
+        "q", ",", "0.05", ",", "\"\<Log-intensity process noise\>\""}], "}"}],
+        ",", "0.001", ",", "0.5", ",", "0.001"}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"dt", ",", "0.01", ",", "\"\<time step for plotting\>\""}], 
+        "}"}], ",", "0.001", ",", "0.1", ",", "0.001"}], "}"}]}], 
+    "]"}]}]}]], "Input",
+ CellChangeTimes->{{3.984019559564972*^9, 3.984019559564972*^9}, {
+   3.9840198171332493`*^9, 3.9840198318068295`*^9}, {3.9840199439713497`*^9, 
+   3.984019973485647*^9}, 3.984020022114956*^9, 3.9840200953782234`*^9, {
+   3.9840201492752285`*^9, 3.984020239148081*^9}, 3.984020394041588*^9, 
+   3.9840205988038483`*^9, {3.9840206628012295`*^9, 3.9840207385125637`*^9}, 
+   3.984020768950735*^9, 3.984020963353348*^9, 3.9840210604209423`*^9, 
+   3.984021366723753*^9, 3.9840227478545513`*^9},
+ CellLabel->"",ExpressionUUID->"43ebbeac-145f-6047-a06c-da3165c69bc6"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"Manipulate", "[", 
+  RowBox[{
+   RowBox[{"Module", "[", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{
+      "nResult", ",", "emaResult", ",", "logResult", ",", "ciUp", ",", 
+       "ciDown", ",", "plots"}], "}"}], ",", 
+     RowBox[{"(*", 
+      RowBox[{"Compute", " ", "estimators"}], "*)"}], "\[IndentingNewLine]", 
+     RowBox[{
+      RowBox[{"logResult", "=", 
+       RowBox[{"RecursiveLogIntensity", "[", 
+        RowBox[{"timestamps", ",", "q", ",", "dt"}], "]"}]}], ";", 
+      "\[IndentingNewLine]", 
+      RowBox[{"ciUpLog", "=", 
+       RowBox[{
+        RowBox[{"logResult", "[", 
+         RowBox[{"[", "2", "]"}], "]"}], "+", 
+        RowBox[{"1.96", " ", 
+         RowBox[{"Sqrt", "[", 
+          RowBox[{"logResult", "[", 
+           RowBox[{"[", "3", "]"}], "]"}], "]"}]}]}]}], ";", 
+      "\[IndentingNewLine]", 
+      RowBox[{"ciDownLog", "=", 
+       RowBox[{
+        RowBox[{"logResult", "[", 
+         RowBox[{"[", "2", "]"}], "]"}], "-", 
+        RowBox[{"1.96", " ", 
+         RowBox[{"Sqrt", "[", 
+          RowBox[{"logResult", "[", 
+           RowBox[{"[", "3", "]"}], "]"}], "]"}]}]}]}], ";", 
+      "\[IndentingNewLine]", 
+      RowBox[{"plots", "=", 
+       RowBox[{"{", 
+        RowBox[{"(*", 
+         RowBox[{"Vertical", " ", "lines", " ", "for", " ", "events"}], 
+         "*)"}], 
+        RowBox[{
+         RowBox[{"{", 
+          RowBox[{"Red", ",", 
+           RowBox[{"Table", "[", 
+            RowBox[{
+             RowBox[{"Line", "[", 
+              RowBox[{"{", 
+               RowBox[{
+                RowBox[{"{", 
+                 RowBox[{"t", ",", "0"}], "}"}], ",", 
+                RowBox[{"{", 
+                 RowBox[{"t", ",", 
+                  RowBox[{"Max", "[", 
+                   RowBox[{"logResult", "[", 
+                    RowBox[{"[", "2", "]"}], "]"}], "]"}]}], "}"}]}], "}"}], 
+              "]"}], ",", 
+             RowBox[{"{", 
+              RowBox[{"t", ",", "timestamps"}], "}"}]}], "]"}]}], "}"}], ",", 
+         RowBox[{"{", 
+          RowBox[{"Purple", ",", "Thick", ",", 
+           RowBox[{"Line", "[", 
+            RowBox[{"Transpose", "[", 
+             RowBox[{"{", 
+              RowBox[{
+               RowBox[{"logResult", "[", 
+                RowBox[{"[", "1", "]"}], "]"}], ",", 
+               RowBox[{"logResult", "[", 
+                RowBox[{"[", "2", "]"}], "]"}]}], "}"}], "]"}], "]"}]}], 
+          "}"}], ",", 
+         RowBox[{"{", 
+          RowBox[{"Purple", ",", "Dashed", ",", 
+           RowBox[{"Line", "[", 
+            RowBox[{"Transpose", "[", 
+             RowBox[{"{", 
+              RowBox[{
+               RowBox[{"logResult", "[", 
+                RowBox[{"[", "1", "]"}], "]"}], ",", "ciUpLog"}], "}"}], 
+             "]"}], "]"}]}], "}"}], ",", 
+         RowBox[{"{", 
+          RowBox[{"Purple", ",", "Dashed", ",", 
+           RowBox[{"Line", "[", 
+            RowBox[{"Transpose", "[", 
+             RowBox[{"{", 
+              RowBox[{
+               RowBox[{"logResult", "[", 
+                RowBox[{"[", "1", "]"}], "]"}], ",", "ciDownLog"}], "}"}], 
+             "]"}], "]"}]}], "}"}]}], "}"}]}], ";", "\[IndentingNewLine]", 
+      RowBox[{"Show", "[", 
+       RowBox[{
+        RowBox[{"Graphics", "[", 
+         RowBox[{"plots", ",", 
+          RowBox[{"PlotRange", "->", "All"}], ",", 
+          RowBox[{"Axes", "->", "True"}], ",", 
+          RowBox[{"Frame", "->", "True"}], ",", 
+          RowBox[{"FrameLabel", "->", 
+           RowBox[{"{", 
+            RowBox[{"\"\<Time\>\"", ",", "\"\<Estimated Rate\>\""}], "}"}]}], 
+          ",", 
+          RowBox[{"ImageSize", "->", "Large"}]}], "]"}], ",", 
+        RowBox[{"PlotRange", "->", 
+         RowBox[{"{", 
+          RowBox[{
+           RowBox[{"{", 
+            RowBox[{"0", ",", 
+             RowBox[{
+              RowBox[{"Last", "[", "timestamps", "]"}], "+", "1"}]}], "}"}], ",",
+            "Automatic"}], "}"}]}], ",", 
+        RowBox[{"AspectRatio", "->", 
+         RowBox[{"2", "/", "3"}]}]}], "]"}]}]}], "]"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"q", ",", "0.05", ",", "\"\<Log-intensity process noise\>\""}], 
+      "}"}], ",", "0.001", ",", "0.5", ",", "0.001"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"dt", ",", "0.01", ",", "\"\<time step for plotting\>\""}], 
+      "}"}], ",", "0.001", ",", "0.1", ",", "0.001"}], "}"}]}], 
+  "]"}]], "Input",
+ CellChangeTimes->{
+  3.984020832069376*^9, {3.984021179937998*^9, 3.9840212181988544`*^9}},
+ CellLabel->
+  "In[1166]:=",ExpressionUUID->"8c282fdb-5b7f-ea4f-8e87-67f35c3fcdda"],
+
+Cell[BoxData[
+ TagBox[
+  StyleBox[
+   DynamicModuleBox[{$CellContext`dt$$ = 0.01, $CellContext`q$$ = 0.268, 
+    Typeset`show$$ = True, Typeset`bookmarkList$$ = {}, 
+    Typeset`bookmarkMode$$ = "Menu", Typeset`animator$$, Typeset`animvar$$ = 
+    1, Typeset`name$$ = "\"untitled\"", Typeset`specs$$ = {{{
+       Hold[$CellContext`q$$], 0.05, "Log-intensity process noise"}, 0.001, 
+      0.5, 0.001, ControlType -> Manipulator}, {{
+       Hold[$CellContext`dt$$], 0.01, "time step for plotting"}, 0.001, 0.1, 
+      0.001, ControlType -> Manipulator}}, Typeset`size$$ = {
+    576., {193.69816080729166`, 199.43009440104166`}}, Typeset`update$$ = 0, 
+    Typeset`initDone$$, Typeset`skipInitDone$$ = True, 
+    Typeset`keyframeActionsQ$$ = False, Typeset`keyframeList$$ = {}}, 
+    DynamicBox[Manipulate`ManipulateBoxes[
+     1, StandardForm, 
+      "Variables" :> {$CellContext`dt$$ = 0.01, $CellContext`q$$ = 0.05}, 
+      "ControllerVariables" :> {}, 
+      "OtherVariables" :> {
+       Typeset`show$$, Typeset`bookmarkList$$, Typeset`bookmarkMode$$, 
+        Typeset`animator$$, Typeset`animvar$$, Typeset`name$$, 
+        Typeset`specs$$, Typeset`size$$, Typeset`update$$, Typeset`initDone$$,
+         Typeset`skipInitDone$$, Typeset`keyframeActionsQ$$, 
+        Typeset`keyframeList$$}, "Body" :> 
+      Module[{$CellContext`nResult$, $CellContext`emaResult$, \
+$CellContext`logResult$, $CellContext`ciUp$, $CellContext`ciDown$, \
+$CellContext`plots$}, $CellContext`logResult$ = \
+$CellContext`RecursiveLogIntensity[$CellContext`timestamps, $CellContext`q$$, \
+$CellContext`dt$$]; $CellContext`ciUpLog = 
+         Part[$CellContext`logResult$, 2] + 1.96 Sqrt[
+             Part[$CellContext`logResult$, 3]]; $CellContext`ciDownLog = 
+         Part[$CellContext`logResult$, 2] - 1.96 Sqrt[
+            Part[$CellContext`logResult$, 3]]; $CellContext`plots$ = {{Red, 
+            Table[
+             Line[{{$CellContext`t, 0}, {$CellContext`t, 
+                Max[
+                 
+                 Part[$CellContext`logResult$, 
+                  2]]}}], {$CellContext`t, $CellContext`timestamps}]}, {
+           Purple, Thick, 
+            Line[
+             Transpose[{
+               Part[$CellContext`logResult$, 1], 
+               Part[$CellContext`logResult$, 2]}]]}, {Purple, Dashed, 
+            Line[
+             Transpose[{
+               Part[$CellContext`logResult$, 1], $CellContext`ciUpLog}]]}, {
+           Purple, Dashed, 
+            Line[
+             Transpose[{
+               Part[$CellContext`logResult$, 1], $CellContext`ciDownLog}]]}}; 
+        Show[
+          
+          Graphics[$CellContext`plots$, PlotRange -> All, Axes -> True, Frame -> 
+           True, FrameLabel -> {"Time", "Estimated Rate"}, ImageSize -> 
+           Large], PlotRange -> {{0, Last[$CellContext`timestamps] + 1}, 
+            Automatic}, AspectRatio -> 2/3]], 
+      "Specifications" :> {{{$CellContext`q$$, 0.05, 
+          "Log-intensity process noise"}, 0.001, 0.5, 
+         0.001}, {{$CellContext`dt$$, 0.01, "time step for plotting"}, 0.001, 
+         0.1, 0.001}}, "Options" :> {}, "DefaultOptions" :> {}],
+     ImageSizeCache->{
+      618.5999999999999, {250.35900065104164`, 256.0909342447917}},
+     SingleEvaluation->True],
+    Deinitialization:>None,
+    DynamicModuleValues:>{},
+    SynchronousInitialization->True,
+    UndoTrackedVariables:>{Typeset`show$$, Typeset`bookmarkMode$$},
+    UnsavedVariables:>{Typeset`initDone$$},
+    UntrackedVariables:>{Typeset`size$$}], "Manipulate",
+   Deployed->True,
+   StripOnInput->False],
+  Manipulate`InterpretManipulate[1]]], "Output",
+ CellChangeTimes->{3.984021384707983*^9},
+ CellLabel->
+  "Out[1166]=",ExpressionUUID->"d08c5fb5-db40-874a-8a10-bb8d1c949b86"]
+}, Open  ]]
+},
+WindowSize->{1076, 1037},
+WindowMargins->{{-1256, Automatic}, {Automatic, -646.5}},
+FrontEndVersion->"14.3 for Microsoft Windows (64-bit) (July 8, 2025)",
+StyleDefinitions->"Default.nb",
+ExpressionUUID->"ad6b147f-8606-c449-8507-46c0f0bcbf80"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[1460, 33, 24123, 628, 1245, "Input",ExpressionUUID->"43ebbeac-145f-6047-a06c-da3165c69bc6"],
+Cell[CellGroupData[{
+Cell[25608, 665, 4608, 122, 199, "Input",ExpressionUUID->"8c282fdb-5b7f-ea4f-8e87-67f35c3fcdda"],
+Cell[30219, 789, 3726, 75, 523, "Output",ExpressionUUID->"d08c5fb5-db40-874a-8a10-bb8d1c949b86"]
+}, Open  ]]
+}
+]
+*)
+
