@@ -26,6 +26,7 @@ import android.view.MenuItem
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.TextView
+import android.os.Build
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
@@ -583,6 +584,15 @@ class MainActivity : AppCompatActivity() {
         ) {
             needed += Manifest.permission.RECORD_AUDIO
         }
+        val bluetoothMicPreferred = PreferenceManager.getDefaultSharedPreferences(this)
+            .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true)
+        if (bluetoothMicPreferred &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+                != PackageManager.PERMISSION_GRANTED
+        ) {
+            needed += Manifest.permission.BLUETOOTH_CONNECT
+        }
 
         return needed
     }
@@ -639,6 +649,9 @@ class MainActivity : AppCompatActivity() {
         }
         if (Manifest.permission.RECORD_AUDIO in missingRuntimePermissions) {
             reasons += "Microphone access is required to detect Geiger counter clicks."
+        }
+        if (Manifest.permission.BLUETOOTH_CONNECT in missingRuntimePermissions) {
+            reasons += "Bluetooth permission is required to use a connected Bluetooth microphone."
         }
         if (needsBatteryOptimizationExemption) {
             reasons += "Battery usage must be set to 'Unrestricted' so Android does not stop tracking in the background."
