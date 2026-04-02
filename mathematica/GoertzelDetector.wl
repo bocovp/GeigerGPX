@@ -197,7 +197,7 @@ processAudio[samples_List] :=
 audioFile = "O:\\Temp\\FastBeeps.wav";    (* \[LeftArrow] SET THIS *)
 
 audio  = Import[audioFile];
-audio  = First[AudioSplit[audio,3]];
+audio  = First[AudioSplit[audio, 4]];
 
 
 fs         = Round[First @ AudioSampleRate[audio]];  (* verify sample rate *)
@@ -220,7 +220,7 @@ energies     = result["energies"];
 windowStarts = result["windowStarts"];
 
 Print["Total windows analysed : ", Length[windowStarts]];
-Print["Detected beeps          : ", Length[beeps]->Total["type"/.beeps]];
+Print["Detected beeps         : ", Length[beeps]->Total["type"/.beeps]];
 
 
 
@@ -256,8 +256,9 @@ spec = Spectrogram[
   ColorFunction     -> "SolarColors",
   FrameLabel        -> {"Time (s)", "Frequency (Hz)"},
   PlotLabel         -> Style["Spectrogram  |  red lines = detected beep starts", 14],
-  ImageSize         -> {500*5*totalDuration, 500},
-  AspectRatio       -> 1/(5*totalDuration)
+  ImageSize         -> {500*5*totalDuration,600},
+   AspectRatio -> Full,
+   PlotRangePadding -> None
 ];
 
 (* Vertical red lines at each beep start time *)
@@ -281,21 +282,62 @@ Show[spec, beepOverlay]
 
 windowTimestamps = (windowStarts - 1) / N[sampleRate];   (* seconds *)
 mainTrace = energies[[All, 1]];
-sideTrace = energies[[All, 2]];
+sideTrace1 = energies[[All, 2]];
+sideTrace2 = energies[[All, 3]];
 
-ListLogPlot[
+llp=ListPlot[
   {
-    Transpose[{windowTimestamps, mainTrace}],
-    Transpose[{windowTimestamps, sideTrace}],
+    Transpose[{windowTimestamps, Log10@mainTrace}],
+    Transpose[{windowTimestamps, Log10@sideTrace1}],
+    Transpose[{windowTimestamps, Log10@sideTrace2}],
     (* Threshold lines as degenerate data sets for the legend *)
-    {{0, magThreshold},       {totalDuration, magThreshold}},
-    {{0, magThresholdEnd},    {totalDuration, magThresholdEnd}}
+    {{0, Log10@magThreshold},       {totalDuration, Log10@magThreshold}},
+    {{0, Log10@magThresholdEnd},    {totalDuration, Log10@magThresholdEnd}}
   },
   Joined        -> True,
-  PlotStyle     -> {Blue, Gray, {Red, Dashed}, {Orange, Dashed}},
+  PlotStyle     -> {Blue, Gray, Gray, {Red, Dashed}, {Orange, Dashed}},
+  ImageSize     -> 500*5*totalDuration,
+   AspectRatio -> Full,
+  PlotRange     -> {{0,totalDuration},Automatic},
+   PlotRangePadding -> None
+]
+
+dtplot = mainTrace*2/(sideTrace1+sideTrace2) * (If[#>=0,1,NaN]&)/@(mainTrace-magThresholdEnd);
+
+dtp=ListPlot[
+  {
+    Transpose[{windowTimestamps, dtplot}],
+    (* Threshold lines as degenerate data sets for the legend *)
+    {{0, dominanceThreshold},       {totalDuration, dominanceThreshold}},
+    {{0, dominanceThresholdEnd},    {totalDuration, dominanceThresholdEnd}}
+  },
+  Joined        -> True,
+  PlotStyle     -> {Blue,{Red, Dashed}, {Orange, Dashed}},
+  ImageSize     -> 500*5*totalDuration,
+   AspectRatio -> Full,
+  PlotRange     -> {{0,totalDuration},{0,5}},
+   PlotRangePadding -> None
+]
+
+
+
+3
+
+
+
   PlotLegends   -> {"main energy", "side energy", "magThreshold", "magThresholdEnd"},
   FrameLabel    -> {"Time (s)", "Goertzel energy"},
   PlotLabel     -> "Energy trace \[LongDash] adjust magThreshold until red dashed line bisects beep peaks",
-  ImageSize     -> {900, 250},
-  AspectRatio   -> 1/4
-]
+
+
+ 500*5*totalDuration/2.5
+
+
+GraphicsColumn[
+ {Show[spec, beepOverlay, beepOverlay, ImagePadding -> {{40, 10}, {Automatic, Automatic}}], 
+  Show[llp, ImagePadding -> {{40, 10}, {Automatic, Automatic}}],
+  Show[dtp, ImagePadding -> {{40, 10}, {Automatic, Automatic}}]},
+ImageSize     -> 500*5*totalDuration/2]
+
+
+
