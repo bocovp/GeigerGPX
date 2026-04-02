@@ -10,6 +10,11 @@ import androidx.lifecycle.MutableLiveData
  * and UI-layer ViewModels.
  */
 class TrackingRepository {
+    data class AudioStatus(
+        val status: String = "unknown",
+        val errorCode: Int = AUDIO_STATUS_WAITING
+    )
+
     data class CpsSnapshot(
         val sampleCount: Int = 0,
         val oldestTimestampMillis: Long = 0L,
@@ -52,8 +57,8 @@ class TrackingRepository {
     private val _gpsStatus = MutableLiveData("unknown")
     val gpsStatus: LiveData<String> = _gpsStatus
 
-    private val _audioStatus = MutableLiveData("unknown")
-    val audioStatus: LiveData<String> = _audioStatus
+    private val _audioStatus = MutableLiveData(AudioStatus())
+    val audioStatus: LiveData<AudioStatus> = _audioStatus
 
     private val _measurementModeEnabled = MutableLiveData(false)
     val measurementModeEnabled: LiveData<Boolean> = _measurementModeEnabled
@@ -102,8 +107,8 @@ class TrackingRepository {
         _gpsStatus.postValue(gpsStatus)
     }
 
-    fun updateAudioStatus(audioStatus: String) {
-        _audioStatus.postValue(audioStatus)
+    fun updateAudioStatus(audioStatus: String, errorCode: Int) {
+        _audioStatus.postValue(AudioStatus(status = audioStatus, errorCode = errorCode))
     }
 
     fun updateMeasurementMode(enabled: Boolean) {
@@ -125,5 +130,11 @@ class TrackingRepository {
         val m = (sec % 3600) / 60
         val s = sec % 60
         return String.format("%02d:%02d:%02d", h, m, s)
+    }
+
+    companion object {
+        const val AUDIO_STATUS_WAITING = 0
+        const val AUDIO_STATUS_WORKING = 1
+        const val AUDIO_STATUS_ERROR = 2
     }
 }
