@@ -25,6 +25,7 @@ class AudioBeepDetector(
     private val useBluetoothMicIfAvailable: Boolean = true,
     private val onBeep: (Float, Int) -> Unit,
     private val onAudioHealth: (Boolean) -> Unit = {},
+    private val onAudioStatus: (String, Int) -> Unit = { _, _ -> },
     /**
      * Fired on the worker thread immediately before the recording loop starts,
      * after the actual sample rate has been resolved. Callers that create their
@@ -48,6 +49,7 @@ class AudioBeepDetector(
     private var communicationDeviceSetByDetector = false
     private var bluetoothMicRoutingActive = false
     private var preferredInputDevice: AudioDeviceInfo? = null
+    @Volatile private var lastPublishedAudioStatus: String? = null
 
     fun start() {
         if (running) return
@@ -109,10 +111,12 @@ class AudioBeepDetector(
 
             Log.i(TAG, "Recording started — actualSampleRate=$actualSampleRate Hz, " +
                     "routedDeviceType=${ar.routedDevice?.type}")
+            updateRoutingAndPublishWorkingStatus(ar.routedDevice)
 
             // Warn immediately if Android silently re-routes away from the chosen device.
             ar.addOnRoutingChangedListener({ record ->
                 Log.w(TAG, "AudioRecord routing changed! now routedDeviceType=${record.routedDevice?.type}")
+                updateRoutingAndPublishWorkingStatus(record.routedDevice)
             }, null)
 
             // Notify callers of the resolved sample rate before the recording loop begins.
@@ -162,6 +166,7 @@ class AudioBeepDetector(
 
                     if (currentAr.state != AudioRecord.STATE_INITIALIZED) {
                         Log.e(TAG, "Recorder uninitialized, restarting")
+                        publishAudioStatus("Recorder uninitialized, restarting", AUDIO_STATUS_ERROR)
                         audioBuf = restartAndReallocate(audioBuf, detector, actualSampleRate) ?: audioBuf
                         continue
                     }
@@ -170,6 +175,7 @@ class AudioBeepDetector(
                     if (read <= 0) {
                         zeroBufferCount++
                         Log.e(TAG, "Hardware read error: $read")
+                        publishAudioStatus("Hardware read error", AUDIO_STATUS_ERROR)
                         continue
                     }
 
@@ -186,17 +192,20 @@ class AudioBeepDetector(
                             Log.d(TAG, "Empty audio buffer")
                             audioHealthy = false
                             onAudioHealth(false)
+                            publishAudioStatus("Empty audio buffer", AUDIO_STATUS_ERROR)
                         }
                     } else {
                         zeroBufferCount = 0
                         if (!audioHealthy) {
                             audioHealthy = true
                             onAudioHealth(true)
+                            publishWorkingStatus()
                         }
                     }
 
                     if (zeroBufferCount >= ZERO_BUFFER_LIMIT) {
                         Log.w(TAG, "AudioRecord appears stuck — restarting")
+                        publishAudioStatus("AudioRecord appears stuck — restarting", AUDIO_STATUS_ERROR)
                         audioBuf = restartAndReallocate(audioBuf, detector, actualSampleRate) ?: audioBuf
                         zeroBufferCount = 0
                         continue
@@ -399,6 +408,7 @@ class AudioBeepDetector(
                 null
             } else {
                 audioRecord = newRecorder
+                updateRoutingAndPublishWorkingStatus(newRecorder.routedDevice)
                 bufferSize
             }
         } catch (e: Exception) {
@@ -562,6 +572,28 @@ class AudioBeepDetector(
         }
     }
 
+    private fun isBluetoothInputDevice(device: AudioDeviceInfo?): Boolean {
+        val type = device?.type ?: return false
+        return type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+            type == AudioDeviceInfo.TYPE_BLE_HEADSET
+    }
+
+    private fun updateRoutingAndPublishWorkingStatus(device: AudioDeviceInfo?) {
+        bluetoothMicRoutingActive = isBluetoothInputDevice(device)
+        publishWorkingStatus()
+    }
+
+    private fun publishWorkingStatus() {
+        val status = if (bluetoothMicRoutingActive) "Working (bluetooth)" else "Working"
+        publishAudioStatus(status, AUDIO_STATUS_WORKING)
+    }
+
+    private fun publishAudioStatus(status: String, errorCode: Int) {
+        if (lastPublishedAudioStatus == status) return
+        lastPublishedAudioStatus = status
+        onAudioStatus(status, errorCode)
+    }
+
     companion object {
         private const val TAG = "AudioBeepDetector"
 
@@ -582,6 +614,9 @@ class AudioBeepDetector(
 
         private const val BASE_MAG = 1e6f
         const val DEFAULT_MAG_THRESHOLD = BASE_MAG * WINDOW_SIZE
+        const val AUDIO_STATUS_WAITING = 0
+        const val AUDIO_STATUS_WORKING = 1
+        const val AUDIO_STATUS_ERROR = 2
 
         fun createWithPrefs(context: Context, onBeep: (Float, Int) -> Unit): AudioBeepDetector {
             val threshold = storedThreshold(context)
@@ -596,7 +631,8 @@ class AudioBeepDetector(
         fun createWithPrefs(
             context: Context,
             onBeep: (Float, Int) -> Unit,
-            onAudioHealth: (Boolean) -> Unit
+            onAudioHealth: (Boolean) -> Unit,
+            onAudioStatus: (String, Int) -> Unit
         ): AudioBeepDetector {
             val threshold = storedThreshold(context)
             return AudioBeepDetector(
@@ -604,7 +640,8 @@ class AudioBeepDetector(
                 magThreshold = threshold,
                 useBluetoothMicIfAvailable = useBluetoothMicIfAvailable(context),
                 onBeep = onBeep,
-                onAudioHealth = onAudioHealth
+                onAudioHealth = onAudioHealth,
+                onAudioStatus = onAudioStatus
             )
         }
 

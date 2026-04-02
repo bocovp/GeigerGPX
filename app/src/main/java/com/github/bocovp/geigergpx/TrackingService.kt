@@ -206,7 +206,7 @@ class TrackingService : Service() {
 
         if (ActivityCompatHelper.hasLocationAndAudioPermissions(this)) {
             fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
-            repo.updateAudioStatus("Working")
+            repo.updateAudioStatus("Working", TrackingRepository.AUDIO_STATUS_WORKING)
             startBeepDetector()
             repo.updateMonitoringStatus(gpsStatus = "Waiting")
         } else {
@@ -288,7 +288,7 @@ class TrackingService : Service() {
             cpsSnapshot = doseRateMeasurement.currentSnapshot(),
             gpsStatus = "Waiting"
         )
-        repo.updateAudioStatus("Working")
+        repo.updateAudioStatus("Working", TrackingRepository.AUDIO_STATUS_WORKING)
     }
 
     private data class TrackStopStats(
@@ -540,8 +540,10 @@ class TrackingService : Service() {
                     alertEvent?.let { dispatchDoseRateAlert(it) }
                 }
             },
-            onAudioHealth = { healthy ->
-                repo.updateAudioStatus(if (healthy) "Working" else "Error")
+            onAudioHealth = { _ ->
+            },
+            onAudioStatus = { status, errorCode ->
+                repo.updateAudioStatus(status, errorCode)
             }
         ).also { it.start() }
     }
