@@ -103,21 +103,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
         updateFolderSummary()
 
         val thresholdPref = findPreference<LongPressPreference>("threshold_calibration")
+        val bluetoothThresholdPref = findPreference<LongPressPreference>("bluetooth_threshold_calibration")
         val useBluetoothMic = findPreference<SwitchPreferenceCompat>(KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE)
 
-        thresholdPref?.let { pref ->
-            // Inside this block, 'pref' is a non-nullable LongPressPreference
-            pref.summary = buildThresholdSummary()
-
-            pref.setOnPreferenceClickListener {
-                startCalibrationDialog(pref)
-                true
-            }
-
-            pref.onLongClick = {
-                showManualThresholdDialog(pref)
-            }
-        }
+        thresholdPref?.let { setupThresholdPreference(it, false) }
+        bluetoothThresholdPref?.let { setupThresholdPreference(it, true) }
 
         useBluetoothMic?.summaryProvider = Preference.SummaryProvider<SwitchPreferenceCompat> { pref ->
             if (pref.isChecked) "Enabled" else "Disabled"
@@ -188,22 +178,50 @@ class SettingsFragment : PreferenceFragmentCompat() {
         return 10.0.pow(value / 10.0) * 100.0
     }
 
-    private fun buildThresholdSummary(): String {
+    private fun thresholdKey(bluetooth: Boolean): String {
+        return if (bluetooth) KEY_BLUETOOTH_AUDIO_THRESHOLD else KEY_AUDIO_THRESHOLD
+    }
+
+    private fun defaultThreshold(bluetooth: Boolean): Float {
+        return if (bluetooth) {
+            AudioBeepDetector.DEFAULT_BLUETOOTH_MAG_THRESHOLD
+        } else {
+            AudioBeepDetector.DEFAULT_MAG_THRESHOLD
+        }
+    }
+
+    private fun buildThresholdSummary(bluetooth: Boolean): String {
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
-        val value = prefs.getFloat(KEY_AUDIO_THRESHOLD, Float.NaN)
+        val value = prefs.getFloat(thresholdKey(bluetooth), Float.NaN)
         return if (value.isNaN()) {
-            "Not calibrated"
+            "Uncalibrated (%.2f dB)".format(toDb(defaultThreshold(bluetooth)))
         } else {
             "Current threshold: %.2f dB".format(toDb(value))
             //100.0 is just an arbitrary constant
         }
     }
 
-    private fun startCalibrationDialog(thresholdPref: LongPressPreference) {
+    private fun setupThresholdPreference(pref: LongPressPreference, bluetooth: Boolean) {
+        pref.summary = buildThresholdSummary(bluetooth)
+        pref.setOnPreferenceClickListener {
+            if (bluetooth && !AudioBeepDetector.isBluetoothMicAvailable(requireContext())) {
+                Toast.makeText(requireContext(), "Bluetooth microphone not available.", Toast.LENGTH_SHORT).show()
+                true
+            } else {
+                startCalibrationDialog(pref, bluetooth)
+                true
+            }
+        }
+        pref.onLongClick = {
+            showManualThresholdDialog(pref, bluetooth)
+        }
+    }
+
+    private fun startCalibrationDialog(thresholdPref: LongPressPreference, bluetooth: Boolean) {
         val activity = requireActivity()
 
         val dialog = AlertDialog.Builder(activity)
-            .setTitle("Calibration")
+            .setTitle(if (bluetooth) "Calibration (bluetooth)" else "Calibration")
             .setMessage("Estimating signal level...")
             .setNegativeButton("Cancel") { d, _ ->
                 calibrationDetector?.stop()
@@ -217,6 +235,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         calibrationDetector = CalibrationSession(
             context = requireContext(),
+            useBluetoothMicIfAvailable = bluetooth,
+            thresholdPreferenceKey = thresholdKey(bluetooth),
+            fallbackThreshold = defaultThreshold(bluetooth),
             onProgress = { phase, current, totalCount ->
                 activity.runOnUiThread {
                     if (phase == 2) {
@@ -228,7 +249,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 activity.runOnUiThread {
                     calibrationDetector = null
                     dialog.dismiss()
-                    thresholdPref.summary = buildThresholdSummary()
+                    thresholdPref.summary = buildThresholdSummary(bluetooth)
                     Toast.makeText(
                         requireContext(),
                         "Calibration finished.",
@@ -240,10 +261,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
         calibrationDetector?.start()
     }
 
-    private fun showManualThresholdDialog(thresholdPref: LongPressPreference) {
+    private fun showManualThresholdDialog(thresholdPref: LongPressPreference, bluetooth: Boolean) {
         val context = requireContext()
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val current = prefs.getFloat(KEY_AUDIO_THRESHOLD, Float.NaN)
+        val thresholdKey = thresholdKey(bluetooth)
+        val current = prefs.getFloat(thresholdKey, Float.NaN)
 
         val input = EditText(context).apply {
             inputType = InputType.TYPE_CLASS_NUMBER or
@@ -265,8 +287,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 if (value != null && value > 0f && value.isFinite()) {
                     // Going back from "our" deciBells to intensity
                     val value2 = fromDb(value);
-                    prefs.edit().putFloat(KEY_AUDIO_THRESHOLD, value2.toFloat()).apply()
-                    thresholdPref.summary = buildThresholdSummary()
+                    prefs.edit().putFloat(thresholdKey, value2.toFloat()).apply()
+                    thresholdPref.summary = buildThresholdSummary(bluetooth)
                     Toast.makeText(context, "Threshold updated.", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(context, "Invalid threshold value.", Toast.LENGTH_SHORT).show()
@@ -279,6 +301,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     companion object {
         const val KEY_GPX_TREE_URI = "gpx_tree_uri"
         const val KEY_AUDIO_THRESHOLD = "audio_threshold"
+        const val KEY_BLUETOOTH_AUDIO_THRESHOLD = "bluetooth_audio_threshold"
         const val KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE = "use_bluetooth_mic_if_available"
     }
 }
