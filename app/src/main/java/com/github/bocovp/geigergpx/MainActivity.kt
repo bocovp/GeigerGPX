@@ -380,11 +380,11 @@ class MainActivity : AppCompatActivity() {
             binding.textGpsStatus.setTextColor(ContextCompat.getColor(this, color))
         }
 
-        viewModel.audioStatus.observe(this) { status ->
-            binding.textAudioStatus.text = "Audio status: $status"
-            val color = when (status) {
-                "Working" -> R.color.status_working
-                "Error" -> R.color.status_spoofing
+        viewModel.audioStatus.observe(this) { audioStatus ->
+            binding.textAudioStatus.text = "Audio status: ${audioStatus.status}"
+            val color = when (audioStatus.errorCode) {
+                TrackingRepository.AUDIO_STATUS_WORKING -> R.color.status_working
+                TrackingRepository.AUDIO_STATUS_ERROR -> R.color.status_spoofing
                 else -> R.color.status_waiting
             }
             binding.textAudioStatus.setTextColor(ContextCompat.getColor(this, color))
