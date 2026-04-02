@@ -12,6 +12,11 @@
             android:title="Threshold (press to calibrate)"
             android:summary="Not calibrated"/>
 
+        <androidx.preference.SwitchPreferenceCompat
+            android:key="use_bluetooth_mic_if_available"
+            android:title="Use Bluetooth mic"
+            android:defaultValue="true" />
+
     </PreferenceCategory>
 
     <PreferenceCategory
@@ -27,7 +32,7 @@
 
         <ListPreference
             android:key="dose_rate_avg_timestamps_n"
-            android:title="Timestamps for dose rate averaging"
+            android:title="Counts for dose rate averaging"
             android:entries="@array/dose_rate_avg_timestamps_entries"
             android:entryValues="@array/dose_rate_avg_timestamps_values"
             android:defaultValue="10" />
