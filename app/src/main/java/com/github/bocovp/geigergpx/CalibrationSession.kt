@@ -28,6 +28,9 @@ class CalibrationSession(
     private val context: Context,
     private val onProgress: (phase: Int, current: Int, total: Int) -> Unit,
     private val onFinished: (threshold: Float?) -> Unit,
+    private val useBluetoothMicIfAvailable: Boolean = PreferenceManager.getDefaultSharedPreferences(context)
+        .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true),
+    private val thresholdPreferenceKey: String = SettingsFragment.KEY_AUDIO_THRESHOLD,
     private val fallbackThreshold: Float = AudioBeepDetector.DEFAULT_MAG_THRESHOLD,
     private val stageOneDurationSeconds: Int = 5,
     private val totalBeepCount: Int = 10
@@ -58,8 +61,7 @@ class CalibrationSession(
     private val detector = AudioBeepDetector(
         context = context.applicationContext,
         magThreshold = fallbackThreshold / 1000f,  // irrelevant; onRawAudio bypasses internal detector
-        useBluetoothMicIfAvailable = PreferenceManager.getDefaultSharedPreferences(context)
-            .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true),
+        useBluetoothMicIfAvailable = useBluetoothMicIfAvailable,
         onBeep = { _, _ -> },
         onRecordingStarted = { sampleRate -> onRecordingStarted(sampleRate) },
         onRawAudio = { samples -> processSamples(samples) }
@@ -154,7 +156,7 @@ class CalibrationSession(
 
         PreferenceManager.getDefaultSharedPreferences(context)
             .edit()
-            .putFloat(SettingsFragment.KEY_AUDIO_THRESHOLD, finalThreshold)
+            .putFloat(thresholdPreferenceKey, finalThreshold)
             .apply()
 
         // Both onFinished and stop() are dispatched to avoid blocking or interrupting
