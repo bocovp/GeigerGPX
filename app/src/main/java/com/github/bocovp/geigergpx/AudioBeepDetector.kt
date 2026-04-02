@@ -22,6 +22,7 @@ import kotlin.concurrent.thread
 class AudioBeepDetector(
     private val context: Context? = null,
     private val magThreshold: Float = DEFAULT_MAG_THRESHOLD,
+    private val bluetoothMagThreshold: Float = DEFAULT_BLUETOOTH_MAG_THRESHOLD,
     private val useBluetoothMicIfAvailable: Boolean = true,
     private val onBeep: (Float, Int) -> Unit,
     private val onAudioHealth: (Boolean) -> Unit = {},
@@ -153,8 +154,9 @@ class AudioBeepDetector(
             // the actual SCO mic sensitivity and codec characteristics. Applying an
             // additional divisor would create a mismatch between calibration and detection.
 
+            val selectedThreshold = if (bluetoothMicRoutingActive) bluetoothMagThreshold else magThreshold
             val detector = GoertzelDetector(
-                magThreshold = magThreshold,
+                magThreshold = selectedThreshold,
                 sampleRate   = actualSampleRate
             )
             detector.onBeep = onBeep
@@ -631,15 +633,18 @@ class AudioBeepDetector(
 
         private const val BASE_MAG = 1e6f
         const val DEFAULT_MAG_THRESHOLD = BASE_MAG * WINDOW_SIZE
+        const val DEFAULT_BLUETOOTH_MAG_THRESHOLD = BASE_MAG * WINDOW_SIZE
         const val AUDIO_STATUS_WAITING = 0
         const val AUDIO_STATUS_WORKING = 1
         const val AUDIO_STATUS_ERROR   = 2
 
         fun createWithPrefs(context: Context, onBeep: (Float, Int) -> Unit): AudioBeepDetector {
-            val threshold = storedThreshold(context)
+            val threshold = storedThreshold(context, bluetooth = false)
+            val bluetoothThreshold = storedThreshold(context, bluetooth = true)
             return AudioBeepDetector(
                 context = context.applicationContext,
                 magThreshold = threshold,
+                bluetoothMagThreshold = bluetoothThreshold,
                 useBluetoothMicIfAvailable = useBluetoothMicIfAvailable(context),
                 onBeep = onBeep
             )
@@ -651,10 +656,12 @@ class AudioBeepDetector(
             onAudioHealth: (Boolean) -> Unit,
             onAudioStatus: (String, Int) -> Unit
         ): AudioBeepDetector {
-            val threshold = storedThreshold(context)
+            val threshold = storedThreshold(context, bluetooth = false)
+            val bluetoothThreshold = storedThreshold(context, bluetooth = true)
             return AudioBeepDetector(
                 context = context.applicationContext,
                 magThreshold = threshold,
+                bluetoothMagThreshold = bluetoothThreshold,
                 useBluetoothMicIfAvailable = useBluetoothMicIfAvailable(context),
                 onBeep = onBeep,
                 onAudioHealth = onAudioHealth,
@@ -662,10 +669,39 @@ class AudioBeepDetector(
             )
         }
 
-        private fun storedThreshold(context: Context): Float {
-            val stored = PreferenceManager.getDefaultSharedPreferences(context)
-                .getFloat(SettingsFragment.KEY_AUDIO_THRESHOLD, Float.NaN)
-            return if (!stored.isNaN() && stored > 0f) stored else DEFAULT_MAG_THRESHOLD
+        fun storedThreshold(context: Context, bluetooth: Boolean): Float {
+            val key = if (bluetooth) {
+                SettingsFragment.KEY_BLUETOOTH_AUDIO_THRESHOLD
+            } else {
+                SettingsFragment.KEY_AUDIO_THRESHOLD
+            }
+            val fallback = if (bluetooth) DEFAULT_BLUETOOTH_MAG_THRESHOLD else DEFAULT_MAG_THRESHOLD
+            val stored = PreferenceManager.getDefaultSharedPreferences(context).getFloat(key, Float.NaN)
+            return if (!stored.isNaN() && stored > 0f) stored else fallback
+        }
+
+        fun isBluetoothMicAvailable(context: Context): Boolean {
+            val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                return false
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val hasBluetoothCommunicationDevice = am.availableCommunicationDevices.any { device ->
+                    device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                        device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+                }
+                if (hasBluetoothCommunicationDevice) return true
+            }
+
+            return am.getDevices(AudioManager.GET_DEVICES_INPUTS).any { device ->
+                device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                    device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+            }
         }
 
         private fun useBluetoothMicIfAvailable(context: Context): Boolean {
