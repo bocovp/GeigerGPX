@@ -486,7 +486,13 @@ class AudioBeepDetector(
                 return false
             }
 
-            val selected = am.setCommunicationDevice(btDevice)
+            val selected = try {
+                am.setCommunicationDevice(btDevice)
+            } catch (e: IllegalArgumentException) {
+                Log.e(TAG, "setCommunicationDevice failed with exception (invalid port?)", e)
+                false
+            }
+
             if (!selected) {
                 Log.w(TAG, "Failed to switch communication device to Bluetooth mic; trying SCO fallback")
                 val scoEnabled = tryEnableLegacyBluetoothSco(am)
@@ -566,8 +572,10 @@ class AudioBeepDetector(
 
     private fun findBluetoothMic(audioManager: AudioManager): AudioDeviceInfo? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val available = audioManager.availableCommunicationDevices
+
             val communicationDevice = audioManager.communicationDevice
-            if (isBluetoothInputDevice(communicationDevice)) {
+            if (isBluetoothInputDevice(communicationDevice) && available.contains(communicationDevice)) {
                 return communicationDevice
             }
 
@@ -575,14 +583,12 @@ class AudioBeepDetector(
             // bidirectional voice audio. Some BLE headset routes can be output-only;
             // selecting them here makes status look "bluetooth" while capture still
             // falls back to the built-in microphone.
-            audioManager.availableCommunicationDevices
-                .firstOrNull { device ->
+            available.firstOrNull { device ->
                     device.isSource && device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
                 }
                 ?.let { return it }
 
-            audioManager.availableCommunicationDevices
-                .firstOrNull { device ->
+            available.firstOrNull { device ->
                     device.isSource && device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
                 }
                 ?.let { return it }
