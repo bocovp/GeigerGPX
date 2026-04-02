@@ -109,14 +109,38 @@ class AudioBeepDetector(
                 return@thread
             }
 
-            Log.i(TAG, "Recording started — actualSampleRate=$actualSampleRate Hz, " +
-                    "routedDeviceType=${ar.routedDevice?.type}")
+            // ar.routedDevice AFTER startRecording() is the OS ground truth for what
+            // device is actually capturing audio. We use it — not our setup intent — to
+            // determine whether BT is genuinely active and to publish the working status.
+            // This also corrects bluetoothMicRoutingActive if Android silently fell back
+            // to the built-in mic despite our routing setup.
             updateRoutingAndPublishWorkingStatus(ar.routedDevice)
 
-            // Warn immediately if Android silently re-routes away from the chosen device.
+            // Cross-check: warn if the OS reports a BT device but the sample rate we
+            // resolved is 44100 Hz. Real SCO hardware never runs at 44100 Hz — if this
+            // fires it means getMinBufferSize() accepted a non-SCO rate while we thought
+            // BT was routing, which implies Android resampling is occurring silently.
+            if (bluetoothMicRoutingActive && actualSampleRate == SAMPLE_RATE) {
+                Log.w(TAG, "routedDevice is BT but sampleRate=$actualSampleRate Hz — " +
+                        "OS may be resampling from SCO rate; detection quality may be degraded")
+            }
+            // Inverse check: if routing fell back to built-in mic but we opened at a
+            // SCO rate, note it. Detection still works (built-in supports 16000 Hz) but
+            // the threshold was calibrated for SCO, so results may differ.
+            if (!bluetoothMicRoutingActive && actualSampleRate != SAMPLE_RATE) {
+                Log.w(TAG, "routedDevice is built-in mic but sampleRate=$actualSampleRate Hz " +
+                        "(SCO rate); BT routing fell back. Threshold calibrated for SCO may not apply.")
+            }
+
+            Log.i(TAG, "Recording confirmed — actualSampleRate=$actualSampleRate Hz, " +
+                    "routedDeviceType=${ar.routedDevice?.type}, bluetoothActive=$bluetoothMicRoutingActive")
+
+            // Re-publish routing changes triggered by the OS mid-session (e.g. headset
+            // disconnected, another app steals the communication device).
             ar.addOnRoutingChangedListener({ record ->
-                Log.w(TAG, "AudioRecord routing changed! now routedDeviceType=${record.routedDevice?.type}")
-                updateRoutingAndPublishWorkingStatus(record.routedDevice)
+                val newDevice = record.routedDevice
+                Log.w(TAG, "AudioRecord routing changed! now routedDeviceType=${newDevice?.type}")
+                updateRoutingAndPublishWorkingStatus(newDevice)
             }, null)
 
             // Notify callers of the resolved sample rate before the recording loop begins.
@@ -124,16 +148,13 @@ class AudioBeepDetector(
             // own GoertzelDetector with the correct rate before any samples arrive.
             onRecordingStarted(actualSampleRate)
 
-            val effectiveThreshold = if (bluetoothMicRoutingActive) {
-                val scaled = magThreshold / BT_MAG_THRESHOLD_DIVISOR
-                Log.i(TAG, "BT mic active — magThreshold scaled from $magThreshold to $scaled")
-                scaled
-            } else {
-                magThreshold
-            }
+            // Threshold is NOT scaled for BT here. Calibration is expected to be
+            // performed separately in BT mode, so the stored threshold already reflects
+            // the actual SCO mic sensitivity and codec characteristics. Applying an
+            // additional divisor would create a mismatch between calibration and detection.
 
             val detector = GoertzelDetector(
-                magThreshold = effectiveThreshold,
+                magThreshold = magThreshold,
                 sampleRate   = actualSampleRate
             )
             detector.onBeep = onBeep
@@ -270,6 +291,11 @@ class AudioBeepDetector(
      * Probes for the highest SCO-compatible sample rate when BT routing is active,
      * falling back through [SCO_SAMPLE_RATES] in order. Returns [SAMPLE_RATE] for
      * the built-in mic path.
+     *
+     * Note: this probes what AudioRecord will accept for the given parameters —
+     * it does not verify that the active audio device is actually BT. The result
+     * is cross-checked against [ar.routedDevice] after [startRecording] and a
+     * warning is logged if they are inconsistent.
      */
     private fun resolveSampleRate(): Int {
         if (!bluetoothMicRoutingActive) return SAMPLE_RATE
@@ -564,6 +590,16 @@ class AudioBeepDetector(
             type == AudioDeviceInfo.TYPE_BLE_HEADSET
     }
 
+    /**
+     * Updates [bluetoothMicRoutingActive] from the OS ground truth ([ar.routedDevice]
+     * after [startRecording]) and publishes the working status. Using the actual routed
+     * device — rather than our setup intent — is the only way to confirm that audio
+     * is genuinely coming from a BT device: if Android silently fell back to the
+     * built-in mic, this will show "Working" instead of "Working (bluetooth)".
+     *
+     * This is called both at startup and from the [OnRoutingChangedListener] so the
+     * status remains accurate if the OS re-routes mid-session.
+     */
     private fun updateRoutingAndPublishWorkingStatus(device: AudioDeviceInfo?) {
         bluetoothMicRoutingActive = isBluetoothInputDevice(device)
         publishWorkingStatus()
@@ -593,16 +629,11 @@ class AudioBeepDetector(
         // placing the target right at the edge.
         private val SCO_SAMPLE_RATES = intArrayOf(16000, 8000)
 
-        // Starting divisor for BT threshold scaling. SCO mics have lower gain and HFP
-        // applies lossy codec compression, so raw Goertzel energy values are much smaller
-        // than on the built-in mic. Tune via onWindowAnalyzed peak main values during a beep.
-        private const val BT_MAG_THRESHOLD_DIVISOR = 10f
-
         private const val BASE_MAG = 1e6f
         const val DEFAULT_MAG_THRESHOLD = BASE_MAG * WINDOW_SIZE
         const val AUDIO_STATUS_WAITING = 0
         const val AUDIO_STATUS_WORKING = 1
-        const val AUDIO_STATUS_ERROR = 2
+        const val AUDIO_STATUS_ERROR   = 2
 
         fun createWithPrefs(context: Context, onBeep: (Float, Int) -> Unit): AudioBeepDetector {
             val threshold = storedThreshold(context)
