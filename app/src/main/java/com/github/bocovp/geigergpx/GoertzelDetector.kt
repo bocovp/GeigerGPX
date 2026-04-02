@@ -220,9 +220,6 @@ class GoertzelDetector(
         private const val TAG = "GoertzelDetector"
 
         const val DEFAULT_SAMPLE_RATE = 44100
-        const val DEFAULT_FREQ_MAIN   = 3276.0f
-        const val SCO_FREQ_MAIN = 16 * 16000f / 78f
-
         const val DEFAULT_WINDOW_SIZE = 175
         const val DEFAULT_STEP_SIZE   = 32
 
