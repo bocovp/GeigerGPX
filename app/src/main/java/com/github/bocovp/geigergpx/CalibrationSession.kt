@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import androidx.preference.PreferenceManager
+import kotlin.concurrent.thread
 
 /**
  * Orchestrates the two-stage calibration process.
@@ -31,33 +32,42 @@ class CalibrationSession(
     private val stageOneDurationSeconds: Int = 5,
     private val totalBeepCount: Int = 10
 ) {
-    private val stageOneSamplesTotal = stageOneDurationSeconds * GoertzelDetector.DEFAULT_SAMPLE_RATE
+    // Resolved in onRecordingStarted once AudioBeepDetector reports the actual rate.
+    // Both are written on the worker thread (onRecordingStarted) before any
+    // processSamples call, then read on the same worker thread — @Volatile ensures
+    // visibility in the unlikely event stop() inspects them from another thread.
+    @Volatile private var actualSampleRate: Int = 0
+    @Volatile private var stageOneSamplesTotal: Int = 0
+
     private var stageOneSamplesProcessed = 0
     private var stageOneMaxMain = 0f
 
     private val peaks = mutableListOf<Float>()
 
-    private val stageOneDetector = GoertzelDetector(magThreshold = 0f).apply {
-        onWindowAnalyzed = { main, sideEnergy ->
-            if (sideEnergy > 0f
-                && main > GoertzelDetector.DEFAULT_DOMINANCE_THRESHOLD * sideEnergy) {
-                if (main > stageOneMaxMain) stageOneMaxMain = main
-            }
-        }
-    }
+    // Created in onRecordingStarted once actualSampleRate is known.
+    // Null until then; processSamples guards against the null case.
+    @Volatile private var stageOneDetector: GoertzelDetector? = null
 
     private var stageTwoDetector: GoertzelDetector? = null
 
-    // The detector is constructed once and held for the full lifetime of this
-    // session. There is no nullable var — stop() always has a valid reference.
+    // The AudioBeepDetector is constructed once and held for the full lifetime of
+    // this session. onRawAudio intercepts all samples so CalibrationSession can
+    // drive its own GoertzelDetector instances at the correct sample rate.
+    // onRecordingStarted fires before the first onRawAudio call, giving us the
+    // actual negotiated sample rate (which differs from DEFAULT_SAMPLE_RATE on SCO).
     private val detector = AudioBeepDetector(
-        magThreshold = fallbackThreshold / 1000f,
+        context = context.applicationContext,
+        magThreshold = fallbackThreshold / 1000f,  // irrelevant; onRawAudio bypasses internal detector
+        useBluetoothMicIfAvailable = PreferenceManager.getDefaultSharedPreferences(context)
+            .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true),
         onBeep = { _, _ -> },
+        onRecordingStarted = { sampleRate -> onRecordingStarted(sampleRate) },
         onRawAudio = { samples -> processSamples(samples) }
     )
 
     fun start() {
-        onProgress(1, 0, stageOneSamplesTotal / GoertzelDetector.DEFAULT_SAMPLE_RATE)
+        // onProgress(1, ...) is deferred to onRecordingStarted so we can report
+        // the correct total (stageOneDurationSeconds) only after the rate is known.
         detector.start()
     }
 
@@ -65,17 +75,50 @@ class CalibrationSession(
         detector.stop()
     }
 
+    // Called on the worker thread immediately before the recording loop starts.
+    // Initialises all rate-dependent state so processSamples() sees consistent values.
+    private fun onRecordingStarted(sampleRate: Int) {
+        actualSampleRate      = sampleRate
+        stageOneSamplesTotal  = stageOneDurationSeconds * sampleRate
+
+        // freqMain must match the SCO bin centre (3282 Hz) or the built-in mic default
+        // (3276 Hz) — same logic as AudioBeepDetector's internal detector.
+        val freqMain = if (sampleRate != GoertzelDetector.DEFAULT_SAMPLE_RATE) {
+            GoertzelDetector.SCO_FREQ_MAIN
+        } else {
+            GoertzelDetector.DEFAULT_FREQ_MAIN
+        }
+
+        stageOneDetector = GoertzelDetector(
+            magThreshold = 0f,
+            sampleRate   = sampleRate,
+            freqMain     = freqMain
+        ).apply {
+            onWindowAnalyzed = { main, sideEnergy ->
+                if (sideEnergy > 0f
+                    && main > GoertzelDetector.DEFAULT_DOMINANCE_THRESHOLD * sideEnergy) {
+                    if (main > stageOneMaxMain) stageOneMaxMain = main
+                }
+            }
+        }
+
+        onProgress(1, 0, stageOneDurationSeconds)
+    }
+
     private fun processSamples(samples: ShortArray) {
+        // Guard against samples arriving before onRecordingStarted (should never
+        // happen given AudioBeepDetector's ordering guarantee, but be safe).
+        val s1 = stageOneDetector ?: return
         if (samples.isEmpty() || peaks.size >= totalBeepCount) return
 
         var offset = 0
 
         if (stageTwoDetector == null) {
-            val remaining  = stageOneSamplesTotal - stageOneSamplesProcessed
-            val toProcess  = minOf(samples.size, remaining)
+            val remaining = stageOneSamplesTotal - stageOneSamplesProcessed
+            val toProcess = minOf(samples.size, remaining)
 
             if (toProcess > 0) {
-                stageOneDetector.processSamples(samples.copyOfRange(0, toProcess))
+                s1.processSamples(samples.copyOfRange(0, toProcess))
                 stageOneSamplesProcessed += toProcess
                 offset = toProcess
             }
@@ -91,11 +134,21 @@ class CalibrationSession(
     }
 
     private fun transitionToStageTwo() {
-        stageOneDetector.onWindowAnalyzed = null
+        stageOneDetector?.onWindowAnalyzed = null
 
         val baseThreshold = (stageOneMaxMain / 2.5f).takeIf { it > 0f } ?: fallbackThreshold
 
-        stageTwoDetector = GoertzelDetector(magThreshold = baseThreshold).apply {
+        val freqMain = if (actualSampleRate != GoertzelDetector.DEFAULT_SAMPLE_RATE) {
+            GoertzelDetector.SCO_FREQ_MAIN
+        } else {
+            GoertzelDetector.DEFAULT_FREQ_MAIN
+        }
+
+        stageTwoDetector = GoertzelDetector(
+            magThreshold = baseThreshold,
+            sampleRate   = actualSampleRate,
+            freqMain     = freqMain
+        ).apply {
             onBeep = { peakMain, _ ->
                 if (peakMain.isFinite() && peaks.size < totalBeepCount) {
                     peaks.add(peakMain)
@@ -120,11 +173,14 @@ class CalibrationSession(
             .putFloat(SettingsFragment.KEY_AUDIO_THRESHOLD, finalThreshold)
             .apply()
 
-        onFinished(finalThreshold)
-
-        // Defer stop() so it doesn't interrupt the onRawAudio callback chain
-        // that led here — and so callers receive onFinished before the detector
-        // tears down.
-        Handler(Looper.getMainLooper()).post { stop() }
+        // Both onFinished and stop() are dispatched to avoid blocking or interrupting
+        // the onRawAudio callback chain that led here.
+        // onFinished is posted to the main thread for safe UI access.
+        // stop() is run on a background thread because it joins the worker thread
+        // with up to a 4000 ms timeout — calling it on the main thread risks an ANR.
+        Handler(Looper.getMainLooper()).post {
+            onFinished(finalThreshold)
+            thread(name = "CalibrationStop") { detector.stop() }
+        }
     }
 }
