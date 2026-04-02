@@ -567,29 +567,41 @@ class AudioBeepDetector(
     private fun findBluetoothMic(audioManager: AudioManager): AudioDeviceInfo? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val communicationDevice = audioManager.communicationDevice
-            if (communicationDevice != null &&
-                (communicationDevice.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-                    communicationDevice.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
-            ) {
+            if (isBluetoothInputDevice(communicationDevice)) {
                 return communicationDevice
             }
 
-            audioManager.availableCommunicationDevices.firstOrNull { device ->
-                device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-                    device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
-            }?.let { return it }
+            // Prefer the classic SCO/HFP profile first because it always supports
+            // bidirectional voice audio. Some BLE headset routes can be output-only;
+            // selecting them here makes status look "bluetooth" while capture still
+            // falls back to the built-in microphone.
+            audioManager.availableCommunicationDevices
+                .firstOrNull { device ->
+                    device.isSource && device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                }
+                ?.let { return it }
+
+            audioManager.availableCommunicationDevices
+                .firstOrNull { device ->
+                    device.isSource && device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+                }
+                ?.let { return it }
         }
 
         return audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS).firstOrNull { device ->
-            device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-                device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+            device.isSource && (
+                device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                    device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+            )
         }
     }
 
     private fun isBluetoothInputDevice(device: AudioDeviceInfo?): Boolean {
-        val type = device?.type ?: return false
-        return type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-            type == AudioDeviceInfo.TYPE_BLE_HEADSET
+        val resolved = device ?: return false
+        return resolved.isSource && (
+            resolved.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                resolved.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+        )
     }
 
     /**
@@ -692,15 +704,19 @@ class AudioBeepDetector(
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val hasBluetoothCommunicationDevice = am.availableCommunicationDevices.any { device ->
-                    device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-                        device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+                    device.isSource && (
+                        device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                            device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+                    )
                 }
                 if (hasBluetoothCommunicationDevice) return true
             }
 
             return am.getDevices(AudioManager.GET_DEVICES_INPUTS).any { device ->
-                device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-                    device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+                device.isSource && (
+                    device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                        device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+                )
             }
         }
 
