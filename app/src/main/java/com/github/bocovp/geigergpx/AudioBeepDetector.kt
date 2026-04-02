@@ -244,49 +244,63 @@ class AudioBeepDetector(
      * Returns false immediately if the thread is interrupted (e.g. by stop()).
      * Must be called from the worker thread, never from the main thread.
      */
-    private fun waitForScoConnection(context: Context, timeoutMs: Long = 3000L): Boolean {
-        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+    private fun waitForScoConnection(context: Context): Boolean {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val latch = CountDownLatch(1)
 
+        // 1. Initial check: If already connected, don't wait.
         @Suppress("DEPRECATION")
         if (am.isBluetoothScoOn) {
             Log.d(TAG, "SCO already connected, skipping wait")
             return true
         }
 
-        val latch = CountDownLatch(1)
-        var connected = false
-
         val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                val state = intent?.getIntExtra(
-                    AudioManager.EXTRA_SCO_AUDIO_STATE,
-                    AudioManager.SCO_AUDIO_STATE_ERROR
-                ) ?: return
-                when (state) {
-                    AudioManager.SCO_AUDIO_STATE_CONNECTED -> {
-                        connected = true
-                        latch.countDown()
-                    }
-                    AudioManager.SCO_AUDIO_STATE_DISCONNECTED,
-                    AudioManager.SCO_AUDIO_STATE_ERROR -> {
-                        latch.countDown()
-                    }
+            override fun onReceive(context: Context, intent: Intent) {
+                val state = intent.getIntExtra(AudioManager.EXTRA_SCO_AUDIO_STATE, -1)
+                Log.d(TAG, "SCO state updated: $state")
+                if (state == AudioManager.SCO_AUDIO_STATE_CONNECTED) {
+                    latch.countDown()
                 }
             }
         }
 
-        context.registerReceiver(receiver, IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED))
-        try {
-            latch.await(timeoutMs, TimeUnit.MILLISECONDS)
-        } catch (e: InterruptedException) {
-            Log.d(TAG, "SCO wait interrupted (stop() called)")
-            Thread.currentThread().interrupt()
-        } finally {
-            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
-        }
+        // 2. Android 14+ Fix: Use ContextCompat with RECEIVER_EXPORTED.
+        // This allows the system Bluetooth stack to talk to your app.
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED),
+            ContextCompat.RECEIVER_EXPORTED
+        )
 
-        Log.i(TAG, "SCO connection wait finished: connected=$connected")
-        return connected
+        try {
+            // 3. Race Condition Fix: Double-check state IMMEDIATELY after registering.
+            // If the hardware connected while we were setting up the receiver,
+            // we catch it here so we don't time out.
+            @Suppress("DEPRECATION")
+            if (am.isBluetoothScoOn) {
+                Log.d(TAG, "SCO connected during registration, moving forward")
+                return true
+            }
+
+            // 4. Wait up to 4 seconds. Some older headsets are slow to wake up.
+            val connected = latch.await(4, TimeUnit.SECONDS)
+            if (!connected) {
+                Log.w(TAG, "Timed out waiting for Bluetooth SCO hardware connection")
+            }
+            return connected
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            return false
+        } finally {
+            // 5. Clean up the receiver to avoid memory leaks.
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error unregistering SCO receiver", e)
+            }
+        }
     }
 
     /**
@@ -507,10 +521,10 @@ class AudioBeepDetector(
 
             if (btDevice.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO &&
                 am.isBluetoothScoAvailableOffCall) {
-                @Suppress("DEPRECATION")
-                am.startBluetoothSco()
-                @Suppress("DEPRECATION")
-                am.isBluetoothScoOn = true
+             //   @Suppress("DEPRECATION")
+             //   am.startBluetoothSco()
+             //   @Suppress("DEPRECATION")
+             //   am.isBluetoothScoOn = true
                 scoEnabledByDetector = true
                 Log.i(TAG, "Bluetooth SCO mode enabled alongside setCommunicationDevice")
             }
@@ -535,8 +549,8 @@ class AudioBeepDetector(
             am.mode = AudioManager.MODE_IN_COMMUNICATION
             @Suppress("DEPRECATION")
             am.startBluetoothSco()
-            @Suppress("DEPRECATION")
-            am.isBluetoothScoOn = true
+           // @Suppress("DEPRECATION")
+           // am.isBluetoothScoOn = true
             scoEnabledByDetector = true
             bluetoothMicRoutingActive = true
             Log.i(TAG, "Bluetooth SCO fallback enabled for microphone input")
@@ -559,7 +573,7 @@ class AudioBeepDetector(
             @Suppress("DEPRECATION")
             am.stopBluetoothSco()
             @Suppress("DEPRECATION")
-            am.isBluetoothScoOn = false
+            //am.isBluetoothScoOn = false
             scoEnabledByDetector = false
         }
         previousAudioMode?.let {
