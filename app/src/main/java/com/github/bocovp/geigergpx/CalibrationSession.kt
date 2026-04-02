@@ -81,18 +81,9 @@ class CalibrationSession(
         actualSampleRate      = sampleRate
         stageOneSamplesTotal  = stageOneDurationSeconds * sampleRate
 
-        // freqMain must match the SCO bin centre (3282 Hz) or the built-in mic default
-        // (3276 Hz) — same logic as AudioBeepDetector's internal detector.
-        val freqMain = if (sampleRate != GoertzelDetector.DEFAULT_SAMPLE_RATE) {
-            GoertzelDetector.SCO_FREQ_MAIN
-        } else {
-            GoertzelDetector.DEFAULT_FREQ_MAIN
-        }
-
         stageOneDetector = GoertzelDetector(
             magThreshold = 0f,
-            sampleRate   = sampleRate,
-            freqMain     = freqMain
+            sampleRate   = sampleRate
         ).apply {
             onWindowAnalyzed = { main, sideEnergy ->
                 if (sideEnergy > 0f
@@ -138,16 +129,9 @@ class CalibrationSession(
 
         val baseThreshold = (stageOneMaxMain / 2.5f).takeIf { it > 0f } ?: fallbackThreshold
 
-        val freqMain = if (actualSampleRate != GoertzelDetector.DEFAULT_SAMPLE_RATE) {
-            GoertzelDetector.SCO_FREQ_MAIN
-        } else {
-            GoertzelDetector.DEFAULT_FREQ_MAIN
-        }
-
         stageTwoDetector = GoertzelDetector(
             magThreshold = baseThreshold,
-            sampleRate   = actualSampleRate,
-            freqMain     = freqMain
+            sampleRate   = actualSampleRate
         ).apply {
             onBeep = { peakMain, _ ->
                 if (peakMain.isFinite() && peaks.size < totalBeepCount) {

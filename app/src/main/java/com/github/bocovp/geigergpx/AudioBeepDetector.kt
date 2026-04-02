@@ -124,13 +124,6 @@ class AudioBeepDetector(
             // own GoertzelDetector with the correct rate before any samples arrive.
             onRecordingStarted(actualSampleRate)
 
-            // The internal detector is created here, after the actual sample rate is known,
-            // so its frequency coefficients and duration calculations are correct.
-            // freqMain differs between SCO and built-in paths because the exact bin 16
-            // centre (3282 Hz) is used for SCO rather than the 44100 Hz bin 13 (3276 Hz).
-            // Goertzel energy scales with window size and signal amplitude; SCO mics have
-            // lower gain and a compressed codec, so the threshold is scaled down as a
-            // starting point — tune further using onWindowAnalyzed log output.
             val effectiveThreshold = if (bluetoothMicRoutingActive) {
                 val scaled = magThreshold / BT_MAG_THRESHOLD_DIVISOR
                 Log.i(TAG, "BT mic active — magThreshold scaled from $magThreshold to $scaled")
@@ -139,16 +132,9 @@ class AudioBeepDetector(
                 magThreshold
             }
 
-            val freqMain = if (bluetoothMicRoutingActive) {
-                GoertzelDetector.SCO_FREQ_MAIN
-            } else {
-                GoertzelDetector.DEFAULT_FREQ_MAIN
-            }
-
             val detector = GoertzelDetector(
                 magThreshold = effectiveThreshold,
-                sampleRate   = actualSampleRate,
-                freqMain     = freqMain
+                sampleRate   = actualSampleRate
             )
             detector.onBeep = onBeep
 
