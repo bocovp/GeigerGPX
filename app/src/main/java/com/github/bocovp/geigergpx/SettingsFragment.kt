@@ -238,6 +238,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
             useBluetoothMicIfAvailable = bluetooth,
             thresholdPreferenceKey = thresholdKey(bluetooth),
             fallbackThreshold = defaultThreshold(bluetooth),
+            onAudioStatus = { status, errorCode ->
+                activity.runOnUiThread {
+                    if (errorCode != AudioInputManager.AUDIO_STATUS_WORKING) {
+                        dialog.setMessage(status)
+                    }
+                }
+            },
             onProgress = { phase, current, totalCount ->
                 activity.runOnUiThread {
                     if (phase == 2) {
