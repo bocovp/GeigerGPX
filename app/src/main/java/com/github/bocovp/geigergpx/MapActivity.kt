@@ -28,6 +28,7 @@ class MapActivity : AppCompatActivity() {
     private var isHeatmapMode: Boolean = false
     private var latestActivePoints: List<TrackPoint> = emptyList()
     private val mapLoadRequestSequence = AtomicInteger(0)
+    private var hasLoadedMapTracks = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -132,7 +133,8 @@ class MapActivity : AppCompatActivity() {
 
     private fun refreshMapTracks(activePoints: List<TrackPoint>) {
         val requestId = mapLoadRequestSequence.incrementAndGet()
-        binding.loadingLabel.visibility = View.VISIBLE
+        val showLoading = !hasLoadedMapTracks || TrackCatalog.isTrackCacheEmpty(this)
+        binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
         Thread {
             val includeCurrentTrack = viewModel.isTracking.value == true
             val selectedTrackIds = selectedTrackIds()
@@ -184,6 +186,7 @@ class MapActivity : AppCompatActivity() {
                 if (requestId != mapLoadRequestSequence.get()) {
                     return@runOnUiThread
                 }
+                hasLoadedMapTracks = true
                 trackMapRenderer.renderTracks(
                     tracks = visibleTracks,
                     pois = poiMapItems,
