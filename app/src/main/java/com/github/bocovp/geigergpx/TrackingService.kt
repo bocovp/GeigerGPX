@@ -33,7 +33,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
-
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 class TrackingService : Service() {
 
     companion object {
@@ -50,6 +51,8 @@ class TrackingService : Service() {
 
         // 10 minutes
         private const val BACKUP_INTERVAL_MS = 10 * 60 * 1000L
+
+        private var audioFocusRequest: AudioFocusRequest? = null
 
         fun activeTrackPointsSnapshot(): List<TrackPoint> {
             val service = runningInstance ?: return emptyList()
@@ -103,6 +106,8 @@ class TrackingService : Service() {
     private var lastAlertAtMillis: Long = 0L
 
     private val doseRateMeasurement = DoseRateMeasurement()
+
+    private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
@@ -530,6 +535,25 @@ class TrackingService : Service() {
     private fun startBeepDetector() {
         if (audioBeepDetector != null) return
 
+        // Request Audio Focus before starting the detector
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setOnAudioFocusChangeListener { focusChange ->
+                    // The AudioBeepDetector's inner loop will automatically handle
+                    // temporary read failures, but logging focus changes helps debugging.
+                    when (focusChange) {
+                        AudioManager.AUDIOFOCUS_LOSS -> android.util.Log.w("TrackingService", "Audio focus completely lost")
+                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> android.util.Log.w("TrackingService", "Audio focus transiently lost")
+                        AudioManager.AUDIOFOCUS_GAIN -> android.util.Log.i("TrackingService", "Audio focus gained")
+                    }
+                }
+                .build()
+            audioManager.requestAudioFocus(audioFocusRequest!!)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN)
+        }
+
         audioBeepDetector = AudioBeepDetector.createWithPrefs(
             context = this,
             onBeep = { _, count ->
@@ -551,6 +575,13 @@ class TrackingService : Service() {
     private fun stopBeepDetector() {
         audioBeepDetector?.stop()
         audioBeepDetector = null
+        // Abandon Audio Focus
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(null)
+        }
     }
 
     private fun dispatchDoseRateAlert(alertEvent: DoseRateMeasurement.AlertEvent) {
