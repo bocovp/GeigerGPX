@@ -299,11 +299,11 @@ class GoertzelDetector(
                 }
                 else -> {
                     // 44100 Hz (built-in mic) or any unexpected rate.
-                    val winSize  = DEFAULT_WINDOW_SIZE
+                    val winSize  = 175
                     val binWidth = sampleRate.toFloat() / winSize  //  in width = 252 Hz
                     RateConfig(
                         windowSize = winSize, // 0.004s
-                        stepSize   = DEFAULT_STEP_SIZE, // 0.00073 s
+                        stepSize   = 32, // 0.00073 s
                         freqLow    = 12 * binWidth, //3024
                         freqMain   = 13 * binWidth, //3276
                         freqHigh   = 14 * binWidth, //3528
