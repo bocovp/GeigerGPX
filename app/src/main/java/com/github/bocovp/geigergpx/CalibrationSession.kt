@@ -31,7 +31,7 @@ class CalibrationSession(
     private val useBluetoothMicIfAvailable: Boolean = PreferenceManager.getDefaultSharedPreferences(context)
         .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true),
     private val thresholdPreferenceKey: String = SettingsFragment.KEY_AUDIO_THRESHOLD,
-    private val fallbackThreshold: Float = AudioBeepDetector.DEFAULT_MAG_THRESHOLD,
+    private val fallbackThreshold: Float = AudioInputManager.DEFAULT_MAG_THRESHOLD,
     private val stageOneDurationSeconds: Int = 5,
     private val totalBeepCount: Int = 10
 ) {
@@ -58,7 +58,7 @@ class CalibrationSession(
     // drive its own GoertzelDetector instances at the correct sample rate.
     // onRecordingStarted fires before the first onRawAudio call, giving us the
     // actual negotiated sample rate (which differs from DEFAULT_SAMPLE_RATE on SCO).
-    private val detector = AudioBeepDetector(
+    private val detector = AudioInputManager(
         context = context.applicationContext,
         magThreshold = fallbackThreshold / 1000f,  // irrelevant; onRawAudio bypasses internal detector
         useBluetoothMicIfAvailable = useBluetoothMicIfAvailable,

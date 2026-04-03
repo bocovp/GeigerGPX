@@ -259,10 +259,10 @@ class GoertzelDetector(
                         freqLow    = 16 * binWidth, //  3084.34
                         freqMain   = 17 * binWidth, //  3277.11
                         freqHigh   = 18 * binWidth, //  3469.88
-                        oneBeepTol = 0.005,
-                        twoBeepTol = 0.01,
-                        threeBeepTol = 0.01,
-                        fourBeepTol = 0.01
+                        oneBeepTol = 0.0075,
+                        twoBeepTol = 0.015,
+                        threeBeepTol = 0.015,
+                        fourBeepTol = 0.015
                     )
                 }
                 8000 -> {

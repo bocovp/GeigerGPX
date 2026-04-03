@@ -1,0 +1,603 @@
+package com.github.bocovp.geigergpx
+
+import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioRecord
+import android.os.Build
+import android.media.MediaRecorder
+import android.util.Log
+import androidx.core.content.ContextCompat
+import androidx.preference.PreferenceManager
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
+
+class AudioBeepDetector(
+    private val context: Context? = null,
+    private val magThreshold: Float = DEFAULT_MAG_THRESHOLD,
+    private val bluetoothMagThreshold: Float = DEFAULT_BLUETOOTH_MAG_THRESHOLD,
+    private val useBluetoothMicIfAvailable: Boolean = true,
+    private val onBeep: (Float, Int) -> Unit,
+    private val onAudioHealth: (Boolean) -> Unit = {},
+    private val onAudioStatus: (String, Int) -> Unit = { _, _ -> },
+    private val onRecordingStarted: (sampleRate: Int) -> Unit = {},
+    private val onRawAudio: ((ShortArray) -> Unit)? = null
+) {
+
+    @Volatile private var running = false
+    @Volatile private var audioRecord: AudioRecord? = null
+    private var workerThread: Thread? = null
+    private var previousAudioMode: Int? = null
+    private var scoEnabledByDetector = false
+    private var communicationDeviceSetByDetector = false
+    private var bluetoothMicRoutingActive = false
+    private var preferredInputDevice: AudioDeviceInfo? = null
+    @Volatile private var lastPublishedAudioStatus: String? = null
+
+    @Volatile private var bluetoothRoutingPending = false // Add this
+
+    fun start() {
+        if (running) {
+            Log.d(TAG, "start() called but detector is already running")
+            return
+        }
+        running = true
+        Log.i(TAG, "Starting AudioBeepDetector worker thread...")
+
+        workerThread = thread(start = true, name = "BeepDetector") {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
+
+            var audioBuf: ShortArray? = null
+
+            while (running) {
+                try {
+                    Log.i(TAG, "--- Outer Loop: Initializing Audio Hardware ---")
+
+                    val ctx = context
+                    if (ctx == null) { Thread.sleep(1000); continue }
+
+                    // CORRECTION 2: Consolidate the Bluetooth connection phase.
+                    // We trigger the routing and WAIT for it to finish before proceeding.
+                    if (useBluetoothMicIfAvailable && !bluetoothMicRoutingActive) {
+                        publishAudioStatus("Initializing Bluetooth...", AUDIO_STATUS_WAITING)
+
+                        // Only call configure if we haven't already started a pending request
+                        if (!bluetoothRoutingPending) {
+                            bluetoothRoutingPending = true
+                            configureBluetoothAudioRouting()
+                        }
+
+                        // Block and wait for the BroadcastReceiver to report Success/Failure
+                        val connected = waitForScoConnection(ctx)
+
+                        // Reset the pending flag regardless of result
+                        bluetoothRoutingPending = false
+
+                        if (!connected) {
+                            Log.w(TAG, "Bluetooth connection failed/timeout. Retrying loop...")
+                            // Optional: reset here if you want a clean slate for the retry
+                            resetBluetoothAudioRouting()
+                            Thread.sleep(2000)
+                            continue
+                        }
+                    }
+
+                    // CORRECTION 3: Now that hardware is (hopefully) ready, create the record.
+                    val created = createAudioRecord()
+                    if (created == null) {
+                        Log.e(TAG, "Failed to create AudioRecord. Retrying...")
+                        publishAudioStatus("Microphone unavailable, retrying...", AUDIO_STATUS_ERROR)
+                        Thread.sleep(2000)
+                        continue
+                    }
+
+                    val (ar, bufferSize, actualSampleRate) = created
+                    audioRecord = ar
+
+                    try {
+                        // CORRECTION 4: Settle time is vital for Samsung M01.
+                        // Some hardware takes time to 'handshake' after the record starts.
+                        ar.startRecording()
+                        Thread.sleep(500)
+
+                        if (ar.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                            throw IllegalStateException("AudioRecord failed to start")
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "startRecording failed", e)
+                        releaseRecorder(swapAudioRecord(null))
+                        resetBluetoothAudioRouting() // Reset hardware on actual crash
+                        Thread.sleep(1000)
+                        continue
+                    }
+
+                    // CORRECTION 5: Verify routing.
+                    // We use isBluetoothInputDevice() which we fixed to check 'isSink' on API 31+.
+                    val currentDevice = ar.routedDevice
+                    val actuallyBt = if (currentDevice != null) isBluetoothInputDevice(currentDevice) else bluetoothMicRoutingActive
+
+                    Log.i(TAG, "Recording confirmed — sampleRate=$actualSampleRate Hz, BT=$actuallyBt")
+
+                    if (useBluetoothMicIfAvailable && !actuallyBt) {
+                        // If we are here, the OS ignored our 'setPreferredDevice' and 'setCommunicationDevice'
+                        Log.w(TAG, "OS rejected BT routing. Cleaning up and retrying.")
+                        publishAudioStatus("Bluetooth rejected, retrying...", AUDIO_STATUS_WAITING)
+                        releaseRecorder(swapAudioRecord(null))
+                        resetBluetoothAudioRouting() // DEFINITIVE FAILURE: Reset hardware now
+                        Thread.sleep(2000)
+                        continue
+                    }
+
+                    updateRoutingAndPublishWorkingStatus(currentDevice)
+                    onRecordingStarted(actualSampleRate)
+
+                    val selectedThreshold = if (actuallyBt) bluetoothMagThreshold else magThreshold
+                    val detector = GoertzelDetector(selectedThreshold, actualSampleRate).apply {
+                        onBeep = this@AudioBeepDetector.onBeep
+                    }
+
+                    if (audioBuf == null || audioBuf.size != bufferSize) {
+                        audioBuf = ShortArray(bufferSize)
+                    }
+
+                    val innerLoopBreak = AtomicBoolean(false)
+
+                    ar.addOnRoutingChangedListener({ record ->
+                        val newDevice = record.routedDevice
+                        Log.w(TAG, "Routing changed mid-session! type=${newDevice?.type}")
+                        if (useBluetoothMicIfAvailable && !isBluetoothInputDevice(newDevice)) {
+                            Log.e(TAG, "Bluetooth lost. Breaking inner loop.")
+                            innerLoopBreak.set(true)
+                        } else {
+                            updateRoutingAndPublishWorkingStatus(newDevice)
+                        }
+                    }, null)
+
+                    var zeroBufferCount = 0
+                    var audioHealthy = true
+
+                    while (running && !innerLoopBreak.get()) {
+                        val currentAr = audioRecord ?: break
+                        val read = currentAr.read(audioBuf!!, 0, audioBuf!!.size)
+
+                        if (read <= 0) {
+                            Log.e(TAG, "Hardware read error: $read")
+                            publishAudioStatus("Hardware error, recovering...", AUDIO_STATUS_ERROR)
+                            break
+                        }
+
+                        val isZero = audioBuf!!.all { it == 0.toShort() }
+
+                        if (isZero) {
+                            zeroBufferCount++
+                            if (audioHealthy) {
+                                Log.d(TAG, "Empty buffer detected.")
+                                audioHealthy = false
+                                onAudioHealth(false)
+                            }
+                        } else {
+                            zeroBufferCount = 0
+                            if (!audioHealthy) {
+                                Log.i(TAG, "Audio recovered.")
+                                audioHealthy = true
+                                onAudioHealth(true)
+                                publishWorkingStatus()
+                            }
+                        }
+
+                        if (zeroBufferCount >= ZERO_BUFFER_LIMIT) {
+                            Log.e(TAG, "Ghost connection detected. Triggering recovery.")
+                            publishAudioStatus("Audio stuck, recovering...", AUDIO_STATUS_ERROR)
+                            break
+                        }
+
+                        val samples = audioBuf!!.copyOf(read)
+                        if (onRawAudio != null) {
+                            onRawAudio.invoke(samples)
+                        } else {
+                            detector.processSamples(samples)
+                        }
+                    }
+
+                    releaseRecorder(swapAudioRecord(null))
+
+                } catch (e: InterruptedException) {
+                    break
+                } catch (e: Exception) {
+                    Log.e(TAG, "Unexpected error in outer loop", e)
+                    resetBluetoothAudioRouting()
+                    Thread.sleep(2000)
+                }
+            }
+            resetBluetoothAudioRouting()
+        }
+    }
+
+    private fun waitForScoConnection(context: Context): Boolean {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        // Check before we even bother setting up the receiver
+        @Suppress("DEPRECATION")
+        if (am.isBluetoothScoOn) {
+            Log.d(TAG, "SCO already connected, skipping wait")
+            bluetoothMicRoutingActive = true // Ensure flag is synced
+            return true
+        }
+
+        val latch = CountDownLatch(1)
+        // Use an AtomicBoolean or Volatile to ensure the main thread sees the update from the receiver thread
+        var connectedResult = false
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                val state = intent.getIntExtra(AudioManager.EXTRA_SCO_AUDIO_STATE, -1)
+                Log.d(TAG, "SCO Receiver state: $state")
+
+                when (state) {
+                    AudioManager.SCO_AUDIO_STATE_CONNECTED -> {
+                        Log.i(TAG, "Bluetooth SCO connected.")
+                        connectedResult = true
+                        bluetoothMicRoutingActive = true
+                        latch.countDown()
+                    }
+                    AudioManager.SCO_AUDIO_STATE_DISCONNECTED,
+                    AudioManager.SCO_AUDIO_STATE_ERROR -> {
+                        Log.w(TAG, "Bluetooth SCO failed to connect (state: $state).")
+                        bluetoothMicRoutingActive = false
+                        latch.countDown()
+                    }
+                }
+            }
+        }
+
+        // Register with RECEIVER_EXPORTED for Android 12+
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED),
+            ContextCompat.RECEIVER_EXPORTED
+        )
+
+        try {
+            // Double-check immediately after registration to close the race window
+            @Suppress("DEPRECATION")
+            if (am.isBluetoothScoOn) {
+                connectedResult = true
+                bluetoothMicRoutingActive = true
+            } else {
+                // Wait up to 5 seconds (Samsung M01 can be slow)
+                latch.await(5, TimeUnit.SECONDS)
+            }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        } finally {
+            // ALWAYS unregister in finally to prevent memory leaks
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error unregistering SCO receiver: ${e.message}")
+            }
+        }
+
+        return connectedResult
+    }
+
+    private fun resolveSampleRate(): Int {
+        val am = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+
+        // 1. Bluetooth priority: use SCO rates (16k or 8k) if BT is active.
+        if (bluetoothMicRoutingActive) {
+            for (rate in SCO_SAMPLE_RATES) {
+                if (AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT) > 0) {
+                    Log.d(TAG, "Using SCO sample rate: $rate Hz")
+                    return rate
+                }
+            }
+        }
+
+        // 2. Regular mic: try hardware native rate (usually 48000 Hz).
+        // PROPERTY_OUTPUT_SAMPLE_RATE is the standard proxy for the hardware clock
+        // rate — there is no dedicated input property in the Android API.
+        val nativeRateStr = am?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)
+        val nativeRate = nativeRateStr?.toIntOrNull()
+
+        if (nativeRate != null && AudioRecord.getMinBufferSize(nativeRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT) > 0) {
+            Log.d(TAG, "Using hardware native sample rate: $nativeRate Hz")
+            return nativeRate
+        }
+
+        // 3. Absolute fallback.
+        return 44100
+    }
+
+    @Synchronized
+    private fun swapAudioRecord(new: AudioRecord?): AudioRecord? {
+        val old = audioRecord
+        audioRecord = new
+        return old
+    }
+
+    private fun releaseRecorder(ar: AudioRecord?) {
+        ar ?: return
+        try {
+            if (ar.state == AudioRecord.STATE_INITIALIZED) ar.stop()
+            ar.release()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing recorder", e)
+        }
+    }
+
+    private fun createAudioRecord(): Triple<AudioRecord, Int, Int>? {
+        val audioSource = if (bluetoothMicRoutingActive) {
+            MediaRecorder.AudioSource.VOICE_COMMUNICATION
+        } else {
+            MediaRecorder.AudioSource.MIC
+        }
+        val rate = resolveSampleRate()
+        val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+
+        if (minBuffer <= 0) return null
+
+        val bufferSize = maxOf(minBuffer, WINDOW_SIZE * WINDOWS_IN_BUFFER)
+
+        // Note: bufferSize * 2 is good for overhead, but ensure it doesn't exceed
+        // hardware limits on lower-end devices like the M01.
+        val ar = AudioRecord(
+            audioSource,
+            rate,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            bufferSize * 2
+        )
+
+        if (ar.state != AudioRecord.STATE_INITIALIZED) {
+            ar.release()
+            return null
+        }
+
+        // 2. CRITICAL FIX: Always set the preferred device if we have one.
+        // Even if communicationDeviceSetByDetector is true, we MUST tell the
+        // AudioRecord instance specifically which device to use.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            preferredInputDevice?.let {
+                val success = ar.setPreferredDevice(it)
+                Log.i(TAG, "AudioRecord binding to ${it.productName}: $success")
+            }
+        }
+
+        return Triple(ar, bufferSize, rate)
+    }
+
+    fun stop() {
+        if (!running) return
+        running = false
+        workerThread?.interrupt()
+        val ar = swapAudioRecord(null)
+        try { workerThread?.join(4000) } catch (e: Exception) {}
+        releaseRecorder(ar)
+        resetBluetoothAudioRouting()
+    }
+
+    private fun configureBluetoothAudioRouting(): Boolean {
+        val ctx = context ?: return false
+        if (!useBluetoothMicIfAvailable) return false
+
+        val am = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+        if (previousAudioMode == null) previousAudioMode = am.mode
+        am.mode = AudioManager.MODE_IN_COMMUNICATION
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+        ) return false
+
+        val btDevice = findBluetoothMic(am)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (btDevice == null) return false
+            val selected = try { am.setCommunicationDevice(btDevice) } catch (e: Exception) { false }
+
+            if (!selected) {
+                return tryEnableLegacyBluetoothSco(am).also { if (it) preferredInputDevice = btDevice }
+            }
+
+            bluetoothMicRoutingActive = true
+            communicationDeviceSetByDetector = true
+            preferredInputDevice = btDevice
+
+            // FIX 1: For TYPE_BLUETOOTH_SCO devices on API >= 31, setCommunicationDevice()
+            // handles audio routing but the SCO audio link itself still requires an explicit
+            // startBluetoothSco() call to activate and generate the
+            // ACTION_SCO_AUDIO_STATE_UPDATED broadcast that waitForScoConnection listens for.
+            // Without this call, scoEnabledByDetector = true would cause waitForScoConnection
+            // to enter but never receive a broadcast, burning the full 4-second timeout.
+            if (btDevice.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO && am.isBluetoothScoAvailableOffCall) {
+                @Suppress("DEPRECATION")
+                am.startBluetoothSco()
+                // FIX 5: isBluetoothScoOn setter is required on some devices/BT stacks
+                // to fully activate the SCO channel alongside startBluetoothSco().
+                @Suppress("DEPRECATION")
+                am.isBluetoothScoOn = true
+                scoEnabledByDetector = true
+                Log.i(TAG, "Bluetooth SCO started alongside setCommunicationDevice (type=${btDevice.type})")
+            }
+            return true
+        } else {
+            return tryEnableLegacyBluetoothSco(am).also { if (it && btDevice != null) preferredInputDevice = btDevice }
+        }
+    }
+
+    private fun tryEnableLegacyBluetoothSco(am: AudioManager): Boolean {
+        if (!am.isBluetoothScoAvailableOffCall) return false
+        return try {
+            am.mode = AudioManager.MODE_IN_COMMUNICATION
+            @Suppress("DEPRECATION")
+            am.startBluetoothSco()
+            // FIX 5: isBluetoothScoOn setter required alongside startBluetoothSco()
+            // for compatibility with older devices and BT stacks.
+            @Suppress("DEPRECATION")
+            am.isBluetoothScoOn = true
+            scoEnabledByDetector = true
+            bluetoothMicRoutingActive = true
+            Log.i(TAG, "Legacy Bluetooth SCO enabled")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to enable legacy Bluetooth SCO", e)
+            false
+        }
+    }
+
+    private fun resetBluetoothAudioRouting() {
+        val ctx = context ?: return
+        val am = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && communicationDeviceSetByDetector) {
+            am.clearCommunicationDevice()
+            communicationDeviceSetByDetector = false
+        }
+        if (scoEnabledByDetector) {
+            @Suppress("DEPRECATION")
+            am.stopBluetoothSco()
+            // FIX 5: Clear the setter on teardown to match the set on setup.
+            @Suppress("DEPRECATION")
+            am.isBluetoothScoOn = false
+            scoEnabledByDetector = false
+        }
+        previousAudioMode?.let {
+            am.mode = it
+            previousAudioMode = null
+        }
+        bluetoothMicRoutingActive = false
+        preferredInputDevice = null
+    }
+
+    private fun findBluetoothMic(audioManager: AudioManager): AudioDeviceInfo? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val available = audioManager.availableCommunicationDevices
+            val communicationDevice = audioManager.communicationDevice
+
+            // FIXED: Directly check if the current communication device is a BT sink
+            if (communicationDevice != null &&
+                (communicationDevice.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || communicationDevice.type == AudioDeviceInfo.TYPE_BLE_HEADSET) &&
+                available.contains(communicationDevice)) {
+                return communicationDevice
+            }
+
+            // FIXED: Check it.isSink instead of it.isSource
+            available.firstOrNull { it.isSink && it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO }?.let { return it }
+            available.firstOrNull { it.isSink && it.type == AudioDeviceInfo.TYPE_BLE_HEADSET }?.let { return it }
+        }
+        // The legacy fallback correctly uses inputs, so leave it as is
+        return audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS).firstOrNull { isBluetoothInputDevice(it) }
+    }
+
+    private fun isBluetoothInputDevice(device: AudioDeviceInfo?): Boolean {
+        if (device == null) return false
+        val type = device.type
+        // CORRECTION: On many Samsung devices (including M01), the OS may report
+        // the bidirectional communication 'handle' as the routed device.
+        // Trusting the TYPE is the most reliable way to confirm Bluetooth.
+        return type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                type == AudioDeviceInfo.TYPE_BLE_HEADSET
+    }
+
+    // FIX 4: Updates bluetoothMicRoutingActive from the OS ground truth (ar.routedDevice
+    // after startRecording, or the routing-changed callback) before publishing status.
+    // The old version only published status without updating the flag, leaving
+    // bluetoothMicRoutingActive stale after a mid-session re-route.
+    private fun updateRoutingAndPublishWorkingStatus(device: AudioDeviceInfo?) {
+        bluetoothMicRoutingActive = if (device != null) isBluetoothInputDevice(device) else bluetoothMicRoutingActive
+        publishAudioStatus(if (bluetoothMicRoutingActive) "Working (bluetooth)" else "Working", AUDIO_STATUS_WORKING)
+    }
+
+    private fun publishWorkingStatus() {
+        publishAudioStatus(if (bluetoothMicRoutingActive) "Working (bluetooth)" else "Working", AUDIO_STATUS_WORKING)
+    }
+
+    private fun publishAudioStatus(status: String, errorCode: Int) {
+        if (lastPublishedAudioStatus == status) return
+        Log.i(TAG, "Status: $status")
+        lastPublishedAudioStatus = status
+        onAudioStatus(status, errorCode)
+    }
+
+    companion object {
+        private const val TAG = "AudioBeepDetector"
+        private const val WINDOW_SIZE = GoertzelDetector.DEFAULT_WINDOW_SIZE
+        private const val WINDOWS_IN_BUFFER = 64
+        private const val ZERO_BUFFER_LIMIT = 20
+        private val SCO_SAMPLE_RATES = intArrayOf(16000, 8000)
+        private const val BASE_MAG = 1e6f
+        const val DEFAULT_MAG_THRESHOLD = BASE_MAG * WINDOW_SIZE
+        const val DEFAULT_BLUETOOTH_MAG_THRESHOLD = BASE_MAG * WINDOW_SIZE
+        const val AUDIO_STATUS_WAITING = 0
+        const val AUDIO_STATUS_WORKING = 1
+        const val AUDIO_STATUS_ERROR   = 2
+
+        fun isBluetoothMicAvailable(context: Context): Boolean {
+            val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+            ) return false
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // FIXED: Check it.isSink instead of it.isSource
+                return am.availableCommunicationDevices.any {
+                    it.isSink && (it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET) }
+            }
+
+            // The legacy fallback correctly uses inputs, so leave it as is
+            // @Suppress("DEPRECATION")
+            return am.getDevices(AudioManager.GET_DEVICES_INPUTS).any {
+                it.isSource && (it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET) }
+        }
+
+        fun createWithPrefs(
+            context: Context,
+            onBeep: (Float, Int) -> Unit,
+            onAudioHealth: (Boolean) -> Unit = {},
+            onAudioStatus: (String, Int) -> Unit = { _, _ -> }
+        ): AudioBeepDetector {
+            return AudioBeepDetector(
+                context = context.applicationContext,
+                magThreshold = storedThreshold(context, false),
+                bluetoothMagThreshold = storedThreshold(context, true),
+                useBluetoothMicIfAvailable = useBluetoothMicIfAvailable(context),
+                onBeep = onBeep,
+                onAudioHealth = onAudioHealth,
+                onAudioStatus = onAudioStatus
+            )
+        }
+
+        fun storedThreshold(context: Context, bluetooth: Boolean): Float {
+            val key = if (bluetooth) SettingsFragment.KEY_BLUETOOTH_AUDIO_THRESHOLD else SettingsFragment.KEY_AUDIO_THRESHOLD
+            val stored = PreferenceManager.getDefaultSharedPreferences(context).getFloat(key, Float.NaN)
+            return if (!stored.isNaN() && stored > 0f) stored else (if (bluetooth) DEFAULT_BLUETOOTH_MAG_THRESHOLD else DEFAULT_MAG_THRESHOLD)
+        }
+
+        private fun useBluetoothMicIfAvailable(context: Context): Boolean {
+            val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // CORRECTION: API 31+ requires checking it.isSink.
+                // Available communication devices are listed as outputs (Sinks).
+                return am.availableCommunicationDevices.any {
+                    it.isSink && (it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+                }
+            }
+
+            // For older versions, we check the standard input list
+            @Suppress("DEPRECATION")
+            return am.getDevices(AudioManager.GET_DEVICES_INPUTS).any {
+                it.isSource && (it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+            }
+        }
+    }
+}

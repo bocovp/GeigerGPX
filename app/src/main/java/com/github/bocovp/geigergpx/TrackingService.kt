@@ -87,7 +87,7 @@ class TrackingService : Service() {
     @Volatile
     private var lastGpsFixMillis: Long = 0L
 
-    private var audioBeepDetector: AudioBeepDetector? = null
+    private var audioBeepDetector: com.github.bocovp.geigergpx.AudioInputManager? = null
 
     // Monitoring state (GPS + audio active, but not recording a track)
     private var isMonitoring: Boolean = false
@@ -554,7 +554,7 @@ class TrackingService : Service() {
             audioManager.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN)
         }
 
-        audioBeepDetector = AudioBeepDetector.createWithPrefs(
+        audioBeepDetector = AudioInputManager.createWithPrefs(
             context = this,
             onBeep = { _, count ->
                 if (count > 0) {
