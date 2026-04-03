@@ -6,7 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
 import android.media.AudioDeviceInfo
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -41,6 +43,7 @@ class AudioInputManager(
     private var bluetoothMicRoutingActive = false
     private var preferredInputDevice: AudioDeviceInfo? = null
     @Volatile private var lastPublishedAudioStatus: String? = null
+    private var audioFocusRequest: Any? = null // Holds the API 26+ AudioFocusRequest
 
     fun start() {
         if (running) {
@@ -118,10 +121,18 @@ class AudioInputManager(
                         continue
                     }
 
-                    // ar.routedDevice AFTER startRecording() is the OS ground truth — the only
-                    // reliable confirmation that audio is genuinely coming from BT.
-                    val currentDevice = ar.routedDevice
-                    val actuallyBt = if (currentDevice != null) isBluetoothInputDevice(currentDevice) else bluetoothMicRoutingActive
+                    var currentDevice = ar.routedDevice
+                    var pollCount = 0
+
+// Poll for up to 1 second if the OS is slow to report the routed device
+                    while (currentDevice == null && pollCount < 10) {
+                        Thread.sleep(100)
+                        currentDevice = ar.routedDevice
+                        pollCount++
+                    }
+
+// Strictly evaluate the actual hardware device. No falling back to 'intent'.
+                    val actuallyBt = isBluetoothInputDevice(currentDevice)
 
                     Log.i(TAG, "Recording confirmed — sampleRate=$actualSampleRate Hz, BT=$actuallyBt, " +
                             "routedDeviceType=${currentDevice?.type}")
@@ -218,6 +229,38 @@ class AudioInputManager(
                 }
             }
             resetBluetoothAudioRouting()
+        }
+    }
+
+    private fun requestAudioFocus(am: AudioManager): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setAcceptsDelayedFocusGain(true)
+                .setOnAudioFocusChangeListener { focusChange ->
+                    Log.d(TAG, "Audio focus changed: $focusChange")
+                }
+                .build()
+            audioFocusRequest = request
+            am.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } else {
+            @Suppress("DEPRECATION")
+            am.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+    }
+
+    private fun abandonAudioFocus(am: AudioManager) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            (audioFocusRequest as? AudioFocusRequest)?.let { am.abandonAudioFocusRequest(it) }
+            audioFocusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            am.abandonAudioFocus(null)
         }
     }
 
@@ -378,6 +421,14 @@ class AudioInputManager(
         if (!useBluetoothMicIfAvailable) return false
 
         val am = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+
+        // 1. Gain audio focus before requesting routing.
+        // Failing to hold focus causes the OS policy manager to reject setCommunicationDevice.
+        if (!requestAudioFocus(am)) {
+            Log.e(TAG, "Failed to gain audio focus. Bluetooth routing might be rejected by OS.")
+            return false
+        }
+
         if (previousAudioMode == null) previousAudioMode = am.mode
         am.mode = AudioManager.MODE_IN_COMMUNICATION
 
@@ -455,6 +506,8 @@ class AudioInputManager(
             am.mode = it
             previousAudioMode = null
         }
+
+        abandonAudioFocus(am) // 2. Release focus when Bluetooth routing is torn down
         bluetoothMicRoutingActive = false
         preferredInputDevice = null
     }
@@ -574,18 +627,13 @@ class AudioInputManager(
         }
 
         /**
-         * Returns true only when BOTH conditions hold:
-         * 1. The user has enabled "use BT mic" in Settings.
-         * 2. A BT device is physically connected right now.
-         *
-         * Reading only the preference causes an infinite BT retry loop when headphones
-         * are unplugged. Reading only hardware ignores the user's explicit toggle.
+         * Returns true ONLY if the user has enabled the Bluetooth preference in Settings.
+         * Note: Removed physical hardware check so the worker loop can wait infinitely
+         * and never silently fall back to the built-in mic if BT drops temporarily.
          */
         private fun useBluetoothMicIfAvailable(context: Context): Boolean {
-            val prefEnabled = PreferenceManager.getDefaultSharedPreferences(context)
+            return PreferenceManager.getDefaultSharedPreferences(context)
                 .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true)
-            if (!prefEnabled) return false
-            return isBluetoothMicAvailable(context)
         }
     }
 }
