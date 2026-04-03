@@ -219,8 +219,8 @@ class GoertzelDetector(
     companion object {
         private const val TAG = "GoertzelDetector"
 
-        const val DEFAULT_SAMPLE_RATE = 44100
-        const val DEFAULT_WINDOW_SIZE = 175
+        const val DEFAULT_SAMPLE_RATE = 48000
+        const val DEFAULT_WINDOW_SIZE = 205
         const val DEFAULT_STEP_SIZE   = 32
 
         const val  BEEP_DURATION = 0.025
@@ -251,14 +251,14 @@ class GoertzelDetector(
             when (sampleRate) {
                 16000 -> {
                     // Bluetooth  audio
-                    val winSize  = 78
+                    val winSize  = 83 // 0.005 s
                     val binWidth = 16000f / winSize // bin width = 205.1 Hz
                     RateConfig(
                         windowSize = winSize,
-                        stepSize   = 14, // ≈ 18 % of 78, giving ~0.875 ms temporal resolution.
-                        freqLow    = 15 * binWidth, //  3076.92
-                        freqMain   = 16 * binWidth, //  3282.05
-                        freqHigh   = 17 * binWidth, //  3487.18
+                        stepSize   = 12, // 0.00075 s
+                        freqLow    = 16 * binWidth, //  3084.34
+                        freqMain   = 17 * binWidth, //  3277.11
+                        freqHigh   = 18 * binWidth, //  3469.88
                         oneBeepTol = 0.005,
                         twoBeepTol = 0.01,
                         threeBeepTol = 0.01,
@@ -267,14 +267,30 @@ class GoertzelDetector(
                 }
                 8000 -> {
                     // Bluetooth  audio
-                    val winSize  = 39  // Window: 39 samples → bin width = 205.1 Hz (identical to 16000/78)
+                    val winSize  = 61 // 0.0076 s
                     val binWidth = 8000f / winSize
                     RateConfig(
                         windowSize = winSize,
-                        stepSize   = 7, // ≈ 18 % of 39, giving ~0.875 ms temporal resolution.
-                        freqLow    = 15 * binWidth, //  3076.92
-                        freqMain   = 16 * binWidth, //  3282.05
-                        freqHigh   = 17 * binWidth, //  3487.18
+                        stepSize   = 6, // 0.00075 s
+                        freqLow    = 23 * binWidth, //  3016.39
+                        freqMain   = 25 * binWidth, //  3278.69
+                        freqHigh   = 27 * binWidth, //  3540.98
+                        oneBeepTol = 0.0075,
+                        twoBeepTol = 0.015,
+                        threeBeepTol = 0.015,
+                        fourBeepTol = 0.015
+                    )
+                }
+                48000 -> {
+                    // Bluetooth  audio
+                    val winSize  = 205 // 0.0043 s
+                    val binWidth = 48000f / winSize
+                    RateConfig(
+                        windowSize = winSize,
+                        stepSize   = 32, // 0.00067s
+                        freqLow    = 13 * binWidth, //  3043.90
+                        freqMain   = 14 * binWidth, //  3278.05
+                        freqHigh   = 15 * binWidth, //  3512.20
                         oneBeepTol = 0.0075,
                         twoBeepTol = 0.015,
                         threeBeepTol = 0.015,
@@ -286,8 +302,8 @@ class GoertzelDetector(
                     val winSize  = DEFAULT_WINDOW_SIZE
                     val binWidth = sampleRate.toFloat() / winSize  //  in width = 252 Hz
                     RateConfig(
-                        windowSize = winSize,
-                        stepSize   = DEFAULT_STEP_SIZE, // ≈ 18 % of 175, giving ~0.73 ms temporal resolution.
+                        windowSize = winSize, // 0.004s
+                        stepSize   = DEFAULT_STEP_SIZE, // 0.00073 s
                         freqLow    = 12 * binWidth, //3024
                         freqMain   = 13 * binWidth, //3276
                         freqHigh   = 14 * binWidth, //3528
