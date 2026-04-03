@@ -184,9 +184,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
     private fun defaultThreshold(bluetooth: Boolean): Float {
         return if (bluetooth) {
-            AudioBeepDetector.DEFAULT_BLUETOOTH_MAG_THRESHOLD
+            AudioInputManager.DEFAULT_BLUETOOTH_MAG_THRESHOLD
         } else {
-            AudioBeepDetector.DEFAULT_MAG_THRESHOLD
+            AudioInputManager.DEFAULT_MAG_THRESHOLD
         }
     }
 
@@ -204,7 +204,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     private fun setupThresholdPreference(pref: LongPressPreference, bluetooth: Boolean) {
         pref.summary = buildThresholdSummary(bluetooth)
         pref.setOnPreferenceClickListener {
-            if (bluetooth && !AudioBeepDetector.isBluetoothMicAvailable(requireContext())) {
+            if (bluetooth && !AudioInputManager.isBluetoothMicAvailable(requireContext())) {
                 Toast.makeText(requireContext(), "Bluetooth microphone not available.", Toast.LENGTH_SHORT).show()
                 true
             } else {
