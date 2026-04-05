@@ -2,8 +2,11 @@ package com.github.bocovp.geigergpx
 
 import org.osmdroid.util.GeoPoint
 
-class TrackGeneralizer(private val minDistanceMeters: Double,
-    private val coeff: Double) {
+class TrackGeneralizer(
+    private val minDistanceMeters: Double,
+    private val coeff: Double,
+    private val minDurationSeconds: Double = 0.0
+) {
 
     fun generalize(track: MapTrack): MapTrack {
         if (track.points.size < 2) return track
@@ -49,7 +52,7 @@ class TrackGeneralizer(private val minDistanceMeters: Double,
             secondsSum += sourcePoint.seconds
             averagedPoints += 1
 
-            if (distanceMeters >= minDistanceMeters) {
+            if (distanceMeters >= minDistanceMeters && secondsSum >= minDurationSeconds) {
                 flushAveragedPoint()
             }
         }
