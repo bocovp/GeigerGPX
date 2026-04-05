@@ -51,6 +51,17 @@ class TimePlotActivity : AppCompatActivity() {
         val coeff = PreferenceManager.getDefaultSharedPreferences(this)
             .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
+        val selectedTrackId = intent.getStringExtra(EXTRA_TRACK_ID)
+        if (!selectedTrackId.isNullOrBlank()) {
+            val selected = TrackCatalog.loadTrackSamplesById(this, selectedTrackId)
+            if (selected != null) {
+                binding.trackNameLabel.text = selected.title
+                binding.timePlotView.setSamples(selected.samples, coeff)
+                return
+            }
+        }
+
+        binding.trackNameLabel.text = CURRENT_TRACK_TITLE
         viewModel.activeTrackPoints.observe(this) { points ->
             binding.timePlotView.setPoints(points, coeff)
         }
@@ -68,5 +79,10 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun syncBottomNavigationSelection() {
         binding.bottomNavigation.menu.findItem(R.id.navigation_time_plot)?.isChecked = true
+    }
+
+    companion object {
+        const val EXTRA_TRACK_ID = "extra_track_id"
+        const val CURRENT_TRACK_TITLE = "Currently recording"
     }
 }
