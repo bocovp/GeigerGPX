@@ -19,4 +19,9 @@
         android:id="@+id/navigation_poi"
         android:icon="@drawable/baseline_place_24"
         android:title="POI" />
+
+    <item
+        android:id="@+id/navigation_time_plot"
+        android:icon="@drawable/baseline_query_stats_24"
+        android:title="TimePlot" />
 </menu>

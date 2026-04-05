@@ -72,6 +72,10 @@ class TracksActivity : AppCompatActivity() {
                     startActivity(Intent(this, PoiActivity::class.java))
                     true
                 }
+                R.id.navigation_time_plot -> {
+                    startActivity(Intent(this, TimePlotActivity::class.java))
+                    true
+                }
                 else -> false
             }
         }
