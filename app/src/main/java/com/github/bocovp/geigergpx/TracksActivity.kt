@@ -197,28 +197,40 @@ class TracksActivity : AppCompatActivity() {
         popup.setForceShowIcon(true)
         MenuCompat.setGroupDividerEnabled(menu, true)
 
+        menu.add(MENU_GROUP_PLOT, MENU_SHOW_PLOT, Menu.NONE, "Show dose rate plot")
+            .setIcon(R.drawable.baseline_query_stats_24)
+        menu.add(MENU_GROUP_OPEN_SHARE, MENU_OPEN_DEFAULT, Menu.NONE, "Open in default app")
+            .setIcon(R.drawable.baseline_open_in_new_24)
+        menu.add(MENU_GROUP_OPEN_SHARE, MENU_SHARE, Menu.NONE, "Share")
+            .setIcon(R.drawable.baseline_share_24)
+
         if (!item.isCurrentTrack) {
-            menu.add(MENU_GROUP_PRIMARY, MENU_RENAME, Menu.NONE, "Rename file")
+            menu.add(MENU_GROUP_MANAGE, MENU_RENAME, Menu.NONE, "Rename")
                 .setIcon(R.drawable.baseline_edit_24)
-            menu.add(MENU_GROUP_PRIMARY, MENU_DELETE, Menu.NONE, "Delete")
-                .setIcon(R.drawable.baseline_delete_24)
 
             var nextMoveId = MENU_MOVE_BASE
-            availableMoveTargets(item.folderName).forEach { targetFolder ->
+            val moveTargets = availableMoveTargets(item.folderName)
+            if (moveTargets.size == 1) {
+                val targetFolder = moveTargets.first()
                 val title = targetFolder?.let { "Move to $it" } ?: "Move to main folder"
-                menu.add(MENU_GROUP_MOVE, nextMoveId, Menu.NONE, title)
+                menu.add(MENU_GROUP_MANAGE, nextMoveId, Menu.NONE, title)
                     .setIcon(R.drawable.baseline_drive_file_move_24)
                 moveActions[nextMoveId] = targetFolder
-                nextMoveId += 1
+            } else if (moveTargets.size > 1) {
+                val moveSubmenu = menu.addSubMenu(MENU_GROUP_MANAGE, MENU_MOVE_SUBMENU, Menu.NONE, "Move to ...")
+                moveSubmenu.item.setIcon(R.drawable.baseline_drive_file_move_24)
+                moveTargets.forEach { targetFolder ->
+                    val title = targetFolder?.let { "Move to $it" } ?: "Move to main folder"
+                    moveSubmenu.add(MENU_GROUP_MOVE, nextMoveId, Menu.NONE, title)
+                        .setIcon(R.drawable.baseline_drive_file_move_24)
+                    moveActions[nextMoveId] = targetFolder
+                    nextMoveId += 1
+                }
             }
-        }
 
-        menu.add(MENU_GROUP_PRIMARY, MENU_OPEN_DEFAULT, Menu.NONE, "Open in default app")
-            .setIcon(R.drawable.baseline_open_in_new_24)
-        menu.add(MENU_GROUP_PRIMARY, MENU_SHARE, Menu.NONE, "Share")
-            .setIcon(R.drawable.baseline_share_24)
-        menu.add(MENU_GROUP_PRIMARY, MENU_SHOW_PLOT, Menu.NONE, "Show plot")
-            .setIcon(R.drawable.baseline_query_stats_24)
+            menu.add(MENU_GROUP_MANAGE, MENU_DELETE, Menu.NONE, "Delete")
+                .setIcon(R.drawable.baseline_delete_24)
+        }
 
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
@@ -228,19 +240,23 @@ class TracksActivity : AppCompatActivity() {
                 MENU_SHARE -> shareTrack(item)
                 MENU_SHOW_PLOT -> showTrackPlot(item)
                 in moveActions.keys -> {
-                    val movedTrackId = moveTrack(item, moveActions.getValue(menuItem.itemId))
-                    if (movedTrackId != null) {
-                        Toast.makeText(this, "Track moved", Toast.LENGTH_SHORT).show()
-                        updateSelectedTrackId(item.id, movedTrackId)
-                        refreshTrackList()
-                    } else {
-                        Toast.makeText(this, "Unable to move file", Toast.LENGTH_SHORT).show()
-                    }
+                    handleMoveAction(item, moveActions.getValue(menuItem.itemId))
                 }
             }
             true
         }
         popup.show()
+    }
+
+    private fun handleMoveAction(item: TrackListItem, targetFolder: String?) {
+        val movedTrackId = moveTrack(item, targetFolder)
+        if (movedTrackId != null) {
+            Toast.makeText(this, "Track moved", Toast.LENGTH_SHORT).show()
+            updateSelectedTrackId(item.id, movedTrackId)
+            refreshTrackList()
+        } else {
+            Toast.makeText(this, "Unable to move file", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showTrackPlot(item: TrackListItem) {
@@ -555,13 +571,16 @@ class TracksActivity : AppCompatActivity() {
         const val PREF_MAP_VISIBLE_SUBFOLDER_NAMES = "map_visible_subfolder_names"
         const val EXTRA_SUBFOLDER_NAME = "extra_subfolder_name"
 
-        private const val MENU_GROUP_PRIMARY = 1
-        private const val MENU_GROUP_MOVE = 2
+        private const val MENU_GROUP_PLOT = 1
+        private const val MENU_GROUP_OPEN_SHARE = 2
+        private const val MENU_GROUP_MANAGE = 3
+        private const val MENU_GROUP_MOVE = 4
         private const val MENU_RENAME = 1
         private const val MENU_DELETE = 2
         private const val MENU_OPEN_DEFAULT = 3
         private const val MENU_SHARE = 4
         private const val MENU_SHOW_PLOT = 5
+        private const val MENU_MOVE_SUBMENU = 6
         private const val MENU_MOVE_BASE = 100
         private const val GPX_MIME = "application/gpx+xml"
         private const val ARCHIVE_SUBFOLDER = "Archive"
