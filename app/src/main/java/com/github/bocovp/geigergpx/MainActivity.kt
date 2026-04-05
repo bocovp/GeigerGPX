@@ -142,6 +142,10 @@ class MainActivity : AppCompatActivity() {
                     openPoi()
                     true
                 }
+                R.id.navigation_time_plot -> {
+                    openTimePlot()
+                    true
+                }
                 else -> false
             }
         }
@@ -267,6 +271,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun openTracks() {
         startActivity(Intent(this, TracksActivity::class.java))
+    }
+
+    private fun openTimePlot() {
+        startActivity(Intent(this, TimePlotActivity::class.java))
     }
 
     private fun openSettings() {

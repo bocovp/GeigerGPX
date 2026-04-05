@@ -48,6 +48,10 @@ class PoiActivity : AppCompatActivity() {
                     true
                 }
                 R.id.navigation_poi -> true
+                R.id.navigation_time_plot -> {
+                    startActivity(Intent(this, TimePlotActivity::class.java))
+                    true
+                }
                 else -> false
             }
         }
