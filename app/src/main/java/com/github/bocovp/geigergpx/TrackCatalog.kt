@@ -298,6 +298,33 @@ object TrackCatalog {
         persistTrackCache(context)
     }
 
+    data class TrackPlotData(
+        val id: String,
+        val title: String,
+        val samples: List<TrackSample>
+    )
+
+    fun loadTrackSamplesById(context: Context, trackId: String): TrackPlotData? {
+        ensureDiskCacheLoaded(context)
+        if (isTrackCacheEmpty(context)) {
+            rebuildTrackCache(context)
+        }
+
+        val cached = parsedTrackCache[trackId] ?: return null
+        val samples = if (cached.hasSamples()) {
+            cached.samplesOrEmpty()
+        } else {
+            val parsed = openInputStreamForTrack(context, trackId)?.use { parseGpxTrack(it) } ?: return null
+            synchronized(this) {
+                val updated = cached.withSamples(parsed.samples)
+                parsedTrackCache[trackId] = updated
+            }
+            persistTrackCache(context)
+            parsed.samples
+        }
+        return TrackPlotData(id = trackId, title = cached.displayName, samples = samples)
+    }
+
     fun folderItemId(folderName: String): String = "folder:$folderName"
 
     private data class CurrentTrackData(

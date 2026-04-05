@@ -47,6 +47,8 @@ class TrackingService : Service() {
         const val ACTION_STOP  = "com.github.bocovp.geigergpx.STOP"
         const val ACTION_CANCEL_TRACK = "com.github.bocovp.geigergpx.CANCEL_TRACK"
         const val ACTION_TOGGLE_MEASUREMENT_MODE = "com.github.bocovp.geigergpx.TOGGLE_MEASUREMENT_MODE"
+        const val ACTION_TRACK_SAVED = "com.github.bocovp.geigergpx.TRACK_SAVED"
+        const val EXTRA_TRACK_ID = "extra_track_id"
         const val NOTIF_ID = 1001
 
         // 10 minutes
@@ -371,11 +373,14 @@ class TrackingService : Service() {
         val finalPointCount = copy.size
         repo.setActiveTrackPoints(copy)
         if (copy.isNotEmpty()) {
-            val filename = GpxWriter.saveTrack(this, copy)
-            if (filename != null) {
+            val saveResult = GpxWriter.saveTrackWithResult(this, copy)
+            if (saveResult != null) {
                 // Final save succeeded: remove any leftover backup file
                 GpxWriter.deleteBackupIfExists(this)
-                showSaveNotification(filename)
+                sendBroadcast(
+                    Intent(ACTION_TRACK_SAVED).putExtra(EXTRA_TRACK_ID, saveResult.sourceId)
+                )
+                showSaveNotification(saveResult.displayPath)
             } else {
                 showSaveNotification("File not saved (error)")
             }

@@ -13,7 +13,16 @@ object GpxWriter {
     private const val GPX_NAMESPACE = "http://www.topografix.com/GPX/1/1"
     private const val RAD_NAMESPACE = "https://github.com/bocovp/GeigerGPX"
 
+    data class SaveTrackResult(
+        val displayPath: String,
+        val sourceId: String
+    )
+
     fun saveTrack(context: Context, points: List<TrackPoint>): String? {
+        return saveTrackWithResult(context, points)?.displayPath
+    }
+
+    fun saveTrackWithResult(context: Context, points: List<TrackPoint>): SaveTrackResult? {
         if (points.isEmpty()) return null
         val fileName = defaultTimestampFileName()
         val result = writeGpxFile(context, points, fileName)
@@ -25,7 +34,7 @@ object GpxWriter {
 
     fun saveBackup(context: Context, points: List<TrackPoint>): String? {
         if (points.isEmpty()) return null
-        return writeGpxFile(context, points, BACKUP_FILE_NAME)
+        return writeGpxFile(context, points, BACKUP_FILE_NAME)?.displayPath
     }
 
     fun backupUri(context: Context): Uri? = FileStorageManager.getFileUri(context, BACKUP_FILE_NAME)
@@ -66,7 +75,7 @@ object GpxWriter {
         return "${sdf.format(Date())}-restored.gpx"
     }
 
-    private fun writeGpxFile(context: Context, points: List<TrackPoint>, fileName: String): String? {
+    private fun writeGpxFile(context: Context, points: List<TrackPoint>, fileName: String): SaveTrackResult? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
@@ -77,7 +86,10 @@ object GpxWriter {
                     writeXmlToStream(writer, points, saveDoseRateInEle, coeff)
                 }
             } ?: return null
-            FileStorageManager.getDisplayPath(context, savedUri)
+            SaveTrackResult(
+                displayPath = FileStorageManager.getDisplayPath(context, savedUri),
+                sourceId = if (savedUri.scheme == "content") "tree:$savedUri" else "file:${savedUri.path}"
+            )
         } catch (e: Exception) {
             e.printStackTrace()
             null

@@ -217,6 +217,8 @@ class TracksActivity : AppCompatActivity() {
             .setIcon(R.drawable.baseline_open_in_new_24)
         menu.add(MENU_GROUP_PRIMARY, MENU_SHARE, Menu.NONE, "Share")
             .setIcon(R.drawable.baseline_share_24)
+        menu.add(MENU_GROUP_PRIMARY, MENU_SHOW_PLOT, Menu.NONE, "Show plot")
+            .setIcon(R.drawable.baseline_query_stats_24)
 
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
@@ -224,6 +226,7 @@ class TracksActivity : AppCompatActivity() {
                 MENU_DELETE -> confirmDeleteTrack(item)
                 MENU_OPEN_DEFAULT -> openInDefaultApp(item)
                 MENU_SHARE -> shareTrack(item)
+                MENU_SHOW_PLOT -> showTrackPlot(item)
                 in moveActions.keys -> {
                     val movedTrackId = moveTrack(item, moveActions.getValue(menuItem.itemId))
                     if (movedTrackId != null) {
@@ -238,6 +241,13 @@ class TracksActivity : AppCompatActivity() {
             true
         }
         popup.show()
+    }
+
+    private fun showTrackPlot(item: TrackListItem) {
+        startActivity(
+            Intent(this, TimePlotActivity::class.java)
+                .putExtra(TimePlotActivity.EXTRA_TRACK_ID, item.id)
+        )
     }
 
     private fun availableMoveTargets(currentFolder: String?): List<String?> {
@@ -551,6 +561,7 @@ class TracksActivity : AppCompatActivity() {
         private const val MENU_DELETE = 2
         private const val MENU_OPEN_DEFAULT = 3
         private const val MENU_SHARE = 4
+        private const val MENU_SHOW_PLOT = 5
         private const val MENU_MOVE_BASE = 100
         private const val GPX_MIME = "application/gpx+xml"
         private const val ARCHIVE_SUBFOLDER = "Archive"
