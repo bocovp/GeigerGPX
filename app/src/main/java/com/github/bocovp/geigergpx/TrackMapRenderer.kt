@@ -59,8 +59,8 @@ class TrackMapRenderer(
         lastMaxDose = currentMax
 
         if (scaleChanged) {
-            tvHalf?.text = String.format("%.2f µSv/h", currentMax / 2)
-            tvMax?.text = String.format("%.2f µSv/h", currentMax)
+            tvHalf?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax / 2)
+            tvMax?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax)
         }
 
         var latestPoint: GeoPoint? = null

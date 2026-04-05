@@ -204,7 +204,7 @@ class GoertzelDetector(
             else                          -> 0
         }
        // if (BuildConfig.DEBUG) {
-            android.util.Log.d(TAG, "$count Duration ${"%.4f".format(duration)}\tPeak ${"%.2e".format(peakMain)}")
+            android.util.Log.d(TAG, "$count Duration ${"%.4f".format(java.util.Locale.US, duration)}\tPeak ${"%.2e".format(java.util.Locale.US, peakMain)}")
        // }
         onBeep(peakMain, count)
     }
