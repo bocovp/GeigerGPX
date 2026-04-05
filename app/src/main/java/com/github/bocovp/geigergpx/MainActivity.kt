@@ -369,7 +369,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         viewModel.distanceMeters.observe(this) { dist ->
-            binding.textDistance.text = "Distance: %.1f m".format(dist)
+            binding.textDistance.text = "Distance: %.1f m".format(java.util.Locale.US, dist)
         }
 
         viewModel.pointCount.observe(this) { count ->
