@@ -29,7 +29,6 @@ import android.view.WindowManager
 import android.widget.EditText
 import android.widget.TextView
 import android.os.Build
-import androidx.core.content.ContextCompat
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
