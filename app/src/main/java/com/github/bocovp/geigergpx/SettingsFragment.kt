@@ -194,9 +194,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
         val value = prefs.getFloat(thresholdKey(bluetooth), Float.NaN)
         return if (value.isNaN()) {
-            "Uncalibrated (%.2f dB)".format(toDb(defaultThreshold(bluetooth)))
+            "Uncalibrated (%.2f dB)".format(java.util.Locale.US, toDb(defaultThreshold(bluetooth)))
         } else {
-            "Current threshold: %.2f dB".format(toDb(value))
+            "Current threshold: %.2f dB".format(java.util.Locale.US, toDb(value))
             //100.0 is just an arbitrary constant
         }
     }
@@ -280,7 +280,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 InputType.TYPE_NUMBER_FLAG_SIGNED
             hint = "e.g. 42.1"
             if (!current.isNaN()) {
-                setText("%.2f".format(toDb(current)))
+                setText("%.2f".format(java.util.Locale.US, toDb(current)))
                 setSelection(text.length)
             }
         }
