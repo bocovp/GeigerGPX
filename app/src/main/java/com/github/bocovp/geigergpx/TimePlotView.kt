@@ -96,7 +96,11 @@ class TimePlotView @JvmOverloads constructor(
         refreshAxisColors()
     }
 
-    fun setPoints(points: List<TrackPoint>, cpsToUSvh: Double) {
+    fun setPoints(
+        points: List<TrackPoint>,
+        cpsToUSvh: Double,
+        recalculateVerticalAxis: Boolean = true
+    ) {
         val samples = points.map {
             TrackSample(
                 latitude = it.latitude,
@@ -106,10 +110,14 @@ class TimePlotView @JvmOverloads constructor(
                 seconds = it.seconds
             )
         }
-        setSamples(samples, cpsToUSvh)
+        setSamples(samples, cpsToUSvh, recalculateVerticalAxis)
     }
 
-    fun setSamples(samples: List<TrackSample>, cpsToUSvh: Double) {
+    fun setSamples(
+        samples: List<TrackSample>,
+        cpsToUSvh: Double,
+        recalculateVerticalAxis: Boolean = true
+    ) {
         plotSegments.clear()
         yAxisUnit = if (kotlin.math.abs(cpsToUSvh - 1.0) < 1e-9) "cps" else "μSv/h"
 
@@ -142,9 +150,11 @@ class TimePlotView @JvmOverloads constructor(
 
         trackDurationSeconds = elapsedSeconds
         maxDoseValue = (plotSegments.maxOfOrNull { maxOf(it.value, it.ciHigh) } ?: 1.0).coerceAtLeast(0.1)
-        verticalTickStep = chooseVerticalTickStep(maxDoseValue)
-        verticalTickCount = ceil(maxDoseValue / verticalTickStep).toInt()
-        verticalAxisMaxValue = verticalTickStep * verticalTickCount
+        if (recalculateVerticalAxis) {
+            verticalTickStep = chooseVerticalTickStep(maxDoseValue)
+            verticalTickCount = ceil(maxDoseValue / verticalTickStep).toInt()
+            verticalAxisMaxValue = verticalTickStep * verticalTickCount
+        }
         clampPan()
         invalidate()
     }

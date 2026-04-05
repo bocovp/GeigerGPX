@@ -91,9 +91,16 @@ class TimePlotActivity : AppCompatActivity() {
         binding.placeholderSlider.addOnChangeListener { _: Slider, value: Float, fromUser: Boolean ->
             updateSliderDescription(value)
             if (fromUser) {
-                updatePlotWithGeneralization()
+                updatePlotWithGeneralization(recalculateVerticalAxis = false)
             }
         }
+        binding.placeholderSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) = Unit
+
+            override fun onStopTrackingTouch(slider: Slider) {
+                updatePlotWithGeneralization(recalculateVerticalAxis = true)
+            }
+        })
     }
 
     private fun observeActiveTrack() {
@@ -109,7 +116,7 @@ class TimePlotActivity : AppCompatActivity() {
                     seconds = it.seconds
                 )
             }
-            updatePlotWithGeneralization()
+            updatePlotWithGeneralization(recalculateVerticalAxis = true)
         }
     }
 
@@ -117,7 +124,7 @@ class TimePlotActivity : AppCompatActivity() {
         binding.topAppBar.subtitle = "Min point duration: ${"%.1f".format(java.util.Locale.US, valueMinutes)} min"
     }
 
-    private fun updatePlotWithGeneralization() {
+    private fun updatePlotWithGeneralization(recalculateVerticalAxis: Boolean = true) {
         val minDurationSeconds = binding.placeholderSlider.value * SECONDS_PER_MINUTE
         val track = MapTrack(
             id = CURRENT_TRACK_TITLE,
@@ -129,7 +136,11 @@ class TimePlotActivity : AppCompatActivity() {
             coeff = cpsToUSvhCoeff,
             minDurationSeconds = minDurationSeconds.toDouble()
         ).generalize(track)
-        binding.timePlotView.setSamples(generalized.points, cpsToUSvhCoeff)
+        binding.timePlotView.setSamples(
+            samples = generalized.points,
+            cpsToUSvh = cpsToUSvhCoeff,
+            recalculateVerticalAxis = recalculateVerticalAxis
+        )
     }
 
     companion object {
