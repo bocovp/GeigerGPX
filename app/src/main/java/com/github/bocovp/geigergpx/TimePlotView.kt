@@ -10,9 +10,8 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import androidx.core.graphics.ColorUtils
+import kotlin.math.ceil
 import kotlin.math.floor
-import kotlin.math.log10
-import kotlin.math.pow
 
 class TimePlotView @JvmOverloads constructor(
     context: Context,
@@ -58,6 +57,9 @@ class TimePlotView @JvmOverloads constructor(
     private var trackDurationSeconds = 0.0
     private var maxDoseValue = 1.0
     private var yAxisUnit = "μSv/h"
+    private var verticalTickStep = 0.2
+    private var verticalTickCount = 5
+    private var verticalAxisMaxValue = 1.0
 
     private var zoomX = 1f
     private var panFraction = 0f
@@ -114,6 +116,9 @@ class TimePlotView @JvmOverloads constructor(
         if (samples.isEmpty()) {
             trackDurationSeconds = 0.0
             maxDoseValue = 1.0
+            verticalTickStep = 0.2
+            verticalTickCount = 5
+            verticalAxisMaxValue = 1.0
             zoomX = 1f
             panFraction = 0f
             invalidate()
@@ -137,6 +142,9 @@ class TimePlotView @JvmOverloads constructor(
 
         trackDurationSeconds = elapsedSeconds
         maxDoseValue = (plotSegments.maxOfOrNull { maxOf(it.value, it.ciHigh) } ?: 1.0).coerceAtLeast(0.1)
+        verticalTickStep = chooseVerticalTickStep(maxDoseValue)
+        verticalTickCount = ceil(maxDoseValue / verticalTickStep).toInt()
+        verticalAxisMaxValue = verticalTickStep * verticalTickCount
         clampPan()
         invalidate()
     }
@@ -238,11 +246,10 @@ class TimePlotView @JvmOverloads constructor(
         plotBottom: Float,
         plotRight: Float
     ) {
-        val tickCount = 5
-        for (i in 0..tickCount) {
-            val ratio = i.toFloat() / tickCount.toFloat()
+        for (i in 0..verticalTickCount) {
+            val ratio = i.toFloat() / verticalTickCount.toFloat()
             val y = plotBottom - ratio * (plotBottom - plotTop)
-            val value = ratio * maxDoseValue
+            val value = i * verticalTickStep
             canvas.drawLine(plotLeft, y, plotRight, y, gridPaint)
             canvas.drawText(String.format(java.util.Locale.US, "%.2f", value), 8f, y + 8f, textPaint)
         }
@@ -261,7 +268,7 @@ class TimePlotView @JvmOverloads constructor(
         val visibleDuration = trackDurationSeconds / zoomX
         val start = (trackDurationSeconds - visibleDuration) * panFraction
         val end = start + visibleDuration
-        val stepSeconds = chooseTickStepSeconds(visibleDuration)
+        val stepSeconds = chooseHorizontalTickStepSeconds(visibleDuration)
 
         var tick = floor(start / stepSeconds) * stepSeconds
         while (tick <= end + 0.0001) {
@@ -274,17 +281,37 @@ class TimePlotView @JvmOverloads constructor(
         }
     }
 
-    private fun chooseTickStepSeconds(duration: Double): Double {
-        val rough = (duration / 6.0).coerceAtLeast(1.0)
-        val magnitude = 10.0.pow(floor(log10(rough)))
-        val normalized = rough / magnitude
-        val snapped = when {
-            normalized <= 1.0 -> 1.0
-            normalized <= 2.0 -> 2.0
-            normalized <= 5.0 -> 5.0
-            else -> 10.0
+    private fun chooseHorizontalTickStepSeconds(durationSeconds: Double): Double {
+        val allowedStepsMinutes = listOf(1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0, 120.0, 300.0, 600.0)
+        val targetTickCount = 6.0
+        val desiredStepMinutes = (durationSeconds / 60.0) / targetTickCount
+        val chosenStepMinutes = allowedStepsMinutes.minByOrNull { kotlin.math.abs(it - desiredStepMinutes) }
+            ?: allowedStepsMinutes.first()
+        return chosenStepMinutes * 60.0
+    }
+
+    private fun chooseVerticalTickStep(maxValue: Double): Double {
+        val allowedSteps = listOf(0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0)
+        val candidatesInRange = allowedSteps.filter { step ->
+            val positiveTickCount = ceil(maxValue / step).toInt()
+            positiveTickCount in 5..7
         }
-        return snapped * magnitude
+        if (candidatesInRange.isNotEmpty()) {
+            return candidatesInRange.minByOrNull { step ->
+                val positiveTickCount = ceil(maxValue / step).toInt()
+                kotlin.math.abs(positiveTickCount - 6)
+            } ?: candidatesInRange.first()
+        }
+
+        return allowedSteps.minByOrNull { step ->
+            val positiveTickCount = ceil(maxValue / step).toInt()
+            val distanceToRange = when {
+                positiveTickCount < 5 -> 5 - positiveTickCount
+                positiveTickCount > 7 -> positiveTickCount - 7
+                else -> 0
+            }
+            distanceToRange.toDouble()
+        } ?: allowedSteps.first()
     }
 
     private fun formatTickLabel(seconds: Double): String {
@@ -299,7 +326,7 @@ class TimePlotView @JvmOverloads constructor(
     }
 
     private fun toY(value: Double, bottom: Float, height: Float): Float {
-        val ratio = (value.coerceAtLeast(0.0) / maxDoseValue).coerceIn(0.0, 1.0)
+        val ratio = (value.coerceAtLeast(0.0) / verticalAxisMaxValue).coerceIn(0.0, 1.0)
         return bottom - (ratio.toFloat() * height)
     }
 
