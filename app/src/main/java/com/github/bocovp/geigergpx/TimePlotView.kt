@@ -283,7 +283,7 @@ class TimePlotView @JvmOverloads constructor(
 
     private fun chooseHorizontalTickStepSeconds(durationSeconds: Double): Double {
         val allowedStepsMinutes = listOf(1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0, 120.0, 300.0, 600.0)
-        val targetTickCount = 6.0
+        val targetTickCount = 5.0
         val desiredStepMinutes = (durationSeconds / 60.0) / targetTickCount
         val chosenStepMinutes = allowedStepsMinutes.minByOrNull { kotlin.math.abs(it - desiredStepMinutes) }
             ?: allowedStepsMinutes.first()
