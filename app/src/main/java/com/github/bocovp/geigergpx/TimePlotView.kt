@@ -4,16 +4,14 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import androidx.core.graphics.ColorUtils
 import kotlin.math.floor
 import kotlin.math.log10
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.pow
 
 class TimePlotView @JvmOverloads constructor(
@@ -21,33 +19,25 @@ class TimePlotView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    private data class PlotPoint(
-        val elapsedSeconds: Double,
+    private data class PlotSegment(
+        val startSeconds: Double,
+        val endSeconds: Double,
         val value: Double,
         val ciLow: Double,
         val ciHigh: Double
     )
 
-    private data class RenderPoint(
-        val x: Float,
-        val yLine: Float,
-        val yCi: Float
-    )
-
-    private val plotPoints = mutableListOf<PlotPoint>()
+    private val plotSegments = mutableListOf<PlotSegment>()
 
     private val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.DKGRAY
         strokeWidth = 2f
         style = Paint.Style.STROKE
     }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.LTGRAY
         strokeWidth = 1f
         style = Paint.Style.STROKE
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.DKGRAY
         textSize = 28f
     }
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -59,9 +49,6 @@ class TimePlotView @JvmOverloads constructor(
         color = Color.argb(100, 140, 140, 140)
         style = Paint.Style.FILL
     }
-
-    private val linePath = Path()
-    private val ciPath = Path()
 
     private val leftPaddingPx = 96f
     private val rightPaddingPx = 22f
@@ -103,11 +90,28 @@ class TimePlotView @JvmOverloads constructor(
         }
     })
 
+    init {
+        refreshAxisColors()
+    }
+
     fun setPoints(points: List<TrackPoint>, cpsToUSvh: Double) {
-        plotPoints.clear()
+        val samples = points.map {
+            TrackSample(
+                latitude = it.latitude,
+                longitude = it.longitude,
+                doseRate = it.cps * cpsToUSvh,
+                counts = it.counts,
+                seconds = it.seconds
+            )
+        }
+        setSamples(samples, cpsToUSvh)
+    }
+
+    fun setSamples(samples: List<TrackSample>, cpsToUSvh: Double) {
+        plotSegments.clear()
         yAxisUnit = if (kotlin.math.abs(cpsToUSvh - 1.0) < 1e-9) "cps" else "μSv/h"
 
-        if (points.size < 2) {
+        if (samples.isEmpty()) {
             trackDurationSeconds = 0.0
             maxDoseValue = 1.0
             zoomX = 1f
@@ -116,22 +120,23 @@ class TimePlotView @JvmOverloads constructor(
             return
         }
 
-        val firstTime = points.first().timeMillis
-        for (point in points) {
-            val elapsedSeconds = ((point.timeMillis - firstTime).toDouble() / 1000.0).coerceAtLeast(0.0)
-            val seconds = point.seconds.coerceAtLeast(0.001)
-            val ci = ConfidenceInterval(0.0, seconds, point.counts, false).scale(cpsToUSvh)
-            val value = point.cps * cpsToUSvh
-            plotPoints += PlotPoint(
-                elapsedSeconds = elapsedSeconds,
+        var elapsedSeconds = 0.0
+        for (sample in samples) {
+            val seconds = sample.seconds.coerceAtLeast(0.001)
+            val ci = ConfidenceInterval(0.0, seconds, sample.counts, false)
+            val value = sample.doseRate
+            plotSegments += PlotSegment(
+                startSeconds = elapsedSeconds,
+                endSeconds = elapsedSeconds + seconds,
                 value = value,
-                ciLow = ci.lowBound.coerceAtLeast(0.0),
-                ciHigh = ci.highBound.coerceAtLeast(0.0)
+                ciLow = ci.lowBound.coerceAtLeast(0.0) * cpsToUSvh,
+                ciHigh = ci.highBound.coerceAtLeast(0.0) * cpsToUSvh
             )
+            elapsedSeconds += seconds
         }
 
-        trackDurationSeconds = plotPoints.last().elapsedSeconds
-        maxDoseValue = (plotPoints.maxOfOrNull { max(it.value, it.ciHigh) } ?: 1.0).coerceAtLeast(0.1)
+        trackDurationSeconds = elapsedSeconds
+        maxDoseValue = (plotSegments.maxOfOrNull { maxOf(it.value, it.ciHigh) } ?: 1.0).coerceAtLeast(0.1)
         clampPan()
         invalidate()
     }
@@ -144,6 +149,7 @@ class TimePlotView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        refreshAxisColors()
 
         val plotLeft = leftPaddingPx
         val plotTop = topPaddingPx
@@ -156,20 +162,35 @@ class TimePlotView @JvmOverloads constructor(
         canvas.drawLine(plotLeft, plotBottom, plotRight, plotBottom, axisPaint)
         canvas.drawLine(plotLeft, plotTop, plotLeft, plotBottom, axisPaint)
 
-        if (plotPoints.isEmpty()) {
+        if (plotSegments.isEmpty()) {
             canvas.drawText("No track data", plotLeft + 16f, plotTop + 40f, textPaint)
             return
         }
 
         drawVerticalTicks(canvas, plotLeft, plotTop, plotBottom, plotRight)
         drawHorizontalTicks(canvas, plotLeft, plotBottom, plotTop, plotRight)
-        drawSeries(canvas, plotLeft, plotTop, plotBottom, plotWidth, plotHeight)
+        drawSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
+    }
+
+    private fun refreshAxisColors() {
+        val baseTextColor = resolveTextPrimaryColor()
+        axisPaint.color = ColorUtils.blendARGB(baseTextColor, Color.WHITE, 0.10f)
+        textPaint.color = ColorUtils.blendARGB(baseTextColor, Color.WHITE, 0.20f)
+        gridPaint.color = ColorUtils.setAlphaComponent(textPaint.color, 110)
+    }
+
+    private fun resolveTextPrimaryColor(): Int {
+        val typedArray = context.obtainStyledAttributes(intArrayOf(android.R.attr.textColorPrimary))
+        return try {
+            typedArray.getColor(0, Color.DKGRAY)
+        } finally {
+            typedArray.recycle()
+        }
     }
 
     private fun drawSeries(
         canvas: Canvas,
         plotLeft: Float,
-        plotTop: Float,
         plotBottom: Float,
         plotWidth: Float,
         plotHeight: Float
@@ -180,36 +201,34 @@ class TimePlotView @JvmOverloads constructor(
         val start = (trackDurationSeconds - visibleDuration) * panFraction
         val end = start + visibleDuration
 
-        val visiblePoints = mutableListOf<RenderPoint>()
-        for (point in plotPoints) {
-            if (point.elapsedSeconds < start || point.elapsedSeconds > end) continue
-            val x = plotLeft + (((point.elapsedSeconds - start) / visibleDuration).toFloat() * plotWidth)
-            visiblePoints += RenderPoint(
-                x = x,
-                yLine = toY(point.value, plotBottom, plotHeight),
-                yCi = toY(min(point.value, point.ciLow), plotBottom, plotHeight)
-            )
-        }
-        if (visiblePoints.size < 2) return
+        for (segment in plotSegments) {
+            val segmentStart = maxOf(segment.startSeconds, start)
+            val segmentEnd = minOf(segment.endSeconds, end)
+            if (segmentEnd <= segmentStart) continue
 
-        linePath.reset()
-        linePath.moveTo(visiblePoints.first().x, visiblePoints.first().yLine)
-        for (p in visiblePoints.drop(1)) {
-            linePath.lineTo(p.x, p.yLine)
-        }
+            val leftX = plotLeft + (((segmentStart - start) / visibleDuration).toFloat() * plotWidth)
+            val rightX = plotLeft + (((segmentEnd - start) / visibleDuration).toFloat() * plotWidth)
 
-        ciPath.reset()
-        ciPath.moveTo(visiblePoints.first().x, visiblePoints.first().yLine)
-        for (p in visiblePoints.drop(1)) {
-            ciPath.lineTo(p.x, p.yLine)
-        }
-        for (p in visiblePoints.asReversed()) {
-            ciPath.lineTo(p.x, p.yCi)
-        }
-        ciPath.close()
+            val lineY = toY(segment.value, plotBottom, plotHeight)
+            val ciLowY = toY(segment.ciLow, plotBottom, plotHeight)
+            val ciHighY = toY(segment.ciHigh, plotBottom, plotHeight)
 
-        canvas.drawPath(ciPath, ciPaint)
-        canvas.drawPath(linePath, linePaint)
+            canvas.drawRect(leftX, ciHighY, rightX, ciLowY, ciPaint)
+            canvas.drawLine(leftX, lineY, rightX, lineY, linePaint)
+
+            if (segment.endSeconds in start..end) {
+                val stepX = plotLeft + (((segment.endSeconds - start) / visibleDuration).toFloat() * plotWidth)
+                val nextValue = nextSegmentValue(segment.endSeconds)
+                if (nextValue != null) {
+                    val nextY = toY(nextValue, plotBottom, plotHeight)
+                    canvas.drawLine(stepX, lineY, stepX, nextY, linePaint)
+                }
+            }
+        }
+    }
+
+    private fun nextSegmentValue(segmentStart: Double): Double? {
+        return plotSegments.firstOrNull { kotlin.math.abs(it.startSeconds - segmentStart) < 1e-9 }?.value
     }
 
     private fun drawVerticalTicks(

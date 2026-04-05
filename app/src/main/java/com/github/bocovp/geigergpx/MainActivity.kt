@@ -20,6 +20,8 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.net.Uri
 import android.content.Context
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.icu.util.Measure
 import android.view.Menu
 import android.view.MenuItem
@@ -27,6 +29,7 @@ import android.view.WindowManager
 import android.widget.EditText
 import android.widget.TextView
 import android.os.Build
+import androidx.core.content.ContextCompat
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
@@ -37,6 +40,21 @@ class MainActivity : AppCompatActivity() {
     private var isMeasurementModeEnabled: Boolean = false
     private var doseRateDisplayMode: ConfidenceInterval.DisplayMode = ConfidenceInterval.DisplayMode.PLUS_MINUS
     private var keepScreenOnEnabled: Boolean = false
+    private var openSavedTrackPlotAfterStop = false
+    private var trackSavedReceiverRegistered = false
+
+    private val trackSavedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != TrackingService.ACTION_TRACK_SAVED) return
+            val trackId = intent.getStringExtra(TrackingService.EXTRA_TRACK_ID) ?: return
+            if (!openSavedTrackPlotAfterStop) return
+            openSavedTrackPlotAfterStop = false
+            startActivity(
+                Intent(this@MainActivity, TimePlotActivity::class.java)
+                    .putExtra(TimePlotActivity.EXTRA_TRACK_ID, trackId)
+            )
+        }
+    }
 
     private val cpsRefreshHandler = Handler(Looper.getMainLooper())
     private val cpsRefreshRunnable = object : Runnable {
@@ -274,6 +292,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openTimePlot() {
+        openSavedTrackPlotAfterStop = false
         startActivity(Intent(this, TimePlotActivity::class.java))
     }
 
@@ -283,6 +302,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        registerTrackSavedReceiverIfNeeded()
         syncBottomNavigationSelection()
         applyKeepScreenOnFlag()
         updateCpsOrDoseLine(false)
@@ -292,6 +312,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        unregisterTrackSavedReceiverIfNeeded()
         stopCpsRefreshLoop()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // Keep monitoring active in background while tracking or while
@@ -541,6 +562,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun cancelTracking() {
+        openSavedTrackPlotAfterStop = false
         val intent = Intent(this, TrackingService::class.java).apply {
             action = TrackingService.ACTION_CANCEL_TRACK
         }
@@ -548,6 +570,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startTracking() {
+        openSavedTrackPlotAfterStop = false
         val intent = Intent(this, TrackingService::class.java).apply {
             action = TrackingService.ACTION_START
         }
@@ -555,10 +578,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopTracking() {
+        openSavedTrackPlotAfterStop = true
         val intent = Intent(this, TrackingService::class.java).apply {
             action = TrackingService.ACTION_STOP
         }
         startService(intent)
+    }
+
+    private fun registerTrackSavedReceiverIfNeeded() {
+        if (trackSavedReceiverRegistered) return
+        val filter = IntentFilter(TrackingService.ACTION_TRACK_SAVED)
+        ContextCompat.registerReceiver(
+            this,
+            trackSavedReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        trackSavedReceiverRegistered = true
+    }
+
+    private fun unregisterTrackSavedReceiverIfNeeded() {
+        if (!trackSavedReceiverRegistered) return
+        unregisterReceiver(trackSavedReceiver)
+        trackSavedReceiverRegistered = false
     }
 
     private fun requestPermissionsOnAppStart() {
