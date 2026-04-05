@@ -85,7 +85,7 @@ class TimePlotActivity : AppCompatActivity() {
     private fun setupGeneralizationSlider() {
         binding.placeholderSlider.valueFrom = 0f
         binding.placeholderSlider.valueTo = MAX_GENERALIZATION_MINUTES
-        binding.placeholderSlider.stepSize = GENERALIZATION_SLIDER_STEP_MINUTES
+        //binding.placeholderSlider.stepSize = GENERALIZATION_SLIDER_STEP_MINUTES
         binding.placeholderSlider.value = 0f
         updateSliderDescription(binding.placeholderSlider.value)
         binding.placeholderSlider.addOnChangeListener { _: Slider, value: Float, fromUser: Boolean ->
@@ -137,6 +137,6 @@ class TimePlotActivity : AppCompatActivity() {
         const val CURRENT_TRACK_TITLE = "Currently recording"
         private const val SECONDS_PER_MINUTE = 60f
         private const val MAX_GENERALIZATION_MINUTES = 10f
-        private const val GENERALIZATION_SLIDER_STEP_MINUTES = 0.5f
+       // private const val GENERALIZATION_SLIDER_STEP_MINUTES = 0.5f
     }
 }
