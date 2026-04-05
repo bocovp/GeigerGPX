@@ -40,6 +40,29 @@ class MapActivity : AppCompatActivity() {
         setSupportActionBar(binding.topAppBar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.topAppBar.setNavigationOnClickListener { finish() }
+        syncBottomNavigationSelection()
+        binding.bottomNavigation.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.navigation_home -> {
+                    startActivity(Intent(this, MainActivity::class.java))
+                    true
+                }
+                R.id.navigation_map -> true
+                R.id.navigation_tracks -> {
+                    startActivity(Intent(this, TracksActivity::class.java))
+                    true
+                }
+                R.id.navigation_poi -> {
+                    startActivity(Intent(this, PoiActivity::class.java))
+                    true
+                }
+                R.id.navigation_time_plot -> {
+                    startActivity(Intent(this, TimePlotActivity::class.java))
+                    true
+                }
+                else -> false
+            }
+        }
 
         binding.mapView.setTileSource(TileSourceFactory.MAPNIK)
         binding.mapView.setMultiTouchControls(true)
@@ -107,6 +130,7 @@ class MapActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        syncBottomNavigationSelection()
         binding.mapView.onResume()
         refreshMapTracks(latestActivePoints)
     }
@@ -119,6 +143,10 @@ class MapActivity : AppCompatActivity() {
     override fun onSupportNavigateUp(): Boolean {
         finish()
         return true
+    }
+
+    private fun syncBottomNavigationSelection() {
+        binding.bottomNavigation.menu.findItem(R.id.navigation_map)?.isChecked = true
     }
 
     private fun observeTrack() {
