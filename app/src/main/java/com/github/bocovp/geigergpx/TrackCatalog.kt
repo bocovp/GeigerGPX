@@ -476,7 +476,7 @@ object TrackCatalog {
         val mm = (durationSeconds % 3600) / 60
         val ss = durationSeconds % 60
         val durationText = String.format("%02d:%02d:%02d", hh, mm, ss)
-        return "${stats.pointCount} points · $durationText · %.1f m".format(stats.distanceMeters)
+        return "${stats.pointCount} points · $durationText · %.1f m".format(java.util.Locale.US, stats.distanceMeters)
     }
 
     private data class CachedParsedTrack(

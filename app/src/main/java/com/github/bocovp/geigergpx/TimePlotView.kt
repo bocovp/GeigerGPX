@@ -244,7 +244,7 @@ class TimePlotView @JvmOverloads constructor(
             val y = plotBottom - ratio * (plotBottom - plotTop)
             val value = ratio * maxDoseValue
             canvas.drawLine(plotLeft, y, plotRight, y, gridPaint)
-            canvas.drawText(String.format("%.2f", value), 8f, y + 8f, textPaint)
+            canvas.drawText(String.format(java.util.Locale.US, "%.2f", value), 8f, y + 8f, textPaint)
         }
         canvas.drawText(yAxisUnit, plotLeft + 8f, plotTop + 28f, textPaint)
     }
