@@ -1,6 +1,6 @@
 # GeigerGPX
 
-GeigerGPX is an Android application for GPS track recording with radiation dose-rate estimation from  **RADEX RD-1008** Geiger counter.
+GeigerGPX is an Android application for simultaneous recording GPS track and dose-rate information obtained from **RADEX RD-1008** Geiger counter.
 No modification to the radiometer is required; signals are recorded via the microphone. Simply enter "search" mode, reset the threshold, and turn on the sound.
 
 ## Current capabilities
