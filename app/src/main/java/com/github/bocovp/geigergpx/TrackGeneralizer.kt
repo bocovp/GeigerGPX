@@ -49,28 +49,24 @@ class TrackGeneralizer(
             averagedPoints = 0
         }
 
-        addToAveraging(track.points.first())
-        if (secondsSum >= minDurationSeconds) {
-            flushAveragedPoint()
-        }
-
-        for (i in 1 until track.points.size) {
+        for (i in 0 until track.points.size) {
             val sourcePoint = track.points[i]
             addToAveraging(sourcePoint)
 
-            if (lastGeneralizedPoint == null) {
+            // Capture the var into an immutable val for safe smart-casting
+            val currentLastPoint = lastGeneralizedPoint
+
+            if (currentLastPoint == null) {
                 if (secondsSum >= minDurationSeconds) {
                     flushAveragedPoint()
                 }
-                continue
-            }
+            } else {
+                val distanceMeters = GeoPoint(sourcePoint.latitude, sourcePoint.longitude)
+                    .distanceToAsDouble(GeoPoint(currentLastPoint.latitude, currentLastPoint.longitude))
 
-            val generalizedPoint = lastGeneralizedPoint ?: continue
-            val distanceMeters = GeoPoint(sourcePoint.latitude, sourcePoint.longitude)
-                .distanceToAsDouble(GeoPoint(generalizedPoint.latitude, generalizedPoint.longitude))
-
-            if (distanceMeters >= minDistanceMeters && secondsSum >= minDurationSeconds) {
-                flushAveragedPoint()
+                if (distanceMeters >= minDistanceMeters && secondsSum >= minDurationSeconds) {
+                    flushAveragedPoint()
+                }
             }
         }
 
