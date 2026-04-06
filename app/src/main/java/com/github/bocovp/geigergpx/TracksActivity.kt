@@ -260,6 +260,7 @@ class TracksActivity : AppCompatActivity() {
     }
 
     private fun showTrackPlot(item: TrackListItem) {
+        TimePlotActivity.rememberTrackSelection(this, item.id)
         startActivity(
             Intent(this, TimePlotActivity::class.java)
                 .putExtra(TimePlotActivity.EXTRA_TRACK_ID, item.id)
