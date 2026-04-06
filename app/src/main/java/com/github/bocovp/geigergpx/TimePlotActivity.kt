@@ -55,17 +55,15 @@ class TimePlotActivity : AppCompatActivity() {
 
         val selectedTrackId = intent.getStringExtra(EXTRA_TRACK_ID)
         if (!selectedTrackId.isNullOrBlank()) {
-            val selected = TrackCatalog.loadTrackSamplesById(this, selectedTrackId)
-            if (selected != null) {
-                binding.trackNameLabel.text = selected.title
-                currentSamples = selected.samples
-                updatePlotWithGeneralization()
-                return
-            }
+            rememberTrackSelection(this, selectedTrackId)
         }
 
-        binding.trackNameLabel.text = CURRENT_TRACK_TITLE
-        observeActiveTrack()
+        val trackToShow = selectedTrackId ?: preferredTrackSelection(this)
+        val loaded = loadTrackForPlot(trackToShow)
+        if (!loaded) {
+            rememberCurrentTrackSelection(this)
+            loadTrackForPlot(TrackCatalog.currentTrackId())
+        }
     }
 
     override fun onResume() {
@@ -120,6 +118,21 @@ class TimePlotActivity : AppCompatActivity() {
         }
     }
 
+    private fun loadTrackForPlot(trackId: String?): Boolean {
+        val normalizedTrackId = trackId?.takeIf { it.isNotBlank() }
+        if (normalizedTrackId == null || normalizedTrackId == TrackCatalog.currentTrackId()) {
+            binding.trackNameLabel.text = CURRENT_TRACK_TITLE
+            observeActiveTrack()
+            return true
+        }
+
+        val selected = TrackCatalog.loadTrackSamplesById(this, normalizedTrackId) ?: return false
+        binding.trackNameLabel.text = selected.title
+        currentSamples = selected.samples
+        updatePlotWithGeneralization()
+        return true
+    }
+
     private fun updateSliderDescription(valueMinutes: Float) {
         binding.topAppBar.subtitle = "Min point duration: ${"%.1f".format(java.util.Locale.US, valueMinutes)} min"
     }
@@ -149,5 +162,19 @@ class TimePlotActivity : AppCompatActivity() {
         private const val SECONDS_PER_MINUTE = 60f
         private const val MAX_GENERALIZATION_MINUTES = 10f
        // private const val GENERALIZATION_SLIDER_STEP_MINUTES = 0.5f
+
+        fun rememberTrackSelection(context: android.content.Context, trackId: String) {
+            val app = context.applicationContext as? GeigerGpxApp ?: return
+            app.selectedTimePlotTrackId = trackId
+        }
+
+        fun rememberCurrentTrackSelection(context: android.content.Context) {
+            rememberTrackSelection(context, TrackCatalog.currentTrackId())
+        }
+
+        fun preferredTrackSelection(context: android.content.Context): String? {
+            val app = context.applicationContext as? GeigerGpxApp
+            return app?.selectedTimePlotTrackId
+        }
     }
 }
