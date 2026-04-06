@@ -321,23 +321,14 @@ dtp=ListPlot[
 
 
 
-3
-
-
-
-  PlotLegends   -> {"main energy", "side energy", "magThreshold", "magThresholdEnd"},
-  FrameLabel    -> {"Time (s)", "Goertzel energy"},
-  PlotLabel     -> "Energy trace \[LongDash] adjust magThreshold until red dashed line bisects beep peaks",
-
-
- 500*5*totalDuration/2.5
-
-
 GraphicsColumn[
  {Show[spec, beepOverlay, beepOverlay, ImagePadding -> {{40, 10}, {Automatic, Automatic}}], 
   Show[llp, ImagePadding -> {{40, 10}, {Automatic, Automatic}}],
   Show[dtp, ImagePadding -> {{40, 10}, {Automatic, Automatic}}]},
 ImageSize     -> 500*5*totalDuration/2]
+
+
+
 
 
 

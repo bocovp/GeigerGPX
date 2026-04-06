@@ -23,10 +23,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[      1060,         20]
-NotebookDataLength[     33651,        872]
-NotebookOptionsPosition[     33961,        867]
-NotebookOutlinePosition[     34367,        883]
-CellTagsIndexPosition[     34324,        880]
+NotebookDataLength[     29995,        794]
+NotebookOptionsPosition[     30439,        792]
+NotebookOutlinePosition[     30842,        808]
+CellTagsIndexPosition[     30799,        805]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -34,9 +34,13 @@ Notebook[{
 Cell[BoxData[
  RowBox[{
   RowBox[{"(*", " ", 
-   RowBox[{"::", "Package", "::"}], "*)"}], 
-  RowBox[{"(*", " ", 
-   RowBox[{"::", "Title", "::"}], "*)"}], 
+   RowBox[{
+    RowBox[{"Plans", " ", "for", " ", "the", " ", "future", " ", "below"}], ";",
+     " ", 
+    RowBox[{
+    "Not", " ", "implemented", " ", "in", " ", "Geige", " ", "GPX", " ", 
+     "yet"}]}], "*)"}], "\[IndentingNewLine]", "\[IndentingNewLine]", 
+  "\[IndentingNewLine]", "\[IndentingNewLine]", 
   RowBox[{"(*", 
    RowBox[{
     RowBox[{"Poisson", " ", "Rate", " ", 
@@ -88,7 +92,8 @@ Cell[BoxData[
            RowBox[{"(", 
             RowBox[{"4", "-", "1"}], ")"}], 
            FractionBox["2", "10"], "*", "100"}]}], "]"}]}], "]"}], "//", 
-      "Sort"}]}], ";"}], "\[IndentingNewLine]", "\[IndentingNewLine]", "\n", 
+      "Sort"}]}], ";"}], "\[IndentingNewLine]", "\[IndentingNewLine]", 
+   "\[IndentingNewLine]", 
    RowBox[{"(*", 
     RowBox[{"--", 
      RowBox[{"--", 
@@ -98,8 +103,7 @@ Cell[BoxData[
          RowBox[{"--", 
           RowBox[{"--", 
            RowBox[{"--", 
-            RowBox[{"--", "--"}]}]}]}]}]}]}]}]}], "*)"}], 
-   "\[IndentingNewLine]", 
+            RowBox[{"--", "--"}]}]}]}]}]}]}]}]}], "*)"}], "\n", 
    RowBox[{"(*", 
     RowBox[{"Function", ":", 
      RowBox[{"N", "-", 
@@ -325,8 +329,8 @@ Cell[BoxData[
            RowBox[{"Length", "[", "tvec", "]"}]}], "}"}]}], "]"}], ";", 
        "\[IndentingNewLine]", 
        RowBox[{"{", 
-        RowBox[{"tvec", ",", "lambda", ",", "var"}], "}"}]}]}], "]"}]}], 
-   "\[IndentingNewLine]", "\[IndentingNewLine]", "\[IndentingNewLine]", 
+        RowBox[{"tvec", ",", "lambda", ",", "var"}], "}"}]}]}], "]"}]}], "\n",
+    "\[IndentingNewLine]", "\[IndentingNewLine]", 
    RowBox[{"(*", 
     RowBox[{"--", 
      RowBox[{"--", 
@@ -342,7 +346,7 @@ Cell[BoxData[
     RowBox[{"Function", ":", 
      RowBox[{
       RowBox[{"Recursive", " ", "Log"}], "-", 
-      RowBox[{"Intensity", " ", "estimator"}]}]}], "*)"}], "\n", 
+      RowBox[{"Intensity", " ", "estimator"}]}]}], "*)"}], "\[IndentingNewLine]", 
    RowBox[{
     RowBox[{"RecursiveLogIntensity", "[", 
      RowBox[{"tstamps_", ",", 
@@ -658,10 +662,9 @@ Cell[BoxData[
    3.9840201492752285`*^9, 3.984020239148081*^9}, 3.984020394041588*^9, 
    3.9840205988038483`*^9, {3.9840206628012295`*^9, 3.9840207385125637`*^9}, 
    3.984020768950735*^9, 3.984020963353348*^9, 3.9840210604209423`*^9, 
-   3.984021366723753*^9, 3.9840227478545513`*^9},
- CellLabel->"",ExpressionUUID->"43ebbeac-145f-6047-a06c-da3165c69bc6"],
-
-Cell[CellGroupData[{
+   3.984021366723753*^9, 3.9840227478545513`*^9, {3.9844547586591854`*^9, 
+   3.9844547834783688`*^9}},ExpressionUUID->"43ebbeac-145f-6047-a06c-\
+da3165c69bc6"],
 
 Cell[BoxData[
  RowBox[{"Manipulate", "[", 
@@ -785,88 +788,10 @@ Cell[BoxData[
  CellChangeTimes->{
   3.984020832069376*^9, {3.984021179937998*^9, 3.9840212181988544`*^9}},
  CellLabel->
-  "In[1166]:=",ExpressionUUID->"8c282fdb-5b7f-ea4f-8e87-67f35c3fcdda"],
-
-Cell[BoxData[
- TagBox[
-  StyleBox[
-   DynamicModuleBox[{$CellContext`dt$$ = 0.01, $CellContext`q$$ = 0.268, 
-    Typeset`show$$ = True, Typeset`bookmarkList$$ = {}, 
-    Typeset`bookmarkMode$$ = "Menu", Typeset`animator$$, Typeset`animvar$$ = 
-    1, Typeset`name$$ = "\"untitled\"", Typeset`specs$$ = {{{
-       Hold[$CellContext`q$$], 0.05, "Log-intensity process noise"}, 0.001, 
-      0.5, 0.001, ControlType -> Manipulator}, {{
-       Hold[$CellContext`dt$$], 0.01, "time step for plotting"}, 0.001, 0.1, 
-      0.001, ControlType -> Manipulator}}, Typeset`size$$ = {
-    576., {193.69816080729166`, 199.43009440104166`}}, Typeset`update$$ = 0, 
-    Typeset`initDone$$, Typeset`skipInitDone$$ = True, 
-    Typeset`keyframeActionsQ$$ = False, Typeset`keyframeList$$ = {}}, 
-    DynamicBox[Manipulate`ManipulateBoxes[
-     1, StandardForm, 
-      "Variables" :> {$CellContext`dt$$ = 0.01, $CellContext`q$$ = 0.05}, 
-      "ControllerVariables" :> {}, 
-      "OtherVariables" :> {
-       Typeset`show$$, Typeset`bookmarkList$$, Typeset`bookmarkMode$$, 
-        Typeset`animator$$, Typeset`animvar$$, Typeset`name$$, 
-        Typeset`specs$$, Typeset`size$$, Typeset`update$$, Typeset`initDone$$,
-         Typeset`skipInitDone$$, Typeset`keyframeActionsQ$$, 
-        Typeset`keyframeList$$}, "Body" :> 
-      Module[{$CellContext`nResult$, $CellContext`emaResult$, \
-$CellContext`logResult$, $CellContext`ciUp$, $CellContext`ciDown$, \
-$CellContext`plots$}, $CellContext`logResult$ = \
-$CellContext`RecursiveLogIntensity[$CellContext`timestamps, $CellContext`q$$, \
-$CellContext`dt$$]; $CellContext`ciUpLog = 
-         Part[$CellContext`logResult$, 2] + 1.96 Sqrt[
-             Part[$CellContext`logResult$, 3]]; $CellContext`ciDownLog = 
-         Part[$CellContext`logResult$, 2] - 1.96 Sqrt[
-            Part[$CellContext`logResult$, 3]]; $CellContext`plots$ = {{Red, 
-            Table[
-             Line[{{$CellContext`t, 0}, {$CellContext`t, 
-                Max[
-                 
-                 Part[$CellContext`logResult$, 
-                  2]]}}], {$CellContext`t, $CellContext`timestamps}]}, {
-           Purple, Thick, 
-            Line[
-             Transpose[{
-               Part[$CellContext`logResult$, 1], 
-               Part[$CellContext`logResult$, 2]}]]}, {Purple, Dashed, 
-            Line[
-             Transpose[{
-               Part[$CellContext`logResult$, 1], $CellContext`ciUpLog}]]}, {
-           Purple, Dashed, 
-            Line[
-             Transpose[{
-               Part[$CellContext`logResult$, 1], $CellContext`ciDownLog}]]}}; 
-        Show[
-          
-          Graphics[$CellContext`plots$, PlotRange -> All, Axes -> True, Frame -> 
-           True, FrameLabel -> {"Time", "Estimated Rate"}, ImageSize -> 
-           Large], PlotRange -> {{0, Last[$CellContext`timestamps] + 1}, 
-            Automatic}, AspectRatio -> 2/3]], 
-      "Specifications" :> {{{$CellContext`q$$, 0.05, 
-          "Log-intensity process noise"}, 0.001, 0.5, 
-         0.001}, {{$CellContext`dt$$, 0.01, "time step for plotting"}, 0.001, 
-         0.1, 0.001}}, "Options" :> {}, "DefaultOptions" :> {}],
-     ImageSizeCache->{
-      618.5999999999999, {250.35900065104164`, 256.0909342447917}},
-     SingleEvaluation->True],
-    Deinitialization:>None,
-    DynamicModuleValues:>{},
-    SynchronousInitialization->True,
-    UndoTrackedVariables:>{Typeset`show$$, Typeset`bookmarkMode$$},
-    UnsavedVariables:>{Typeset`initDone$$},
-    UntrackedVariables:>{Typeset`size$$}], "Manipulate",
-   Deployed->True,
-   StripOnInput->False],
-  Manipulate`InterpretManipulate[1]]], "Output",
- CellChangeTimes->{3.984021384707983*^9},
- CellLabel->
-  "Out[1166]=",ExpressionUUID->"d08c5fb5-db40-874a-8a10-bb8d1c949b86"]
-}, Open  ]]
+  "In[1166]:=",ExpressionUUID->"8c282fdb-5b7f-ea4f-8e87-67f35c3fcdda"]
 },
-WindowSize->{1076, 1037},
-WindowMargins->{{-1256, Automatic}, {Automatic, -646.5}},
+WindowSize->{1748, 1048},
+WindowMargins->{{-5.5, Automatic}, {Automatic, -5.5}},
 FrontEndVersion->"14.3 for Microsoft Windows (64-bit) (July 8, 2025)",
 StyleDefinitions->"Default.nb",
 ExpressionUUID->"ad6b147f-8606-c449-8507-46c0f0bcbf80"
@@ -882,11 +807,8 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[1460, 33, 24123, 628, 1245, "Input",ExpressionUUID->"43ebbeac-145f-6047-a06c-da3165c69bc6"],
-Cell[CellGroupData[{
-Cell[25608, 665, 4608, 122, 199, "Input",ExpressionUUID->"8c282fdb-5b7f-ea4f-8e87-67f35c3fcdda"],
-Cell[30219, 789, 3726, 75, 523, "Output",ExpressionUUID->"d08c5fb5-db40-874a-8a10-bb8d1c949b86"]
-}, Open  ]]
+Cell[1460, 33, 24364, 633, 1131, "Input",ExpressionUUID->"43ebbeac-145f-6047-a06c-da3165c69bc6"],
+Cell[25827, 668, 4608, 122, 161, "Input",ExpressionUUID->"8c282fdb-5b7f-ea4f-8e87-67f35c3fcdda"]
 }
 ]
 *)
