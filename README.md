@@ -1,11 +1,11 @@
 # GeigerGPX
 
 GeigerGPX is an Android application for simultaneous recording GPS track and dose-rate information obtained from **RADEX RD1008** (РАДЭКС РД1008) Geiger counter.
-No modification to the radiometer is required; signals are recorded via the microphone. Simply switch RD-1008 into "search" mode, reset the threshold, and turn on the sound.
+No modification to the radiometer is required; signals are recorded via the microphone. Simply switch RD1008 into "search" mode, reset the threshold, and turn on the sound.
 
 ## Current capabilities
 
-- **Audio pulse detection:** Pulse detection uses three Goertzel filters (the main tuned at 3276.8 Hz and a pair of witnesses at ±234 Hz) plus a pulse-duration filter, with parameters tailored to RD-1008 (not tested on other counters).
+- **Audio pulse detection:** Pulse detection uses three Goertzel filters (the main tuned at 3276.8 Hz and a pair of witnesses at ±234 Hz) plus a pulse-duration filter, with parameters tailored to RD1008 (not tested on other counters).
 - **GPS track recording with dose overlay:** The application records position and superimposes dose rate data on the same track timeline.
 - **Export tracks to GPX files:** Tracks are saved as GPX with custom radiation extensions; other GPX applications can open tracks, but wil not display dose rate information.
 - **Dose-aware map analysis:** Recorded tracks can be analyzed on the map as either color-graded lines or a heat map built from multiple selected tracks.
