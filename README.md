@@ -1,33 +1,22 @@
-This is Android app written in Kotlin with the following functions.
+# GeigerGPX
 
-1. The basic function is logging GPS track.
-One can start recoording a track and finish it.
-The finished track is saved as a gpx file.
-When track is being recorded, a statistics appears on the screen: track duration, number of points saved, distance travelled, cps etc.
+GeigerGPX is an Android app for GPS track recording with radiation dose-rate estimation from Geiger counter beeps, designed and tuned for the **RADEX RD-1008**.
 
-2. The main feature: When the track is recorded the app also records the dose rate. The assumed used Geiger counter does not have a digital interface it only produces a sound (beep) with known frequency and duration.
-So this sound is recorded with phone's mic and processed to detect each beep.
-The dose rate and raw measurement data are written for each GPX point inside GPX extensions using the custom `rad` namespace. Optionally, the dose rate can also be duplicated into the elevation tag for compatibility.
+## Current capabilities
 
-3. Since there is GPS spoofing/jamming possible, a part of the track where the speed is too high is automatically removed.
+- **RD-1008-focused audio detection:** Pulse detection uses three Goertzel filters (3276.8 Hz center and side peaks at ±234 Hz) plus a pulse-duration filter, with parameters tailored to RD-1008 and not yet validated on other counters.
+- **GPS track recording with dose overlay:** The app records position and superimposes dose-rate data on the same track timeline.
+- **GPX export with custom radiation data:** Tracks are saved as GPX with custom radiation extensions; other GPX apps can open tracks, but usually do not display dose-rate extensions.
+- **Dose-aware map analysis:** Recorded tracks can be analyzed on the map as either color-graded lines or a cumulative heat map built from multiple selected tracks.
+- **Fast current-dose preview:** A quick current dose-rate estimate is shown using statistics from the last 10 detected pulses.
+- **Statistical confidence intervals:** Confidence intervals are computed using Chi-square quantiles at a 0.95 confidence level.
+- **Long-term Measurement mode:** A dedicated measurement workflow supports low-background and long-duration sampling.
+- **Measurement waypoint export:** Measurement results are additionally written to a separate GPX file as `<wpt>` entries with description, coordinates, timestamp, dose rate, and interval-reconstruction fields.
+- **Track dose graphing:** The app provides a dose-rate graph for recorded tracks with a manually selectable averaging window.
+- **Experimental Bluetooth audio input:** Audio capture from Bluetooth headsets is supported as an experimental feature, but it is less stable and usually lower quality than built-in microphone capture.
+- **No explicit beta/noise mode:** The processing pipeline continuously accumulates statistics from GPS and audio streams without a dedicated beta/background-noise mode toggle.
+- **High-rate limitation warning:** At high dose rates, RD-1008 may not emit all pulses audibly, so phone-side estimates can be biased low.
 
-4. There is an options menu, where following options are defined:
-- max speed to detect gps spoofing/jamming
-- distance (in meters) between points written in the gpx file
-- whether to also save dose rate in the elevation tag.
-- coundd to dose rate coefficeint.
-- folder for saveing gpx file selection
+## Notes
 
-The app should be compatible with android version 12.
-
-
-Some notes:
-
-- Tracking should continue when the screen is off or app is in background. Sound recoding should also continue in these cases.
-
-- It is OK if we still read GPS more frequently (e.g. every second) but only write points when distance threshold is exceeded and speed below max-speed filter.
-
-- When spoofing is detected, we should skip writing the points until the speed falls below limit. Then we resume writing points.
-
-- Beeps will be quite loud but background noise will be present. The hardcoded frequency of the beep sound is taken into account in audio processing.
-
+- The app is intended for practical field logging and post-analysis; for high-dose scenarios, rely on instrument-native readings as the primary source.
