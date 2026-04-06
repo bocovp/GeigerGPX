@@ -12,14 +12,22 @@ class TrackGeneralizer(
         if (track.points.size < 2) return track
 
         val generalized = ArrayList<TrackSample>(track.points.size)
-        var lastGeneralizedPoint = track.points.first()
-        generalized += lastGeneralizedPoint
+
+        var lastGeneralizedPoint: TrackSample? = null
 
         var latSum = 0.0
         var lonSum = 0.0
         var countsSum = 0
         var secondsSum = 0.0
         var averagedPoints = 0
+
+        fun addToAveraging(sample: TrackSample) {
+            latSum += sample.latitude
+            lonSum += sample.longitude
+            countsSum += sample.counts
+            secondsSum += sample.seconds
+            averagedPoints += 1
+        }
 
         fun flushAveragedPoint() {
             if (averagedPoints == 0) return
@@ -41,16 +49,25 @@ class TrackGeneralizer(
             averagedPoints = 0
         }
 
+        addToAveraging(track.points.first())
+        if (secondsSum >= minDurationSeconds) {
+            flushAveragedPoint()
+        }
+
         for (i in 1 until track.points.size) {
             val sourcePoint = track.points[i]
-            val distanceMeters = GeoPoint(sourcePoint.latitude, sourcePoint.longitude)
-                .distanceToAsDouble(GeoPoint(lastGeneralizedPoint.latitude, lastGeneralizedPoint.longitude))
+            addToAveraging(sourcePoint)
 
-            latSum += sourcePoint.latitude
-            lonSum += sourcePoint.longitude
-            countsSum += sourcePoint.counts
-            secondsSum += sourcePoint.seconds
-            averagedPoints += 1
+            if (lastGeneralizedPoint == null) {
+                if (secondsSum >= minDurationSeconds) {
+                    flushAveragedPoint()
+                }
+                continue
+            }
+
+            val generalizedPoint = lastGeneralizedPoint ?: continue
+            val distanceMeters = GeoPoint(sourcePoint.latitude, sourcePoint.longitude)
+                .distanceToAsDouble(GeoPoint(generalizedPoint.latitude, generalizedPoint.longitude))
 
             if (distanceMeters >= minDistanceMeters && secondsSum >= minDurationSeconds) {
                 flushAveragedPoint()
