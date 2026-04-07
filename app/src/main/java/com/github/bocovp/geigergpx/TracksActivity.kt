@@ -99,15 +99,25 @@ class TracksActivity : AppCompatActivity() {
         binding.bottomNavigation.menu.findItem(R.id.navigation_tracks)?.isChecked = true
     }
 
-    private fun refreshTrackList() {
-        val showLoading = !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty(this)
+    private fun refreshTrackList(
+        forceLoading: Boolean = false,
+        clearTracksWhileLoading: Boolean = false,
+        rebuildCache: Boolean = false
+    ) {
+        val showLoading = forceLoading || !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty(this)
         if (showLoading) {
-            binding.loadingLabel.setText(R.string.loading_files)
+            binding.loadingLabel.setText(R.string.loading_tracks)
+            if (clearTracksWhileLoading) {
+                adapter.submit(emptyList(), emptySet(), emptySet())
+            }
         }
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
         binding.tracksRecyclerView.visibility = if (showLoading) View.GONE else View.VISIBLE
 
         Thread {
+            if (rebuildCache) {
+                TrackCatalog.rebuildTrackCache(this)
+            }
             val points = viewModel.activeTrackPoints.value.orEmpty()
             val includeCurrentTrack = currentFolderName == null && viewModel.isTracking.value == true
             val items = TrackCatalog.loadTrackListItems(
@@ -145,8 +155,7 @@ class TracksActivity : AppCompatActivity() {
                 true
             }
             R.id.action_refresh_tracks -> {
-                TrackCatalog.rebuildTrackCache(this)
-                refreshTrackList()
+                refreshTrackList(forceLoading = true, clearTracksWhileLoading = true, rebuildCache = true)
                 true
             }
             else -> super.onOptionsItemSelected(item)
