@@ -84,6 +84,12 @@ class TimePlotActivity : AppCompatActivity() {
         binding.placeholderSlider.valueFrom = 0f
         binding.placeholderSlider.valueTo = GENERALIZATION_SLIDER_INTERNAL_MAX
         binding.placeholderSlider.value = 0f
+<<<<<<< codex/make-slider-control-non-linear-jj7yie
+        binding.placeholderSlider.setLabelFormatter { internalValue ->
+            "%.1f".format(java.util.Locale.US, internalSliderToDurationMinutes(internalValue))
+        }
+=======
+>>>>>>> main
         updateSliderDescription(internalSliderToDurationMinutes(binding.placeholderSlider.value))
         binding.placeholderSlider.addOnChangeListener { _: Slider, value: Float, fromUser: Boolean ->
             val durationMinutes = internalSliderToDurationMinutes(value)
