@@ -5,7 +5,7 @@ No modification to the radiometer is required; signals are recorded via the micr
 
 ## Current capabilities
 
-- **Audio pulse detection:** Pulse detection uses three Goertzel filters (the main tuned at 3276.8 Hz and a pair of witnesses at ±234 Hz) plus a pulse duration filter, with parameters tailored to RD1008 (not tested on other counters).
+- **Audio pulse detection:** Pulse detection uses three Goertzel filters (the main tuned at 3276.8 Hz and a pair of witnesses at ±234 Hz) plus a pulse duration filter. The parameters are tailored to RD1008 (not tested on other counters).
 - **GPS track recording with dose overlay:** The application records position and superimposes dose rate data on the same track timeline.
 - **Export tracks to GPX files:** Tracks are saved in GPX format with custom extensions for dose rate; other GPX applications can open tracks, but will not display the dose rate information.
 - **Dose-aware map analysis:** Recorded tracks can be analyzed on a map as either color-graded lines or a heat map built from multiple selected tracks.
