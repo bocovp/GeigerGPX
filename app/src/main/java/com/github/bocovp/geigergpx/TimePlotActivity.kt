@@ -82,12 +82,15 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun setupGeneralizationSlider() {
         binding.placeholderSlider.valueFrom = 0f
-        binding.placeholderSlider.valueTo = MAX_GENERALIZATION_MINUTES
-        //binding.placeholderSlider.stepSize = GENERALIZATION_SLIDER_STEP_MINUTES
+        binding.placeholderSlider.valueTo = GENERALIZATION_SLIDER_INTERNAL_MAX
         binding.placeholderSlider.value = 0f
-        updateSliderDescription(binding.placeholderSlider.value)
+        binding.placeholderSlider.setLabelFormatter { internalValue ->
+            "%.1f".format(java.util.Locale.US, internalSliderToDurationMinutes(internalValue))
+        }
+        updateSliderDescription(internalSliderToDurationMinutes(binding.placeholderSlider.value))
         binding.placeholderSlider.addOnChangeListener { _: Slider, value: Float, fromUser: Boolean ->
-            updateSliderDescription(value)
+            val durationMinutes = internalSliderToDurationMinutes(value)
+            updateSliderDescription(durationMinutes)
             if (fromUser) {
                 updatePlotWithGeneralization(recalculateVerticalAxis = false)
             }
@@ -137,8 +140,15 @@ class TimePlotActivity : AppCompatActivity() {
         binding.topAppBar.subtitle = "Min point duration: ${"%.1f".format(java.util.Locale.US, valueMinutes)} min"
     }
 
+    private fun internalSliderToDurationMinutes(sliderInternalValue: Float): Float {
+        // Full formula: minDuration = 10 * (exp(3 * x) - 1) / (exp(3) - 1), where x is in [0, 1].
+        val expTerm = kotlin.math.exp(3.0 * sliderInternalValue.toDouble()) - 1.0
+        return (EXP_SCALE_FACTOR * expTerm).toFloat()
+    }
+
     private fun updatePlotWithGeneralization(recalculateVerticalAxis: Boolean = true) {
-        val minDurationSeconds = binding.placeholderSlider.value * SECONDS_PER_MINUTE
+        val minDurationMinutes = internalSliderToDurationMinutes(binding.placeholderSlider.value)
+        val minDurationSeconds = minDurationMinutes * SECONDS_PER_MINUTE
         val track = MapTrack(
             id = CURRENT_TRACK_TITLE,
             title = binding.trackNameLabel.text?.toString().orEmpty(),
@@ -160,8 +170,8 @@ class TimePlotActivity : AppCompatActivity() {
         const val EXTRA_TRACK_ID = "extra_track_id"
         const val CURRENT_TRACK_TITLE = "Currently recording"
         private const val SECONDS_PER_MINUTE = 60f
-        private const val MAX_GENERALIZATION_MINUTES = 10f
-       // private const val GENERALIZATION_SLIDER_STEP_MINUTES = 0.5f
+        private const val GENERALIZATION_SLIDER_INTERNAL_MAX = 1f
+        private const val EXP_SCALE_FACTOR = 0.523957
 
         fun rememberTrackSelection(context: android.content.Context, trackId: String) {
             val app = context.applicationContext as? GeigerGpxApp ?: return
