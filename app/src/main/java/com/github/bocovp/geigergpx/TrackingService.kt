@@ -73,16 +73,19 @@ class TrackingService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var backupJob: kotlinx.coroutines.Job? = null
+    private var gpsFallbackJob: kotlinx.coroutines.Job? = null
 
     private lateinit var prefs: SharedPreferences
     @Volatile private var maxSpeedKmh: Double = 30.0
     @Volatile private var spacingM: Double = 5.0
     @Volatile private var minCountsPerPoint: Int = 0
     @Volatile private var maxTimeWithoutCountsS: Double = 1.0
+    @Volatile private var maxTimeWithoutGpsS: Double = 60.0
     @Volatile private var alertDoseRate: Double = 0.0
     @Volatile private var cpsToUsvhCoefficient: Double = 1.0
     private var alertRingtone: Ringtone? = null
     private var lastAlertAtMillis: Long = 0L
+    @Volatile private var lastObservedLocation: Location? = null
 
     private val doseRateMeasurement = DoseRateMeasurement()
 
@@ -95,6 +98,7 @@ class TrackingService : Service() {
             "point_spacing_m",
             "min_counts_per_point",
             "max_time_without_counts_s",
+            "max_time_without_gps_s",
             "dose_rate_avg_timestamps_n",
             "alert_dose_rate",
             "cps_to_usvh" -> loadTrackingPrefs()
@@ -117,6 +121,7 @@ class TrackingService : Service() {
     override fun onDestroy() {
         runningInstance = null
         stopBackupLoop()
+        stopGpsFallbackLoop()
         fusedLocation.removeLocationUpdates(locationCallback)
         stopBeepDetector()
         alertRingtone?.stop()
@@ -131,6 +136,7 @@ class TrackingService : Service() {
         spacingM = prefs.getString("point_spacing_m", "5.0")?.toDoubleOrNull() ?: 5.0
         minCountsPerPoint = prefs.getString("min_counts_per_point", "0")?.toIntOrNull() ?: 0
         maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")?.toDoubleOrNull() ?: 1.0
+        maxTimeWithoutGpsS = prefs.getString("max_time_without_gps_s", "60")?.toDoubleOrNull() ?: 60.0
         cpsToUsvhCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
         val configuredAlertDoseRate = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
         alertDoseRate = if (configuredAlertDoseRate > 0.0) configuredAlertDoseRate else 0.0
@@ -222,6 +228,7 @@ class TrackingService : Service() {
         val currentTotal = repo.getTotalCounts()
         trackWriter.start(now, currentTotal)
         gpsSpoofingDetector.reset()
+        lastObservedLocation = null
 
         if (isMonitoring) {
             // Already monitoring: GPS and audio are already running.
@@ -249,6 +256,7 @@ class TrackingService : Service() {
         }
 
         startBackupLoop()
+        startGpsFallbackLoop()
 
         repo.beginNewTrack()
         repo.setActiveTrackPoints(emptyList())
@@ -273,6 +281,7 @@ class TrackingService : Service() {
         trackWriter.reset()
         repo.setActiveTrackPoints(emptyList())
         gpsSpoofingDetector.reset()
+        lastObservedLocation = null
 
         if (isMonitoring) {
             notificationManager.postTrackingNotification("Monitoring...")
@@ -309,6 +318,7 @@ class TrackingService : Service() {
         if (!trackWriter.isTracking()) return
 
         stopBackupLoop()
+        stopGpsFallbackLoop()
         GpxWriter.deleteBackupIfExists(this)
         repo.discardTrackCounts()
         stopTrackingSession(TrackStopStats(durationSeconds = 0, distance = 0.0, points = 0))
@@ -375,6 +385,7 @@ class TrackingService : Service() {
     private fun handleLocation(loc: Location) {
         val now = System.currentTimeMillis()
         val gpsSpoofingState = gpsSpoofingDetector.process(loc, maxSpeedKmh, now)
+        lastObservedLocation = Location(loc)
         val tracking = trackWriter.isTracking()
         val elapsedSec = if (tracking) trackWriter.elapsedSeconds(now) else 0
 
@@ -382,24 +393,34 @@ class TrackingService : Service() {
             updateMonitoringStats(now)
         }
 
-        if (gpsSpoofingState.isSpoofing) {
-            if (tracking) {
-                updateStats(elapsedSec, now)
-            }
-            return
+        val gpsMode = when (gpsSpoofingState.mode) {
+            GpsSpoofingDetector.Mode.ACTIVE -> TrackWriter.GpsMode.ACTIVE
+            GpsSpoofingDetector.Mode.INACTIVE -> TrackWriter.GpsMode.INACTIVE
+            GpsSpoofingDetector.Mode.SPOOFING -> TrackWriter.GpsMode.SPOOFING
+        }
+        if (gpsMode == TrackWriter.GpsMode.ACTIVE) {
+            doseRateMeasurement.handleGpsLocation(loc)
         }
 
-        doseRateMeasurement.handleGpsLocation(loc)
-
         if (tracking) {
-            val result = trackWriter.handleGpsLocation(
-                loc = loc,
-                now = now,
-                totalBeeps = repo.getTotalCounts(),
-                spacingM = spacingM,
-                minCountsPerPoint = minCountsPerPoint,
-                maxTimeWithoutCountsS = maxTimeWithoutCountsS
-            )
+            val totalBeeps = repo.getTotalCounts()
+            val result = if (gpsMode == TrackWriter.GpsMode.ACTIVE) {
+                trackWriter.handleGpsLocation(
+                    loc = loc,
+                    now = now,
+                    totalBeeps = totalBeeps,
+                    spacingM = spacingM,
+                    minCountsPerPoint = minCountsPerPoint,
+                    maxTimeWithoutCountsS = maxTimeWithoutCountsS
+                )
+            } else {
+                maybeCommitNoGpsPoint(
+                    now = now,
+                    mode = gpsMode,
+                    totalBeeps = totalBeeps,
+                    spoofedLocation = loc
+                )
+            }
 
             result.snapshot?.let { snapshot ->
                 repo.setActiveTrackPoints(snapshot)
@@ -554,5 +575,67 @@ class TrackingService : Service() {
     private fun stopBackupLoop() {
         backupJob?.cancel()
         backupJob = null
+    }
+
+    private fun startGpsFallbackLoop() {
+        gpsFallbackJob?.cancel()
+        gpsFallbackJob = serviceScope.launch {
+            while (isActive && trackWriter.isTracking()) {
+                delay(1000L)
+                if (!trackWriter.isTracking()) break
+
+                val now = System.currentTimeMillis()
+                val elapsedSinceLastPoint = trackWriter.secondsSinceLastWritten(now)
+                if (maxTimeWithoutGpsS <= 0.0 || elapsedSinceLastPoint < maxTimeWithoutGpsS) {
+                    continue
+                }
+
+                val detectorState = gpsSpoofingDetector.currentState(now)
+                val mode = when (detectorState.mode) {
+                    GpsSpoofingDetector.Mode.ACTIVE -> TrackWriter.GpsMode.ACTIVE
+                    GpsSpoofingDetector.Mode.INACTIVE -> TrackWriter.GpsMode.INACTIVE
+                    GpsSpoofingDetector.Mode.SPOOFING -> TrackWriter.GpsMode.SPOOFING
+                }
+                if (mode == TrackWriter.GpsMode.ACTIVE) {
+                    continue
+                }
+
+                val result = maybeCommitNoGpsPoint(
+                    now = now,
+                    mode = mode,
+                    totalBeeps = repo.getTotalCounts(),
+                    spoofedLocation = lastObservedLocation
+                )
+                result.snapshot?.let { snapshot ->
+                    repo.setActiveTrackPoints(snapshot)
+                }
+                updateStats(trackWriter.elapsedSeconds(now), now)
+            }
+        }
+    }
+
+    private fun stopGpsFallbackLoop() {
+        gpsFallbackJob?.cancel()
+        gpsFallbackJob = null
+    }
+
+    private fun maybeCommitNoGpsPoint(
+        now: Long,
+        mode: TrackWriter.GpsMode,
+        totalBeeps: Int,
+        spoofedLocation: Location?
+    ): TrackWriter.ProcessLocationResult {
+        if (mode == TrackWriter.GpsMode.ACTIVE) return TrackWriter.ProcessLocationResult()
+        if (maxTimeWithoutGpsS <= 0.0) return TrackWriter.ProcessLocationResult()
+        if (trackWriter.secondsSinceLastWritten(now) < maxTimeWithoutGpsS) return TrackWriter.ProcessLocationResult()
+
+        return trackWriter.handleGpsFallback(
+            mode = mode,
+            spoofedLocation = spoofedLocation,
+            now = now,
+            totalBeeps = totalBeeps,
+            minCountsPerPoint = minCountsPerPoint,
+            maxTimeWithoutCountsS = maxTimeWithoutCountsS
+        )
     }
 }

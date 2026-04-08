@@ -43,6 +43,7 @@ class TrackMapRenderer(
         var currentMax = Double.NEGATIVE_INFINITY
         tracks.forEach { track ->
             track.points.forEach { sample ->
+                if (sample.badCoordinates) return@forEach
                 if (sample.doseRate > currentMax) currentMax = sample.doseRate
             }
         }
@@ -96,7 +97,10 @@ class TrackMapRenderer(
                     )
                 }
             )
-            overlay.tracks = if (pois.isEmpty()) tracks else tracks + poiTrack
+            val filteredTracks = tracks.map { track ->
+                track.copy(points = track.points.filterNot { it.badCoordinates })
+            }
+            overlay.tracks = if (pois.isEmpty()) filteredTracks else filteredTracks + poiTrack
             overlay.minDose = currentMin
             overlay.maxDose = currentMax
 
@@ -117,7 +121,7 @@ class TrackMapRenderer(
             removeDeletedTracks(activeTrackIds)
 
             tracks.forEach { track ->
-                val trackPoints = generalizedTracksById[track.id] ?: track.points
+                val trackPoints = (generalizedTracksById[track.id] ?: track.points).filterNot { it.badCoordinates }
                 if (trackPoints.isEmpty()) return@forEach
 
                 latestPoint = GeoPoint(trackPoints.last().latitude, trackPoints.last().longitude)
@@ -170,7 +174,7 @@ class TrackMapRenderer(
 
     private fun fitToSelection(tracks: List<MapTrack>, pois: List<PoiMapItem>, fallbackPoint: GeoPoint?) {
         val trackGeoPoints = tracks
-            .flatMap { track -> track.points }
+            .flatMap { track -> track.points.filterNot { it.badCoordinates } }
             .map { sample -> GeoPoint(sample.latitude, sample.longitude) }
 
         if (trackGeoPoints.isNotEmpty()) {

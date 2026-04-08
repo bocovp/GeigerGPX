@@ -7,5 +7,6 @@ data class TrackPoint(
     val distanceFromLast: Double,
     val cps: Double,
     val counts: Int,
-    val seconds: Double
+    val seconds: Double,
+    val badCoordinates: Boolean = false
 )
