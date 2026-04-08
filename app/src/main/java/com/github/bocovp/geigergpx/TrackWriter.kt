@@ -70,7 +70,7 @@ class TrackWriter {
     }
 
 
-    fun initializeAnchor(loc: Location, now: Long, totalBeeps: Int) = synchronized(lock) {
+    private fun initializeAnchor(loc: Location, now: Long, totalBeeps: Int) = synchronized(lock) {
         lastWrittenLocation = Location(loc)
         lastWrittenTime = now
         latSum = loc.latitude
@@ -79,14 +79,14 @@ class TrackWriter {
         lastPointTotalBeeps = totalBeeps
     }
 
-    fun movementStatsFor(loc: Location, now: Long): MovementStats = synchronized(lock) {
+    private fun movementStatsFor(loc: Location, now: Long): MovementStats = synchronized(lock) {
         val lastLoc = requireNotNull(lastWrittenLocation) { "Anchor location missing" }
         val distance = lastLoc.distanceTo(loc).toDouble()
         val timeDeltaSec = kotlin.math.max(0.1, (now - lastWrittenTime) / 1000.0)
         MovementStats(distance = distance, timeDeltaSec = timeDeltaSec)
     }
 
-    fun accumulateLocation(loc: Location) = synchronized(lock) {
+    private fun accumulateLocation(loc: Location) = synchronized(lock) {
         latSum += loc.latitude
         lonSum += loc.longitude
         latLonSum += 1
@@ -122,7 +122,7 @@ class TrackWriter {
         ProcessLocationResult(snapshot = snapshot)
     }
 
-    fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int): List<TrackPoint> = synchronized(lock) {
+    private fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int): List<TrackPoint> = synchronized(lock) {
         val finalBeeps = totalBeeps - lastPointTotalBeeps
         val finalCps = finalBeeps.toDouble() / movementStats.timeDeltaSec // TODO: add -1
         val avgLat = if (latLonSum > 0) latSum / latLonSum.toDouble() else loc.latitude
