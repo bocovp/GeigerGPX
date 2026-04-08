@@ -17,8 +17,6 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import kotlin.math.max
-import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -67,19 +65,11 @@ class TrackingService : Service() {
 
     // Track recording state
     private val trackWriter = TrackWriter()
-    private val trackLocationLock = Any()
-
-    private var lastTimeMillis: Long = 0L
-    private var lastLocation: Location? = null
+    private val gpsSpoofingDetector = GpsSpoofingDetector()
 
     @Volatile
-    private var gpsSpoofingActive: Boolean = false
-
-    @Volatile
-    private var spoofingSpeedKmh: Double = 0.0
-
-    @Volatile
-    private var lastGpsFixMillis: Long = 0L
+    private var gpsSpoofingState: GpsSpoofingDetector.State =
+        GpsSpoofingDetector.State(mode = GpsSpoofingDetector.Mode.INACTIVE)
 
     private var audioBeepDetector: com.github.bocovp.geigergpx.AudioInputManager? = null
 
@@ -237,10 +227,8 @@ class TrackingService : Service() {
         val now = System.currentTimeMillis()
         val currentTotal = repo.getTotalCounts()
         trackWriter.start(now, currentTotal)
-        lastGpsFixMillis = 0L
-        clearLastTrackLocation()
-        gpsSpoofingActive = false
-        spoofingSpeedKmh = 0.0
+        gpsSpoofingDetector.reset()
+        gpsSpoofingState = GpsSpoofingDetector.State(mode = GpsSpoofingDetector.Mode.INACTIVE)
 
         if (isMonitoring) {
             // Already monitoring: GPS and audio are already running.
@@ -289,18 +277,11 @@ class TrackingService : Service() {
         val points: Int
     )
 
-    private data class TrackLocationSnapshot(
-        val location: Location?,
-        val timeMillis: Long
-    )
-
     private fun stopTrackingSession(stats: TrackStopStats) {
         trackWriter.reset()
         repo.setActiveTrackPoints(emptyList())
-        lastGpsFixMillis = 0L
-        clearLastTrackLocation()
-        gpsSpoofingActive = false
-        spoofingSpeedKmh = 0.0
+        gpsSpoofingDetector.reset()
+        gpsSpoofingState = GpsSpoofingDetector.State(mode = GpsSpoofingDetector.Mode.INACTIVE)
 
         if (isMonitoring) {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -403,43 +384,19 @@ class TrackingService : Service() {
         }
     }
 
-    private fun checkSpoofing(loc:Location) {
-        val now = System.currentTimeMillis()
-        val previousLocationSnapshot = lastTrackLocationSnapshot()
-        val previousLocation = previousLocationSnapshot.location
-        val previousTimeMillis = previousLocationSnapshot.timeMillis
-
-        if (previousLocation != null && previousTimeMillis > 0L) {
-            val timeDeltaSec = max(0.1, (now - previousTimeMillis) / 1000.0)
-            val distance = previousLocation.distanceTo(loc).toDouble()
-            val speedKmh = (distance / timeDeltaSec) * 3.6
-
-            if (speedKmh > maxSpeedKmh) {
-                gpsSpoofingActive = true
-                spoofingSpeedKmh = speedKmh
-            } else {
-                gpsSpoofingActive = false
-                spoofingSpeedKmh = 0.0
-            }
-        }
-        updateLastTrackLocation(loc, now)
-    }
-
     private fun handleLocation(loc: Location) {
-        checkSpoofing(loc)
-
         val now = System.currentTimeMillis()
-        lastGpsFixMillis = now
+        gpsSpoofingState = gpsSpoofingDetector.process(loc, maxSpeedKmh, now)
         val tracking = trackWriter.isTracking()
         val elapsedSec = if (tracking) trackWriter.elapsedSeconds(now) else 0
 
         if (!tracking) {
-            updateMonitoringStats()
+            updateMonitoringStats(now)
         }
 
-        if (gpsSpoofingActive) {
+        if (gpsSpoofingState.isSpoofing) {
             if (tracking) {
-                updateStats(elapsedSec)
+                updateStats(elapsedSec, now)
             }
             return
         }
@@ -460,7 +417,7 @@ class TrackingService : Service() {
                 repo.setActiveTrackPoints(snapshot)
             }
 
-            updateStats(elapsedSec)
+            updateStats(elapsedSec, now)
         }
     }
 
@@ -471,14 +428,9 @@ class TrackingService : Service() {
         repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = false)
     }
 
-    private fun updateStats(elapsedSec: Long) {
-        val lastGpsFixMillisSnapshot = lastGpsFixMillis
-        val gpsOk = (System.currentTimeMillis() - lastGpsFixMillisSnapshot) <= 5000L
-        val gpsStatus = when {
-            !gpsOk || lastGpsFixMillisSnapshot == 0L -> "Waiting"
-            gpsSpoofingActive -> "Spoofing detected (${String.format(Locale.US, "%.1f", spoofingSpeedKmh)} km/h)"
-            else -> "Working"
-        }
+    private fun updateStats(elapsedSec: Long, nowMillis: Long) {
+        gpsSpoofingState = gpsSpoofingDetector.currentState(nowMillis)
+        val gpsStatus = gpsSpoofingDetector.getStatusString(nowMillis)
         val currentSize = trackWriter.pointCount()
         repo.updateStatus(
             tracking = true,
@@ -490,31 +442,10 @@ class TrackingService : Service() {
         )
     }
 
-    private fun updateMonitoringStats() {
-        val lastGpsFixMillisSnapshot = lastGpsFixMillis
-        val gpsOk = (System.currentTimeMillis() - lastGpsFixMillisSnapshot) <= 5000L
-        val gpsStatus = when {
-            !gpsOk || lastGpsFixMillisSnapshot == 0L -> "Waiting"
-            else -> "Working"
-        }
+    private fun updateMonitoringStats(nowMillis: Long) {
+        gpsSpoofingState = gpsSpoofingDetector.currentState(nowMillis)
+        val gpsStatus = gpsSpoofingDetector.getStatusString(nowMillis)
         repo.updateMonitoringStatus(gpsStatus = gpsStatus)
-    }
-
-    private fun clearLastTrackLocation() = synchronized(trackLocationLock) {
-        lastLocation = null
-        lastTimeMillis = 0L
-    }
-
-    private fun lastTrackLocationSnapshot(): TrackLocationSnapshot = synchronized(trackLocationLock) {
-        TrackLocationSnapshot(
-            location = lastLocation?.let(::Location),
-            timeMillis = lastTimeMillis
-        )
-    }
-
-    private fun updateLastTrackLocation(location: Location, timeMillis: Long) = synchronized(trackLocationLock) {
-        lastLocation = Location(location)
-        lastTimeMillis = timeMillis
     }
 
     // -------------------------------------------------------------------------
