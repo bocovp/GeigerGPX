@@ -5,7 +5,8 @@ data class TrackSample(
     val longitude: Double,
     val doseRate: Double,
     val counts: Int,
-    val seconds: Double
+    val seconds: Double,
+    val badCoordinates: Boolean = false
 )
 
 data class MapTrack(

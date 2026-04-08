@@ -19,25 +19,33 @@ class TrackGeneralizer(
         var lonSum = 0.0
         var countsSum = 0
         var secondsSum = 0.0
-        var averagedPoints = 0
+        var averagedCoordinatePoints = 0
+        var averagedDosePoints = 0
+        var lastSourcePoint: TrackSample? = null
 
         fun addToAveraging(sample: TrackSample) {
-            latSum += sample.latitude
-            lonSum += sample.longitude
+            if (!sample.badCoordinates) {
+                latSum += sample.latitude
+                lonSum += sample.longitude
+                averagedCoordinatePoints += 1
+            }
             countsSum += sample.counts
             secondsSum += sample.seconds
-            averagedPoints += 1
+            averagedDosePoints += 1
+            lastSourcePoint = sample
         }
 
         fun flushAveragedPoint() {
-            if (averagedPoints == 0) return
+            if (averagedDosePoints == 0) return
+            val fallbackPoint = lastSourcePoint ?: return
 
             val averagedPoint = TrackSample(
-                latitude = latSum / averagedPoints,
-                longitude = lonSum / averagedPoints,
+                latitude = if (averagedCoordinatePoints > 0) latSum / averagedCoordinatePoints else fallbackPoint.latitude,
+                longitude = if (averagedCoordinatePoints > 0) lonSum / averagedCoordinatePoints else fallbackPoint.longitude,
                 doseRate = if (secondsSum > 0.0) countsSum * coeff / secondsSum else 0.0,
                 counts = countsSum,
-                seconds = secondsSum
+                seconds = secondsSum,
+                badCoordinates = averagedCoordinatePoints == 0
             )
             generalized += averagedPoint
             lastGeneralizedPoint = averagedPoint
@@ -46,7 +54,9 @@ class TrackGeneralizer(
             lonSum = 0.0
             countsSum = 0
             secondsSum = 0.0
-            averagedPoints = 0
+            averagedCoordinatePoints = 0
+            averagedDosePoints = 0
+            lastSourcePoint = null
         }
 
         for (i in 0 until track.points.size) {

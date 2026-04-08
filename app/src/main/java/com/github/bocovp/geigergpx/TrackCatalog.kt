@@ -347,23 +347,28 @@ object TrackCatalog {
         }
 
         val samples = currentPoints.map {
-            TrackSample(it.latitude, it.longitude, it.cps * coeff, it.counts, it.seconds)
+            TrackSample(it.latitude, it.longitude, it.cps * coeff, it.counts, it.seconds, it.badCoordinates)
         }
         return CurrentTrackData(samples, statsFromTrackPoints(currentPoints))
     }
 
     private fun statsFromTrackPoints(points: List<TrackPoint>): TrackStats {
         if (points.isEmpty()) return TrackStats(0, 0L, 0.0)
+        val validPoints = points.filterNot { it.badCoordinates }
         var distance = 0.0
-        for (i in 1 until points.size) {
+        for (i in 1 until validPoints.size) {
             distance += distanceBetween(
-                points[i - 1].latitude,
-                points[i - 1].longitude,
-                points[i].latitude,
-                points[i].longitude
+                validPoints[i - 1].latitude,
+                validPoints[i - 1].longitude,
+                validPoints[i].latitude,
+                validPoints[i].longitude
             )
         }
-        val duration = (points.last().timeMillis - points.first().timeMillis).coerceAtLeast(0L)
+        val duration = if (validPoints.size >= 2) {
+            (validPoints.last().timeMillis - validPoints.first().timeMillis).coerceAtLeast(0L)
+        } else {
+            0L
+        }
         return TrackStats(points.size, duration, distance)
     }
 
@@ -384,6 +389,7 @@ object TrackCatalog {
             var doseRate = 0.0
             var counts = 0
             var seconds = 0.0
+            var badCoordinates = false
             var timeMs = 0L
             var insideTrkpt = false
             var currentTag: String? = null
@@ -401,7 +407,11 @@ object TrackCatalog {
                             doseRate = 0.0
                             counts = 0
                             seconds = 0.0
+                            badCoordinates = false
                             timeMs = 0L
+                        }
+                        if (insideTrkpt && currentNamespace == RAD_NAMESPACE && parser.name == "badCoordinates") {
+                            badCoordinates = true
                         }
                     }
 
@@ -424,8 +434,8 @@ object TrackCatalog {
 
                     XmlPullParser.END_TAG -> {
                         if (parser.name == "trkpt" && insideTrkpt) {
-                            samples.add(TrackSample(lat, lon, doseRate, counts, seconds))
-                            if (timeMs > 0L) timestamps.add(timeMs)
+                            samples.add(TrackSample(lat, lon, doseRate, counts, seconds, badCoordinates))
+                            if (timeMs > 0L && !badCoordinates) timestamps.add(timeMs)
                             insideTrkpt = false
                         }
                         currentTag = null
@@ -437,12 +447,13 @@ object TrackCatalog {
 
             if (samples.isEmpty()) return null
             var distance = 0.0
-            for (i in 1 until samples.size) {
+            val validSamples = samples.filterNot { it.badCoordinates }
+            for (i in 1 until validSamples.size) {
                 distance += distanceBetween(
-                    samples[i - 1].latitude,
-                    samples[i - 1].longitude,
-                    samples[i].latitude,
-                    samples[i].longitude
+                    validSamples[i - 1].latitude,
+                    validSamples[i - 1].longitude,
+                    validSamples[i].latitude,
+                    validSamples[i].longitude
                 )
             }
             val duration = if (timestamps.size >= 2) {

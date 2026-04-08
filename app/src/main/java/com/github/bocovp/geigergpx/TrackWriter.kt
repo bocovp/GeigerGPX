@@ -3,6 +3,12 @@ package com.github.bocovp.geigergpx
 import android.location.Location
 
 class TrackWriter {
+    enum class GpsMode {
+        ACTIVE,
+        INACTIVE,
+        SPOOFING
+    }
+
     data class MovementStats(
         val distance: Double,
         val timeDeltaSec: Double
@@ -123,6 +129,63 @@ class TrackWriter {
     }
 
     private fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int): List<TrackPoint> = synchronized(lock) {
+        return commitPointInternal(
+            loc = loc,
+            now = now,
+            movementStats = movementStats,
+            totalBeeps = totalBeeps,
+            badCoordinates = false
+        )
+    }
+
+    fun handleGpsFallback(
+        mode: GpsMode,
+        spoofedLocation: Location?,
+        now: Long,
+        totalBeeps: Int,
+        minCountsPerPoint: Int,
+        maxTimeWithoutCountsS: Double
+    ): ProcessLocationResult = synchronized(lock) {
+        if (mode == GpsMode.ACTIVE) return ProcessLocationResult()
+        val lastLoc = lastWrittenLocation ?: return ProcessLocationResult()
+
+        val candidateLocation = when (mode) {
+            GpsMode.INACTIVE -> Location(lastLoc)
+            GpsMode.SPOOFING -> spoofedLocation?.let { Location(it) } ?: return ProcessLocationResult()
+            GpsMode.ACTIVE -> return ProcessLocationResult()
+        }
+
+        val movementStats = movementStatsFor(candidateLocation, now)
+        val currentBeeps = totalBeeps - lastPointTotalBeeps
+        if (currentBeeps <= 0) {
+            return ProcessLocationResult()
+        }
+        val timedOut = maxTimeWithoutCountsS > 0.0 && movementStats.timeDeltaSec >= maxTimeWithoutCountsS
+        if (currentBeeps < minCountsPerPoint && !timedOut) {
+            return ProcessLocationResult()
+        }
+
+        val snapshot = commitPointInternal(
+            loc = candidateLocation,
+            now = now,
+            movementStats = movementStats,
+            totalBeeps = totalBeeps,
+            badCoordinates = true
+        )
+        ProcessLocationResult(snapshot = snapshot)
+    }
+
+    fun secondsSinceLastWritten(now: Long): Double = synchronized(lock) {
+        if (lastWrittenTime <= 0L) 0.0 else kotlin.math.max(0.0, (now - lastWrittenTime) / 1000.0)
+    }
+
+    private fun commitPointInternal(
+        loc: Location,
+        now: Long,
+        movementStats: MovementStats,
+        totalBeeps: Int,
+        badCoordinates: Boolean
+    ): List<TrackPoint> = synchronized(lock) {
         val finalBeeps = totalBeeps - lastPointTotalBeeps
         val finalCps = finalBeeps.toDouble() / movementStats.timeDeltaSec // TODO: add -1
         val avgLat = if (latLonSum > 0) latSum / latLonSum.toDouble() else loc.latitude
@@ -136,7 +199,8 @@ class TrackWriter {
             distanceFromLast = movementStats.distance,
             cps = finalCps,
             counts = finalBeeps,
-            seconds = movementStats.timeDeltaSec
+            seconds = movementStats.timeDeltaSec,
+            badCoordinates = badCoordinates
         )
 
         writtenPointsInternal.add(point)

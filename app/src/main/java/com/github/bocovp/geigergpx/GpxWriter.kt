@@ -125,6 +125,9 @@ object GpxWriter {
             writer.write("\t\t\t\t\t<rad:doseRate>$doseStr</rad:doseRate>\n")
             writer.write("\t\t\t\t\t<rad:counts>${p.counts}</rad:counts>\n")
             writer.write("\t\t\t\t\t<rad:seconds>$secondsStr</rad:seconds>\n")
+            if (p.badCoordinates) {
+                writer.write("\t\t\t\t\t<rad:badCoordinates/>\n")
+            }
             writer.write("\t\t\t\t</extensions>\n")
             writer.write("\t\t\t</trkpt>\n")
         }

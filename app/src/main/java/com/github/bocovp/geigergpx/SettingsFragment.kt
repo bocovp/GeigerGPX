@@ -71,6 +71,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
         maxTime?.summaryProvider = summaryWithUnit("s")
 
+        val maxTimeWithoutGps = findPreference<EditTextPreference>("max_time_without_gps_s")
+        maxTimeWithoutGps?.setOnBindEditTextListener { edit ->
+            edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+        maxTimeWithoutGps?.summaryProvider = summaryWithUnit("s")
+
         val coeff = findPreference<EditTextPreference>("cps_to_usvh")
         coeff?.setOnBindEditTextListener { edit ->
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
