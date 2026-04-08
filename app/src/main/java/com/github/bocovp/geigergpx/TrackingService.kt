@@ -1,20 +1,16 @@
 package com.github.bocovp.geigergpx
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.Service
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.location.Location
 import android.os.Build
 import android.os.IBinder
-import android.app.PendingIntent
 import android.content.pm.ServiceInfo
 import android.media.Ringtone
 import android.media.RingtoneManager
-import androidx.core.app.NotificationCompat
 import androidx.preference.PreferenceManager
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -23,9 +19,6 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlin.math.max
 import java.util.Locale
-import android.widget.Toast
-import android.os.Handler
-import android.os.Looper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,7 +42,6 @@ class TrackingService : Service() {
         const val ACTION_TOGGLE_MEASUREMENT_MODE = "com.github.bocovp.geigergpx.TOGGLE_MEASUREMENT_MODE"
         const val ACTION_TRACK_SAVED = "com.github.bocovp.geigergpx.TRACK_SAVED"
         const val EXTRA_TRACK_ID = "extra_track_id"
-        const val NOTIF_ID = 1001
 
         // 10 minutes
         private const val BACKUP_INTERVAL_MS = 10 * 60 * 1000L
@@ -110,6 +102,7 @@ class TrackingService : Service() {
     private val doseRateMeasurement = DoseRateMeasurement()
 
     private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    private val notificationManager by lazy { TrackingNotificationManager(this) }
 
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
@@ -131,7 +124,7 @@ class TrackingService : Service() {
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
         loadTrackingPrefs()
         prefs.registerOnSharedPreferenceChangeListener(prefListener)
-        createNotificationChannel()
+        notificationManager.createChannels()
         setupLocationRequest()
         setupLocationCallback()
     }
@@ -173,12 +166,12 @@ class TrackingService : Service() {
         // 2. Immediately satisfy the system's foreground requirement
         when (intent?.action) {
             ACTION_START_MONITORING, ACTION_START -> {
-                val notification = buildNotification("Initializing...")
+                val notification = notificationManager.buildTrackingNotification("Initializing...")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(NOTIF_ID, notification,
+                    startForeground(TrackingNotificationManager.NOTIF_ID, notification,
                         ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
                 } else {
-                    startForeground(NOTIF_ID, notification)
+                    startForeground(TrackingNotificationManager.NOTIF_ID, notification)
                 }
             }
         }
@@ -194,14 +187,6 @@ class TrackingService : Service() {
         return START_STICKY
     }
 
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val ch = NotificationChannel("geigergpx_channel", "Tracking", NotificationManager.IMPORTANCE_LOW)
-            nm.createNotificationChannel(ch)
-        }
-    }
 
     // -------------------------------------------------------------------------
     // Monitoring (foreground-only, no track recording)
@@ -238,7 +223,7 @@ class TrackingService : Service() {
         } else {
             // Still tracking: downgrade notification to indicate background tracking
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(NOTIF_ID, buildNotification("Tracking (background)..."))
+            nm.notify(TrackingNotificationManager.NOTIF_ID, notificationManager.buildTrackingNotification("Tracking (background)..."))
         }
     }
 
@@ -261,17 +246,17 @@ class TrackingService : Service() {
             // Already monitoring: GPS and audio are already running.
             // Just upgrade the notification.
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(NOTIF_ID, buildNotification("Tracking..."))
+            nm.notify(TrackingNotificationManager.NOTIF_ID, notificationManager.buildTrackingNotification("Tracking..."))
         } else {
             // Not monitoring: start GPS and audio now.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(
-                    NOTIF_ID,
-                    buildNotification("Tracking..."),
+                    TrackingNotificationManager.NOTIF_ID,
+                    notificationManager.buildTrackingNotification("Tracking..."),
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
                 )
             } else {
-                startForeground(NOTIF_ID, buildNotification("Tracking..."))
+                startForeground(TrackingNotificationManager.NOTIF_ID, notificationManager.buildTrackingNotification("Tracking..."))
             }
             if (ActivityCompatHelper.hasLocationAndAudioPermissions(this)) {
                 fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
@@ -319,7 +304,7 @@ class TrackingService : Service() {
 
         if (isMonitoring) {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(NOTIF_ID, buildNotification("Monitoring..."))
+            nm.notify(TrackingNotificationManager.NOTIF_ID, notificationManager.buildTrackingNotification("Monitoring..."))
             repo.updateStatus(
                 tracking = false,
                 durationSeconds = stats.durationSeconds,
@@ -347,8 +332,7 @@ class TrackingService : Service() {
             }
             stopSelf()
 
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.cancel(NOTIF_ID)
+            notificationManager.cancelTracking()
         }
     }
 
@@ -623,72 +607,16 @@ class TrackingService : Service() {
     }
 
     private fun showDoseRateAlertNotification(meanDoseRate: Double) {
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = "geigergpx_alert_channel"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Dose rate alerts",
-                NotificationManager.IMPORTANCE_HIGH
-            )
-            nm.createNotificationChannel(channel)
-        }
-
         val unit = if (cpsToUsvhCoefficient == 1.0) "cps" else "μSv/h"
-        val message = String.format(Locale.US, "Dose rate %.2f %s", meanDoseRate, unit)
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Radiation alert")
-            .setContentText(message)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .build()
-        nm.notify(2002, notification)
+        notificationManager.postAlertNotification(meanDoseRate = meanDoseRate, unit = unit)
     }
 
     // -------------------------------------------------------------------------
     // Notifications
     // -------------------------------------------------------------------------
 
-    private fun buildNotification(text: String): Notification {
-        val channelId = "geigergpx_channel"
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ch = NotificationChannel(
-                channelId,
-                "Geiger GPX Tracking",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            nm.createNotificationChannel(ch)
-        }
-
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent, pendingFlags)
-
-        return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Geiger GPX")
-            .setContentText(text)
-            .setContentIntent(pendingIntent)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setOngoing(true)
-            .build()
-    }
-
     private fun showSaveNotification(message: String?) {
-        Handler(Looper.getMainLooper()).post {
-            try {
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                android.util.Log.e("MYTAG", "Could not show toast: ${e.message}")
-            }
-        }
+        notificationManager.showSaveToast(message)
     }
     private fun startBackupLoop() {
         backupJob?.cancel()
