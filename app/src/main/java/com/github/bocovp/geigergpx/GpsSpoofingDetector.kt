@@ -78,6 +78,4 @@ class GpsSpoofingDetector {
         state = State(mode = Mode.INACTIVE)
     }
 
-    val lastLocationSnapshot: Pair<Location?, Long>
-        get() = synchronized(lock) { Pair(lastLocation?.let(::Location), lastTimeMillis) }
 }

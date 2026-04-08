@@ -78,7 +78,11 @@ class TrackingNotificationManager(private val context: Context) {
         }
     }
 
-    fun cancelTracking() {
+    fun postTrackingNotification(text: String) {
+        nm.notify(NOTIF_ID, buildTrackingNotification(text))
+    }
+
+    fun cancelTrackingNotification() {
         nm.cancel(NOTIF_ID)
     }
 

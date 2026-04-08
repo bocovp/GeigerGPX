@@ -1,7 +1,6 @@
 package com.github.bocovp.geigergpx
 
 import android.app.Service
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -66,10 +65,6 @@ class TrackingService : Service() {
     // Track recording state
     private val trackWriter = TrackWriter()
     private val gpsSpoofingDetector = GpsSpoofingDetector()
-
-    @Volatile
-    private var gpsSpoofingState: GpsSpoofingDetector.State =
-        GpsSpoofingDetector.State(mode = GpsSpoofingDetector.Mode.INACTIVE)
 
     private var audioBeepDetector: com.github.bocovp.geigergpx.AudioInputManager? = null
 
@@ -212,8 +207,7 @@ class TrackingService : Service() {
             stopSelf()
         } else {
             // Still tracking: downgrade notification to indicate background tracking
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(TrackingNotificationManager.NOTIF_ID, notificationManager.buildTrackingNotification("Tracking (background)..."))
+            notificationManager.postTrackingNotification("Tracking (background)...")
         }
     }
 
@@ -228,13 +222,11 @@ class TrackingService : Service() {
         val currentTotal = repo.getTotalCounts()
         trackWriter.start(now, currentTotal)
         gpsSpoofingDetector.reset()
-        gpsSpoofingState = GpsSpoofingDetector.State(mode = GpsSpoofingDetector.Mode.INACTIVE)
 
         if (isMonitoring) {
             // Already monitoring: GPS and audio are already running.
             // Just upgrade the notification.
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(TrackingNotificationManager.NOTIF_ID, notificationManager.buildTrackingNotification("Tracking..."))
+            notificationManager.postTrackingNotification("Tracking...")
         } else {
             // Not monitoring: start GPS and audio now.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -281,11 +273,9 @@ class TrackingService : Service() {
         trackWriter.reset()
         repo.setActiveTrackPoints(emptyList())
         gpsSpoofingDetector.reset()
-        gpsSpoofingState = GpsSpoofingDetector.State(mode = GpsSpoofingDetector.Mode.INACTIVE)
 
         if (isMonitoring) {
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(TrackingNotificationManager.NOTIF_ID, notificationManager.buildTrackingNotification("Monitoring..."))
+            notificationManager.postTrackingNotification("Monitoring...")
             repo.updateStatus(
                 tracking = false,
                 durationSeconds = stats.durationSeconds,
@@ -312,8 +302,6 @@ class TrackingService : Service() {
                 stopForeground(true)
             }
             stopSelf()
-
-            notificationManager.cancelTracking()
         }
     }
 
@@ -345,12 +333,12 @@ class TrackingService : Service() {
                 sendBroadcast(
                     Intent(ACTION_TRACK_SAVED).putExtra(EXTRA_TRACK_ID, saveResult.sourceId)
                 )
-                showSaveNotification(saveResult.displayPath)
+                notificationManager.showSaveToast(saveResult.displayPath)
             } else {
-                showSaveNotification("File not saved (error)")
+                notificationManager.showSaveToast("File not saved (error)")
             }
         } else {
-            showSaveNotification("Nothing to save")
+            notificationManager.showSaveToast("Nothing to save")
         }
         repo.finalizeTrackCounts()
         stopTrackingSession(
@@ -386,7 +374,7 @@ class TrackingService : Service() {
 
     private fun handleLocation(loc: Location) {
         val now = System.currentTimeMillis()
-        gpsSpoofingState = gpsSpoofingDetector.process(loc, maxSpeedKmh, now)
+        val gpsSpoofingState = gpsSpoofingDetector.process(loc, maxSpeedKmh, now)
         val tracking = trackWriter.isTracking()
         val elapsedSec = if (tracking) trackWriter.elapsedSeconds(now) else 0
 
@@ -429,7 +417,6 @@ class TrackingService : Service() {
     }
 
     private fun updateStats(elapsedSec: Long, nowMillis: Long) {
-        gpsSpoofingState = gpsSpoofingDetector.currentState(nowMillis)
         val gpsStatus = gpsSpoofingDetector.getStatusString(nowMillis)
         val currentSize = trackWriter.pointCount()
         repo.updateStatus(
@@ -443,7 +430,6 @@ class TrackingService : Service() {
     }
 
     private fun updateMonitoringStats(nowMillis: Long) {
-        gpsSpoofingState = gpsSpoofingDetector.currentState(nowMillis)
         val gpsStatus = gpsSpoofingDetector.getStatusString(nowMillis)
         repo.updateMonitoringStatus(gpsStatus = gpsStatus)
     }
@@ -546,9 +532,6 @@ class TrackingService : Service() {
     // Notifications
     // -------------------------------------------------------------------------
 
-    private fun showSaveNotification(message: String?) {
-        notificationManager.showSaveToast(message)
-    }
     private fun startBackupLoop() {
         backupJob?.cancel()
         backupJob = serviceScope.launch {
