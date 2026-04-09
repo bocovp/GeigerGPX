@@ -11,6 +11,9 @@ class TrackGeneralizer(
     fun generalize(track: MapTrack): MapTrack {
         if (track.points.size < 2) return track
 
+        val geoPointSource = GeoPoint(0.0, 0.0)
+        val geoPointLast = GeoPoint(0.0, 0.0)
+
         val generalized = ArrayList<TrackSample>(track.points.size)
 
         var lastGeneralizedPoint: TrackSample? = null
@@ -71,8 +74,9 @@ class TrackGeneralizer(
                     flushAveragedPoint()
                 }
             } else {
-                val distanceMeters = GeoPoint(sourcePoint.latitude, sourcePoint.longitude)
-                    .distanceToAsDouble(GeoPoint(currentLastPoint.latitude, currentLastPoint.longitude))
+                geoPointSource.setCoords(sourcePoint.latitude, sourcePoint.longitude)
+                geoPointLast.setCoords(currentLastPoint.latitude, currentLastPoint.longitude)
+                val distanceMeters = geoPointSource.distanceToAsDouble(geoPointLast)
 
                 if (distanceMeters >= minDistanceMeters && secondsSum >= minDurationSeconds) {
                     flushAveragedPoint()
