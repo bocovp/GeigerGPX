@@ -88,6 +88,7 @@ class TrackingService : Service() {
     @Volatile private var lastObservedLocation: Location? = null
 
     private val doseRateMeasurement = DoseRateMeasurement()
+    private var kde: KernelDensityEstimator? = null
 
     private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     private val notificationManager by lazy { TrackingNotificationManager(this) }
@@ -229,6 +230,9 @@ class TrackingService : Service() {
         trackWriter.start(now, currentTotal)
         gpsSpoofingDetector.reset()
         lastObservedLocation = null
+
+        kde = KernelDensityEstimator(cpsToUsvhCoefficient)
+        kde?.clear()
 
         if (isMonitoring) {
             // Already monitoring: GPS and audio are already running.
@@ -489,6 +493,10 @@ class TrackingService : Service() {
                     val alertEvent = doseRateMeasurement.processBeep(count)
                     repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true) // ????????????????????
                     alertEvent?.let { dispatchDoseRateAlert(it) }
+
+                    if (trackWriter.isTracking()) {
+                        kde?.addPoint(System.currentTimeMillis() / 1000.0, count)
+                    }
                 }
             },
             onAudioHealth = { _ ->
