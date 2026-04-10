@@ -79,6 +79,7 @@ class HeatmapOverlay(
             for (sample in track.points) {
                 // Skip if count is 0 (as per requirements)
                 if (sample.counts == 0) continue
+                if (sample.badCoordinates) continue
 
                 // Project Lat/Lon to Screen Pixels
                 // Note: reuse GeoPoint to reduce allocation in tight loops if possible
@@ -136,4 +137,3 @@ class HeatmapOverlay(
         return Bitmap.createBitmap(pixels, cols, rows, Bitmap.Config.ARGB_8888)
     }
 }
-
