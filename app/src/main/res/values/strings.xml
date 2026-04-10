@@ -13,4 +13,5 @@
     <string name="time_plot_switch_to_sliding_window">Switch to sliding window</string>
     <string name="time_plot_switch_to_kernel_estimator">Switch to kernel estimator</string>
     <string name="time_plot_no_track_data">No track data</string>
+    <string name="time_plot_loading">Loading...</string>
 </resources>

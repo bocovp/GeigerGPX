@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
@@ -64,11 +65,9 @@ class TimePlotActivity : AppCompatActivity() {
 
         val trackToShow = selectedTrackId ?: preferredTrackSelection(this)
         selectedTrackIdForPlot = trackToShow
-        val loaded = loadTrackForPlot(trackToShow)
-        if (!loaded) {
-            rememberCurrentTrackSelection(this)
-            selectedTrackIdForPlot = TrackCatalog.currentTrackId()
-            loadTrackForPlot(TrackCatalog.currentTrackId())
+        showLoading(true)
+        binding.root.post {
+            loadTrackForPlotAsync(trackToShow)
         }
         invalidateOptionsMenu()
     }
@@ -159,6 +158,34 @@ class TimePlotActivity : AppCompatActivity() {
         }
     }
 
+    private fun loadTrackForPlotAsync(trackId: String?) {
+        val normalizedTrackId = trackId?.takeIf { it.isNotBlank() }
+        if (normalizedTrackId == null || normalizedTrackId == TrackCatalog.currentTrackId()) {
+            loadTrackForPlot(trackId)
+            showLoading(false)
+            return
+        }
+
+        Thread {
+            val selected = TrackCatalog.loadTrackSamplesById(this, normalizedTrackId)
+            runOnUiThread {
+                if (selected != null) {
+                    applyLoadedTrack(normalizedTrackId, selected)
+                } else {
+                    rememberCurrentTrackSelection(this)
+                    selectedTrackIdForPlot = TrackCatalog.currentTrackId()
+                    loadTrackForPlot(TrackCatalog.currentTrackId())
+                }
+                showLoading(false)
+            }
+        }.start()
+    }
+
+    private fun showLoading(isLoading: Boolean) {
+        binding.loadingLabel.visibility = if (isLoading) View.VISIBLE else View.GONE
+        binding.timePlotView.visibility = if (isLoading) View.INVISIBLE else View.VISIBLE
+    }
+
     private fun loadTrackForPlot(trackId: String?): Boolean {
         selectedTrackIdForPlot = trackId
         val normalizedTrackId = trackId?.takeIf { it.isNotBlank() }
@@ -169,10 +196,15 @@ class TimePlotActivity : AppCompatActivity() {
         }
 
         val selected = TrackCatalog.loadTrackSamplesById(this, normalizedTrackId) ?: return false
-        binding.trackNameLabel.text = selected.title
-        currentSamples = selected.samples
-        updatePlot()
+        applyLoadedTrack(normalizedTrackId, selected)
         return true
+    }
+
+    private fun applyLoadedTrack(trackId: String, selectedTrack: TrackCatalog.TrackPlotData) {
+        selectedTrackIdForPlot = trackId
+        binding.trackNameLabel.text = selectedTrack.title
+        currentSamples = selectedTrack.samples
+        updatePlot()
     }
 
     private fun updateSliderDescription(valueMinutes: Float) {
