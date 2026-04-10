@@ -8,4 +8,8 @@
     <string name="no_poi_file_found">No POI.gpx file found</string>
     <string name="no_poi_in_library">No POI in Library</string>
     <string name="refresh">Refresh</string>
+    <string name="time_plot_mode_sliding_window">Sliding Window</string>
+    <string name="time_plot_mode_kernel_estimator">Kernel Estimator</string>
+    <string name="time_plot_no_track_data">No track data</string>
+    <string name="time_plot_kernel_placeholder">Kernel Estimator for saved tracks coming soon</string>
 </resources>

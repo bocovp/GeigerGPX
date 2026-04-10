@@ -54,6 +54,24 @@ class TrackingService : Service() {
             val service = runningInstance ?: return Pair(0.0, 0.0)
             return service.doseRateMeasurement.consumeMeasurementAverageCoordinates()
         }
+
+        fun activeKdeTimestampBounds(): Pair<Double, Double>? {
+            val service = runningInstance ?: return null
+            synchronized(service.kdeLock) {
+                return service.kde?.timestampBounds()
+            }
+        }
+
+        fun activeKdeConfidenceIntervals(
+            t2s: DoubleArray,
+            scaleSeconds: Double
+        ): Triple<DoubleArray, DoubleArray, DoubleArray>? {
+            val service = runningInstance ?: return null
+            synchronized(service.kdeLock) {
+                val estimator = service.kde ?: return null
+                return estimator.getConfidenceIntervals(t2s, scaleSeconds.coerceAtLeast(1e-3))
+            }
+        }
     }
 
     private val fusedLocation by lazy { LocationServices.getFusedLocationProviderClient(this) }
@@ -89,6 +107,7 @@ class TrackingService : Service() {
 
     private val doseRateMeasurement = DoseRateMeasurement()
     private var kde: KernelDensityEstimator? = null
+    private val kdeLock = Any()
 
     private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     private val notificationManager by lazy { TrackingNotificationManager(this) }
@@ -231,8 +250,10 @@ class TrackingService : Service() {
         gpsSpoofingDetector.reset()
         lastObservedLocation = null
 
-        kde = KernelDensityEstimator(cpsToUsvhCoefficient)
-        kde?.clear()
+        synchronized(kdeLock) {
+            kde = KernelDensityEstimator(cpsToUsvhCoefficient)
+            kde?.clear()
+        }
 
         if (isMonitoring) {
             // Already monitoring: GPS and audio are already running.
@@ -495,7 +516,9 @@ class TrackingService : Service() {
                     alertEvent?.let { dispatchDoseRateAlert(it) }
 
                     if (trackWriter.isTracking()) {
-                        kde?.addPoint(System.currentTimeMillis() / 1000.0, count)
+                        synchronized(kdeLock) {
+                            kde?.addPoint(System.currentTimeMillis() / 1000.0, count)
+                        }
                     }
                 }
             },
