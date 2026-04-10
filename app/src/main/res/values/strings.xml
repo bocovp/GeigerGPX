@@ -11,5 +11,4 @@
     <string name="time_plot_mode_sliding_window">Sliding Window</string>
     <string name="time_plot_mode_kernel_estimator">Kernel Estimator</string>
     <string name="time_plot_no_track_data">No track data</string>
-    <string name="time_plot_kernel_placeholder">Kernel Estimator for saved tracks coming soon</string>
 </resources>
