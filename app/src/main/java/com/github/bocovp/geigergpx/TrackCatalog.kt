@@ -429,15 +429,15 @@ object TrackCatalog {
                             badCoordinates = false
                             timeMs = 0L
                         }
-                        if (insideTrkpt && currentNamespace == RAD_NAMESPACE && parser.name == "badCoordinates") {
-                            badCoordinates = true
-                        }
                     }
 
                     XmlPullParser.TEXT -> {
                         if (insideTrkpt) {
                             when {
                                 currentTag == "time" -> timeMs = parseIsoTime(parser.text)
+                                currentTag == "fix" && parser.text?.trim()?.equals("none", ignoreCase = true) == true -> {
+                                    badCoordinates = true
+                                }
                                 currentNamespace == RAD_NAMESPACE && currentTag == "doseRate" -> {
                                     doseRate = parser.text?.trim()?.toDoubleOrNull() ?: 0.0
                                 }
