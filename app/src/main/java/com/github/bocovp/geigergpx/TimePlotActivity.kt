@@ -299,11 +299,17 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun updateModeUi() {
-        val titleRes = when (plotMode) {
-            PlotMode.SLIDING_WINDOW -> R.string.time_plot_mode_sliding_window
-            PlotMode.KERNEL_ESTIMATOR -> R.string.time_plot_mode_kernel_estimator
+        val toggleItem = binding.topAppBar.menu.findItem(R.id.action_toggle_plot_mode) ?: return
+        val (iconRes, titleRes) = when (plotMode) {
+            PlotMode.SLIDING_WINDOW -> {
+                R.drawable.baseline_query_stats_24 to R.string.time_plot_switch_to_kernel_estimator
+            }
+            PlotMode.KERNEL_ESTIMATOR -> {
+                R.drawable.baseline_track_24 to R.string.time_plot_switch_to_sliding_window
+            }
         }
-        binding.topAppBar.menu.findItem(R.id.action_toggle_plot_mode)?.title = getString(titleRes)
+        toggleItem.setIcon(iconRes)
+        toggleItem.title = getString(titleRes)
     }
 
     companion object {
