@@ -346,10 +346,10 @@ class TimePlotActivity : AppCompatActivity() {
         toggleItem ?: return
         val (iconRes, titleRes) = when (plotMode) {
             PlotMode.SLIDING_WINDOW -> {
-                R.drawable.baseline_bar_chart_24 to R.string.time_plot_switch_to_kernel_estimator
+                R.drawable.baseline_planner_review_24 to R.string.time_plot_switch_to_kernel_estimator
             }
             PlotMode.KERNEL_ESTIMATOR -> {
-                R.drawable.baseline_planner_review_24 to R.string.time_plot_switch_to_sliding_window
+                R.drawable.baseline_bar_chart_24 to R.string.time_plot_switch_to_sliding_window
             }
         }
         toggleItem.setIcon(iconRes)

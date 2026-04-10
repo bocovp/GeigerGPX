@@ -429,6 +429,9 @@ object TrackCatalog {
                             badCoordinates = false
                             timeMs = 0L
                         }
+                        if (insideTrkpt && currentNamespace == RAD_NAMESPACE && parser.name == "badCoordinates") {
+                            badCoordinates = true
+                        } // Keeping this for backward compatibility. Remove in the future
                     }
 
                     XmlPullParser.TEXT -> {
