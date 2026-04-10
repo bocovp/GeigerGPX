@@ -203,12 +203,38 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun updateKernelEstimatorPlot(scaleSeconds: Double, recalculateVerticalAxis: Boolean) {
         val isCurrentTrack = selectedTrackIdForPlot.isNullOrBlank() || selectedTrackIdForPlot == TrackCatalog.currentTrackId()
-        if (!isCurrentTrack) {
-            binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_kernel_placeholder))
-            binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
-            return
+        if (isCurrentTrack) {
+            updateKernelEstimatorPlotForCurrentTrack(scaleSeconds, recalculateVerticalAxis)
+        } else {
+            updateKernelEstimatorPlotFromSamples(
+                samples = currentSamples,
+                scaleSeconds = scaleSeconds,
+                recalculateVerticalAxis = recalculateVerticalAxis
+            )
         }
+    }
+
+    private fun updateKernelEstimatorPlotForCurrentTrack(
+        scaleSeconds: Double,
+        recalculateVerticalAxis: Boolean
+    ) {
         val bounds = TrackingService.activeKdeTimestampBounds()
+        renderKernelEstimatorPlot(
+            bounds = bounds,
+            recalculateVerticalAxis = recalculateVerticalAxis
+        ) { t2s ->
+            TrackingService.activeKdeConfidenceIntervals(
+                t2s = t2s,
+                scaleSeconds = scaleSeconds
+            )
+        }
+    }
+
+    private fun renderKernelEstimatorPlot(
+        bounds: Pair<Double, Double>?,
+        recalculateVerticalAxis: Boolean,
+        getConfidenceIntervals: (DoubleArray) -> Triple<DoubleArray, DoubleArray, DoubleArray>?
+    ) {
         if (bounds == null || bounds.second < bounds.first) {
             binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
             binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
@@ -223,10 +249,7 @@ class TimePlotActivity : AppCompatActivity() {
             val step = (lastTimestamp - firstTimestamp) / (sampleCount - 1).toDouble()
             DoubleArray(sampleCount) { idx -> firstTimestamp + idx * step }
         }
-        val ci = TrackingService.activeKdeConfidenceIntervals(
-            t2s = ts2,
-            scaleSeconds = scaleSeconds
-        )
+        val ci = getConfidenceIntervals(ts2)
         if (ci == null) {
             binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
             binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
@@ -243,6 +266,36 @@ class TimePlotActivity : AppCompatActivity() {
             cpsToUSvh = cpsToUSvhCoeff,
             recalculateVerticalAxis = recalculateVerticalAxis
         )
+    }
+
+    private fun updateKernelEstimatorPlotFromSamples(
+        samples: List<TrackSample>,
+        scaleSeconds: Double,
+        recalculateVerticalAxis: Boolean
+    ) {
+        if (samples.isEmpty()) {
+            binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
+            binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
+            return
+        }
+
+        val estimator = KernelDensityEstimator(cpsToUSvhCoeff)
+        var accumulatedSeconds = 0.0
+        for (sample in samples) {
+            val durationSeconds = sample.seconds.coerceAtLeast(0.0)
+            val timestamp = accumulatedSeconds + 0.5 * durationSeconds
+            estimator.addPoint(timestamp, sample.counts.coerceAtLeast(0))
+            accumulatedSeconds += durationSeconds
+        }
+        renderKernelEstimatorPlot(
+            bounds = estimator.timestampBounds(),
+            recalculateVerticalAxis = recalculateVerticalAxis
+        ) { t2s ->
+            estimator.getConfidenceIntervals(
+                t2s = t2s,
+                scale = scaleSeconds.coerceAtLeast(1e-3)
+            )
+        }
     }
 
     private fun updateModeUi() {
