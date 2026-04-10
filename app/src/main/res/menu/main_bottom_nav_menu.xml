@@ -6,11 +6,6 @@
         android:title="Home" />
 
     <item
-        android:id="@+id/navigation_map"
-        android:icon="@drawable/baseline_map_24"
-        android:title="Map" />
-
-    <item
         android:id="@+id/navigation_tracks"
         android:icon="@drawable/baseline_track_24"
         android:title="Tracks" />
@@ -21,7 +16,12 @@
         android:title="POI" />
 
     <item
+        android:id="@+id/navigation_map"
+        android:icon="@drawable/baseline_map_24"
+        android:title="Map" />
+
+    <item
         android:id="@+id/navigation_time_plot"
         android:icon="@drawable/baseline_query_stats_24"
-        android:title="TimePlot" />
+        android:title="Plot" />
 </menu>

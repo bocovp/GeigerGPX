@@ -4,7 +4,7 @@
 
     <item
         android:id="@+id/action_toggle_plot_mode"
-        android:icon="@drawable/baseline_query_stats_24"
+        android:icon="@drawable/baseline_bar_chart_24"
         android:title="@string/time_plot_switch_to_kernel_estimator"
         app:showAsAction="always" />
 </menu>

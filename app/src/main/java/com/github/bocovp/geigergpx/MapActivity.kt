@@ -103,10 +103,10 @@ class MapActivity : AppCompatActivity() {
 
         if (isHeatmapMode) {
             toggleItem?.title = "Show Gradient Tracks"
-            toggleItem?.setIcon(R.drawable.track_24)
+            toggleItem?.setIcon(R.drawable.baseline_line_axis_24)
         } else {
             toggleItem?.title = "Show Heatmap"
-            toggleItem?.setIcon(R.drawable.baseline_heatmap_24)
+            toggleItem?.setIcon(R.drawable.baseline_scatter_plot_24)
         }
 
         return super.onPrepareOptionsMenu(menu)
