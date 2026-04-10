@@ -43,6 +43,15 @@ class KernelDensityEstimator(private val coeff: Double) {
     }
 
     /**
+     * Returns the first and last timestamps currently recorded.
+     * If no points are present, returns null.
+     */
+    fun timestampBounds(): Pair<Double, Double>? {
+        if (size <= 0) return null
+        return Pair(ts[0], ts[size - 1])
+    }
+
+    /**
      * Core convolution — returns raw count rate in **cps** (not yet multiplied by [coeff]).
      *
      *   result(t) = (0.75 / scale) * Σ_i  ns[i] * (1 − u²),   u = (t − ts[i]) / scale

@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -27,6 +28,15 @@ class TimePlotView @JvmOverloads constructor(
     )
 
     private val plotSegments = mutableListOf<PlotSegment>()
+    private var kernelSeries: List<KernelPoint> = emptyList()
+    private var emptyMessage: String = "No track data"
+
+    private data class KernelPoint(
+        val t: Double,
+        val mean: Double,
+        val low: Double,
+        val high: Double
+    )
 
     private val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         strokeWidth = 2f
@@ -118,6 +128,7 @@ class TimePlotView @JvmOverloads constructor(
         cpsToUSvh: Double,
         recalculateVerticalAxis: Boolean = true
     ) {
+        kernelSeries = emptyList()
         plotSegments.clear()
         yAxisUnit = if (kotlin.math.abs(cpsToUSvh - 1.0) < 1e-9) "cps" else "μSv/h"
 
@@ -159,6 +170,53 @@ class TimePlotView @JvmOverloads constructor(
         invalidate()
     }
 
+    fun setKernelSeries(
+        relativeSeconds: DoubleArray,
+        mean: DoubleArray,
+        low: DoubleArray,
+        high: DoubleArray,
+        cpsToUSvh: Double,
+        recalculateVerticalAxis: Boolean = true
+    ) {
+        plotSegments.clear()
+        yAxisUnit = if (kotlin.math.abs(cpsToUSvh - 1.0) < 1e-9) "cps" else "μSv/h"
+        val size = minOf(relativeSeconds.size, mean.size, low.size, high.size)
+        kernelSeries = List(size) { idx ->
+            KernelPoint(
+                t = relativeSeconds[idx].coerceAtLeast(0.0),
+                mean = mean[idx].coerceAtLeast(0.0),
+                low = low[idx].coerceAtLeast(0.0),
+                high = high[idx].coerceAtLeast(0.0)
+            )
+        }
+        if (kernelSeries.isEmpty()) {
+            trackDurationSeconds = 0.0
+            maxDoseValue = 1.0
+            verticalTickStep = 0.2
+            verticalTickCount = 5
+            verticalAxisMaxValue = 1.0
+            zoomX = 1f
+            panFraction = 0f
+            invalidate()
+            return
+        }
+
+        trackDurationSeconds = kernelSeries.last().t.coerceAtLeast(0.0)
+        maxDoseValue = kernelSeries.maxOfOrNull { maxOf(it.mean, it.high) }?.coerceAtLeast(0.1) ?: 1.0
+        if (recalculateVerticalAxis) {
+            verticalTickStep = chooseVerticalTickStep(maxDoseValue)
+            verticalTickCount = ceil(maxDoseValue / verticalTickStep).toInt()
+            verticalAxisMaxValue = verticalTickStep * verticalTickCount
+        }
+        clampPan()
+        invalidate()
+    }
+
+    fun setEmptyMessage(message: String) {
+        emptyMessage = message
+        invalidate()
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val scaled = scaleDetector.onTouchEvent(event)
         val gestured = gestureDetector.onTouchEvent(event)
@@ -180,14 +238,18 @@ class TimePlotView @JvmOverloads constructor(
         canvas.drawLine(plotLeft, plotBottom, plotRight, plotBottom, axisPaint)
         canvas.drawLine(plotLeft, plotTop, plotLeft, plotBottom, axisPaint)
 
-        if (plotSegments.isEmpty()) {
-            canvas.drawText("No track data", plotLeft + 16f, plotTop + 40f, textPaint)
+        if (plotSegments.isEmpty() && kernelSeries.isEmpty()) {
+            canvas.drawText(emptyMessage, plotLeft + 16f, plotTop + 40f, textPaint)
             return
         }
 
         drawVerticalTicks(canvas, plotLeft, plotTop, plotBottom, plotRight)
         drawHorizontalTicks(canvas, plotLeft, plotBottom, plotTop, plotRight)
-        drawSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
+        if (kernelSeries.isNotEmpty()) {
+            drawKernelSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
+        } else {
+            drawSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
+        }
     }
 
     private fun refreshAxisColors() {
@@ -247,6 +309,46 @@ class TimePlotView @JvmOverloads constructor(
 
     private fun nextSegmentValue(segmentStart: Double): Double? {
         return plotSegments.firstOrNull { kotlin.math.abs(it.startSeconds - segmentStart) < 1e-9 }?.value
+    }
+
+    private fun drawKernelSeries(
+        canvas: Canvas,
+        plotLeft: Float,
+        plotBottom: Float,
+        plotWidth: Float,
+        plotHeight: Float
+    ) {
+        if (trackDurationSeconds <= 0.0 || kernelSeries.isEmpty()) return
+        val visibleDuration = trackDurationSeconds / zoomX
+        val start = (trackDurationSeconds - visibleDuration) * panFraction
+        val end = start + visibleDuration
+        val points = kernelSeries.filter { it.t in start..end }
+        if (points.size < 2) return
+
+        val areaPath = Path()
+        for (idx in points.indices) {
+            val p = points[idx]
+            val x = plotLeft + (((p.t - start) / visibleDuration).toFloat() * plotWidth)
+            val y = toY(p.high, plotBottom, plotHeight)
+            if (idx == 0) areaPath.moveTo(x, y) else areaPath.lineTo(x, y)
+        }
+        for (idx in points.size - 1 downTo 0) {
+            val p = points[idx]
+            val x = plotLeft + (((p.t - start) / visibleDuration).toFloat() * plotWidth)
+            val y = toY(p.low, plotBottom, plotHeight)
+            areaPath.lineTo(x, y)
+        }
+        areaPath.close()
+        canvas.drawPath(areaPath, ciPaint)
+
+        var prev = points.first()
+        for (idx in 1 until points.size) {
+            val curr = points[idx]
+            val x1 = plotLeft + (((prev.t - start) / visibleDuration).toFloat() * plotWidth)
+            val x2 = plotLeft + (((curr.t - start) / visibleDuration).toFloat() * plotWidth)
+            canvas.drawLine(x1, toY(prev.mean, plotBottom, plotHeight), x2, toY(curr.mean, plotBottom, plotHeight), linePaint)
+            prev = curr
+        }
     }
 
     private fun drawVerticalTicks(

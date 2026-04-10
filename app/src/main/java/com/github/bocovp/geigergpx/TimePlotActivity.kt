@@ -9,12 +9,15 @@ import com.github.bocovp.geigergpx.databinding.ActivityTimePlotBinding
 import com.google.android.material.slider.Slider
 
 class TimePlotActivity : AppCompatActivity() {
+    private enum class PlotMode { SLIDING_WINDOW, KERNEL_ESTIMATOR }
 
     private lateinit var binding: ActivityTimePlotBinding
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var cpsToUSvhCoeff: Double = 1.0
     private var currentSamples: List<TrackSample> = emptyList()
     private var activeTrackObserverAttached = false
+    private var selectedTrackIdForPlot: String? = null
+    private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -23,6 +26,22 @@ class TimePlotActivity : AppCompatActivity() {
         setSupportActionBar(binding.topAppBar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.topAppBar.setNavigationOnClickListener { finish() }
+        binding.topAppBar.inflateMenu(R.menu.time_plot_toolbar_menu)
+        binding.topAppBar.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.action_toggle_plot_mode -> {
+                    plotMode = if (plotMode == PlotMode.SLIDING_WINDOW) {
+                        PlotMode.KERNEL_ESTIMATOR
+                    } else {
+                        PlotMode.SLIDING_WINDOW
+                    }
+                    updateModeUi()
+                    updatePlot(recalculateVerticalAxis = true)
+                    true
+                }
+                else -> false
+            }
+        }
 
         setupGeneralizationSlider()
 
@@ -59,11 +78,14 @@ class TimePlotActivity : AppCompatActivity() {
         }
 
         val trackToShow = selectedTrackId ?: preferredTrackSelection(this)
+        selectedTrackIdForPlot = trackToShow
         val loaded = loadTrackForPlot(trackToShow)
         if (!loaded) {
             rememberCurrentTrackSelection(this)
+            selectedTrackIdForPlot = TrackCatalog.currentTrackId()
             loadTrackForPlot(TrackCatalog.currentTrackId())
         }
+        updateModeUi()
     }
 
     override fun onResume() {
@@ -92,14 +114,14 @@ class TimePlotActivity : AppCompatActivity() {
             val durationMinutes = internalSliderToDurationMinutes(value)
             updateSliderDescription(durationMinutes)
             if (fromUser) {
-                updatePlotWithGeneralization(recalculateVerticalAxis = false)
+                updatePlot(recalculateVerticalAxis = false)
             }
         }
         binding.placeholderSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
             override fun onStartTrackingTouch(slider: Slider) = Unit
 
             override fun onStopTrackingTouch(slider: Slider) {
-                updatePlotWithGeneralization(recalculateVerticalAxis = true)
+                updatePlot(recalculateVerticalAxis = true)
             }
         })
     }
@@ -117,11 +139,12 @@ class TimePlotActivity : AppCompatActivity() {
                     seconds = it.seconds
                 )
             }
-            updatePlotWithGeneralization(recalculateVerticalAxis = true)
+            updatePlot(recalculateVerticalAxis = true)
         }
     }
 
     private fun loadTrackForPlot(trackId: String?): Boolean {
+        selectedTrackIdForPlot = trackId
         val normalizedTrackId = trackId?.takeIf { it.isNotBlank() }
         if (normalizedTrackId == null || normalizedTrackId == TrackCatalog.currentTrackId()) {
             binding.trackNameLabel.text = CURRENT_TRACK_TITLE
@@ -132,7 +155,7 @@ class TimePlotActivity : AppCompatActivity() {
         val selected = TrackCatalog.loadTrackSamplesById(this, normalizedTrackId) ?: return false
         binding.trackNameLabel.text = selected.title
         currentSamples = selected.samples
-        updatePlotWithGeneralization()
+        updatePlot()
         return true
     }
 
@@ -146,9 +169,21 @@ class TimePlotActivity : AppCompatActivity() {
         return (EXP_SCALE_FACTOR * expTerm).toFloat()
     }
 
-    private fun updatePlotWithGeneralization(recalculateVerticalAxis: Boolean = true) {
+    private fun updatePlot(recalculateVerticalAxis: Boolean = true) {
         val minDurationMinutes = internalSliderToDurationMinutes(binding.placeholderSlider.value)
         val minDurationSeconds = minDurationMinutes * SECONDS_PER_MINUTE
+        if (plotMode == PlotMode.KERNEL_ESTIMATOR) {
+            updateKernelEstimatorPlot(minDurationSeconds.toDouble(), recalculateVerticalAxis)
+            return
+        }
+        updatePlotWithGeneralization(minDurationSeconds.toDouble(), recalculateVerticalAxis)
+    }
+
+    private fun updatePlotWithGeneralization(
+        minDurationSeconds: Double,
+        recalculateVerticalAxis: Boolean = true
+    ) {
+        binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
         val track = MapTrack(
             id = CURRENT_TRACK_TITLE,
             title = binding.trackNameLabel.text?.toString().orEmpty(),
@@ -157,7 +192,7 @@ class TimePlotActivity : AppCompatActivity() {
         val generalized = TrackGeneralizer(
             minDistanceMeters = 0.0,
             coeff = cpsToUSvhCoeff,
-            minDurationSeconds = minDurationSeconds.toDouble()
+            minDurationSeconds = minDurationSeconds
         ).generalize(track)
         binding.timePlotView.setSamples(
             samples = generalized.points,
@@ -166,12 +201,65 @@ class TimePlotActivity : AppCompatActivity() {
         )
     }
 
+    private fun updateKernelEstimatorPlot(scaleSeconds: Double, recalculateVerticalAxis: Boolean) {
+        val isCurrentTrack = selectedTrackIdForPlot.isNullOrBlank() || selectedTrackIdForPlot == TrackCatalog.currentTrackId()
+        if (!isCurrentTrack) {
+            binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_kernel_placeholder))
+            binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
+            return
+        }
+        val bounds = TrackingService.activeKdeTimestampBounds()
+        if (bounds == null || bounds.second < bounds.first) {
+            binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
+            binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
+            return
+        }
+        val firstTimestamp = bounds.first
+        val lastTimestamp = bounds.second
+        val sampleCount = KDE_PLOT_SAMPLE_COUNT
+        val ts2 = if (kotlin.math.abs(lastTimestamp - firstTimestamp) < 1e-9) {
+            doubleArrayOf(firstTimestamp)
+        } else {
+            val step = (lastTimestamp - firstTimestamp) / (sampleCount - 1).toDouble()
+            DoubleArray(sampleCount) { idx -> firstTimestamp + idx * step }
+        }
+        val ci = TrackingService.activeKdeConfidenceIntervals(
+            t2s = ts2,
+            scaleSeconds = scaleSeconds
+        )
+        if (ci == null) {
+            binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
+            binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
+            return
+        }
+        val (mean, low, high) = ci
+        val relativeSeconds = DoubleArray(ts2.size) { idx -> ts2[idx] - firstTimestamp }
+        binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
+        binding.timePlotView.setKernelSeries(
+            relativeSeconds = relativeSeconds,
+            mean = mean,
+            low = low,
+            high = high,
+            cpsToUSvh = cpsToUSvhCoeff,
+            recalculateVerticalAxis = recalculateVerticalAxis
+        )
+    }
+
+    private fun updateModeUi() {
+        val titleRes = when (plotMode) {
+            PlotMode.SLIDING_WINDOW -> R.string.time_plot_mode_sliding_window
+            PlotMode.KERNEL_ESTIMATOR -> R.string.time_plot_mode_kernel_estimator
+        }
+        binding.topAppBar.menu.findItem(R.id.action_toggle_plot_mode)?.title = getString(titleRes)
+    }
+
     companion object {
         const val EXTRA_TRACK_ID = "extra_track_id"
         const val CURRENT_TRACK_TITLE = "Currently recording"
         private const val SECONDS_PER_MINUTE = 60f
         private const val GENERALIZATION_SLIDER_INTERNAL_MAX = 1f
         private const val EXP_SCALE_FACTOR = 0.523957
+        private const val KDE_PLOT_SAMPLE_COUNT = 240
 
         fun rememberTrackSelection(context: android.content.Context, trackId: String) {
             val app = context.applicationContext as? GeigerGpxApp ?: return
