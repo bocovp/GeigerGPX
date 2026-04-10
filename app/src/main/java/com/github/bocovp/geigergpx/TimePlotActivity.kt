@@ -313,8 +313,8 @@ class TimePlotActivity : AppCompatActivity() {
             )
         }
     }
-
-    private fun updateModeUi(toggleItem: MenuItem?) {
+    
+private fun updateModeUi(toggleItem: MenuItem?) {
         toggleItem ?: return
         val (iconRes, titleRes) = when (plotMode) {
             PlotMode.SLIDING_WINDOW -> {
