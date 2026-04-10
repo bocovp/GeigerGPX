@@ -299,8 +299,12 @@ class TimePlotActivity : AppCompatActivity() {
         var accumulatedSeconds = 0.0
         for (sample in samples) {
             val durationSeconds = sample.seconds.coerceAtLeast(0.0)
-            val timestamp = accumulatedSeconds + 0.5 * durationSeconds
-            estimator.addPoint(timestamp, sample.counts.coerceAtLeast(0))
+            addSampleToEstimator(
+                estimator = estimator,
+                intervalStartSeconds = accumulatedSeconds,
+                durationSeconds = durationSeconds,
+                counts = sample.counts.coerceAtLeast(0)
+            )
             accumulatedSeconds += durationSeconds
         }
         renderKernelEstimatorPlot(
@@ -313,8 +317,32 @@ class TimePlotActivity : AppCompatActivity() {
             )
         }
     }
-    
-private fun updateModeUi(toggleItem: MenuItem?) {
+
+    private fun addSampleToEstimator(
+        estimator: KernelDensityEstimator,
+        intervalStartSeconds: Double,
+        durationSeconds: Double,
+        counts: Int
+    ) {
+        if (counts <= 0) return
+
+        val intervalEndSeconds = intervalStartSeconds + durationSeconds
+        val groupCount = kotlin.math.ceil(counts / KDE_MAX_COUNTS_PER_POINT.toDouble()).toInt().coerceAtLeast(1)
+        val baseGroupSize = counts / groupCount
+        val groupsWithExtraCount = counts % groupCount
+
+        for (groupIndex in 0 until groupCount) {
+            val groupSize = baseGroupSize + if (groupIndex < groupsWithExtraCount) 1 else 0
+            val timestamp = if (durationSeconds <= 0.0) {
+                intervalStartSeconds
+            } else {
+                intervalStartSeconds + ((groupIndex + 0.5) / groupCount) * (intervalEndSeconds - intervalStartSeconds)
+            }
+            estimator.addPoint(timestamp, groupSize)
+        }
+    }
+
+    private fun updateModeUi(toggleItem: MenuItem?) {
         toggleItem ?: return
         val (iconRes, titleRes) = when (plotMode) {
             PlotMode.SLIDING_WINDOW -> {
@@ -335,6 +363,7 @@ private fun updateModeUi(toggleItem: MenuItem?) {
         private const val GENERALIZATION_SLIDER_INTERNAL_MAX = 1f
         private const val EXP_SCALE_FACTOR = 0.523957
         private const val KDE_PLOT_SAMPLE_COUNT = 240
+        private const val KDE_MAX_COUNTS_PER_POINT = 10
 
         fun rememberTrackSelection(context: android.content.Context, trackId: String) {
             val app = context.applicationContext as? GeigerGpxApp ?: return
