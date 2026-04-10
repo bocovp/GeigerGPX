@@ -10,5 +10,7 @@
     <string name="refresh">Refresh</string>
     <string name="time_plot_mode_sliding_window">Sliding Window</string>
     <string name="time_plot_mode_kernel_estimator">Kernel Estimator</string>
+    <string name="time_plot_switch_to_sliding_window">Switch to sliding window</string>
+    <string name="time_plot_switch_to_kernel_estimator">Switch to kernel estimator</string>
     <string name="time_plot_no_track_data">No track data</string>
 </resources>

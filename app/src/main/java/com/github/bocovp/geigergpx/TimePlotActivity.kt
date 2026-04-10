@@ -2,6 +2,8 @@ package com.github.bocovp.geigergpx
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
@@ -25,23 +27,6 @@ class TimePlotActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.topAppBar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        binding.topAppBar.setNavigationOnClickListener { finish() }
-        binding.topAppBar.inflateMenu(R.menu.time_plot_toolbar_menu)
-        binding.topAppBar.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                R.id.action_toggle_plot_mode -> {
-                    plotMode = if (plotMode == PlotMode.SLIDING_WINDOW) {
-                        PlotMode.KERNEL_ESTIMATOR
-                    } else {
-                        PlotMode.SLIDING_WINDOW
-                    }
-                    updateModeUi()
-                    updatePlot(recalculateVerticalAxis = true)
-                    true
-                }
-                else -> false
-            }
-        }
 
         setupGeneralizationSlider()
 
@@ -85,12 +70,43 @@ class TimePlotActivity : AppCompatActivity() {
             selectedTrackIdForPlot = TrackCatalog.currentTrackId()
             loadTrackForPlot(TrackCatalog.currentTrackId())
         }
-        updateModeUi()
+        invalidateOptionsMenu()
     }
 
     override fun onResume() {
         super.onResume()
         syncBottomNavigationSelection()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.time_plot_toolbar_menu, menu)
+        updateModeUi(menu.findItem(R.id.action_toggle_plot_mode))
+        return true
+    }
+
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        updateModeUi(menu.findItem(R.id.action_toggle_plot_mode))
+        return super.onPrepareOptionsMenu(menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                finish()
+                true
+            }
+            R.id.action_toggle_plot_mode -> {
+                plotMode = if (plotMode == PlotMode.SLIDING_WINDOW) {
+                    PlotMode.KERNEL_ESTIMATOR
+                } else {
+                    PlotMode.SLIDING_WINDOW
+                }
+                updatePlot(recalculateVerticalAxis = true)
+                invalidateOptionsMenu()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -298,12 +314,18 @@ class TimePlotActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateModeUi() {
-        val titleRes = when (plotMode) {
-            PlotMode.SLIDING_WINDOW -> R.string.time_plot_mode_sliding_window
-            PlotMode.KERNEL_ESTIMATOR -> R.string.time_plot_mode_kernel_estimator
+    private fun updateModeUi(toggleItem: MenuItem?) {
+        toggleItem ?: return
+        val (iconRes, titleRes) = when (plotMode) {
+            PlotMode.SLIDING_WINDOW -> {
+                R.drawable.baseline_query_stats_24 to R.string.time_plot_switch_to_kernel_estimator
+            }
+            PlotMode.KERNEL_ESTIMATOR -> {
+                R.drawable.baseline_track_24 to R.string.time_plot_switch_to_sliding_window
+            }
         }
-        binding.topAppBar.menu.findItem(R.id.action_toggle_plot_mode)?.title = getString(titleRes)
+        toggleItem.setIcon(iconRes)
+        toggleItem.title = getString(titleRes)
     }
 
     companion object {
