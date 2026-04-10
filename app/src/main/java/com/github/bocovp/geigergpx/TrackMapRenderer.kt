@@ -121,7 +121,7 @@ class TrackMapRenderer(
             removeDeletedTracks(activeTrackIds)
 
             tracks.forEach { track ->
-                val trackPoints = (generalizedTracksById[track.id] ?: track.points).filterNot { it.badCoordinates }
+                val trackPoints = generalizedTracksById[track.id] ?: track.points
                 if (trackPoints.isEmpty()) return@forEach
 
                 latestPoint = GeoPoint(trackPoints.last().latitude, trackPoints.last().longitude)

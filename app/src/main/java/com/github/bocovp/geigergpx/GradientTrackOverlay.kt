@@ -17,6 +17,10 @@ class GradientTrackOverlay : Overlay() {
         strokeCap = Paint.Cap.ROUND
         isAntiAlias = true
     }
+    private val badPointPaint = Paint().apply {
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
 
     override fun draw(canvas: Canvas, projection: Projection) {
         if (points.size < 2) return
@@ -27,12 +31,11 @@ class GradientTrackOverlay : Overlay() {
         for (i in 0 until points.size - 1) {
             val p1 = points[i]
             val p2 = points[i + 1]
+            if (p1.badCoordinates || p2.badCoordinates) continue
 
-            // Convert GeoPoints to screen coordinates
             projection.toPixels(GeoPoint(p1.latitude, p1.longitude), p1Pixels)
             projection.toPixels(GeoPoint(p2.latitude, p2.longitude), p2Pixels)
 
-            // Setup the 'honest' gradient for this specific segment
             paint.shader = LinearGradient(
                 p1Pixels.x.toFloat(), p1Pixels.y.toFloat(),
                 p2Pixels.x.toFloat(), p2Pixels.y.toFloat(),
@@ -46,6 +49,41 @@ class GradientTrackOverlay : Overlay() {
                 p2Pixels.x.toFloat(), p2Pixels.y.toFloat(),
                 paint
             )
+        }
+
+        paint.shader = null
+        var i = 0
+        while (i < points.size) {
+            if (!points[i].badCoordinates) {
+                i += 1
+                continue
+            }
+
+            val runStart = i
+            while (i < points.size && points[i].badCoordinates) i += 1
+            val runEndExclusive = i
+
+            val previousGood = points.getOrNull(runStart - 1)
+            val nextGood = points.getOrNull(runEndExclusive)
+            if (previousGood == null || nextGood == null ||
+                previousGood.badCoordinates || nextGood.badCoordinates
+            ) {
+                continue
+            }
+
+            projection.toPixels(GeoPoint(previousGood.latitude, previousGood.longitude), p1Pixels)
+            projection.toPixels(GeoPoint(nextGood.latitude, nextGood.longitude), p2Pixels)
+
+            val badPointsCount = runEndExclusive - runStart
+            for (badPointIndex in 0 until badPointsCount) {
+                val sample = points[runStart + badPointIndex]
+                val ratio = (badPointIndex + 1).toFloat() / (badPointsCount + 1).toFloat()
+                val x = p1Pixels.x + (p2Pixels.x - p1Pixels.x) * ratio
+                val y = p1Pixels.y + (p2Pixels.y - p1Pixels.y) * ratio
+
+                badPointPaint.color = DoseColorScale.colorForDose(sample.doseRate, minDose, maxDose)
+                canvas.drawCircle(x, y, paint.strokeWidth / 2f, badPointPaint)
+            }
         }
     }
 
