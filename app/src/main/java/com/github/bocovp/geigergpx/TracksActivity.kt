@@ -97,6 +97,7 @@ class TracksActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        syncBottomNavigationSelection()
         refreshTrackList()
     }
 
@@ -593,11 +594,6 @@ class TracksActivity : AppCompatActivity() {
             .edit()
             .putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selected)
             .apply()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        syncBottomNavigationSelection()
     }
 
     companion object {
