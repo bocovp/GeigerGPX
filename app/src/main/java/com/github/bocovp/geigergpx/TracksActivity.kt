@@ -38,6 +38,7 @@ class TracksActivity : AppCompatActivity() {
         intent.getStringExtra(EXTRA_SUBFOLDER_NAME)?.takeIf { it.isNotBlank() }
     }
     private var hasLoadedTrackList = false
+    private var refreshPollScheduled = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,6 +95,11 @@ class TracksActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        refreshTrackList()
+    }
+
 
     private fun syncBottomNavigationSelection() {
         binding.bottomNavigation.menu.findItem(R.id.navigation_tracks)?.isChecked = true
@@ -104,7 +110,14 @@ class TracksActivity : AppCompatActivity() {
         clearTracksWhileLoading: Boolean = false,
         rebuildCache: Boolean = false
     ) {
-        val showLoading = forceLoading || !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty(this)
+        if (rebuildCache) {
+            TrackCatalog.rebuildTrackCacheAsync(applicationContext) {
+                runOnUiThread { refreshTrackList(forceLoading = true) }
+            }
+        }
+
+        val rebuildInProgress = TrackCatalog.isTrackCacheRebuildInProgress()
+        val showLoading = forceLoading || rebuildInProgress || !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty(this)
         if (showLoading) {
             binding.loadingLabel.setText(R.string.loading_tracks)
             if (clearTracksWhileLoading) {
@@ -114,10 +127,12 @@ class TracksActivity : AppCompatActivity() {
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
         binding.tracksRecyclerView.visibility = if (showLoading) View.GONE else View.VISIBLE
 
+        if (rebuildInProgress) {
+            scheduleRefreshPoll()
+            return
+        }
+
         Thread {
-            if (rebuildCache) {
-                TrackCatalog.rebuildTrackCache(this)
-            }
             val points = viewModel.activeTrackPoints.value.orEmpty()
             val includeCurrentTrack = currentFolderName == null && viewModel.isTracking.value == true
             val items = TrackCatalog.loadTrackListItems(
@@ -141,6 +156,15 @@ class TracksActivity : AppCompatActivity() {
                 binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
             }
         }.start()
+    }
+
+    private fun scheduleRefreshPoll() {
+        if (refreshPollScheduled) return
+        refreshPollScheduled = true
+        binding.root.postDelayed({
+            refreshPollScheduled = false
+            refreshTrackList(forceLoading = true)
+        }, 500L)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
