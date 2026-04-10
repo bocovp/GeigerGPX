@@ -15,6 +15,8 @@ import java.io.BufferedWriter
 import java.io.InputStream
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val CURRENT_TRACK_ID = "active-track"
 private const val CURRENT_TRACK_TITLE = "Currently recording"
@@ -47,6 +49,8 @@ object TrackCatalog {
 
     private val parsedTrackCache = ConcurrentHashMap<String, CachedParsedTrack>()
     private val cachedSubfolders = linkedSetOf<String>()
+    private val cacheRebuildExecutor = Executors.newSingleThreadExecutor()
+    private val isCacheRebuildInProgress = AtomicBoolean(false)
     @Volatile private var diskCacheLoaded = false
 
     fun currentTrackId(): String = CURRENT_TRACK_ID
@@ -95,6 +99,21 @@ object TrackCatalog {
             snapshot.subfolders.mapTo(cachedSubfolders) { it.name }
         }
         persistTrackCache(context)
+    }
+
+    fun isTrackCacheRebuildInProgress(): Boolean = isCacheRebuildInProgress.get()
+
+    fun rebuildTrackCacheAsync(context: Context, onComplete: (() -> Unit)? = null) {
+        if (!isCacheRebuildInProgress.compareAndSet(false, true)) return
+        val appContext = context.applicationContext
+        cacheRebuildExecutor.execute {
+            try {
+                rebuildTrackCache(appContext)
+            } finally {
+                isCacheRebuildInProgress.set(false)
+                onComplete?.invoke()
+            }
+        }
     }
 
     fun loadTrackListItems(
