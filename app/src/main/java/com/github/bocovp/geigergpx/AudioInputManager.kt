@@ -26,7 +26,7 @@ class AudioInputManager(
     private val context: Context? = null,
     private val magThreshold: Float = DEFAULT_MAG_THRESHOLD,
     private val bluetoothMagThreshold: Float = DEFAULT_BLUETOOTH_MAG_THRESHOLD,
-    private val useBluetoothMicIfAvailable: Boolean = true,
+    private val useBluetoothMicIfAvailable: Boolean = false,
     private val onBeep: (Float, Int) -> Unit,
     private val onAudioHealth: (Boolean) -> Unit = {},
     private val onAudioStatus: (String, Int) -> Unit = { _, _ -> },
@@ -633,7 +633,7 @@ class AudioInputManager(
          */
         private fun useBluetoothMicIfAvailable(context: Context): Boolean {
             return PreferenceManager.getDefaultSharedPreferences(context)
-                .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true)
+                .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)
         }
     }
 }

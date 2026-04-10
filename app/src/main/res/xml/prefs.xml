@@ -20,7 +20,7 @@
         <androidx.preference.SwitchPreferenceCompat
             android:key="use_bluetooth_mic_if_available"
             android:title="Use Bluetooth mic"
-            android:defaultValue="true" />
+            android:defaultValue="false" />
 
     </PreferenceCategory>
 

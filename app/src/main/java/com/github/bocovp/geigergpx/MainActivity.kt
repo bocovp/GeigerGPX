@@ -636,7 +636,7 @@ class MainActivity : AppCompatActivity() {
             needed += Manifest.permission.RECORD_AUDIO
         }
         val bluetoothMicPreferred = PreferenceManager.getDefaultSharedPreferences(this)
-            .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true)
+            .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)
         if (bluetoothMicPreferred &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)

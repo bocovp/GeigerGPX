@@ -31,6 +31,6 @@ object ActivityCompatHelper {
     private fun shouldRequireBluetoothConnectPermission(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true)
+        return prefs.getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)
     }
 }
