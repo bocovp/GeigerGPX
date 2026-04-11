@@ -39,6 +39,7 @@ class TrackingService : Service() {
         const val ACTION_TOGGLE_MEASUREMENT_MODE = "com.github.bocovp.geigergpx.TOGGLE_MEASUREMENT_MODE"
         const val ACTION_TRACK_SAVED = "com.github.bocovp.geigergpx.TRACK_SAVED"
         const val EXTRA_TRACK_ID = "extra_track_id"
+        const val EXTRA_FOREGROUND_DISPATCH = "extra_foreground_dispatch"
 
         // 10 minutes
         private const val BACKUP_INTERVAL_MS = 10 * 60 * 1000L
@@ -174,28 +175,47 @@ class TrackingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // 2. Immediately satisfy the system's foreground requirement
-        when (intent?.action) {
-            ACTION_START_MONITORING, ACTION_START -> {
-                val notification = notificationManager.buildTrackingNotification("Initializing...")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(TrackingNotificationManager.NOTIF_ID, notification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-                } else {
-                    startForeground(TrackingNotificationManager.NOTIF_ID, notification)
-                }
-            }
+        val action = intent?.action
+        val launchedAsForeground = intent?.getBooleanExtra(EXTRA_FOREGROUND_DISPATCH, false) == true
+        if (launchedAsForeground) {
+            ensureForegroundDispatchContract(action)
         }
 
-        when (intent?.action) {
+        when (action) {
             ACTION_START_MONITORING -> startMonitoring()
             ACTION_STOP_MONITORING -> stopMonitoring()
             ACTION_START -> startTracking()
             ACTION_STOP -> stopTracking()
             ACTION_CANCEL_TRACK -> cancelTracking()
             ACTION_TOGGLE_MEASUREMENT_MODE -> toggleMeasurementMode()
+            else -> {
+                if (launchedAsForeground) {
+                    android.util.Log.w("TrackingService", "Ignoring unknown foreground-dispatched action=$action")
+                }
+            }
         }
         return START_STICKY
+    }
+
+    private fun ensureForegroundDispatchContract(action: String?) {
+        val status = when (action) {
+            ACTION_START -> "Tracking..."
+            ACTION_START_MONITORING -> "Monitoring..."
+            ACTION_STOP, ACTION_CANCEL_TRACK -> "Stopping..."
+            ACTION_STOP_MONITORING -> "Stopping monitoring..."
+            ACTION_TOGGLE_MEASUREMENT_MODE -> "Updating measurement mode..."
+            else -> "Processing request..."
+        }
+        val notification = notificationManager.buildTrackingNotification(status)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                TrackingNotificationManager.NOTIF_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            )
+        } else {
+            startForeground(TrackingNotificationManager.NOTIF_ID, notification)
+        }
     }
 
 
