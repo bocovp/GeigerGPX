@@ -111,29 +111,39 @@ class ConfidenceInterval {
     }
 
     fun chi2L(n: Int): Float {
-        return if (n <= 11) CHI2_L[n] else chi2(2*n, -Z_95)
+        val index = n.coerceAtLeast(0)
+        return if (index <= 11) CHI2_L[index] else chi2(2 * index, -Z_95)
     }
 
     fun chi2R(n: Int): Float {
-        return if (n <= 11) CHI2_R[n] else chi2(2*n, Z_95)
+        val index = n.coerceAtLeast(0)
+        return if (index <= 11) CHI2_R[index] else chi2(2 * index, Z_95)
     }
 
-    constructor(tStart: Double, tEnd: Double, eventsInside: Int, eventAtEnd:Boolean){
+    constructor(tStart: Double, tEnd: Double, eventsInside: Int, eventAtEnd: Boolean) {
         val duration = (tEnd - tStart).toFloat()
-        sampleCount = eventsInside
-        val n = eventsInside         // Total count of events excluding boundaries
+        sampleCount = eventsInside.coerceAtLeast(0)
+        if (duration <= 0.0f || eventsInside < 0) {
+            mean = 0.0
+            delta = 0.0
+            lowBound = 0.0
+            highBound = 0.0
+            return
+        }
+
+        val n = eventsInside // Total count of events excluding boundaries
         val add = if (eventAtEnd) 1 else 0
 
         val invDuration2 = 0.5f / duration
 
-        lowBound = (chi2L(n + add) * invDuration2).toDouble()
-        highBound = (chi2R(n + 1) * invDuration2).toDouble()
+        lowBound = (chi2L((n + add).coerceAtLeast(0)) * invDuration2).toDouble()
+        highBound = (chi2R((n + 1).coerceAtLeast(0)) * invDuration2).toDouble()
 
         val meanF = n.toFloat() / duration
         mean = meanF.toDouble()
         delta = when (n) {
             0 -> highBound
-            1 ->  (meanF * Z_95).toDouble()
+            1 -> (meanF * Z_95).toDouble()
             else -> {
                 val root = sqrt((n - add).toFloat())
                 (meanF * Z_95 / root).toDouble() // This is simply CI for normal distribution

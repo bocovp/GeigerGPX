@@ -515,15 +515,17 @@ class MainActivity : AppCompatActivity() {
             // if onBeep we have only n-1 intervals ot analyze (t1->t2) (t2->t1) ... (t{n-1}->tn)
             //ConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
 
-            // if onBeep we the last point ends the interval and thus not counted
-            ConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount - ignoredFirst - 1, true) // disregarding t1 and tn
+            // Clamp because sampleCount - ignoredFirst - 1 can go negative during startup/race updates.
+            val eventsInside = (latestCpsSnapshot.sampleCount - ignoredFirst - 1).coerceAtLeast(0)
+            ConfidenceInterval(t1, tn, eventsInside, true) // disregarding t1 and tn
         } else {
             val t_now = System.currentTimeMillis().toDouble() / 1000.0
             // if not onBeep we have n intervals: (t1->t2) (t2->t1) ... (t{n-1}->tn) and (tn->now)
             //ConfidenceInterval(t1, t_now, latestCpsSnapshot.sampleCount + 1)
 
-            // if not onBeep the last point is inside the intervsal
-            ConfidenceInterval(t1, t_now, latestCpsSnapshot.sampleCount - ignoredFirst, false) // disregarding t1
+            // Clamp because sampleCount - ignoredFirst can be transiently negative with incomplete windows.
+            val eventsInside = (latestCpsSnapshot.sampleCount - ignoredFirst).coerceAtLeast(0)
+            ConfidenceInterval(t1, t_now, eventsInside, false) // disregarding t1
         }
 
         val doseRateMean = ci.mean * coeff
