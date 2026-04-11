@@ -29,6 +29,7 @@ import android.view.WindowManager
 import android.widget.EditText
 import android.widget.TextView
 import android.os.Build
+import android.util.Log
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
@@ -134,10 +135,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.buttonMeasurementMode.setOnClickListener {
-            val intent = Intent(this, TrackingService::class.java).apply {
-                action = TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE
-            }
-            startService(intent)
+            dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE)
         }
 
         binding.buttonSavePoi.setOnClickListener {
@@ -315,6 +313,9 @@ class MainActivity : AppCompatActivity() {
         unregisterTrackSavedReceiverIfNeeded()
         stopCpsRefreshLoop()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // onPause can coincide with a foreground->background transition.
+        // During that handoff, plain startService() may throw IllegalStateException.
+        // dispatchTrackingAction() uses foreground-safe dispatch so we never crash.
         // Keep monitoring active in background while tracking or while
         // measurement mode is enabled.
         if (viewModel.isTracking.value != true && !isMeasurementModeEnabled) {
@@ -470,10 +471,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (isMeasurementModeEnabled) {
-                    val intent = Intent(this, TrackingService::class.java).apply {
-                        action = TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE
-                    }
-                    startService(intent)
+                    dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE)
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -565,27 +563,35 @@ class MainActivity : AppCompatActivity() {
 
     private fun cancelTracking() {
         openSavedTrackPlotAfterStop = false
-        val intent = Intent(this, TrackingService::class.java).apply {
-            action = TrackingService.ACTION_CANCEL_TRACK
-        }
-        startService(intent)
+        dispatchTrackingAction(TrackingService.ACTION_CANCEL_TRACK)
     }
 
     private fun startTracking() {
         openSavedTrackPlotAfterStop = false
         TimePlotActivity.rememberCurrentTrackSelection(this)
-        val intent = Intent(this, TrackingService::class.java).apply {
-            action = TrackingService.ACTION_START
-        }
-        startForegroundService(intent)
+        dispatchTrackingAction(TrackingService.ACTION_START)
     }
 
     private fun stopTracking() {
         openSavedTrackPlotAfterStop = true
+        dispatchTrackingAction(TrackingService.ACTION_STOP)
+    }
+
+    private fun dispatchTrackingAction(action: String) {
         val intent = Intent(this, TrackingService::class.java).apply {
-            action = TrackingService.ACTION_STOP
+            this.action = action
+            putExtra(TrackingService.EXTRA_FOREGROUND_DISPATCH, true)
         }
-        startService(intent)
+        try {
+            ContextCompat.startForegroundService(this, intent)
+        } catch (error: IllegalStateException) {
+            Log.w("MainActivity", "Unable to dispatch TrackingService action=$action", error)
+            Toast.makeText(
+                this,
+                "Tracking action was delayed by Android background restrictions.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     private fun registerTrackSavedReceiverIfNeeded() {
@@ -662,18 +668,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun startMonitoring() {
         if (ensurePermissions()) {
-            val intent = Intent(this, TrackingService::class.java).apply {
-                action = TrackingService.ACTION_START_MONITORING
-            }
-            startService(intent)
+            dispatchTrackingAction(TrackingService.ACTION_START_MONITORING)
         }
     }
 
     private fun stopMonitoring() {
-        val intent = Intent(this, TrackingService::class.java).apply {
-            action = TrackingService.ACTION_STOP_MONITORING
-        }
-        startService(intent)
+        dispatchTrackingAction(TrackingService.ACTION_STOP_MONITORING)
     }
 
     private fun isIgnoringBatteryOptimizations(): Boolean {
