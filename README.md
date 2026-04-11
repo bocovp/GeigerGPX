@@ -19,7 +19,7 @@ No modification to the radiometer is required; signals are recorded via the micr
 
 ## Screenshots
 
-![Main screen](/screenshots/Main.jpg?raw=true "Main screen")
+![Main screen](../../screenshots/Main.jpg?raw=true "Main screen")
 
 
 
