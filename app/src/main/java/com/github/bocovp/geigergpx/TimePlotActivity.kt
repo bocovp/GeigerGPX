@@ -208,7 +208,7 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun updateSliderDescription(valueMinutes: Float) {
-        binding.topAppBar.subtitle = "Min point duration: ${"%.1f".format(java.util.Locale.US, valueMinutes)} min"
+        binding.topAppBar.subtitle = "Averaging window: ${"%.1f".format(java.util.Locale.US, valueMinutes)} min"
     }
 
     private fun internalSliderToDurationMinutes(sliderInternalValue: Float): Float {
