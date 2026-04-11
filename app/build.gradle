@@ -16,7 +16,7 @@ android {
         minSdk 26
         targetSdk 34
         versionCode 1
-        versionName "1.0"
+        versionName "1.0-beta.1"
     }
 
     buildFeatures {
@@ -28,6 +28,11 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "GeigerGPX-${variant.name}-${defaultConfig.versionName}.apk"
+        }
+    }
 }
 
 dependencies {
