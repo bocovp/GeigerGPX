@@ -17,6 +17,9 @@ No modification to the radiometer is required; signals are recorded via the micr
 - **Experimental Bluetooth audio input:** Audio capture from Bluetooth headsets is supported as an experimental feature, but it is way less stable and provides lower quality as compared to built-in or wired microphone capture.
 - **High-rate limitation warning:** At high dose rates, RD-1008 may not emit all pulses audibly, so phone-side estimates can be biased low.
 
-## Notes
+## Screenshots
 
-- The application is intended for practical field logging and post-analysis; for high-dose scenarios, rely on instrument-native readings as the primary source.
+![Main screen](/screenshots/Main.jpg?raw=true "Main screen")
+
+
+
