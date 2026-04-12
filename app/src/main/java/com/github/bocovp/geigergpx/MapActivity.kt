@@ -129,6 +129,7 @@ class MapActivity : AppCompatActivity() {
                 val moved = trackMapRenderer.autoZoomToSelection(animate = true)
                 if (moved) {
                     suppressMapMoveEventsTemporarily()
+                    rememberViewportAfterProgrammaticAutoZoom()
                 }
                 true
             }
@@ -150,14 +151,12 @@ class MapActivity : AppCompatActivity() {
         super.onResume()
         syncBottomNavigationSelection()
         binding.mapView.onResume()
-        if (isAutoZoomDisabledByUser) {
-            rememberedViewportState?.let { trackMapRenderer.restoreViewport(it) }
-        }
+        rememberedViewportState?.let { trackMapRenderer.restoreViewport(it) }
         refreshMapTracks(latestActivePoints)
     }
 
     override fun onPause() {
-        if (isAutoZoomDisabledByUser && hasVisibleMapContent) {
+        if (hasVisibleMapContent) {
             rememberedViewportState = trackMapRenderer.currentViewportState()
         }
         binding.mapView.onPause()
@@ -247,11 +246,21 @@ class MapActivity : AppCompatActivity() {
                 )
                 if (autoFitApplied) {
                     suppressMapMoveEventsTemporarily()
+                    rememberViewportAfterProgrammaticAutoZoom()
                 }
                 hasVisibleMapContent = visibleTracks.isNotEmpty() || poiMapItems.isNotEmpty()
                 binding.loadingLabel.visibility = View.GONE
             }
         }.start()
+    }
+
+
+    private fun rememberViewportAfterProgrammaticAutoZoom() {
+        binding.mapView.postDelayed({
+            if (hasVisibleMapContent) {
+                rememberedViewportState = trackMapRenderer.currentViewportState()
+            }
+        }, 1600L)
     }
 
     private fun onUserMapMoved() {
