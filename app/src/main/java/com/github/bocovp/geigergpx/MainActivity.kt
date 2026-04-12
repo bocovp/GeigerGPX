@@ -57,13 +57,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val cpsRefreshHandler = Handler(Looper.getMainLooper())
-    private val cpsRefreshRunnable = object : Runnable {
+    private val uiRefreshHandler = Handler(Looper.getMainLooper())
+    private val uiRefreshRunnable = object : Runnable {
         override fun run() {
             updateCpsOrDoseLine(false)
-            cpsRefreshHandler.postDelayed(this, 1000L)
+            refreshTrackDurationFromTimer()
+            updateCountDisplay()
+            uiRefreshHandler.postDelayed(this, 1000L)
         }
     }
+    private var trackDurationBaseSeconds: Long = 0L
+    private var trackDurationBaseTimestampMillis: Long = 0L
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -304,14 +308,16 @@ class MainActivity : AppCompatActivity() {
         syncBottomNavigationSelection()
         applyKeepScreenOnFlag()
         updateCpsOrDoseLine(false)
-        startCpsRefreshLoop()
+        refreshTrackDurationFromTimer()
+        updateCountDisplay()
+        startUiRefreshLoop()
         startMonitoring()
     }
 
     override fun onPause() {
         super.onPause()
         unregisterTrackSavedReceiverIfNeeded()
-        stopCpsRefreshLoop()
+        stopUiRefreshLoop()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // onPause can coincide with a foreground->background transition.
         // During that handoff, plain startService() may throw IllegalStateException.
@@ -323,13 +329,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startCpsRefreshLoop() {
-        cpsRefreshHandler.removeCallbacks(cpsRefreshRunnable)
-        cpsRefreshHandler.postDelayed(cpsRefreshRunnable, 1000L)
+    private fun startUiRefreshLoop() {
+        uiRefreshHandler.removeCallbacks(uiRefreshRunnable)
+        uiRefreshHandler.postDelayed(uiRefreshRunnable, 1000L)
     }
 
-    private fun stopCpsRefreshLoop() {
-        cpsRefreshHandler.removeCallbacks(cpsRefreshRunnable)
+    private fun stopUiRefreshLoop() {
+        uiRefreshHandler.removeCallbacks(uiRefreshRunnable)
+    }
+
+    private fun refreshTrackDurationFromTimer() {
+        val tracking = viewModel.isTracking.value ?: false
+        val seconds = if (tracking) {
+            val elapsed = ((System.currentTimeMillis() - trackDurationBaseTimestampMillis) / 1000L)
+                .coerceAtLeast(0L)
+            trackDurationBaseSeconds + elapsed
+        } else {
+            trackDurationBaseSeconds
+        }
+        binding.textDuration.text = "Duration: ${TrackingRepository.formatDuration(seconds)}"
     }
 
     private fun updateCountDisplay(
@@ -366,8 +384,10 @@ class MainActivity : AppCompatActivity() {
             updateCountDisplay(isTracking = tracking)
         }
 
-        viewModel.durationText.observe(this) {
-            binding.textDuration.text = "Duration: $it"
+        viewModel.trackDurationSeconds.observe(this) { seconds ->
+            trackDurationBaseSeconds = seconds
+            trackDurationBaseTimestampMillis = System.currentTimeMillis()
+            refreshTrackDurationFromTimer()
         }
 
         viewModel.distanceMeters.observe(this) { dist ->
