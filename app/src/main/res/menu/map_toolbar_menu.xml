@@ -3,6 +3,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <!-- Usage: Toggles between standard lines and heatmap overlay -->
     <item
+        android:id="@+id/action_auto_zoom"
+        android:icon="@drawable/baseline_refresh_24"
+        android:title="Auto Zoom"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/action_toggle_heatmap"
         android:icon="@drawable/baseline_scatter_plot_24"
         android:title="Show Heatmap"

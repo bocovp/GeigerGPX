@@ -20,6 +20,10 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
 class MapActivity : AppCompatActivity() {
+    companion object {
+        private var rememberedViewportState: TrackMapRenderer.MapViewportState? = null
+        private var isAutoZoomDisabledByUser: Boolean = false
+    }
 
     private lateinit var binding: ActivityMapBinding
     private lateinit var trackMapRenderer: TrackMapRenderer
@@ -29,6 +33,8 @@ class MapActivity : AppCompatActivity() {
     private var latestActivePoints: List<TrackPoint> = emptyList()
     private val mapLoadRequestSequence = AtomicInteger(0)
     private var hasLoadedMapTracks = false
+    private var hasVisibleMapContent = false
+    private var ignoreMapMoveEventsUntilMillis: Long = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,13 +72,18 @@ class MapActivity : AppCompatActivity() {
 
         binding.mapView.setTileSource(TileSourceFactory.MAPNIK)
         binding.mapView.setMultiTouchControls(true)
+        binding.mapView.controller.setZoom(5.0)
         binding.mapView.zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
         binding.zoomInButton.setOnClickListener { binding.mapView.controller.zoomIn() }
         binding.zoomOutButton.setOnClickListener { binding.mapView.controller.zoomOut() }
         binding.mapView.addMapListener(object : MapListener {
-            override fun onScroll(event: ScrollEvent?): Boolean = false
+            override fun onScroll(event: ScrollEvent?): Boolean {
+                onUserMapMoved()
+                return false
+            }
 
             override fun onZoom(event: ZoomEvent?): Boolean {
+                onUserMapMoved()
                 refreshMapTracks(latestActivePoints)
                 return false
             }
@@ -114,6 +125,13 @@ class MapActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_auto_zoom -> {
+                val moved = trackMapRenderer.autoZoomToSelection(animate = true)
+                if (moved) {
+                    suppressMapMoveEventsTemporarily()
+                }
+                true
+            }
             R.id.action_toggle_heatmap -> {
                 isHeatmapMode = !isHeatmapMode
                 invalidateOptionsMenu()
@@ -132,10 +150,16 @@ class MapActivity : AppCompatActivity() {
         super.onResume()
         syncBottomNavigationSelection()
         binding.mapView.onResume()
+        if (isAutoZoomDisabledByUser) {
+            rememberedViewportState?.let { trackMapRenderer.restoreViewport(it) }
+        }
         refreshMapTracks(latestActivePoints)
     }
 
     override fun onPause() {
+        if (isAutoZoomDisabledByUser && hasVisibleMapContent) {
+            rememberedViewportState = trackMapRenderer.currentViewportState()
+        }
         binding.mapView.onPause()
         super.onPause()
     }
@@ -215,14 +239,34 @@ class MapActivity : AppCompatActivity() {
                     return@runOnUiThread
                 }
                 hasLoadedMapTracks = true
-                trackMapRenderer.renderTracks(
+                val autoFitApplied = trackMapRenderer.renderTracks(
                     tracks = visibleTracks,
                     pois = poiMapItems,
-                    isHeatmapMode = isHeatmapMode
+                    isHeatmapMode = isHeatmapMode,
+                    shouldAutoFit = !isAutoZoomDisabledByUser
                 )
+                if (autoFitApplied) {
+                    suppressMapMoveEventsTemporarily()
+                }
+                hasVisibleMapContent = visibleTracks.isNotEmpty() || poiMapItems.isNotEmpty()
                 binding.loadingLabel.visibility = View.GONE
             }
         }.start()
+    }
+
+    private fun onUserMapMoved() {
+        if (System.currentTimeMillis() < ignoreMapMoveEventsUntilMillis) {
+            return
+        }
+        if (!hasVisibleMapContent) {
+            return
+        }
+        isAutoZoomDisabledByUser = true
+        rememberedViewportState = trackMapRenderer.currentViewportState()
+    }
+
+    private fun suppressMapMoveEventsTemporarily() {
+        ignoreMapMoveEventsUntilMillis = System.currentTimeMillis() + 1500L
     }
 
     private fun ensurePoiSelectionInitialized(allPoiIds: Set<String>): Set<String> {
