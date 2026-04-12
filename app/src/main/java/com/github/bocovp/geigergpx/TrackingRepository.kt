@@ -29,8 +29,11 @@ class TrackingRepository {
     private val _isTracking = MutableLiveData(false)
     val isTracking: LiveData<Boolean> = _isTracking
 
-    private val _durationText = MutableLiveData("00:00:00")
-    val durationText: LiveData<String> = _durationText
+    private val _trackDurationText = MutableLiveData("00:00:00")
+    val trackDurationText: LiveData<String> = _trackDurationText
+
+    private val _trackDurationSeconds = MutableLiveData(0L)
+    val trackDurationSeconds: LiveData<Long> = _trackDurationSeconds
 
     private val _distanceMeters = MutableLiveData(0.0)
     val distanceMeters: LiveData<Double> = _distanceMeters
@@ -65,14 +68,15 @@ class TrackingRepository {
 
     fun updateStatus(
         tracking: Boolean,
-        durationSeconds: Long,
+        trackDurationSeconds: Long,
         distance: Double,
         points: Int,
         cpsSnapshot: CpsSnapshot,
         gpsStatus: String
     ) {
         _isTracking.postValue(tracking)
-        _durationText.postValue(formatDuration(durationSeconds))
+        _trackDurationSeconds.postValue(trackDurationSeconds)
+        _trackDurationText.postValue(formatDuration(trackDurationSeconds))
         _distanceMeters.postValue(distance)
         _pointCount.postValue(points)
         _cpsUpdate.postValue(CpsUpdate(snapshot = cpsSnapshot, onBeep = false))
@@ -125,16 +129,17 @@ class TrackingRepository {
     /** Get the latest global total beep count. */
     fun getTotalCounts(): Int = totalCounter.get()
 
-    private fun formatDuration(sec: Long): String {
-        val h = sec / 3600
-        val m = (sec % 3600) / 60
-        val s = sec % 60
-        return String.format("%02d:%02d:%02d", h, m, s)
-    }
-
     companion object {
         const val AUDIO_STATUS_WAITING = 0
         const val AUDIO_STATUS_WORKING = 1
         const val AUDIO_STATUS_ERROR = 2
+
+        fun formatDuration(sec: Long): String {
+            val safe = sec.coerceAtLeast(0L)
+            val h = safe / 3600
+            val m = (safe % 3600) / 60
+            val s = safe % 60
+            return String.format("%02d:%02d:%02d", h, m, s)
+        }
     }
 }

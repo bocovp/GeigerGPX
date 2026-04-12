@@ -307,7 +307,7 @@ class TrackingService : Service() {
         repo.setActiveTrackPoints(emptyList())
         repo.updateStatus(
             tracking = true,
-            durationSeconds = 0,
+            trackDurationSeconds = 0,
             distance = 0.0,
             points = 0,
             cpsSnapshot = doseRateMeasurement.currentSnapshot(),
@@ -317,7 +317,7 @@ class TrackingService : Service() {
     }
 
     private data class TrackStopStats(
-        val durationSeconds: Long,
+        val trackDurationSeconds: Long,
         val distance: Double,
         val points: Int
     )
@@ -332,7 +332,7 @@ class TrackingService : Service() {
             notificationManager.postTrackingNotification("Monitoring...")
             repo.updateStatus(
                 tracking = false,
-                durationSeconds = stats.durationSeconds,
+                trackDurationSeconds = stats.trackDurationSeconds,
                 distance = stats.distance,
                 points = stats.points,
                 cpsSnapshot = doseRateMeasurement.currentSnapshot(),
@@ -343,7 +343,7 @@ class TrackingService : Service() {
             stopBeepDetector()
             repo.updateStatus(
                 tracking = false,
-                durationSeconds = stats.durationSeconds,
+                trackDurationSeconds = stats.trackDurationSeconds,
                 distance = stats.distance,
                 points = stats.points,
                 cpsSnapshot = doseRateMeasurement.currentSnapshot(),
@@ -366,13 +366,13 @@ class TrackingService : Service() {
         stopGpsFallbackLoop()
         GpxWriter.deleteBackupIfExists(this)
         repo.discardTrackCounts()
-        stopTrackingSession(TrackStopStats(durationSeconds = 0, distance = 0.0, points = 0))
+        stopTrackingSession(TrackStopStats(trackDurationSeconds = 0, distance = 0.0, points = 0))
     }
 
     private fun stopTracking() {
         if (!trackWriter.isTracking()) return
 
-        val finalDurationSeconds = trackWriter.elapsedSeconds(System.currentTimeMillis())
+        val finalTrackDurationSeconds = trackWriter.elapsedSeconds(System.currentTimeMillis())
         val finalDistance = trackWriter.totalDistance
 
         stopBackupLoop()
@@ -398,7 +398,7 @@ class TrackingService : Service() {
         repo.finalizeTrackCounts()
         stopTrackingSession(
             TrackStopStats(
-                durationSeconds = finalDurationSeconds,
+                trackDurationSeconds = finalTrackDurationSeconds,
                 distance = finalDistance,
                 points = finalPointCount
             )
@@ -432,7 +432,7 @@ class TrackingService : Service() {
         val gpsSpoofingState = gpsSpoofingDetector.process(loc, maxSpeedKmh, now)
         lastObservedLocation = Location(loc)
         val tracking = trackWriter.isTracking()
-        val elapsedSec = if (tracking) trackWriter.elapsedSeconds(now) else 0
+        val elapsedTrackSeconds = if (tracking) trackWriter.elapsedSeconds(now) else 0
 
         if (!tracking) {
             updateMonitoringStats(now)
@@ -471,7 +471,7 @@ class TrackingService : Service() {
                 repo.setActiveTrackPoints(snapshot)
             }
 
-            updateStats(elapsedSec, now)
+            updateStats(elapsedTrackSeconds, now)
         }
     }
 
@@ -482,12 +482,12 @@ class TrackingService : Service() {
         repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = false)
     }
 
-    private fun updateStats(elapsedSec: Long, nowMillis: Long) {
+    private fun updateStats(elapsedTrackSeconds: Long, nowMillis: Long) {
         val gpsStatus = gpsSpoofingDetector.getStatusString(nowMillis)
         val currentSize = trackWriter.pointCount()
         repo.updateStatus(
             tracking = true,
-            durationSeconds = elapsedSec,
+            trackDurationSeconds = elapsedTrackSeconds,
             distance = trackWriter.totalDistance,
             points = currentSize,
             cpsSnapshot = doseRateMeasurement.currentSnapshot(),
