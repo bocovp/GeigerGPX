@@ -12,6 +12,11 @@ class TrackMapRenderer(
     private val tvHalf: TextView?,
     private val tvMax: TextView?
 ) {
+    data class MapViewportState(
+        val latitude: Double,
+        val longitude: Double,
+        val zoomLevel: Double
+    )
 
     private val trackOverlays = mutableMapOf<String, GradientTrackOverlay>()
     private var poiOverlay: PoiOverlay? = null
@@ -21,12 +26,16 @@ class TrackMapRenderer(
     private var lastMaxDose = Double.NEGATIVE_INFINITY
     private var lastRenderFingerprint: String = ""
     private var lastGeneralizationZoomLevel: Double? = null
+    private var lastRenderedTracks: List<MapTrack> = emptyList()
+    private var lastRenderedPois: List<PoiMapItem> = emptyList()
+    private var lastFallbackPoint: GeoPoint? = null
 
     fun renderTracks(
         tracks: List<MapTrack>,
         pois: List<PoiMapItem>,
-        isHeatmapMode: Boolean
-    ) {
+        isHeatmapMode: Boolean,
+        shouldAutoFit: Boolean
+    ): Boolean {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
         val doseCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
@@ -66,6 +75,7 @@ class TrackMapRenderer(
 
         var latestPoint: GeoPoint? = null
         var shouldInvalidate = false
+        var autoFitApplied = false
 
         if (isHeatmapMode) {
             if (trackOverlays.isNotEmpty()) {
@@ -161,46 +171,79 @@ class TrackMapRenderer(
             append(pois.map { it.id }.sorted().joinToString(","))
         }
         val datasetChanged = renderFingerprint != lastRenderFingerprint
-        if (datasetChanged) {
-            fitToSelection(tracks, pois, latestPoint)
+        if (datasetChanged && shouldAutoFit) {
+            autoFitApplied = fitToSelection(tracks, pois, latestPoint, animate = true)
             lastRenderFingerprint = renderFingerprint
             shouldInvalidate = true
+        } else if (datasetChanged) {
+            lastRenderFingerprint = renderFingerprint
         }
+
+        lastRenderedTracks = tracks
+        lastRenderedPois = pois
+        lastFallbackPoint = latestPoint
 
         if (shouldInvalidate) {
             mapView.invalidate()
         }
+        return autoFitApplied
     }
 
-    private fun fitToSelection(tracks: List<MapTrack>, pois: List<PoiMapItem>, fallbackPoint: GeoPoint?) {
+    fun autoZoomToSelection(animate: Boolean): Boolean {
+        return fitToSelection(lastRenderedTracks, lastRenderedPois, lastFallbackPoint, animate)
+    }
+
+    fun restoreViewport(viewportState: MapViewportState) {
+        mapView.controller.setCenter(GeoPoint(viewportState.latitude, viewportState.longitude))
+        mapView.controller.setZoom(viewportState.zoomLevel)
+    }
+
+    fun currentViewportState(): MapViewportState {
+        val center = mapView.mapCenter
+        return MapViewportState(
+            latitude = center.latitude,
+            longitude = center.longitude,
+            zoomLevel = mapView.zoomLevelDouble
+        )
+    }
+
+    private fun fitToSelection(
+        tracks: List<MapTrack>,
+        pois: List<PoiMapItem>,
+        fallbackPoint: GeoPoint?,
+        animate: Boolean
+    ): Boolean {
         val trackGeoPoints = tracks
             .flatMap { track -> track.points.filterNot { it.badCoordinates } }
             .map { sample -> GeoPoint(sample.latitude, sample.longitude) }
 
         if (trackGeoPoints.isNotEmpty()) {
-            fitToPoints(trackGeoPoints, fallbackPoint)
-            return
+            return fitToPoints(trackGeoPoints, fallbackPoint, animate)
         }
 
         val poiGeoPoints = pois.map { poi -> GeoPoint(poi.latitude, poi.longitude) }
-        fitToPoints(poiGeoPoints, fallbackPoint)
+        return fitToPoints(poiGeoPoints, fallbackPoint, animate)
     }
 
-    private fun fitToPoints(geoPoints: List<GeoPoint>, fallbackPoint: GeoPoint?) {
+    private fun fitToPoints(geoPoints: List<GeoPoint>, fallbackPoint: GeoPoint?, animate: Boolean): Boolean {
         when {
             geoPoints.size > 1 -> {
                 val boundingBox = BoundingBox.fromGeoPointsSafe(geoPoints)
-                mapView.zoomToBoundingBox(boundingBox, true, 64)
+                mapView.zoomToBoundingBox(boundingBox, animate, 64)
+                return true
             }
             geoPoints.size == 1 -> {
                 mapView.controller.setCenter(geoPoints.first())
                 mapView.controller.setZoom(18.0)
+                return true
             }
             fallbackPoint != null -> {
                 mapView.controller.setCenter(fallbackPoint)
                 mapView.controller.setZoom(18.0)
+                return true
             }
         }
+        return false
     }
 
     private fun removeDeletedTracks(activeIds: Set<String>) {
