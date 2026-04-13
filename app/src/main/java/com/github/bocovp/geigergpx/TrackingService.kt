@@ -93,6 +93,7 @@ class TrackingService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var backupJob: kotlinx.coroutines.Job? = null
     private var gpsFallbackJob: kotlinx.coroutines.Job? = null
+    private var uiTickJob: kotlinx.coroutines.Job? = null
 
     private lateinit var prefs: SharedPreferences
     @Volatile private var maxSpeedKmh: Double = 30.0
@@ -143,6 +144,7 @@ class TrackingService : Service() {
         runningInstance = null
         stopBackupLoop()
         stopGpsFallbackLoop()
+        stopUiTickLoop()
         fusedLocation.removeLocationUpdates(locationCallback)
         stopBeepDetector()
         alertRingtone?.stop()
@@ -231,6 +233,7 @@ class TrackingService : Service() {
             fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
             repo.updateAudioStatus("Working", TrackingRepository.AUDIO_STATUS_WORKING)
             startBeepDetector()
+            startUiTickLoop()
             repo.updateMonitoringStatus(gpsStatus = "Waiting")
         } else {
             isMonitoring = false
@@ -251,6 +254,7 @@ class TrackingService : Service() {
         // Only stop foreground and self-destruct if not tracking
         if (!trackWriter.isTracking()) {
             stopSelf()
+            stopUiTickLoop()
         } else {
             // Still tracking: downgrade notification to indicate background tracking
             notificationManager.postTrackingNotification("Tracking (background)...")
@@ -302,17 +306,13 @@ class TrackingService : Service() {
 
         startBackupLoop()
         startGpsFallbackLoop()
+        startUiTickLoop()
 
         repo.beginNewTrack()
         repo.setActiveTrackPoints(emptyList())
-        repo.updateStatus(
-            tracking = true,
-            trackDurationSeconds = 0,
-            distance = 0.0,
-            points = 0,
-            cpsSnapshot = doseRateMeasurement.currentSnapshot(),
-            gpsStatus = "Waiting"
-        )
+        repo.updateTrackDuration(0)
+        repo.updateTrackGeometry(distance = 0.0, points = 0)
+        repo.updateTrackingState(tracking = true, gpsStatus = "Waiting")
         repo.updateAudioStatus("Working", TrackingRepository.AUDIO_STATUS_WORKING)
     }
 
@@ -330,25 +330,15 @@ class TrackingService : Service() {
 
         if (isMonitoring) {
             notificationManager.postTrackingNotification("Monitoring...")
-            repo.updateStatus(
-                tracking = false,
-                trackDurationSeconds = stats.trackDurationSeconds,
-                distance = stats.distance,
-                points = stats.points,
-                cpsSnapshot = doseRateMeasurement.currentSnapshot(),
-                gpsStatus = repo.gpsStatus.value ?: "Waiting"
-            )
+            repo.updateTrackDuration(stats.trackDurationSeconds)
+            repo.updateTrackGeometry(distance = stats.distance, points = stats.points)
+            repo.updateTrackingState(tracking = false, gpsStatus = repo.gpsStatus.value ?: "Waiting")
         } else {
             fusedLocation.removeLocationUpdates(locationCallback)
             stopBeepDetector()
-            repo.updateStatus(
-                tracking = false,
-                trackDurationSeconds = stats.trackDurationSeconds,
-                distance = stats.distance,
-                points = stats.points,
-                cpsSnapshot = doseRateMeasurement.currentSnapshot(),
-                gpsStatus = "Waiting"
-            )
+            repo.updateTrackDuration(stats.trackDurationSeconds)
+            repo.updateTrackGeometry(distance = stats.distance, points = stats.points)
+            repo.updateTrackingState(tracking = false, gpsStatus = "Waiting")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
             } else {
@@ -356,6 +346,7 @@ class TrackingService : Service() {
                 stopForeground(true)
             }
             stopSelf()
+            stopUiTickLoop()
         }
     }
 
@@ -432,7 +423,6 @@ class TrackingService : Service() {
         val gpsSpoofingState = gpsSpoofingDetector.process(loc, maxSpeedKmh, now)
         lastObservedLocation = Location(loc)
         val tracking = trackWriter.isTracking()
-        val elapsedTrackSeconds = if (tracking) trackWriter.elapsedSeconds(now) else 0
 
         if (!tracking) {
             updateMonitoringStats(now)
@@ -469,9 +459,11 @@ class TrackingService : Service() {
 
             result.snapshot?.let { snapshot ->
                 repo.setActiveTrackPoints(snapshot)
+                repo.updateTrackGeometry(
+                    distance = trackWriter.totalDistance,
+                    points = snapshot.size
+                )
             }
-
-            updateStats(elapsedTrackSeconds, now)
         }
     }
 
@@ -480,19 +472,6 @@ class TrackingService : Service() {
         val enabled = doseRateMeasurement.toggleMeasurementMode()
         repo.updateMeasurementMode(enabled)
         repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = false)
-    }
-
-    private fun updateStats(elapsedTrackSeconds: Long, nowMillis: Long) {
-        val gpsStatus = gpsSpoofingDetector.getStatusString(nowMillis)
-        val currentSize = trackWriter.pointCount()
-        repo.updateStatus(
-            tracking = true,
-            trackDurationSeconds = elapsedTrackSeconds,
-            distance = trackWriter.totalDistance,
-            points = currentSize,
-            cpsSnapshot = doseRateMeasurement.currentSnapshot(),
-            gpsStatus = gpsStatus
-        )
     }
 
     private fun updateMonitoringStats(nowMillis: Long) {
@@ -659,8 +638,11 @@ class TrackingService : Service() {
                 )
                 result.snapshot?.let { snapshot ->
                     repo.setActiveTrackPoints(snapshot)
+                    repo.updateTrackGeometry(
+                        distance = trackWriter.totalDistance,
+                        points = snapshot.size
+                    )
                 }
-                updateStats(trackWriter.elapsedSeconds(now), now)
             }
         }
     }
@@ -668,6 +650,26 @@ class TrackingService : Service() {
     private fun stopGpsFallbackLoop() {
         gpsFallbackJob?.cancel()
         gpsFallbackJob = null
+    }
+
+    private fun startUiTickLoop() {
+        uiTickJob?.cancel()
+        uiTickJob = serviceScope.launch {
+            while (isActive && (isMonitoring || trackWriter.isTracking())) {
+                delay(1000L)
+                if (!isMonitoring && !trackWriter.isTracking()) break
+                val now = System.currentTimeMillis()
+                repo.notifyUiTick(now)
+                if (trackWriter.isTracking()) {
+                    repo.updateTrackDuration(trackWriter.elapsedSeconds(now))
+                }
+            }
+        }
+    }
+
+    private fun stopUiTickLoop() {
+        uiTickJob?.cancel()
+        uiTickJob = null
     }
 
     private fun maybeCommitNoGpsPoint(
