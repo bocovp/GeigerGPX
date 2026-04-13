@@ -10,7 +10,7 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 
-class GPSManager(
+class GpsManager(
     context: Context,
     private val looper: Looper,
     private val maxSpeedKmhProvider: () -> Double,

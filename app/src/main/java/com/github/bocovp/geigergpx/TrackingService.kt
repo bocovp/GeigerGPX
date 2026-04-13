@@ -74,7 +74,7 @@ class TrackingService : Service() {
 
     // Track recording state
     private val trackWriter = TrackWriter()
-    private lateinit var gpsManager: GPSManager
+    private lateinit var gpsManager: GpsManager
 
     private var audioBeepDetector: com.github.bocovp.geigergpx.AudioInputManager? = null
 
@@ -125,7 +125,7 @@ class TrackingService : Service() {
         loadTrackingPrefs()
         prefs.registerOnSharedPreferenceChangeListener(prefListener)
         notificationManager.createChannels()
-        gpsManager = GPSManager(
+        gpsManager = GpsManager(
             context = this,
             looper = mainLooper,
             maxSpeedKmhProvider = { maxSpeedKmh },
@@ -393,7 +393,7 @@ class TrackingService : Service() {
     // Location / GPS
     // -------------------------------------------------------------------------
 
-    private fun handleLocation(processedLocation: GPSManager.ProcessedLocation) {
+    private fun handleLocation(processedLocation: GpsManager.ProcessedLocation) {
         val loc = processedLocation.location
         val now = processedLocation.nowMillis
         val gpsMode = processedLocation.mode
