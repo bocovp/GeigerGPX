@@ -296,7 +296,7 @@ class MainActivity : AppCompatActivity() {
         updateCpsOrDoseLine(false)
         refreshTrackDuration(viewModel.trackDurationSeconds.value ?: 0L)
         refreshMeasurementDurationFromTimer()
-        updateCountDisplay()
+        updateCountDisplay(viewModel.countDisplayState.value ?: TrackingViewModel.CountDisplayState())
         startMonitoring()
     }
 
@@ -318,17 +318,10 @@ class MainActivity : AppCompatActivity() {
         binding.textDuration.text = "Duration: ${TrackingRepository.formatDuration(seconds)}"
     }
 
-    private fun updateCountDisplay(
-        isTracking: Boolean = viewModel.isTracking.value ?: false,
-        totalCounts: Int = viewModel.totalCounts.value ?: 0,
-        trackCounts: Int = viewModel.trackCounts.value ?: 0,
-        savedTrackCounts: Int? = viewModel.savedTrackCounts.value
-    ) {
-        val displayedTrackCounts = if (isTracking) trackCounts else (savedTrackCounts ?: trackCounts)
-        val measurementCount = if (isMeasurementModeEnabled) latestCpsSnapshot.sampleCount else 0
-        binding.textTrackCounts.text = "Track counts: $displayedTrackCounts"
-        binding.textMeasurementCounts.text = "Counts: $measurementCount"
-        binding.textTotalCounts.text = "Total counts: $totalCounts"
+    private fun updateCountDisplay(state: TrackingViewModel.CountDisplayState) {
+        binding.textTrackCounts.text = "Track counts: ${state.trackCounts}"
+        binding.textMeasurementCounts.text = "Counts: ${state.measurementCounts}"
+        binding.textTotalCounts.text = "Total counts: ${state.totalCounts}"
     }
 
     private fun refreshMeasurementDurationFromTimer() {
@@ -350,8 +343,6 @@ class MainActivity : AppCompatActivity() {
         viewModel.isTracking.observe(this) { tracking ->
             binding.buttonStart.text = if (tracking) "Cancel" else "Start track"
             binding.buttonStop.isEnabled = tracking
-
-            updateCountDisplay(isTracking = tracking)
         }
 
         viewModel.trackDurationSeconds.observe(this) { seconds ->
@@ -374,20 +365,11 @@ class MainActivity : AppCompatActivity() {
         viewModel.cpsUpdate.observe(this) { update ->
             latestCpsSnapshot = update.snapshot
             updateCpsOrDoseLine(update.onBeep)
-            updateCountDisplay()
             refreshMeasurementDurationFromTimer()
         }
 
-        viewModel.totalCounts.observe(this) { totalCounts ->
-            updateCountDisplay(totalCounts = totalCounts)
-        }
-
-        viewModel.trackCounts.observe(this) { trackCount ->
-            updateCountDisplay(trackCounts = trackCount)
-        }
-
-        viewModel.savedTrackCounts.observe(this) { savedCounts ->
-            updateCountDisplay(savedTrackCounts = savedCounts)
+        viewModel.countDisplayState.observe(this) { state ->
+            updateCountDisplay(state)
         }
 
         viewModel.gpsStatus.observe(this) { status ->
@@ -423,7 +405,6 @@ class MainActivity : AppCompatActivity() {
             }
             binding.buttonSavePoi.isEnabled = enabled
             updateCpsOrDoseLine(false)
-            updateCountDisplay()
             refreshMeasurementDurationFromTimer()
         }
     }
