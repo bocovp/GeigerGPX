@@ -16,8 +16,6 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
 
     val isTracking: LiveData<Boolean> = repo.isTracking
 
-    val trackDurationText: LiveData<String> = repo.trackDurationText
-
     val trackDurationSeconds: LiveData<Long> = repo.trackDurationSeconds
 
     val distanceMeters: LiveData<Double> = repo.distanceMeters

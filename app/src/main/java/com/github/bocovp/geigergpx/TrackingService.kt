@@ -438,6 +438,7 @@ class TrackingService : Service() {
         }
 
         if (tracking) {
+            repo.updateMonitoringStatus(gpsSpoofingDetector.getStatusString(now))
             val totalBeeps = repo.getTotalCounts()
             val result = if (gpsMode == TrackWriter.GpsMode.ACTIVE) {
                 trackWriter.handleGpsLocation(
@@ -471,7 +472,7 @@ class TrackingService : Service() {
     private fun toggleMeasurementMode() {
         val enabled = doseRateMeasurement.toggleMeasurementMode()
         repo.updateMeasurementMode(enabled)
-        repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = false)
+//        repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = false)
     }
 
     private fun updateMonitoringStats(nowMillis: Long) {

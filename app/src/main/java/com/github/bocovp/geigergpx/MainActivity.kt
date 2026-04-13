@@ -456,8 +456,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun getCurrentMeasurementCountsAndSeconds(): Pair<Int, Double> {
         val counts = latestCpsSnapshot.sampleCount.coerceAtLeast(0)
-        val seconds = if (latestCpsSnapshot.oldestTimestampMillis > 0L) {
-            ((System.currentTimeMillis() - latestCpsSnapshot.oldestTimestampMillis).toDouble() / 1000.0)
+        val seconds = if (latestCpsSnapshot.measurementStartTimestampMillis > 0L) {
+            ((System.currentTimeMillis() - latestCpsSnapshot.measurementStartTimestampMillis).toDouble() / 1000.0)
                 .coerceAtLeast(0.0)
         } else {
             0.0

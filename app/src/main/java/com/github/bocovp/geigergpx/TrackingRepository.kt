@@ -29,9 +29,6 @@ class TrackingRepository {
     private val _isTracking = MutableLiveData(false)
     val isTracking: LiveData<Boolean> = _isTracking
 
-    private val _trackDurationText = MutableLiveData("00:00:00")
-    val trackDurationText: LiveData<String> = _trackDurationText
-
     private val _trackDurationSeconds = MutableLiveData(0L)
     val trackDurationSeconds: LiveData<Long> = _trackDurationSeconds
 
@@ -78,7 +75,6 @@ class TrackingRepository {
 
     fun updateTrackDuration(trackDurationSeconds: Long) {
         _trackDurationSeconds.postValue(trackDurationSeconds)
-        _trackDurationText.postValue(formatDuration(trackDurationSeconds))
     }
 
     fun updateTrackingState(tracking: Boolean, gpsStatus: String) {
