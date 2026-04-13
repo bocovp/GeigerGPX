@@ -54,6 +54,9 @@ class TrackingRepository {
     private val _countsAtTrackStart = MutableLiveData(0)
     val countsAtTrackStart: LiveData<Int> = _countsAtTrackStart
 
+    private val _countsAtMeasurementStart = MutableLiveData(0)
+    val countsAtMeasurementStart: LiveData<Int> = _countsAtMeasurementStart
+
     private val _savedTrackCounts = MutableLiveData<Int?>(null)
     val savedTrackCounts: LiveData<Int?> = _savedTrackCounts
 
@@ -116,6 +119,9 @@ class TrackingRepository {
     }
 
     fun updateMeasurementMode(enabled: Boolean) {
+        if (enabled) {
+            _countsAtMeasurementStart.postValue(totalCounter.get())
+        }
         _measurementModeEnabled.postValue(enabled)
     }
 
