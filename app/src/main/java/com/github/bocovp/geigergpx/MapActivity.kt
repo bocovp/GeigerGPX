@@ -138,10 +138,6 @@ class MapActivity : AppCompatActivity() {
                 invalidateOptionsMenu()
                 refreshMapTracks(latestActivePoints)
                 true
-            } 
-            R.id.action_tracks -> {
-                startActivity(Intent(this, TracksActivity::class.java))
-                true
             }
             else -> super.onOptionsItemSelected(item)
         }

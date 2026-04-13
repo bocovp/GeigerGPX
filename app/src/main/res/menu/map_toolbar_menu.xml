@@ -14,11 +14,4 @@
         android:title="Show Heatmap"
         app:showAsAction="always" />
 
-    <item
-        android:id="@+id/action_tracks"
-        android:icon="@drawable/baseline_track_24"
-        android:title="Tracks"
-        app:showAsAction="always"
-        app:iconTint="?attr/colorControlNormal" />
-
 </menu>
