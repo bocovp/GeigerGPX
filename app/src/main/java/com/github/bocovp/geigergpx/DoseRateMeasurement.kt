@@ -18,9 +18,7 @@ class DoseRateMeasurement(
     private var mainCpsBeepCount: Int = 0
     private var mainCpsBeepNextIndex: Int = 0
 
-    private var latSum: Double = 0.0
-    private var lonSum: Double = 0.0
-    private var latLonCount: Int = 0
+    private val measurementCoordinateAverager = GpsCoordinateAverager()
     private var alertDoseRate: Double = 0.0
     private var cpsToUsvhCoefficient: Double = 1.0
 
@@ -35,10 +33,10 @@ class DoseRateMeasurement(
             measurementStartTimestampMillis = nowMillis
             measurementTimestampCount = 0L
             measurementOldestTimestamp = 0L
-            resetMeasurementCoordinates()
+            measurementCoordinateAverager.reset()
         } else {
             measurementStartTimestampMillis = 0L
-            resetMeasurementCoordinates()
+            measurementCoordinateAverager.reset()
         }
         measurementModeEnabled
     }
@@ -46,17 +44,12 @@ class DoseRateMeasurement(
     fun handleGpsLocation(loc: Location) {
         synchronized(mainCpsLock) {
             if (!measurementModeEnabled) return
-            latSum += loc.latitude
-            lonSum += loc.longitude
-            latLonCount += 1
+            measurementCoordinateAverager.process(loc)
         }
     }
 
     fun consumeMeasurementAverageCoordinates(): Pair<Double, Double> = synchronized(mainCpsLock) {
-        val latitude = if (latLonCount > 0) latSum / latLonCount.toDouble() else 0.0
-        val longitude = if (latLonCount > 0) lonSum / latLonCount.toDouble() else 0.0
-        resetMeasurementCoordinates()
-        Pair(latitude, longitude)
+        measurementCoordinateAverager.consumeAverage() ?: Pair(0.0, 0.0)
     }
 
     fun updateMainCpsWindowSize(newSize: Int) {
@@ -201,9 +194,4 @@ class DoseRateMeasurement(
         return (mainCpsBeepCount - 1).toDouble() / deltaSeconds
     }
 
-    private fun resetMeasurementCoordinates() {
-        latSum = 0.0
-        lonSum = 0.0
-        latLonCount = 0
-    }
 }

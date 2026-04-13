@@ -31,11 +31,7 @@ class TrackWriter {
 
     private var lastPointTotalBeeps: Int = 0
 
-    private var latSum: Double = 0.0
-
-    private var lonSum: Double = 0.0
-
-    private var latLonSum: Int = 0
+    private val coordinateAverager = GpsCoordinateAverager()
 
     private var lastWrittenTime: Long = 0L
 
@@ -63,9 +59,7 @@ class TrackWriter {
         writtenPointsInternal.clear()
         lastWrittenLocation = null
         lastWrittenTime = 0L
-        latSum = 0.0
-        lonSum = 0.0
-        latLonSum = 0
+        coordinateAverager.reset()
         lastPointTotalBeeps = 0
     }
 
@@ -79,9 +73,8 @@ class TrackWriter {
     private fun initializeAnchor(loc: Location, now: Long, totalBeeps: Int) = synchronized(lock) {
         lastWrittenLocation = Location(loc)
         lastWrittenTime = now
-        latSum = loc.latitude
-        lonSum = loc.longitude
-        latLonSum = 1
+        coordinateAverager.reset()
+        coordinateAverager.process(loc)
         lastPointTotalBeeps = totalBeeps
     }
 
@@ -93,9 +86,7 @@ class TrackWriter {
     }
 
     private fun accumulateLocation(loc: Location) = synchronized(lock) {
-        latSum += loc.latitude
-        lonSum += loc.longitude
-        latLonSum += 1
+        coordinateAverager.process(loc)
     }
 
     fun handleGpsLocation(
@@ -188,8 +179,9 @@ class TrackWriter {
     ): List<TrackPoint> = synchronized(lock) {
         val finalBeeps = totalBeeps - lastPointTotalBeeps
         val finalCps = finalBeeps.toDouble() / movementStats.timeDeltaSec // TODO: add -1
-        val avgLat = if (latLonSum > 0) latSum / latLonSum.toDouble() else loc.latitude
-        val avgLon = if (latLonSum > 0) lonSum / latLonSum.toDouble() else loc.longitude
+        val averagedCoordinates = coordinateAverager.consumeAverage()
+        val avgLat = averagedCoordinates?.first ?: loc.latitude
+        val avgLon = averagedCoordinates?.second ?: loc.longitude
         val avgTimeMillis = (lastWrittenTime + now) / 2L
 
         val point = TrackPoint(
@@ -209,9 +201,7 @@ class TrackWriter {
         _totalDistance += movementStats.distance
         lastWrittenLocation = Location(loc)
         lastWrittenTime = now
-        latSum = 0.0
-        lonSum = 0.0
-        latLonSum = 0
+        coordinateAverager.reset()
         lastPointTotalBeeps = totalBeeps
         snapshot
     }

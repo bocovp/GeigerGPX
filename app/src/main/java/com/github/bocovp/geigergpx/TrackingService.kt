@@ -11,11 +11,6 @@ import android.content.pm.ServiceInfo
 import android.media.Ringtone
 import android.media.RingtoneManager
 import androidx.preference.PreferenceManager
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -75,15 +70,11 @@ class TrackingService : Service() {
         }
     }
 
-    private val fusedLocation by lazy { LocationServices.getFusedLocationProviderClient(this) }
-    private lateinit var locationRequest: LocationRequest
-    private lateinit var locationCallback: LocationCallback
-
     private val repo by lazy { (application as GeigerGpxApp).trackingRepository }
 
     // Track recording state
     private val trackWriter = TrackWriter()
-    private val gpsSpoofingDetector = GpsSpoofingDetector()
+    private lateinit var gpsManager: GPSManager
 
     private var audioBeepDetector: com.github.bocovp.geigergpx.AudioInputManager? = null
 
@@ -105,8 +96,6 @@ class TrackingService : Service() {
     @Volatile private var cpsToUsvhCoefficient: Double = 1.0
     private var alertRingtone: Ringtone? = null
     private var lastAlertAtMillis: Long = 0L
-    @Volatile private var lastObservedLocation: Location? = null
-
     private val doseRateMeasurement = DoseRateMeasurement()
     private var kde: KernelDensityEstimator? = null
     private val kdeLock = Any()
@@ -136,8 +125,14 @@ class TrackingService : Service() {
         loadTrackingPrefs()
         prefs.registerOnSharedPreferenceChangeListener(prefListener)
         notificationManager.createChannels()
-        setupLocationRequest()
-        setupLocationCallback()
+        gpsManager = GPSManager(
+            context = this,
+            looper = mainLooper,
+            maxSpeedKmhProvider = { maxSpeedKmh },
+            onLocationProcessed = { processedLocation ->
+                handleLocation(processedLocation)
+            }
+        )
     }
 
     override fun onDestroy() {
@@ -145,7 +140,7 @@ class TrackingService : Service() {
         stopBackupLoop()
         stopGpsFallbackLoop()
         stopUiTickLoop()
-        fusedLocation.removeLocationUpdates(locationCallback)
+        gpsManager.stopUpdates()
         stopBeepDetector()
         alertRingtone?.stop()
         alertRingtone = null
@@ -230,7 +225,7 @@ class TrackingService : Service() {
         isMonitoring = true
 
         if (ActivityCompatHelper.hasLocationAndAudioPermissions(this)) {
-            fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
+            gpsManager.startUpdates()
             repo.updateAudioStatus("Working", TrackingRepository.AUDIO_STATUS_WORKING)
             startBeepDetector()
             startUiTickLoop()
@@ -247,7 +242,7 @@ class TrackingService : Service() {
 
         // Only remove location updates and stop beep detector if not tracking
         if (!trackWriter.isTracking()) {
-            fusedLocation.removeLocationUpdates(locationCallback)
+            gpsManager.stopUpdates()
             stopBeepDetector()
         }
 
@@ -271,8 +266,7 @@ class TrackingService : Service() {
         val now = System.currentTimeMillis()
         val currentTotal = repo.getTotalCounts()
         trackWriter.start(now, currentTotal)
-        gpsSpoofingDetector.reset()
-        lastObservedLocation = null
+        gpsManager.reset()
 
         synchronized(kdeLock) {
             kde = KernelDensityEstimator(cpsToUsvhCoefficient)
@@ -295,7 +289,7 @@ class TrackingService : Service() {
                 startForeground(TrackingNotificationManager.NOTIF_ID, notificationManager.buildTrackingNotification("Tracking..."))
             }
             if (ActivityCompatHelper.hasLocationAndAudioPermissions(this)) {
-                fusedLocation.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
+                gpsManager.startUpdates()
                 startBeepDetector()
             } else {
                 trackWriter.reset()
@@ -325,8 +319,7 @@ class TrackingService : Service() {
     private fun stopTrackingSession(stats: TrackStopStats) {
         trackWriter.reset()
         repo.setActiveTrackPoints(emptyList())
-        gpsSpoofingDetector.reset()
-        lastObservedLocation = null
+        gpsManager.reset()
 
         if (isMonitoring) {
             notificationManager.postTrackingNotification("Monitoring...")
@@ -334,7 +327,7 @@ class TrackingService : Service() {
             repo.updateTrackGeometry(distance = stats.distance, points = stats.points)
             repo.updateTrackingState(tracking = false, gpsStatus = repo.gpsStatus.value ?: "Waiting")
         } else {
-            fusedLocation.removeLocationUpdates(locationCallback)
+            gpsManager.stopUpdates()
             stopBeepDetector()
             repo.updateTrackDuration(stats.trackDurationSeconds)
             repo.updateTrackGeometry(distance = stats.distance, points = stats.points)
@@ -400,45 +393,22 @@ class TrackingService : Service() {
     // Location / GPS
     // -------------------------------------------------------------------------
 
-    private fun setupLocationRequest() {
-        locationRequest = LocationRequest.Builder(
-            Priority.PRIORITY_HIGH_ACCURACY, 1000L
-        ).setMinUpdateIntervalMillis(500L)
-            .setWaitForAccurateLocation(false)
-            .build()
-    }
-
-    private fun setupLocationCallback() {
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                super.onLocationResult(result)
-                val loc = result.lastLocation ?: return
-                handleLocation(loc)
-            }
-        }
-    }
-
-    private fun handleLocation(loc: Location) {
-        val now = System.currentTimeMillis()
-        val gpsSpoofingState = gpsSpoofingDetector.process(loc, maxSpeedKmh, now)
-        lastObservedLocation = Location(loc)
+    private fun handleLocation(processedLocation: GPSManager.ProcessedLocation) {
+        val loc = processedLocation.location
+        val now = processedLocation.nowMillis
+        val gpsMode = processedLocation.mode
         val tracking = trackWriter.isTracking()
 
         if (!tracking) {
             updateMonitoringStats(now)
         }
 
-        val gpsMode = when (gpsSpoofingState.mode) {
-            GpsSpoofingDetector.Mode.ACTIVE -> TrackWriter.GpsMode.ACTIVE
-            GpsSpoofingDetector.Mode.INACTIVE -> TrackWriter.GpsMode.INACTIVE
-            GpsSpoofingDetector.Mode.SPOOFING -> TrackWriter.GpsMode.SPOOFING
-        }
         if (gpsMode == TrackWriter.GpsMode.ACTIVE) {
             doseRateMeasurement.handleGpsLocation(loc)
         }
 
         if (tracking) {
-            repo.updateMonitoringStatus(gpsSpoofingDetector.getStatusString(now))
+            repo.updateMonitoringStatus(processedLocation.status)
             val totalBeeps = repo.getTotalCounts()
             val result = if (gpsMode == TrackWriter.GpsMode.ACTIVE) {
                 trackWriter.handleGpsLocation(
@@ -476,7 +446,7 @@ class TrackingService : Service() {
     }
 
     private fun updateMonitoringStats(nowMillis: Long) {
-        val gpsStatus = gpsSpoofingDetector.getStatusString(nowMillis)
+        val gpsStatus = gpsManager.currentStatus(nowMillis)
         repo.updateMonitoringStatus(gpsStatus = gpsStatus)
     }
 
@@ -621,12 +591,7 @@ class TrackingService : Service() {
                     continue
                 }
 
-                val detectorState = gpsSpoofingDetector.currentState(now)
-                val mode = when (detectorState.mode) {
-                    GpsSpoofingDetector.Mode.ACTIVE -> TrackWriter.GpsMode.ACTIVE
-                    GpsSpoofingDetector.Mode.INACTIVE -> TrackWriter.GpsMode.INACTIVE
-                    GpsSpoofingDetector.Mode.SPOOFING -> TrackWriter.GpsMode.SPOOFING
-                }
+                val mode = gpsManager.currentMode(now)
                 if (mode == TrackWriter.GpsMode.ACTIVE) {
                     continue
                 }
@@ -635,7 +600,7 @@ class TrackingService : Service() {
                     now = now,
                     mode = mode,
                     totalBeeps = repo.getTotalCounts(),
-                    spoofedLocation = lastObservedLocation
+                    spoofedLocation = gpsManager.lastLocationCopy()
                 )
                 result.snapshot?.let { snapshot ->
                     repo.setActiveTrackPoints(snapshot)
