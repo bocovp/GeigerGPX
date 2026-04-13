@@ -209,6 +209,7 @@ class MainActivity : AppCompatActivity() {
         menuInflater.inflate(R.menu.main_toolbar_menu, menu)
         if (menu is MenuBuilder) {
             menu.setOptionalIconsVisible(true)
+            menu.setGroupDividerEnabled(true)
         }
         refreshKeepScreenOnMenuItem(menu.findItem(R.id.action_keep_screen_on))
         return true
@@ -241,6 +242,10 @@ class MainActivity : AppCompatActivity() {
             }
             R.id.action_settings -> {
                 openSettings()
+                true
+            }
+            R.id.action_plot -> {
+                openTimePlot()
                 true
             }
             else -> super.onOptionsItemSelected(item)
