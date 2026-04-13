@@ -13,7 +13,7 @@ No modification to the radiometer is required; signals are recorded via the micr
 - **Confidence interval calculation:** Confidence intervals (CIs) are computed using χ² quantiles at a 0.95 confidence level.
 - **Long-term Measurement mode:** A dedicated measurement workflow for low-background and long-duration sampling.
 - **Measurement waypoint export:** Measurement results are written to a separate GPX-file as `<wpt>` tags with description, coordinates, timestamp, dose rate, and CI-related fields.
-- **Dose rate plots:** For recorded tracks the application provides a dose rate plot with a manually adjustable averaging window (fixed-duration window or Epanechnikov kernel).
+- **Dose rate plots:** For recorded tracks the application provides a dose rate plot with a manually adjustable averaging window (fixed-duration window or Epanechnikov kernel estimator).
 - **Experimental Bluetooth audio input:** Audio capture from Bluetooth headsets is supported as an experimental feature, but it is way less stable and provides lower quality as compared to built-in microphone capture.
 - **High-rate limitation warning:** At high dose rates, RD-1008 may not emit all pulses audibly, so phone-side estimates can be biased low.
 
