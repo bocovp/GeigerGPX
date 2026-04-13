@@ -65,21 +65,21 @@ class TrackingRepository {
 
     private val _measurementModeEnabled = MutableLiveData(false)
     val measurementModeEnabled: LiveData<Boolean> = _measurementModeEnabled
+    private val _uiTickMillis = MutableLiveData(0L)
+    val uiTickMillis: LiveData<Long> = _uiTickMillis
 
-    fun updateStatus(
-        tracking: Boolean,
-        trackDurationSeconds: Long,
-        distance: Double,
-        points: Int,
-        cpsSnapshot: CpsSnapshot,
-        gpsStatus: String
-    ) {
-        _isTracking.postValue(tracking)
-        _trackDurationSeconds.postValue(trackDurationSeconds)
-        _trackDurationText.postValue(formatDuration(trackDurationSeconds))
+    fun updateTrackGeometry(distance: Double, points: Int) {
         _distanceMeters.postValue(distance)
         _pointCount.postValue(points)
-        _cpsUpdate.postValue(CpsUpdate(snapshot = cpsSnapshot, onBeep = false))
+    }
+
+    fun updateTrackDuration(trackDurationSeconds: Long) {
+        _trackDurationSeconds.postValue(trackDurationSeconds)
+        _trackDurationText.postValue(formatDuration(trackDurationSeconds))
+    }
+
+    fun updateTrackingState(tracking: Boolean, gpsStatus: String) {
+        _isTracking.postValue(tracking)
         _gpsStatus.postValue(gpsStatus)
     }
 
@@ -117,6 +117,10 @@ class TrackingRepository {
 
     fun updateMeasurementMode(enabled: Boolean) {
         _measurementModeEnabled.postValue(enabled)
+    }
+
+    fun notifyUiTick(nowMillis: Long) {
+        _uiTickMillis.postValue(nowMillis)
     }
 
     /** Increment and return the global total beep count in a thread-safe way. */

@@ -53,4 +53,6 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
     val audioStatus: LiveData<TrackingRepository.AudioStatus> = repo.audioStatus
 
     val measurementModeEnabled: LiveData<Boolean> = repo.measurementModeEnabled
+
+    val uiTickMillis: LiveData<Long> = repo.uiTickMillis
 }

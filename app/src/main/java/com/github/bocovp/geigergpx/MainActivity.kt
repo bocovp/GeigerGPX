@@ -4,8 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -56,18 +54,6 @@ class MainActivity : AppCompatActivity() {
             )
         }
     }
-
-    private val uiRefreshHandler = Handler(Looper.getMainLooper())
-    private val uiRefreshRunnable = object : Runnable {
-        override fun run() {
-            updateCpsOrDoseLine(false)
-            refreshTrackDurationFromTimer()
-            updateCountDisplay()
-            uiRefreshHandler.postDelayed(this, 1000L)
-        }
-    }
-    private var trackDurationBaseSeconds: Long = 0L
-    private var trackDurationBaseTimestampMillis: Long = 0L
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -308,16 +294,15 @@ class MainActivity : AppCompatActivity() {
         syncBottomNavigationSelection()
         applyKeepScreenOnFlag()
         updateCpsOrDoseLine(false)
-        refreshTrackDurationFromTimer()
+        refreshTrackDuration(viewModel.trackDurationSeconds.value ?: 0L)
+        refreshMeasurementDurationFromTimer()
         updateCountDisplay()
-        startUiRefreshLoop()
         startMonitoring()
     }
 
     override fun onPause() {
         super.onPause()
         unregisterTrackSavedReceiverIfNeeded()
-        stopUiRefreshLoop()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // onPause can coincide with a foreground->background transition.
         // During that handoff, plain startService() may throw IllegalStateException.
@@ -329,24 +314,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startUiRefreshLoop() {
-        uiRefreshHandler.removeCallbacks(uiRefreshRunnable)
-        uiRefreshHandler.postDelayed(uiRefreshRunnable, 1000L)
-    }
-
-    private fun stopUiRefreshLoop() {
-        uiRefreshHandler.removeCallbacks(uiRefreshRunnable)
-    }
-
-    private fun refreshTrackDurationFromTimer() {
-        val tracking = viewModel.isTracking.value ?: false
-        val seconds = if (tracking) {
-            val elapsed = ((System.currentTimeMillis() - trackDurationBaseTimestampMillis) / 1000L)
-                .coerceAtLeast(0L)
-            trackDurationBaseSeconds + elapsed
-        } else {
-            trackDurationBaseSeconds
-        }
+    private fun refreshTrackDuration(seconds: Long) {
         binding.textDuration.text = "Duration: ${TrackingRepository.formatDuration(seconds)}"
     }
 
@@ -358,6 +326,12 @@ class MainActivity : AppCompatActivity() {
     ) {
         val displayedTrackCounts = if (isTracking) trackCounts else (savedTrackCounts ?: trackCounts)
         val measurementCount = if (isMeasurementModeEnabled) latestCpsSnapshot.sampleCount else 0
+        binding.textTrackCounts.text = "Track counts: $displayedTrackCounts"
+        binding.textMeasurementCounts.text = "Counts: $measurementCount"
+        binding.textTotalCounts.text = "Total counts: $totalCounts"
+    }
+
+    private fun refreshMeasurementDurationFromTimer() {
         val measurementDurationSeconds = if (isMeasurementModeEnabled) {
             val measurementStart = latestCpsSnapshot.measurementStartTimestampMillis
             if (measurementStart > 0L) {
@@ -369,11 +343,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             0.0
         }
-
-        binding.textTrackCounts.text = "Track counts: $displayedTrackCounts"
-        binding.textMeasurementCounts.text = "Counts: $measurementCount"
         binding.textMeasurementDuration.text = "Duration: ${measurementDurationSeconds.roundToInt()} s"
-        binding.textTotalCounts.text = "Total counts: $totalCounts"
     }
 
     private fun observeViewModel() {
@@ -385,9 +355,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         viewModel.trackDurationSeconds.observe(this) { seconds ->
-            trackDurationBaseSeconds = seconds
-            trackDurationBaseTimestampMillis = System.currentTimeMillis()
-            refreshTrackDurationFromTimer()
+            refreshTrackDuration(seconds)
+        }
+
+        viewModel.uiTickMillis.observe(this) {
+            updateCpsOrDoseLine(false)
+            refreshMeasurementDurationFromTimer()
         }
 
         viewModel.distanceMeters.observe(this) { dist ->
@@ -402,6 +375,7 @@ class MainActivity : AppCompatActivity() {
             latestCpsSnapshot = update.snapshot
             updateCpsOrDoseLine(update.onBeep)
             updateCountDisplay()
+            refreshMeasurementDurationFromTimer()
         }
 
         viewModel.totalCounts.observe(this) { totalCounts ->
@@ -450,6 +424,7 @@ class MainActivity : AppCompatActivity() {
             binding.buttonSavePoi.isEnabled = enabled
             updateCpsOrDoseLine(false)
             updateCountDisplay()
+            refreshMeasurementDurationFromTimer()
         }
     }
 
