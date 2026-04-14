@@ -28,6 +28,7 @@ import android.widget.EditText
 import android.widget.TextView
 import android.os.Build
 import android.util.Log
+import androidx.documentfile.provider.DocumentFile
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
@@ -76,6 +77,21 @@ class MainActivity : AppCompatActivity() {
         stopTracking()
     }
 
+    private val folderPickerForStartupValidation = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            contentResolver.takePersistableUriPermission(uri, flags)
+            PreferenceManager.getDefaultSharedPreferences(this)
+                .edit()
+                .putString(SettingsFragment.KEY_GPX_TREE_URI, uri.toString())
+                .apply()
+        } else {
+            FileStorageManager.clearConfiguredTreeUri(this)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -92,6 +108,7 @@ class MainActivity : AppCompatActivity() {
                 Toast.LENGTH_SHORT
             ).show()
         }
+        validateConfiguredSaveFolderAtStartup()
 
         binding.buttonStart.setOnClickListener {
             if (viewModel.isTracking.value == true) {
@@ -167,6 +184,40 @@ class MainActivity : AppCompatActivity() {
 
         observeViewModel()
         requestPermissionsOnAppStart()
+    }
+
+    private fun validateConfiguredSaveFolderAtStartup() {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val treeUriString = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+        val defaultFolderError = FileStorageManager.getDefaultFolderWriteProbeError(this)
+        if (defaultFolderError != null) {
+            Toast.makeText(
+                this,
+                "Warning: app default save folder is not writable: ${defaultFolderError.localizedMessage}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        if (treeUriString.isNullOrBlank()) return
+
+        val treeUri = runCatching { Uri.parse(treeUriString) }.getOrNull()
+        val treeRoot = treeUri?.let { DocumentFile.fromTreeUri(this, it) }
+        val isValidFolder = treeRoot?.isDirectory == true
+        val canWrite = isValidFolder && FileStorageManager.isConfiguredFolderWritable(this)
+        if (isValidFolder && canWrite) return
+
+        AlertDialog.Builder(this)
+            .setTitle("Save folder unavailable")
+            .setMessage(
+                "Configured save folder is invalid or not writable. Choose another folder or app will fall back to default folder."
+            )
+            .setPositiveButton("Choose folder") { _, _ ->
+                folderPickerForStartupValidation.launch(null)
+            }
+            .setNegativeButton("Use default folder") { _, _ ->
+                FileStorageManager.clearConfiguredTreeUri(this)
+            }
+            .setCancelable(false)
+            .show()
     }
 
 
@@ -435,7 +486,7 @@ class MainActivity : AppCompatActivity() {
 //                  val doseRate = ConfidenceInterval(0.0, seconds, counts + 1).scale(coeff).mean
                 val (latitude, longitude) = TrackingService.consumeMeasurementAverageCoordinates()
 
-                val ok = PoiLibrary.addPoi(
+                val saveResult = PoiLibrary.addPoiWithResult(
                     context = this,
                     description = description,
                     timestampMillis = System.currentTimeMillis(),
@@ -445,10 +496,14 @@ class MainActivity : AppCompatActivity() {
                     counts = counts,
                     seconds = seconds
                 )
-                if (ok) {
+                if (saveResult.success) {
                     Toast.makeText(this, "POI saved", Toast.LENGTH_SHORT).show()
+                    saveResult.warning?.let { warning ->
+                        Toast.makeText(this, warning, Toast.LENGTH_LONG).show()
+                    }
                 } else {
-                    Toast.makeText(this, "Unable to save POI", Toast.LENGTH_SHORT).show()
+                    val message = saveResult.error?.let { "Unable to save POI: $it" } ?: "Unable to save POI"
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
                 }
 
                 if (isMeasurementModeEnabled) {

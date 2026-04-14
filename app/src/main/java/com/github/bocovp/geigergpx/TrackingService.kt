@@ -373,8 +373,11 @@ class TrackingService : Service() {
                     Intent(ACTION_TRACK_SAVED).putExtra(EXTRA_TRACK_ID, saveResult.sourceId)
                 )
                 notificationManager.showSaveToast(saveResult.displayPath)
+                saveResult.warning?.let { warning ->
+                    notificationManager.showSaveToast(warning)
+                }
             } else {
-                notificationManager.showSaveToast("File not saved (error)")
+                notificationManager.showSaveToast("File not saved (primary and fallback attempts failed)")
             }
         } else {
             notificationManager.showSaveToast("Nothing to save")

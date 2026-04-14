@@ -743,7 +743,7 @@ object TrackCatalog {
     }
 
     private fun trackCacheFile(context: Context): File {
-        val root = context.cacheDir
+        val root = FileStorageManager.getRootDirectory(context)
         return File(root, "track-cache.json")
     }
 }
