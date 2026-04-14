@@ -442,7 +442,7 @@ class TrackingService : Service() {
     private fun toggleMeasurementMode() {
         val enabled = doseRateMeasurement.toggleMeasurementMode()
         repo.updateMeasurementMode(enabled)
-//        repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = false)
+        repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = false)
     }
 
     private fun updateMonitoringStats(nowMillis: Long) {
