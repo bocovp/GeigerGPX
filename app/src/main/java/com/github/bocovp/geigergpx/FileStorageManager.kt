@@ -25,6 +25,15 @@ object FileStorageManager {
     private const val PREFS_KEY_GPX_TREE_URI = SettingsFragment.KEY_GPX_TREE_URI
     private const val DEFAULT_GPX_MIME = "application/gpx+xml"
     private const val DEFAULT_TEXT_MIME = "text/plain"
+    private const val PERMISSION_PROBE_FILE_NAME = ".geigergpx-write-test.tmp"
+
+    data class WriteResult(
+        val uri: Uri?,
+        val usedDefaultFolder: Boolean,
+        val error: Throwable?
+    ) {
+        val succeeded: Boolean get() = uri != null
+    }
 
     fun exists(context: Context, relativePath: String): Boolean {
         val normalizedPath = normalizeRelativePath(relativePath)
@@ -87,6 +96,35 @@ object FileStorageManager {
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+
+    fun writeStreamDetailed(
+        context: Context,
+        relativePath: String,
+        mimeType: String = mimeTypeFor(relativePath),
+        forceDefaultFolder: Boolean = false,
+        writer: (OutputStream) -> Unit
+    ): WriteResult {
+        val normalizedPath = normalizeRelativePath(relativePath)
+        return try {
+            if (!forceDefaultFolder) {
+                val treeUri = configuredTreeUri(context)
+                if (treeUri != null) {
+                    val document = createOrReplaceDocument(context, treeUri, normalizedPath, mimeType)
+                        ?: return WriteResult(null, usedDefaultFolder = false, error = IllegalStateException("Cannot create file"))
+                    context.contentResolver.openOutputStream(document.uri)?.use(writer)
+                        ?: return WriteResult(null, usedDefaultFolder = false, error = IllegalStateException("Cannot open output stream"))
+                    return WriteResult(document.uri, usedDefaultFolder = false, error = null)
+                }
+            }
+
+            val file = resolveLocalFile(context, normalizedPath)
+            file.parentFile?.mkdirs()
+            file.outputStream().use(writer)
+            WriteResult(Uri.fromFile(file), usedDefaultFolder = true, error = null)
+        } catch (e: Exception) {
+            WriteResult(null, usedDefaultFolder = forceDefaultFolder || configuredTreeUri(context) == null, error = e)
         }
     }
 
@@ -229,6 +267,31 @@ object FileStorageManager {
 
     fun getRootDirectory(context: Context): File {
         return context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
+    }
+
+    fun getDefaultFolderWriteProbeError(context: Context): Throwable? {
+        return runCatching {
+            val probeFile = File(getRootDirectory(context), PERMISSION_PROBE_FILE_NAME)
+            probeFile.parentFile?.mkdirs()
+            probeFile.writeText("ok")
+            probeFile.delete()
+        }.exceptionOrNull()
+    }
+
+    fun isConfiguredFolderWritable(context: Context): Boolean {
+        val treeUri = configuredTreeUri(context) ?: return true
+        return runCatching {
+            val root = DocumentFile.fromTreeUri(context, treeUri) ?: return false
+            val probeFile = root.createFile(DEFAULT_TEXT_MIME, "geigergpx-write-test-${System.currentTimeMillis()}")
+                ?: return false
+            probeFile.delete()
+            true
+        }.getOrDefault(false)
+    }
+
+    fun clearConfiguredTreeUri(context: Context) {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        prefs.edit().putString(PREFS_KEY_GPX_TREE_URI, null).apply()
     }
 
     fun configuredTreeUri(context: Context): Uri? {

@@ -15,7 +15,8 @@ object GpxWriter {
 
     data class SaveTrackResult(
         val displayPath: String,
-        val sourceId: String
+        val sourceId: String,
+        val warning: String? = null
     )
 
     fun saveTrack(context: Context, points: List<TrackPoint>): String? {
@@ -34,26 +35,30 @@ object GpxWriter {
 
     fun saveBackup(context: Context, points: List<TrackPoint>): String? {
         if (points.isEmpty()) return null
-        return writeGpxFile(context, points, BACKUP_FILE_NAME)?.displayPath
+        return writeGpxFile(context, points, BACKUP_FILE_NAME, forceDefaultFolder = true)?.displayPath
     }
 
-    fun backupUri(context: Context): Uri? = FileStorageManager.getFileUri(context, BACKUP_FILE_NAME)
+    fun backupUri(context: Context): Uri? {
+        val file = java.io.File(FileStorageManager.getRootDirectory(context), BACKUP_FILE_NAME)
+        return if (file.exists()) Uri.fromFile(file) else null
+    }
 
     fun deleteBackupIfExists(context: Context) {
-        runCatching { FileStorageManager.deleteFile(context, BACKUP_FILE_NAME) }
+        runCatching {
+            val file = java.io.File(FileStorageManager.getRootDirectory(context), BACKUP_FILE_NAME)
+            if (file.exists()) file.delete()
+        }
     }
 
     fun restoreBackupIfPresent(context: Context): String? {
-        if (!FileStorageManager.exists(context, BACKUP_FILE_NAME)) return null
+        val backupFile = java.io.File(FileStorageManager.getRootDirectory(context), BACKUP_FILE_NAME)
+        if (!backupFile.exists()) return null
         val newName = defaultRestoredFileName()
-        val oldTrackId = FileStorageManager.getFileUri(context, BACKUP_FILE_NAME)?.let { uri ->
-            if (uri.scheme == "content") "tree:$uri" else "file:${uri.path}"
-        } ?: return null
+        val oldTrackId = "file:${backupFile.absolutePath}"
         return try {
-            if (FileStorageManager.moveFile(context, BACKUP_FILE_NAME, newName)) {
-                val newTrackId = FileStorageManager.getFileUri(context, newName)?.let { uri ->
-                        if (uri.scheme == "content") "tree:$uri" else "file:${uri.path}"
-                    } ?: return null
+            val destination = java.io.File(FileStorageManager.getRootDirectory(context), newName)
+            if (backupFile.renameTo(destination)) {
+                val newTrackId = "file:${destination.absolutePath}"
                 TrackCatalog.onTrackMoved(context, oldTrackId, newTrackId, destinationFolder = null)
                 newName
             } else {
@@ -75,25 +80,50 @@ object GpxWriter {
         return "${sdf.format(Date())}-restored.gpx"
     }
 
-    private fun writeGpxFile(context: Context, points: List<TrackPoint>, fileName: String): SaveTrackResult? {
+    private fun writeGpxFile(
+        context: Context,
+        points: List<TrackPoint>,
+        fileName: String,
+        forceDefaultFolder: Boolean = false
+    ): SaveTrackResult? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
-        return try {
-            val savedUri = FileStorageManager.writeStream(context, fileName) { out ->
-                out.bufferedWriter().use { writer ->
-                    writeXmlToStream(writer, points, saveDoseRateInEle, coeff)
-                }
-            } ?: return null
-            SaveTrackResult(
+        val primaryResult = FileStorageManager.writeStreamDetailed(
+            context = context,
+            relativePath = fileName,
+            forceDefaultFolder = forceDefaultFolder
+        ) { out ->
+            out.bufferedWriter().use { writer ->
+                writeXmlToStream(writer, points, saveDoseRateInEle, coeff)
+            }
+        }
+        if (primaryResult.succeeded) {
+            val savedUri = primaryResult.uri ?: return null
+            return SaveTrackResult(
                 displayPath = FileStorageManager.getDisplayPath(context, savedUri),
                 sourceId = if (savedUri.scheme == "content") "tree:$savedUri" else "file:${savedUri.path}"
             )
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
         }
+        if (forceDefaultFolder) return null
+
+        val fallbackResult = FileStorageManager.writeStreamDetailed(
+            context = context,
+            relativePath = fileName,
+            forceDefaultFolder = true
+        ) { out ->
+            out.bufferedWriter().use { writer ->
+                writeXmlToStream(writer, points, saveDoseRateInEle, coeff)
+            }
+        }
+        val fallbackUri = fallbackResult.uri ?: return null
+        val primaryMessage = primaryResult.error?.localizedMessage ?: "unknown error"
+        return SaveTrackResult(
+            displayPath = FileStorageManager.getDisplayPath(context, fallbackUri),
+            sourceId = if (fallbackUri.scheme == "content") "tree:$fallbackUri" else "file:${fallbackUri.path}",
+            warning = "Primary save failed: $primaryMessage. Saved in default app folder."
+        )
     }
 
     private fun writeXmlToStream(

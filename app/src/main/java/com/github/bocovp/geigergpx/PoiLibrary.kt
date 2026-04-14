@@ -26,6 +26,11 @@ data class PoiEntry(
 )
 
 object PoiLibrary {
+    data class SaveResult(
+        val success: Boolean,
+        val warning: String? = null,
+        val error: String? = null
+    )
 
     enum class LoadState {
         MISSING_FILE,
@@ -65,6 +70,19 @@ object PoiLibrary {
         counts: Int,
         seconds: Double
     ): Boolean {
+        return addPoiWithResult(context, description, timestampMillis, latitude, longitude, doseRate, counts, seconds).success
+    }
+
+    fun addPoiWithResult(
+        context: Context,
+        description: String,
+        timestampMillis: Long,
+        latitude: Double,
+        longitude: Double,
+        doseRate: Double,
+        counts: Int,
+        seconds: Double
+    ): SaveResult {
         return modifyPoiFile(context) { existing ->
             val list = parsePoiEntries(existing).toMutableList()
             list.add(
@@ -94,7 +112,7 @@ object PoiLibrary {
                 }
             }
             serializePoiEntries(updated)
-        }
+        }.success
     }
 
     fun removePoi(context: Context, poi: PoiEntry): Boolean {
@@ -102,10 +120,10 @@ object PoiLibrary {
             val filtered = parsePoiEntries(existing)
                 .filterNot { it.id == poi.id }
             serializePoiEntries(filtered)
-        }
+        }.success
     }
 
-    private fun modifyPoiFile(context: Context, transform: (String) -> String): Boolean {
+    private fun modifyPoiFile(context: Context, transform: (String) -> String): SaveResult {
         ensurePoiFileExists(context)
 
         val updated = FileStorageManager.transactionalWrite(
@@ -114,8 +132,34 @@ object PoiLibrary {
             backupFile = POI_BACKUP_FILE_NAME,
             transform = transform
         )
+        if (updated) return SaveResult(success = true)
 
-        return updated
+        val defaultRoot = FileStorageManager.getRootDirectory(context)
+        val targetFile = java.io.File(defaultRoot, POI_FILE_NAME)
+        val backupFile = java.io.File(defaultRoot, POI_BACKUP_FILE_NAME)
+        return try {
+            targetFile.parentFile?.mkdirs()
+            if (!targetFile.exists()) {
+                targetFile.writeText(emptyPoiXml())
+            }
+            val original = targetFile.readText()
+            backupFile.writeText(original)
+            val transformed = transform(original)
+            targetFile.writeText(transformed)
+            if (backupFile.exists()) {
+                backupFile.delete()
+            }
+            SaveResult(
+                success = true,
+                warning = "Primary POI save failed. Saved in default app folder."
+            )
+        } catch (e: Exception) {
+            SaveResult(
+                success = false,
+                warning = "Primary POI save failed. Fallback also failed.",
+                error = e.localizedMessage ?: e.toString()
+            )
+        }
     }
 
     private fun ensurePoiFileExists(context: Context) {
