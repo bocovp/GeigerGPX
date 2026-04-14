@@ -1,5 +1,6 @@
 package com.github.bocovp.geigergpx
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
 import android.os.Looper
@@ -54,7 +55,8 @@ class GpsManager(
     @Volatile
     private var lastObservedLocation: Location? = null
 
-    fun startUpdates() {
+
+    @SuppressLint("MissingPermission")    fun startUpdates() {
         fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, looper)
     }
 
