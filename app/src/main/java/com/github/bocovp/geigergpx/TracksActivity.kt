@@ -39,6 +39,8 @@ class TracksActivity : AppCompatActivity() {
     }
     private var hasLoadedTrackList = false
     private var refreshPollScheduled = false
+    private var pendingManualRefresh = false
+    private var loadingStateActive = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -111,20 +113,26 @@ class TracksActivity : AppCompatActivity() {
         clearTracksWhileLoading: Boolean = false,
         rebuildCache: Boolean = false
     ) {
+        var effectiveForceLoading = forceLoading
         if (rebuildCache) {
-            TrackCatalog.rebuildTrackCacheAsync(applicationContext) {
-                runOnUiThread { refreshTrackList(forceLoading = true) }
-            }
+            pendingManualRefresh = true
+            TrackCatalog.rebuildTrackCacheAsync(applicationContext)
         }
 
         val rebuildInProgress = TrackCatalog.isTrackCacheRebuildInProgress()
-        val showLoading = forceLoading || rebuildInProgress || !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty(this)
-        if (showLoading) {
+        if (!rebuildInProgress && pendingManualRefresh) {
+            effectiveForceLoading = true
+            pendingManualRefresh = false
+        }
+
+        val showLoading = effectiveForceLoading || rebuildInProgress || !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty(this)
+        if (showLoading && !loadingStateActive) {
             binding.loadingLabel.setText(R.string.loading_tracks)
             if (clearTracksWhileLoading) {
                 adapter.submit(emptyList(), emptySet(), emptySet())
             }
         }
+        loadingStateActive = showLoading
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
         binding.tracksRecyclerView.visibility = if (showLoading) View.GONE else View.VISIBLE
 
@@ -152,7 +160,10 @@ class TracksActivity : AppCompatActivity() {
                 hasLoadedTrackList = true
                 adapter.submit(items, selectedTracks, selectedFolders)
                 val hasTracks = items.isNotEmpty()
-                binding.loadingLabel.setText(if (hasTracks) R.string.loading_files else R.string.no_tracks_found)
+                if (loadingStateActive) {
+                    binding.loadingLabel.setText(if (hasTracks) R.string.loading_files else R.string.no_tracks_found)
+                }
+                loadingStateActive = false
                 binding.loadingLabel.visibility = if (hasTracks) View.GONE else View.VISIBLE
                 binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
             }
@@ -164,7 +175,7 @@ class TracksActivity : AppCompatActivity() {
         refreshPollScheduled = true
         binding.root.postDelayed({
             refreshPollScheduled = false
-            refreshTrackList(forceLoading = true)
+            refreshTrackList(forceLoading = pendingManualRefresh)
         }, 500L)
     }
 
