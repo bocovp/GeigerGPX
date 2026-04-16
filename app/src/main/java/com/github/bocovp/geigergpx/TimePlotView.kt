@@ -67,6 +67,7 @@ class TimePlotView @JvmOverloads constructor(
     private var trackDurationSeconds = 0.0
     private var maxDoseValue = 1.0
     private var yAxisUnit = "μSv/h"
+    private var xAxisUnit = "min"
     private var verticalTickStep = 0.2
     private var verticalTickCount = 5
     private var verticalAxisMaxValue = 1.0
@@ -134,6 +135,7 @@ class TimePlotView @JvmOverloads constructor(
 
         if (samples.isEmpty()) {
             trackDurationSeconds = 0.0
+            updateXAxisUnit()
             maxDoseValue = 1.0
             verticalTickStep = 0.2
             verticalTickCount = 5
@@ -160,6 +162,7 @@ class TimePlotView @JvmOverloads constructor(
         }
 
         trackDurationSeconds = elapsedSeconds
+        updateXAxisUnit()
         maxDoseValue = (plotSegments.maxOfOrNull { maxOf(it.value, it.ciHigh) } ?: 1.0).coerceAtLeast(0.1)
         if (recalculateVerticalAxis) {
             verticalTickStep = chooseVerticalTickStep(maxDoseValue)
@@ -191,6 +194,7 @@ class TimePlotView @JvmOverloads constructor(
         }
         if (kernelSeries.isEmpty()) {
             trackDurationSeconds = 0.0
+            updateXAxisUnit()
             maxDoseValue = 1.0
             verticalTickStep = 0.2
             verticalTickCount = 5
@@ -202,6 +206,7 @@ class TimePlotView @JvmOverloads constructor(
         }
 
         trackDurationSeconds = kernelSeries.last().t.coerceAtLeast(0.0)
+        updateXAxisUnit()
         maxDoseValue = kernelSeries.maxOfOrNull { maxOf(it.mean, it.high) }?.coerceAtLeast(0.1) ?: 1.0
         if (recalculateVerticalAxis) {
             verticalTickStep = chooseVerticalTickStep(maxDoseValue)
@@ -245,6 +250,7 @@ class TimePlotView @JvmOverloads constructor(
 
         drawVerticalTicks(canvas, plotLeft, plotTop, plotBottom, plotRight)
         drawHorizontalTicks(canvas, plotLeft, plotBottom, plotTop, plotRight)
+        drawHorizontalAxisLabel(canvas, plotLeft, plotBottom, plotRight)
         if (kernelSeries.isNotEmpty()) {
             drawKernelSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
         } else {
@@ -393,6 +399,20 @@ class TimePlotView @JvmOverloads constructor(
         }
     }
 
+    private fun drawHorizontalAxisLabel(
+        canvas: Canvas,
+        plotLeft: Float,
+        plotBottom: Float,
+        plotRight: Float
+    ) {
+        if (trackDurationSeconds <= 0.0) return
+
+        val textWidth = textPaint.measureText(xAxisUnit)
+        val x = plotRight - textWidth
+        val y = plotBottom + 65f
+        canvas.drawText(xAxisUnit, x, y, textPaint)
+    }
+
     private fun chooseHorizontalTickStepSeconds(durationSeconds: Double): Double {
         val allowedStepsMinutes = listOf(1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0, 120.0, 300.0, 600.0)
         val targetTickCount = 5.0
@@ -435,6 +455,10 @@ class TimePlotView @JvmOverloads constructor(
             val hours = totalMinutes / 60
             String.format("%d:%02d", hours, minutes)
         }
+    }
+
+    private fun updateXAxisUnit() {
+        xAxisUnit = if (trackDurationSeconds < 3600.0) "min" else "h:mm"
     }
 
     private fun toY(value: Double, bottom: Float, height: Float): Float {
