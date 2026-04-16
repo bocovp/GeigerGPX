@@ -26,6 +26,11 @@ class TimePlotActivity : AppCompatActivity() {
     private var currentSamples: List<TrackSample> = emptyList()
     private var activeTrackObserverAttached = false
     private var trackingObserverAttached = false
+    /**
+     * Tracks that failed to load in this session. Used to avoid repeatedly trying a stale/missing
+     * track ID when preferences still contain it.
+     */
+    private val failedTrackIdsForPlot = mutableSetOf<String>()
     private var selectedTrackIdForPlot: String? = null
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
@@ -172,6 +177,9 @@ class TimePlotActivity : AppCompatActivity() {
         if (activeTrackObserverAttached) return
         activeTrackObserverAttached = true
         viewModel.activeTrackPoints.observe(this) { points ->
+            // Prevent the live recording stream from overwriting the plot after the user switches
+            // to a saved track (or to a no-data state).
+            if (selectedTrackIdForPlot != TrackCatalog.currentTrackId()) return@observe
             currentSamples = points.map {
                 TrackSample(
                     latitude = it.latitude,
@@ -240,12 +248,17 @@ class TimePlotActivity : AppCompatActivity() {
             return
         }
 
+        // Switch the "current track for plotting" immediately so the live observer can’t
+        // overwrite the plot while the async load is in-flight.
+        selectedTrackIdForPlot = normalizedTrackId
+
         Thread {
             val selected = TrackCatalog.loadTrackSamplesById(this, normalizedTrackId)
             runOnUiThread {
                 if (selected != null) {
                     applyLoadedTrack(normalizedTrackId, selected)
                 } else {
+                    failedTrackIdsForPlot.add(normalizedTrackId)
                     refreshTrackCandidatesAndPlotAsync()
                 }
             }
@@ -290,6 +303,7 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun applyLoadedTrack(trackId: String, selectedTrack: TrackCatalog.TrackPlotData) {
         selectedTrackIdForPlot = trackId
+        failedTrackIdsForPlot.remove(trackId)
         rememberTrackSelection(this, trackId)
         updateTrackTitle(selectedTrack.title)
         updateTrackSelectorUi()
@@ -369,9 +383,12 @@ class TimePlotActivity : AppCompatActivity() {
             selectedTrackIdForPlot
         )
         val matchingCandidate = preferredIds.firstNotNullOfOrNull { candidateId ->
+            if (failedTrackIdsForPlot.contains(candidateId)) return@firstNotNullOfOrNull null
             candidates.firstOrNull { it.id == candidateId }?.id
         }
-        return matchingCandidate ?: candidates.first().id
+        if (matchingCandidate != null) return matchingCandidate
+
+        return candidates.firstOrNull { it.id !in failedTrackIdsForPlot }?.id
     }
 
     private fun cycleSelectedTrack(delta: Int) {
@@ -381,6 +398,8 @@ class TimePlotActivity : AppCompatActivity() {
             ?: 0
         val nextIndex = (currentIndex + delta).mod(plotCandidates.size)
         val nextTrackId = plotCandidates[nextIndex].id
+        // Allow retrying a previously failed track if the file re-appeared.
+        failedTrackIdsForPlot.remove(nextTrackId)
         rememberTrackSelection(this, nextTrackId)
         loadTrackForPlotAsync(nextTrackId)
     }
