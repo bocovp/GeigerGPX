@@ -162,7 +162,6 @@ class TimePlotActivity : AppCompatActivity() {
         val normalizedTrackId = trackId?.takeIf { it.isNotBlank() }
         if (normalizedTrackId == null || normalizedTrackId == TrackCatalog.currentTrackId()) {
             loadTrackForPlot(trackId)
-            showLoading(false)
             return
         }
 
@@ -176,14 +175,28 @@ class TimePlotActivity : AppCompatActivity() {
                     selectedTrackIdForPlot = TrackCatalog.currentTrackId()
                     loadTrackForPlot(TrackCatalog.currentTrackId())
                 }
-                showLoading(false)
             }
         }.start()
     }
 
     private fun showLoading(isLoading: Boolean) {
-        binding.loadingLabel.visibility = if (isLoading) View.VISIBLE else View.GONE
-        binding.timePlotView.visibility = if (isLoading) View.INVISIBLE else View.VISIBLE
+        if (isLoading) {
+            showPlotMessage(R.string.time_plot_loading)
+        } else {
+            showPlotMessage(null)
+        }
+    }
+
+    private fun showPlotMessage(messageResId: Int?) {
+        if (messageResId == null) {
+            binding.loadingLabel.visibility = View.GONE
+            binding.timePlotView.visibility = View.VISIBLE
+            return
+        }
+
+        binding.loadingLabel.setText(messageResId)
+        binding.loadingLabel.visibility = View.VISIBLE
+        binding.timePlotView.visibility = View.INVISIBLE
     }
 
     private fun loadTrackForPlot(trackId: String?): Boolean {
@@ -231,7 +244,6 @@ class TimePlotActivity : AppCompatActivity() {
         minDurationSeconds: Double,
         recalculateVerticalAxis: Boolean = true
     ) {
-        binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
         val track = MapTrack(
             id = CURRENT_TRACK_TITLE,
             title = binding.trackNameLabel.text?.toString().orEmpty(),
@@ -247,6 +259,11 @@ class TimePlotActivity : AppCompatActivity() {
             cpsToUSvh = cpsToUSvhCoeff,
             recalculateVerticalAxis = recalculateVerticalAxis
         )
+        if (generalized.points.isEmpty()) {
+            showPlotMessage(R.string.time_plot_no_track_data)
+        } else {
+            showPlotMessage(null)
+        }
     }
 
     private fun updateKernelEstimatorPlot(scaleSeconds: Double, recalculateVerticalAxis: Boolean) {
@@ -284,8 +301,8 @@ class TimePlotActivity : AppCompatActivity() {
         getConfidenceIntervals: (DoubleArray) -> Triple<DoubleArray, DoubleArray, DoubleArray>?
     ) {
         if (bounds == null || bounds.second < bounds.first) {
-            binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
             binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
+            showPlotMessage(R.string.time_plot_no_track_data)
             return
         }
         val firstTimestamp = bounds.first
@@ -299,13 +316,12 @@ class TimePlotActivity : AppCompatActivity() {
         }
         val ci = getConfidenceIntervals(ts2)
         if (ci == null) {
-            binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
             binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
+            showPlotMessage(R.string.time_plot_no_track_data)
             return
         }
         val (mean, low, high) = ci
         val relativeSeconds = DoubleArray(ts2.size) { idx -> ts2[idx] - firstTimestamp }
-        binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
         binding.timePlotView.setKernelSeries(
             relativeSeconds = relativeSeconds,
             mean = mean,
@@ -314,6 +330,11 @@ class TimePlotActivity : AppCompatActivity() {
             cpsToUSvh = cpsToUSvhCoeff,
             recalculateVerticalAxis = recalculateVerticalAxis
         )
+        if (relativeSeconds.isEmpty()) {
+            showPlotMessage(R.string.time_plot_no_track_data)
+        } else {
+            showPlotMessage(null)
+        }
     }
 
     private fun updateKernelEstimatorPlotFromSamples(
@@ -322,8 +343,8 @@ class TimePlotActivity : AppCompatActivity() {
         recalculateVerticalAxis: Boolean
     ) {
         if (samples.isEmpty()) {
-            binding.timePlotView.setEmptyMessage(getString(R.string.time_plot_no_track_data))
             binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
+            showPlotMessage(R.string.time_plot_no_track_data)
             return
         }
 
