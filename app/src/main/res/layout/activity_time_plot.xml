@@ -23,7 +23,13 @@
         android:layout_marginStart="16dp"
         android:layout_marginTop="8dp"
         android:layout_marginEnd="16dp"
-        android:hint="@string/time_plot_track_label"
+
+        app:hintEnabled="false"
+        app:boxCornerRadiusBottomEnd="100dp"
+        app:boxCornerRadiusBottomStart="100dp"
+        app:boxCornerRadiusTopEnd="100dp"
+        app:boxCornerRadiusTopStart="100dp"
+
         app:endIconContentDescription="@string/time_plot_next_track"
         app:endIconDrawable="@drawable/baseline_navigate_next_24"
         app:endIconMode="custom"
@@ -42,8 +48,10 @@
             android:cursorVisible="false"
             android:focusable="false"
             android:focusableInTouchMode="false"
-            android:inputType="none"
-            android:maxLines="2"
+            android:inputType="text"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:ellipsize="end"
             android:text="Currently recording"
             android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
     </com.google.android.material.textfield.TextInputLayout>
