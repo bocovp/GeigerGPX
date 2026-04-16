@@ -14,4 +14,7 @@
     <string name="time_plot_switch_to_kernel_estimator">Switch to kernel estimator</string>
     <string name="time_plot_no_track_data">No track data</string>
     <string name="time_plot_loading">Loading...</string>
+    <string name="time_plot_track_label">Track</string>
+    <string name="time_plot_previous_track">Previous selected track</string>
+    <string name="time_plot_next_track">Next selected track</string>
 </resources>

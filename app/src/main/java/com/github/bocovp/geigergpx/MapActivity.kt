@@ -293,16 +293,10 @@ class MapActivity : AppCompatActivity() {
     }
 
     private fun selectedTrackIds(): Set<String> {
-        return PreferenceManager.getDefaultSharedPreferences(this)
-            .getStringSet(TracksActivity.PREF_MAP_VISIBLE_TRACK_IDS, emptySet())
-            ?.toSet()
-            ?: emptySet()
+        return TrackSelectionPrefs.selectedTrackIds(this)
     }
 
     private fun selectedFolderIds(): Set<String> {
-        return PreferenceManager.getDefaultSharedPreferences(this)
-            .getStringSet(TracksActivity.PREF_MAP_VISIBLE_SUBFOLDER_NAMES, emptySet())
-            ?.toSet()
-            ?: emptySet()
+        return TrackSelectionPrefs.selectedFolderIds(this)
     }
 }

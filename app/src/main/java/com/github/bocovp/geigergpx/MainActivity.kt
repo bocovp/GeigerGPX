@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != TrackingService.ACTION_TRACK_SAVED) return
             val trackId = intent.getStringExtra(TrackingService.EXTRA_TRACK_ID) ?: return
+            TrackSelectionPrefs.replaceSelectedTrackId(this@MainActivity, TrackCatalog.currentTrackId(), trackId)
             TimePlotActivity.rememberTrackSelection(this@MainActivity, trackId)
             if (!openSavedTrackPlotAfterStop) return
             openSavedTrackPlotAfterStop = false
@@ -604,6 +605,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startTracking() {
         openSavedTrackPlotAfterStop = false
+        TrackSelectionPrefs.setTrackSelected(this, TrackCatalog.currentTrackId(), true)
         TimePlotActivity.rememberCurrentTrackSelection(this)
         dispatchTrackingAction(TrackingService.ACTION_START)
     }
