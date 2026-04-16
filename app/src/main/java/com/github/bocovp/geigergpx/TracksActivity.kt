@@ -200,29 +200,11 @@ class TracksActivity : AppCompatActivity() {
 
 
     private fun onTrackToggled(trackId: String, visible: Boolean) {
-        val selected = selectedTrackIds().toMutableSet()
-        if (visible) {
-            selected.add(trackId)
-        } else {
-            selected.remove(trackId)
-        }
-        PreferenceManager.getDefaultSharedPreferences(this)
-            .edit()
-            .putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selected)
-            .apply()
+        TrackSelectionPrefs.setTrackSelected(this, trackId, visible)
     }
 
     private fun onFolderToggled(folderName: String, visible: Boolean) {
-        val selected = selectedFolderIds().toMutableSet()
-        if (visible) {
-            selected.add(folderName)
-        } else {
-            selected.remove(folderName)
-        }
-        PreferenceManager.getDefaultSharedPreferences(this)
-            .edit()
-            .putStringSet(PREF_MAP_VISIBLE_SUBFOLDER_NAMES, selected)
-            .apply()
+        TrackSelectionPrefs.setFolderSelected(this, folderName, visible)
     }
 
     private fun openSubfolder(item: TrackListItem) {
@@ -242,8 +224,6 @@ class TracksActivity : AppCompatActivity() {
         popup.setForceShowIcon(true)
         MenuCompat.setGroupDividerEnabled(menu, true)
 
-        menu.add(MENU_GROUP_PLOT, MENU_SHOW_PLOT, Menu.NONE, "Show dose rate plot")
-            .setIcon(R.drawable.baseline_query_stats_24)
         menu.add(MENU_GROUP_OPEN_SHARE, MENU_OPEN_DEFAULT, Menu.NONE, "Open in default app")
             .setIcon(R.drawable.baseline_open_in_new_24)
         menu.add(MENU_GROUP_OPEN_SHARE, MENU_SHARE, Menu.NONE, "Share")
@@ -283,7 +263,6 @@ class TracksActivity : AppCompatActivity() {
                 MENU_DELETE -> confirmDeleteTrack(item)
                 MENU_OPEN_DEFAULT -> openInDefaultApp(item)
                 MENU_SHARE -> shareTrack(item)
-                MENU_SHOW_PLOT -> showTrackPlot(item)
                 in moveActions.keys -> {
                     handleMoveAction(item, moveActions.getValue(menuItem.itemId))
                 }
@@ -297,19 +276,11 @@ class TracksActivity : AppCompatActivity() {
         val movedTrackId = moveTrack(item, targetFolder)
         if (movedTrackId != null) {
             Toast.makeText(this, "Track moved", Toast.LENGTH_SHORT).show()
-            updateSelectedTrackId(item.id, movedTrackId)
+            TrackSelectionPrefs.replaceSelectedTrackId(this, item.id, movedTrackId)
             refreshTrackList()
         } else {
             Toast.makeText(this, "Unable to move file", Toast.LENGTH_SHORT).show()
         }
-    }
-
-    private fun showTrackPlot(item: TrackListItem) {
-        TimePlotActivity.rememberTrackSelection(this, item.id)
-        startActivity(
-            Intent(this, TimePlotActivity::class.java)
-                .putExtra(TimePlotActivity.EXTRA_TRACK_ID, item.id)
-        )
     }
 
     private fun availableMoveTargets(currentFolder: String?): List<String?> {
@@ -351,7 +322,7 @@ class TracksActivity : AppCompatActivity() {
                             if (it.endsWith(".gpx", ignoreCase = true)) it else "$it.gpx"
                         }
                     )
-                    updateSelectedTrackId(item.id, renamed)
+                    TrackSelectionPrefs.replaceSelectedTrackId(this, item.id, renamed)
                     refreshTrackList()
                 } else {
                     Toast.makeText(this, "Unable to rename file", Toast.LENGTH_SHORT).show()
@@ -368,7 +339,7 @@ class TracksActivity : AppCompatActivity() {
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val deleted = deleteTrack(item)
                 if (deleted) {
-                    removeSelectedTrackId(item.id)
+                    TrackSelectionPrefs.removeSelectedTrackId(this, item.id)
                     TrackCatalog.onTrackDeleted(this, item.id)
                     Toast.makeText(this, "Deleted", Toast.LENGTH_SHORT).show()
                     refreshTrackList()
@@ -575,44 +546,16 @@ class TracksActivity : AppCompatActivity() {
     }
 
     private fun selectedTrackIds(): Set<String> {
-        return PreferenceManager.getDefaultSharedPreferences(this)
-            .getStringSet(PREF_MAP_VISIBLE_TRACK_IDS, emptySet())
-            ?.toSet()
-            ?: emptySet()
+        return TrackSelectionPrefs.selectedTrackIds(this)
     }
 
     private fun selectedFolderIds(): Set<String> {
-        return PreferenceManager.getDefaultSharedPreferences(this)
-            .getStringSet(PREF_MAP_VISIBLE_SUBFOLDER_NAMES, emptySet())
-            ?.toSet()
-            ?: emptySet()
-    }
-
-    private fun updateSelectedTrackId(oldTrackId: String, newTrackId: String) {
-        val selected = selectedTrackIds().toMutableSet()
-        if (!selected.remove(oldTrackId)) return
-        selected.add(newTrackId)
-        PreferenceManager.getDefaultSharedPreferences(this)
-            .edit()
-            .putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selected)
-            .apply()
-    }
-
-    private fun removeSelectedTrackId(trackId: String) {
-        val selected = selectedTrackIds().toMutableSet()
-        if (!selected.remove(trackId)) return
-        PreferenceManager.getDefaultSharedPreferences(this)
-            .edit()
-            .putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selected)
-            .apply()
+        return TrackSelectionPrefs.selectedFolderIds(this)
     }
 
     companion object {
-        const val PREF_MAP_VISIBLE_TRACK_IDS = "map_visible_track_ids"
-        const val PREF_MAP_VISIBLE_SUBFOLDER_NAMES = "map_visible_subfolder_names"
         const val EXTRA_SUBFOLDER_NAME = "extra_subfolder_name"
 
-        private const val MENU_GROUP_PLOT = 1
         private const val MENU_GROUP_OPEN_SHARE = 2
         private const val MENU_GROUP_MANAGE = 3
         private const val MENU_GROUP_MOVE = 4
@@ -620,7 +563,6 @@ class TracksActivity : AppCompatActivity() {
         private const val MENU_DELETE = 2
         private const val MENU_OPEN_DEFAULT = 3
         private const val MENU_SHARE = 4
-        private const val MENU_SHOW_PLOT = 5
         private const val MENU_MOVE_SUBMENU = 6
         private const val MENU_MOVE_BASE = 100
         private const val GPX_MIME = "application/gpx+xml"

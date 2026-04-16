@@ -15,19 +15,38 @@
         app:layout_constraintTop_toTopOf="parent"
         app:title="Dose rate plot" />
 
-    <TextView
-        android:id="@+id/trackNameLabel"
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/trackNameInputLayout"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         android:layout_marginTop="8dp"
         android:layout_marginEnd="16dp"
-        android:maxLines="2"
-        android:text="Currently recording"
-        android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+        android:hint="@string/time_plot_track_label"
+        app:endIconContentDescription="@string/time_plot_next_track"
+        app:endIconDrawable="@drawable/baseline_navigate_next_24"
+        app:endIconMode="custom"
+        app:startIconCheckable="false"
+        app:startIconContentDescription="@string/time_plot_previous_track"
+        app:startIconDrawable="@drawable/baseline_navigate_before_24"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/topAppBar" />
+        app:layout_constraintTop_toBottomOf="@id/topAppBar">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/trackNameField"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clickable="false"
+            android:cursorVisible="false"
+            android:focusable="false"
+            android:focusableInTouchMode="false"
+            android:inputType="none"
+            android:maxLines="2"
+            android:text="Currently recording"
+            android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
+    </com.google.android.material.textfield.TextInputLayout>
 
     <com.github.bocovp.geigergpx.TimePlotView
         android:id="@+id/timePlotView"
@@ -40,7 +59,7 @@
         app:layout_constraintBottom_toTopOf="@id/placeholderSlider"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/trackNameLabel" />
+        app:layout_constraintTop_toBottomOf="@id/trackNameInputLayout" />
 
 
     <TextView

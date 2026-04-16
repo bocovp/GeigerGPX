@@ -10,16 +10,24 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityTimePlotBinding
 import com.google.android.material.slider.Slider
+import java.util.Locale
 
 class TimePlotActivity : AppCompatActivity() {
     private enum class PlotMode { SLIDING_WINDOW, KERNEL_ESTIMATOR }
+
+    private data class PlotCandidate(
+        val id: String,
+        val title: String
+    )
 
     private lateinit var binding: ActivityTimePlotBinding
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var cpsToUSvhCoeff: Double = 1.0
     private var currentSamples: List<TrackSample> = emptyList()
     private var activeTrackObserverAttached = false
+    private var trackingObserverAttached = false
     private var selectedTrackIdForPlot: String? = null
+    private var plotCandidates: List<PlotCandidate> = emptyList()
     private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,6 +38,8 @@ class TimePlotActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         setupGeneralizationSlider()
+        setupTrackSelector()
+        observeTrackingState()
 
         syncBottomNavigationSelection()
         binding.bottomNavigation.setOnItemSelectedListener { item ->
@@ -63,11 +73,9 @@ class TimePlotActivity : AppCompatActivity() {
             rememberTrackSelection(this, selectedTrackId)
         }
 
-        val trackToShow = selectedTrackId ?: preferredTrackSelection(this)
-        selectedTrackIdForPlot = trackToShow
         showLoading(true)
         binding.root.post {
-            loadTrackForPlotAsync(trackToShow)
+            refreshTrackCandidatesAndPlotAsync(selectedTrackId)
         }
         invalidateOptionsMenu()
     }
@@ -75,6 +83,7 @@ class TimePlotActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         syncBottomNavigationSelection()
+        refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -117,12 +126,22 @@ class TimePlotActivity : AppCompatActivity() {
         binding.bottomNavigation.menu.findItem(R.id.navigation_time_plot)?.isChecked = true
     }
 
+    private fun setupTrackSelector() {
+        binding.trackNameInputLayout.setStartIconOnClickListener {
+            cycleSelectedTrack(-1)
+        }
+        binding.trackNameInputLayout.setEndIconOnClickListener {
+            cycleSelectedTrack(1)
+        }
+        updateTrackSelectorUi()
+    }
+
     private fun setupGeneralizationSlider() {
         binding.placeholderSlider.valueFrom = 0f
         binding.placeholderSlider.valueTo = GENERALIZATION_SLIDER_INTERNAL_MAX
         binding.placeholderSlider.value = 0f
         binding.placeholderSlider.setLabelFormatter { internalValue ->
-            "%.1f".format(java.util.Locale.US, internalSliderToDurationMinutes(internalValue))
+            "%.1f".format(Locale.US, internalSliderToDurationMinutes(internalValue))
         }
         updateSliderDescription(internalSliderToDurationMinutes(binding.placeholderSlider.value))
         binding.placeholderSlider.addOnChangeListener { _: Slider, value: Float, fromUser: Boolean ->
@@ -139,6 +158,14 @@ class TimePlotActivity : AppCompatActivity() {
                 updatePlot(recalculateVerticalAxis = true)
             }
         })
+    }
+
+    private fun observeTrackingState() {
+        if (trackingObserverAttached) return
+        trackingObserverAttached = true
+        viewModel.isTracking.observe(this) {
+            refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
+        }
     }
 
     private fun observeActiveTrack() {
@@ -158,6 +185,54 @@ class TimePlotActivity : AppCompatActivity() {
         }
     }
 
+    private fun refreshTrackCandidatesAndPlotAsync(preferredTrackId: String? = null) {
+        showLoading(true)
+        Thread {
+            val candidates = loadPlotCandidates()
+            runOnUiThread {
+                plotCandidates = candidates
+                val resolvedTrackId = resolveSelectedTrackId(candidates, preferredTrackId)
+                updateTrackSelectorUi()
+                if (resolvedTrackId == null) {
+                    selectedTrackIdForPlot = null
+                    currentSamples = emptyList()
+                    updateTrackTitle(null)
+                    binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
+                    showPlotMessage(R.string.time_plot_no_track_data)
+                } else {
+                    loadTrackForPlotAsync(resolvedTrackId)
+                }
+            }
+        }.start()
+    }
+
+    private fun loadPlotCandidates(): List<PlotCandidate> {
+        val activePoints = viewModel.activeTrackPoints.value.orEmpty()
+        val includeCurrentTrack = viewModel.isTracking.value == true
+        val selectedTrackIds = TrackSelectionPrefs.selectedTrackIds(this)
+        val selectedFolders = TrackSelectionPrefs.selectedFolderIds(this)
+        val mapTrackIds = selectedTrackIds.ifEmpty { setOf(TrackCatalog.currentTrackId()) }
+        val items = TrackCatalog.loadTrackListItems(
+            context = this,
+            activePoints = activePoints,
+            includeCurrentTrack = includeCurrentTrack,
+            includeMapTracks = false,
+            mapTrackIds = mapTrackIds,
+            includeSubfolderTracks = true
+        )
+        return items
+            .filter { item ->
+                when {
+                    item.itemType != TrackListItemType.TRACK -> false
+                    item.folderName != null -> {
+                        selectedTrackIds.contains(item.id) && selectedFolders.contains(item.folderName)
+                    }
+                    else -> selectedTrackIds.contains(item.id) || (selectedTrackIds.isEmpty() && item.defaultVisible)
+                }
+            }
+            .map { PlotCandidate(id = it.id, title = it.title) }
+    }
+
     private fun loadTrackForPlotAsync(trackId: String?) {
         val normalizedTrackId = trackId?.takeIf { it.isNotBlank() }
         if (normalizedTrackId == null || normalizedTrackId == TrackCatalog.currentTrackId()) {
@@ -171,9 +246,7 @@ class TimePlotActivity : AppCompatActivity() {
                 if (selected != null) {
                     applyLoadedTrack(normalizedTrackId, selected)
                 } else {
-                    rememberCurrentTrackSelection(this)
-                    selectedTrackIdForPlot = TrackCatalog.currentTrackId()
-                    loadTrackForPlot(TrackCatalog.currentTrackId())
+                    refreshTrackCandidatesAndPlotAsync()
                 }
             }
         }.start()
@@ -203,7 +276,9 @@ class TimePlotActivity : AppCompatActivity() {
         selectedTrackIdForPlot = trackId
         val normalizedTrackId = trackId?.takeIf { it.isNotBlank() }
         if (normalizedTrackId == null || normalizedTrackId == TrackCatalog.currentTrackId()) {
-            binding.trackNameLabel.text = CURRENT_TRACK_TITLE
+            updateTrackTitle(CURRENT_TRACK_TITLE)
+            rememberCurrentTrackSelection(this)
+            updateTrackSelectorUi()
             observeActiveTrack()
             return true
         }
@@ -215,13 +290,15 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun applyLoadedTrack(trackId: String, selectedTrack: TrackCatalog.TrackPlotData) {
         selectedTrackIdForPlot = trackId
-        binding.trackNameLabel.text = selectedTrack.title
+        rememberTrackSelection(this, trackId)
+        updateTrackTitle(selectedTrack.title)
+        updateTrackSelectorUi()
         currentSamples = selectedTrack.samples
         updatePlot()
     }
 
     private fun updateSliderDescription(valueMinutes: Float) {
-        binding.topAppBar.subtitle = "Averaging window: ${"%.1f".format(java.util.Locale.US, valueMinutes)} min"
+        binding.topAppBar.subtitle = "Averaging window: ${"%.1f".format(Locale.US, valueMinutes)} min"
     }
 
     private fun internalSliderToDurationMinutes(sliderInternalValue: Float): Float {
@@ -246,7 +323,7 @@ class TimePlotActivity : AppCompatActivity() {
     ) {
         val track = MapTrack(
             id = CURRENT_TRACK_TITLE,
-            title = binding.trackNameLabel.text?.toString().orEmpty(),
+            title = binding.trackNameField.text?.toString().orEmpty(),
             points = currentSamples
         )
         val generalized = TrackGeneralizer(
@@ -264,6 +341,48 @@ class TimePlotActivity : AppCompatActivity() {
         } else {
             showPlotMessage(null)
         }
+    }
+
+    private fun updateTrackTitle(title: String?) {
+        binding.trackNameField.setText(title.orEmpty())
+    }
+
+    private fun updateTrackSelectorUi() {
+        val hasMultipleCandidates = plotCandidates.size > 1
+        binding.trackNameInputLayout.isStartIconVisible = hasMultipleCandidates
+        binding.trackNameInputLayout.isEndIconVisible = hasMultipleCandidates
+        if (selectedTrackIdForPlot != null) {
+            val candidateTitle = plotCandidates.firstOrNull { it.id == selectedTrackIdForPlot }?.title
+            if (candidateTitle != null && binding.trackNameField.text?.toString() != candidateTitle) {
+                updateTrackTitle(candidateTitle)
+            }
+        }
+    }
+
+    private fun resolveSelectedTrackId(candidates: List<PlotCandidate>, preferredTrackId: String?): String? {
+        if (candidates.isEmpty()) {
+            return null
+        }
+        val preferredIds = listOfNotNull(
+            preferredTrackId?.takeIf { it.isNotBlank() },
+            preferredTrackSelection(this),
+            selectedTrackIdForPlot
+        )
+        val matchingCandidate = preferredIds.firstNotNullOfOrNull { candidateId ->
+            candidates.firstOrNull { it.id == candidateId }?.id
+        }
+        return matchingCandidate ?: candidates.first().id
+    }
+
+    private fun cycleSelectedTrack(delta: Int) {
+        if (plotCandidates.size <= 1) return
+        val currentIndex = plotCandidates.indexOfFirst { it.id == selectedTrackIdForPlot }
+            .takeIf { it >= 0 }
+            ?: 0
+        val nextIndex = (currentIndex + delta).mod(plotCandidates.size)
+        val nextTrackId = plotCandidates[nextIndex].id
+        rememberTrackSelection(this, nextTrackId)
+        loadTrackForPlotAsync(nextTrackId)
     }
 
     private fun updateKernelEstimatorPlot(scaleSeconds: Double, recalculateVerticalAxis: Boolean) {
