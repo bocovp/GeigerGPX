@@ -34,6 +34,7 @@ class TimePlotActivity : AppCompatActivity() {
     private var selectedTrackIdForPlot: String? = null
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
+    private var plotLoadRequestToken: Long = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -252,9 +253,13 @@ class TimePlotActivity : AppCompatActivity() {
         // overwrite the plot while the async load is in-flight.
         selectedTrackIdForPlot = normalizedTrackId
 
+        val requestToken = ++plotLoadRequestToken
         Thread {
             val selected = TrackCatalog.loadTrackSamplesById(this, normalizedTrackId)
             runOnUiThread {
+                if (requestToken != plotLoadRequestToken || selectedTrackIdForPlot != normalizedTrackId) {
+                    return@runOnUiThread
+                }
                 if (selected != null) {
                     applyLoadedTrack(normalizedTrackId, selected)
                 } else {

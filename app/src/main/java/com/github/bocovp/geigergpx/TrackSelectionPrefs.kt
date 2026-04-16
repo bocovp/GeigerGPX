@@ -49,7 +49,10 @@ object TrackSelectionPrefs {
 
     fun replaceSelectedTrackId(context: Context, oldTrackId: String, newTrackId: String) {
         val selectedIds = selectedTrackIds(context).toMutableSet()
-        if (!selectedIds.remove(oldTrackId)) return
+        // Always replace the selection:
+        // - remove the old ID if it exists
+        // - add the new ID even if the old ID was not selected (keeps "saved track becomes selected" working).
+        selectedIds.remove(oldTrackId)
         selectedIds.add(newTrackId)
         PreferenceManager.getDefaultSharedPreferences(context)
             .edit()
