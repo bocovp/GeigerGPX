@@ -49,8 +49,9 @@ class TrackMapRenderer(
             kotlin.math.abs((lastGeneralizationZoomLevel ?: currentZoomLevel) - currentZoomLevel) > 1e-9
         val modeChangedForGeneralization = lastUseKernelEstimator != useKernelEstimator
         val scaleChangedForGeneralization = kotlin.math.abs((lastKdeScaleSeconds ?: -1.0) - (kdeScaleSeconds ?: -1.0)) > 1e-9
+        val generalizationChanged = zoomChangedForGeneralization || modeChangedForGeneralization || scaleChangedForGeneralization
 
-        if (zoomChangedForGeneralization || modeChangedForGeneralization || scaleChangedForGeneralization) {
+        if (generalizationChanged) {
             recalculateGeneralizedTracks(tracks, currentZoomLevel, useKernelEstimator, kdeScaleSeconds)
             lastGeneralizationZoomLevel = currentZoomLevel
             lastUseKernelEstimator = useKernelEstimator
@@ -145,7 +146,7 @@ class TrackMapRenderer(
                 latestPoint = GeoPoint(trackPoints.last().latitude, trackPoints.last().longitude)
 
                 val previousCount = renderedPointCounts[track.id] ?: 0
-                if (previousCount != trackPoints.size || scaleChanged) {
+                if (previousCount != trackPoints.size || scaleChanged || generalizationChanged) {
                     val overlay = trackOverlays.getOrPut(track.id) {
                         GradientTrackOverlay().also { mapView.overlays.add(it) }
                     }
