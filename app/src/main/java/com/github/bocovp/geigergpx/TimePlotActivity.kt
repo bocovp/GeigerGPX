@@ -144,9 +144,11 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun setupGeneralizationSlider() {
-        binding.placeholderSlider.valueFrom = 0f
+        binding.placeholderSlider.valueFrom = KdeScaleSlider.minutesToInternal(KdeScaleSlider.MIN_MINUTES)
         binding.placeholderSlider.valueTo = KdeScaleSlider.INTERNAL_MAX
         binding.placeholderSlider.value = appState.sharedKdeSliderInternalValue
+            .coerceIn(binding.placeholderSlider.valueFrom, binding.placeholderSlider.valueTo)
+        appState.sharedKdeSliderInternalValue = binding.placeholderSlider.value
         binding.placeholderSlider.setLabelFormatter { internalValue ->
             "%.1f".format(Locale.US, KdeScaleSlider.internalToMinutes(internalValue))
         }
@@ -156,7 +158,8 @@ class TimePlotActivity : AppCompatActivity() {
             updateSliderDescription(durationMinutes)
             if (fromUser) {
                 appState.sharedKdeSliderInternalValue = value
-                updatePlot(recalculateVerticalAxis = false)
+                val shouldRecalculateVerticalAxis = plotMode == PlotMode.KERNEL_ESTIMATOR
+                updatePlot(recalculateVerticalAxis = shouldRecalculateVerticalAxis)
             }
         }
         binding.placeholderSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
@@ -504,7 +507,7 @@ class TimePlotActivity : AppCompatActivity() {
         ) { t2s ->
             estimator.getConfidenceIntervals(
                 t2s = t2s,
-                scale = scaleSeconds.coerceAtLeast(1e-3)
+                scale = scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS)
             )
         }
     }

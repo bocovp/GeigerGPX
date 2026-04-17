@@ -65,7 +65,7 @@ class TrackingService : Service() {
             val service = runningInstance ?: return null
             synchronized(service.kdeLock) {
                 val estimator = service.kde ?: return null
-                return estimator.getConfidenceIntervals(t2s, scaleSeconds.coerceAtLeast(1e-3))
+                return estimator.getConfidenceIntervals(t2s, scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS))
             }
         }
     }

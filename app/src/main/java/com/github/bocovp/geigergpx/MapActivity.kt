@@ -325,9 +325,11 @@ class MapActivity : AppCompatActivity() {
     }
 
     private fun setupKdeScaleSlider() {
-        binding.kdeScaleSliderMap.valueFrom = 0f
+        binding.kdeScaleSliderMap.valueFrom = KdeScaleSlider.minutesToInternal(KdeScaleSlider.MIN_MINUTES)
         binding.kdeScaleSliderMap.valueTo = KdeScaleSlider.INTERNAL_MAX
         binding.kdeScaleSliderMap.value = appState.sharedKdeSliderInternalValue
+            .coerceIn(binding.kdeScaleSliderMap.valueFrom, binding.kdeScaleSliderMap.valueTo)
+        appState.sharedKdeSliderInternalValue = binding.kdeScaleSliderMap.value
         binding.kdeScaleSliderMap.setLabelFormatter { value ->
             "%.1f".format(Locale.US, KdeScaleSlider.internalToMinutes(value))
         }
@@ -343,7 +345,7 @@ class MapActivity : AppCompatActivity() {
 
     private fun currentKdeScaleSeconds(): Double {
         val minutes = KdeScaleSlider.internalToMinutes(appState.sharedKdeSliderInternalValue)
-        return (minutes * 60.0).coerceAtLeast(1e-3)
+        return (minutes * 60.0).coerceAtLeast(KdeScaleSlider.MIN_SECONDS)
     }
 
     private fun updateLegendVisibility() {
