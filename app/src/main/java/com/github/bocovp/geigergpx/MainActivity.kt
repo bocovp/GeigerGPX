@@ -101,7 +101,8 @@ class MainActivity : AppCompatActivity() {
         applyToolbarTitleVisibility()
         setupToolbarTitleLongPress()
 
-        val restoredName = (application as GeigerGpxApp).consumeRestoredBackupName()
+        validateConfiguredSaveFolderAtStartup()
+        val restoredName = (application as GeigerGpxApp).restoreBackupIfNeeded()
         if (restoredName != null) {
             Toast.makeText(
                 this,
@@ -109,7 +110,6 @@ class MainActivity : AppCompatActivity() {
                 Toast.LENGTH_SHORT
             ).show()
         }
-        validateConfiguredSaveFolderAtStartup()
 
         binding.buttonStart.setOnClickListener {
             if (viewModel.isTracking.value == true) {
