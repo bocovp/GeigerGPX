@@ -88,6 +88,7 @@ class KernelDensityEstimator(private val coeff: Double) {
      * For numerical stability and better KDE conditioning, large counts are split into
      * multiple pseudo-events distributed uniformly across the interval midpoint grid.
      */
+    @Synchronized
     fun addSampleInterval(
         intervalStartSeconds: Double,
         durationSeconds: Double,
