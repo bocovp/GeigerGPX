@@ -8,6 +8,7 @@ class GeigerGpxApp : Application() {
     private var backupRestoreAttempted: Boolean = false
     var isMainToolbarTitleHidden: Boolean = false
     var selectedTimePlotTrackId: String? = null
+    var sharedKdeSliderInternalValue: Float = 0f
 
     override fun onCreate() {
         super.onCreate()
