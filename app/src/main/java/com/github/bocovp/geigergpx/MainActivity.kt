@@ -42,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private var openSavedTrackPlotAfterStop = false
     private var trackSavedReceiverRegistered = false
     private var pendingRestoreAfterStartupFolderValidation = false
+    private val statePendingStartupRestore = "state_pending_startup_restore"
 
     private val trackSavedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -100,6 +101,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingRestoreAfterStartupFolderValidation =
+            savedInstanceState?.getBoolean(statePendingStartupRestore, false) ?: false
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         setSupportActionBar(binding.topAppBar)
@@ -186,6 +189,11 @@ class MainActivity : AppCompatActivity() {
         requestPermissionsOnAppStart()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(statePendingStartupRestore, pendingRestoreAfterStartupFolderValidation)
+    }
+
     private fun validateConfiguredSaveFolderAtStartup(onValidationComplete: () -> Unit) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val treeUriString = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
@@ -229,14 +237,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun restoreStartupBackupIfNeeded() {
-        val restoredName = (application as GeigerGpxApp).restoreBackupIfNeeded()
-        if (restoredName != null) {
-            Toast.makeText(
-                this,
-                "Backup file was restored and saved as $restoredName",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
+        Thread {
+            val restoredName = (application as GeigerGpxApp).restoreBackupIfNeeded()
+            if (restoredName != null) {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    Toast.makeText(
+                        this,
+                        "Backup file was restored and saved as $restoredName",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }.start()
     }
 
 
