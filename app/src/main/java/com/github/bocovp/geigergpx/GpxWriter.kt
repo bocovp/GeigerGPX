@@ -68,8 +68,9 @@ object GpxWriter {
                 // Keep restored file and avoid repeated restores by removing backup best-effort.
                 backupFile.deleteOnExit()
             }
-
-            TrackCatalog.onTrackSaved(context, newName, emptyList())
+            val uri = writeResult.uri ?: return null
+            val newTrackId = if (uri.scheme == "content") "tree:$uri" else "file:${uri.path}"
+            TrackCatalog.onTrackMoved(context, "file:${backupFile.absolutePath}", newTrackId, null)
             newName
         } catch (e: Exception) {
             e.printStackTrace()

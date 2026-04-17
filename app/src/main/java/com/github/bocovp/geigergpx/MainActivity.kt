@@ -41,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private var keepScreenOnEnabled: Boolean = false
     private var openSavedTrackPlotAfterStop = false
     private var trackSavedReceiverRegistered = false
+    private var pendingRestoreAfterStartupFolderValidation = false
 
     private val trackSavedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -91,6 +92,10 @@ class MainActivity : AppCompatActivity() {
         } else {
             FileStorageManager.clearConfiguredTreeUri(this)
         }
+        if (pendingRestoreAfterStartupFolderValidation) {
+            pendingRestoreAfterStartupFolderValidation = false
+            restoreStartupBackupIfNeeded()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -101,14 +106,8 @@ class MainActivity : AppCompatActivity() {
         applyToolbarTitleVisibility()
         setupToolbarTitleLongPress()
 
-        validateConfiguredSaveFolderAtStartup()
-        val restoredName = (application as GeigerGpxApp).restoreBackupIfNeeded()
-        if (restoredName != null) {
-            Toast.makeText(
-                this,
-                "Backup file was restored and saved as $restoredName",
-                Toast.LENGTH_SHORT
-            ).show()
+        validateConfiguredSaveFolderAtStartup {
+            restoreStartupBackupIfNeeded()
         }
 
         binding.buttonStart.setOnClickListener {
@@ -187,7 +186,7 @@ class MainActivity : AppCompatActivity() {
         requestPermissionsOnAppStart()
     }
 
-    private fun validateConfiguredSaveFolderAtStartup() {
+    private fun validateConfiguredSaveFolderAtStartup(onValidationComplete: () -> Unit) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val treeUriString = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
         val defaultFolderError = FileStorageManager.getDefaultFolderWriteProbeError(this)
@@ -198,13 +197,19 @@ class MainActivity : AppCompatActivity() {
                 Toast.LENGTH_LONG
             ).show()
         }
-        if (treeUriString.isNullOrBlank()) return
+        if (treeUriString.isNullOrBlank()) {
+            onValidationComplete()
+            return
+        }
 
         val treeUri = runCatching { Uri.parse(treeUriString) }.getOrNull()
         val treeRoot = treeUri?.let { DocumentFile.fromTreeUri(this, it) }
         val isValidFolder = treeRoot?.isDirectory == true
         val canWrite = isValidFolder && FileStorageManager.isConfiguredFolderWritable(this)
-        if (isValidFolder && canWrite) return
+        if (isValidFolder && canWrite) {
+            onValidationComplete()
+            return
+        }
 
         AlertDialog.Builder(this)
             .setTitle("Save folder unavailable")
@@ -212,13 +217,26 @@ class MainActivity : AppCompatActivity() {
                 "Configured save folder is invalid or not writable. Choose another folder or app will fall back to default folder."
             )
             .setPositiveButton("Choose folder") { _, _ ->
+                pendingRestoreAfterStartupFolderValidation = true
                 folderPickerForStartupValidation.launch(null)
             }
             .setNegativeButton("Use default folder") { _, _ ->
                 FileStorageManager.clearConfiguredTreeUri(this)
+                onValidationComplete()
             }
             .setCancelable(false)
             .show()
+    }
+
+    private fun restoreStartupBackupIfNeeded() {
+        val restoredName = (application as GeigerGpxApp).restoreBackupIfNeeded()
+        if (restoredName != null) {
+            Toast.makeText(
+                this,
+                "Backup file was restored and saved as $restoredName",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
 
