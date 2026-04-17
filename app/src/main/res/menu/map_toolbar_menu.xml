@@ -14,4 +14,11 @@
         android:title="Show Heatmap"
         app:showAsAction="always" />
 
+    <item
+        android:id="@+id/action_toggle_plot_mode"
+        android:enabled="false"
+        android:icon="@drawable/baseline_planner_review_24"
+        android:title="@string/time_plot_switch_to_kernel_estimator"
+        app:showAsAction="always" />
+
 </menu>

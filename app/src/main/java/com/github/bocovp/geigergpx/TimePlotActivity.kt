@@ -35,6 +35,7 @@ class TimePlotActivity : AppCompatActivity() {
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
     private var plotLoadRequestToken: Long = 0L
+    private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -144,16 +145,17 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun setupGeneralizationSlider() {
         binding.placeholderSlider.valueFrom = 0f
-        binding.placeholderSlider.valueTo = GENERALIZATION_SLIDER_INTERNAL_MAX
-        binding.placeholderSlider.value = 0f
+        binding.placeholderSlider.valueTo = KdeScaleSlider.INTERNAL_MAX
+        binding.placeholderSlider.value = appState.sharedKdeSliderInternalValue
         binding.placeholderSlider.setLabelFormatter { internalValue ->
-            "%.1f".format(Locale.US, internalSliderToDurationMinutes(internalValue))
+            "%.1f".format(Locale.US, KdeScaleSlider.internalToMinutes(internalValue))
         }
-        updateSliderDescription(internalSliderToDurationMinutes(binding.placeholderSlider.value))
+        updateSliderDescription(KdeScaleSlider.internalToMinutes(binding.placeholderSlider.value))
         binding.placeholderSlider.addOnChangeListener { _: Slider, value: Float, fromUser: Boolean ->
-            val durationMinutes = internalSliderToDurationMinutes(value)
+            val durationMinutes = KdeScaleSlider.internalToMinutes(value)
             updateSliderDescription(durationMinutes)
             if (fromUser) {
+                appState.sharedKdeSliderInternalValue = value
                 updatePlot(recalculateVerticalAxis = false)
             }
         }
@@ -320,14 +322,8 @@ class TimePlotActivity : AppCompatActivity() {
         binding.topAppBar.subtitle = "Averaging window: ${"%.1f".format(Locale.US, valueMinutes)} min"
     }
 
-    private fun internalSliderToDurationMinutes(sliderInternalValue: Float): Float {
-        // Full formula: minDuration = 10 * (exp(3 * x) - 1) / (exp(3) - 1), where x is in [0, 1].
-        val expTerm = kotlin.math.exp(3.0 * sliderInternalValue.toDouble()) - 1.0
-        return (EXP_SCALE_FACTOR * expTerm).toFloat()
-    }
-
     private fun updatePlot(recalculateVerticalAxis: Boolean = true) {
-        val minDurationMinutes = internalSliderToDurationMinutes(binding.placeholderSlider.value)
+        val minDurationMinutes = KdeScaleSlider.internalToMinutes(binding.placeholderSlider.value)
         val minDurationSeconds = minDurationMinutes * SECONDS_PER_MINUTE
         if (plotMode == PlotMode.KERNEL_ESTIMATOR) {
             updateKernelEstimatorPlot(minDurationSeconds.toDouble(), recalculateVerticalAxis)
@@ -495,8 +491,7 @@ class TimePlotActivity : AppCompatActivity() {
         var accumulatedSeconds = 0.0
         for (sample in samples) {
             val durationSeconds = sample.seconds.coerceAtLeast(0.0)
-            addSampleToEstimator(
-                estimator = estimator,
+            estimator.addSampleInterval(
                 intervalStartSeconds = accumulatedSeconds,
                 durationSeconds = durationSeconds,
                 counts = sample.counts.coerceAtLeast(0)
@@ -511,30 +506,6 @@ class TimePlotActivity : AppCompatActivity() {
                 t2s = t2s,
                 scale = scaleSeconds.coerceAtLeast(1e-3)
             )
-        }
-    }
-
-    private fun addSampleToEstimator(
-        estimator: KernelDensityEstimator,
-        intervalStartSeconds: Double,
-        durationSeconds: Double,
-        counts: Int
-    ) {
-        if (counts <= 0) return
-
-        val intervalEndSeconds = intervalStartSeconds + durationSeconds
-        val groupCount = kotlin.math.ceil(counts / KDE_MAX_COUNTS_PER_POINT.toDouble()).toInt().coerceAtLeast(1)
-        val baseGroupSize = counts / groupCount
-        val groupsWithExtraCount = counts % groupCount
-
-        for (groupIndex in 0 until groupCount) {
-            val groupSize = baseGroupSize + if (groupIndex < groupsWithExtraCount) 1 else 0
-            val timestamp = if (durationSeconds <= 0.0) {
-                intervalStartSeconds
-            } else {
-                intervalStartSeconds + ((groupIndex + 0.5) / groupCount) * (intervalEndSeconds - intervalStartSeconds)
-            }
-            estimator.addPoint(timestamp, groupSize)
         }
     }
 
@@ -556,10 +527,7 @@ class TimePlotActivity : AppCompatActivity() {
         const val EXTRA_TRACK_ID = "extra_track_id"
         const val CURRENT_TRACK_TITLE = "Currently recording"
         private const val SECONDS_PER_MINUTE = 60f
-        private const val GENERALIZATION_SLIDER_INTERNAL_MAX = 1f
-        private const val EXP_SCALE_FACTOR = 0.523957
         private const val KDE_PLOT_SAMPLE_COUNT = 240
-        private const val KDE_MAX_COUNTS_PER_POINT = 10
 
         fun rememberTrackSelection(context: android.content.Context, trackId: String) {
             val app = context.applicationContext as? GeigerGpxApp ?: return

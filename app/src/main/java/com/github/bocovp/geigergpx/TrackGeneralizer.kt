@@ -1,6 +1,7 @@
 package com.github.bocovp.geigergpx
 
 import org.osmdroid.util.GeoPoint
+import kotlin.math.roundToInt
 
 class TrackGeneralizer(
     private val minDistanceMeters: Double,
@@ -8,7 +9,7 @@ class TrackGeneralizer(
     private val minDurationSeconds: Double = 0.0
 ) {
 
-    fun generalize(track: MapTrack): MapTrack {
+    fun generalize(track: MapTrack, kdeScale: Double? = null): MapTrack {
         if (track.points.size < 2) return track
 
         val geoPointSource = GeoPoint(0.0, 0.0)
@@ -86,6 +87,46 @@ class TrackGeneralizer(
 
         flushAveragedPoint()
 
+        if (kdeScale != null) {
+            return track.copy(points = applyKdeToGeneralizedTrack(track, generalized, kdeScale))
+        }
         return track.copy(points = generalized)
+    }
+
+    private fun applyKdeToGeneralizedTrack(
+        sourceTrack: MapTrack,
+        generalizedTrackPoints: List<TrackSample>,
+        kdeScale: Double
+    ): List<TrackSample> {
+        if (generalizedTrackPoints.isEmpty() || kdeScale <= 0.0) return generalizedTrackPoints
+
+        val kernelEstimator = KernelDensityEstimator(coeff)
+        var intervalStartSeconds = 0.0
+        for (sample in sourceTrack.points) {
+            kernelEstimator.addSampleInterval(
+                intervalStartSeconds = intervalStartSeconds,
+                durationSeconds = sample.seconds,
+                counts = sample.counts
+            )
+            intervalStartSeconds += sample.seconds.coerceAtLeast(0.0)
+        }
+
+        val midpointSeconds = DoubleArray(generalizedTrackPoints.size)
+        var elapsedSeconds = 0.0
+        generalizedTrackPoints.forEachIndexed { idx, sample ->
+            val duration = sample.seconds.coerceAtLeast(0.0)
+            midpointSeconds[idx] = elapsedSeconds + duration * 0.5
+            elapsedSeconds += duration
+        }
+        val estimatedDoseRate = kernelEstimator.estimateDoseRate(midpointSeconds, kdeScale)
+        return generalizedTrackPoints.mapIndexed { idx, sample ->
+            val doseRate = estimatedDoseRate.getOrElse(idx) { sample.doseRate }.coerceAtLeast(0.0)
+            val counts = if (coeff > 0.0) {
+                ((doseRate / coeff) * sample.seconds).roundToInt().coerceAtLeast(0)
+            } else {
+                sample.counts
+            }
+            sample.copy(doseRate = doseRate, counts = counts)
+        }
     }
 }
