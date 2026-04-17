@@ -54,18 +54,26 @@ object GpxWriter {
         val backupFile = java.io.File(FileStorageManager.getRootDirectory(context), BACKUP_FILE_NAME)
         if (!backupFile.exists()) return null
         val newName = defaultRestoredFileName()
-        val oldTrackId = "file:${backupFile.absolutePath}"
         return try {
-            val destination = java.io.File(FileStorageManager.getRootDirectory(context), newName)
-            if (backupFile.renameTo(destination)) {
-                val newTrackId = "file:${destination.absolutePath}"
-                TrackCatalog.onTrackMoved(context, oldTrackId, newTrackId, destinationFolder = null)
-                newName
-            } else {
-                null
+            val writeResult = FileStorageManager.writeStreamDetailed(
+                context = context,
+                relativePath = newName
+            ) { output ->
+                backupFile.inputStream().use { input ->
+                    input.copyTo(output)
+                }
             }
+            if (writeResult.uri == null) return null
+            if (!backupFile.delete()) {
+                // Keep restored file and avoid repeated restores by removing backup best-effort.
+                backupFile.deleteOnExit()
+            }
+            val uri = writeResult.uri ?: return null
+            val newTrackId = if (uri.scheme == "content") "tree:$uri" else "file:${uri.path}"
+            TrackCatalog.onTrackMoved(context, "file:${backupFile.absolutePath}", newTrackId, null)
+            newName
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("GPX", "Failed to restore backup", e)
             null
         }
     }

@@ -5,14 +5,28 @@ import android.app.Application
 class GeigerGpxApp : Application() {
     val trackingRepository: TrackingRepository by lazy { TrackingRepository() }
     private var restoredBackupName: String? = null
+    private var backupRestoreAttempted: Boolean = false
     var isMainToolbarTitleHidden: Boolean = false
     var selectedTimePlotTrackId: String? = null
 
     override fun onCreate() {
         super.onCreate()
-        // Restore abandoned backup once per process start. This avoids restoring during
-        // Activity recreation (e.g. screen rotation) while tracking is ongoing.
-        restoredBackupName = GpxWriter.restoreBackupIfPresent(this)
+    }
+
+    @Synchronized
+    fun restoreBackupIfNeeded(): String? {
+        if (!backupRestoreAttempted) {
+            backupRestoreAttempted = true // Mark as attempted immediately
+
+            // Abort restoration if a tracking session is already active.
+            // This prevents moving/deleting the Backup.gpx file that the
+            // background service is currently writing to.
+            if (trackingRepository.isTracking.value == true) {
+                return null
+            }
+
+            restoredBackupName = GpxWriter.restoreBackupIfPresent(this)        }
+        return consumeRestoredBackupName()
     }
 
     fun consumeRestoredBackupName(): String? {
