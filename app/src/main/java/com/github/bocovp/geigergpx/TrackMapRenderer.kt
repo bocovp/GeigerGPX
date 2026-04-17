@@ -31,6 +31,7 @@ class TrackMapRenderer(
     private var lastFallbackPoint: GeoPoint? = null
     private var lastUseKernelEstimator: Boolean = false
     private var lastKdeScaleSeconds: Double? = null
+    private var lastGeneralizationTrackFingerprint: String = ""
 
     fun renderTracks(
         tracks: List<MapTrack>,
@@ -49,18 +50,29 @@ class TrackMapRenderer(
             kotlin.math.abs((lastGeneralizationZoomLevel ?: currentZoomLevel) - currentZoomLevel) > 1e-9
         val modeChangedForGeneralization = lastUseKernelEstimator != useKernelEstimator
         val scaleChangedForGeneralization = kotlin.math.abs((lastKdeScaleSeconds ?: -1.0) - (kdeScaleSeconds ?: -1.0)) > 1e-9
-        val generalizationChanged = zoomChangedForGeneralization || modeChangedForGeneralization || scaleChangedForGeneralization
+        val currentTrackFingerprint = buildGeneralizationTrackFingerprint(tracks)
+        val trackDataChangedForGeneralization = currentTrackFingerprint != lastGeneralizationTrackFingerprint
+        val generalizationChanged = zoomChangedForGeneralization ||
+            modeChangedForGeneralization ||
+            scaleChangedForGeneralization ||
+            trackDataChangedForGeneralization
 
         if (generalizationChanged) {
             recalculateGeneralizedTracks(tracks, currentZoomLevel, useKernelEstimator, kdeScaleSeconds)
             lastGeneralizationZoomLevel = currentZoomLevel
             lastUseKernelEstimator = useKernelEstimator
             lastKdeScaleSeconds = kdeScaleSeconds
+            lastGeneralizationTrackFingerprint = currentTrackFingerprint
         }
 
         var currentMax = Double.NEGATIVE_INFINITY
         tracks.forEach { track ->
-            track.points.forEach { sample ->
+            val pointsForColorScale = if (useKernelEstimator) {
+                generalizedTracksById[track.id] ?: track.points
+            } else {
+                track.points
+            }
+            pointsForColorScale.forEach { sample ->
                 if (sample.badCoordinates) return@forEach
                 if (sample.doseRate > currentMax) currentMax = sample.doseRate
             }
@@ -266,6 +278,27 @@ class TrackMapRenderer(
         }
     }
 
+    private fun buildGeneralizationTrackFingerprint(tracks: List<MapTrack>): String {
+        if (tracks.isEmpty()) return ""
+        return buildString {
+            tracks.forEach { track ->
+                val lastPoint = track.points.lastOrNull()
+                append(track.id)
+                append(':')
+                append(track.points.size)
+                append(':')
+                append(lastPoint?.seconds ?: -1.0)
+                append(':')
+                append(lastPoint?.counts ?: -1)
+                append(':')
+                append(lastPoint?.latitude ?: 0.0)
+                append(':')
+                append(lastPoint?.longitude ?: 0.0)
+                append(';')
+            }
+        }
+    }
+
     private fun recalculateGeneralizedTracks(
         tracks: List<MapTrack>,
         zoomLevel: Double,
@@ -281,7 +314,7 @@ class TrackMapRenderer(
 
 
         val generalizer = TrackGeneralizer(minDistanceMeters, coeff)
-        val kdeScale = if (useKernelEstimator) kdeScaleSeconds?.coerceAtLeast(1e-3) else null
+        val kdeScale = if (useKernelEstimator) kdeScaleSeconds?.coerceAtLeast(KdeScaleSlider.MIN_SECONDS) else null
 
         generalizedTracksById.clear()
         tracks.forEach { track ->
