@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityMapBinding
+import com.google.android.material.slider.Slider
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
@@ -20,6 +21,8 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
 class MapActivity : AppCompatActivity() {
+    private enum class PlotMode { SLIDING_WINDOW, KERNEL_ESTIMATOR }
+
     companion object {
         private var rememberedViewportState: TrackMapRenderer.MapViewportState? = null
         private var isAutoZoomDisabledByUser: Boolean = false
@@ -35,6 +38,8 @@ class MapActivity : AppCompatActivity() {
     private var hasLoadedMapTracks = false
     private var hasVisibleMapContent = false
     private var ignoreMapMoveEventsUntilMillis: Long = 0L
+    private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
+    private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -76,6 +81,7 @@ class MapActivity : AppCompatActivity() {
         binding.mapView.zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
         binding.zoomInButton.setOnClickListener { binding.mapView.controller.zoomIn() }
         binding.zoomOutButton.setOnClickListener { binding.mapView.controller.zoomOut() }
+        setupKdeScaleSlider()
         binding.mapView.addMapListener(object : MapListener {
             override fun onScroll(event: ScrollEvent?): Boolean {
                 onUserMapMoved()
@@ -111,6 +117,7 @@ class MapActivity : AppCompatActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu?): Boolean {
         val toggleItem = menu?.findItem(R.id.action_toggle_heatmap)
+        val modeItem = menu?.findItem(R.id.action_toggle_plot_mode)
 
         if (isHeatmapMode) {
             toggleItem?.title = "Show Gradient Tracks"
@@ -119,6 +126,8 @@ class MapActivity : AppCompatActivity() {
             toggleItem?.title = "Show Heatmap"
             toggleItem?.setIcon(R.drawable.baseline_scatter_plot_24)
         }
+        updateModeUi(modeItem)
+        modeItem?.isEnabled = !isHeatmapMode
 
         return super.onPrepareOptionsMenu(menu)
     }
@@ -135,6 +144,19 @@ class MapActivity : AppCompatActivity() {
             }
             R.id.action_toggle_heatmap -> {
                 isHeatmapMode = !isHeatmapMode
+                updateLegendVisibility()
+                invalidateOptionsMenu()
+                refreshMapTracks(latestActivePoints)
+                true
+            }
+            R.id.action_toggle_plot_mode -> {
+                if (isHeatmapMode) return true
+                plotMode = if (plotMode == PlotMode.SLIDING_WINDOW) {
+                    PlotMode.KERNEL_ESTIMATOR
+                } else {
+                    PlotMode.SLIDING_WINDOW
+                }
+                updateLegendVisibility()
                 invalidateOptionsMenu()
                 refreshMapTracks(latestActivePoints)
                 true
@@ -238,7 +260,9 @@ class MapActivity : AppCompatActivity() {
                     tracks = visibleTracks,
                     pois = poiMapItems,
                     isHeatmapMode = isHeatmapMode,
-                    shouldAutoFit = !isAutoZoomDisabledByUser
+                    shouldAutoFit = !isAutoZoomDisabledByUser,
+                    useKernelEstimator = !isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR,
+                    kdeScaleSeconds = currentKdeScaleSeconds()
                 )
                 if (autoFitApplied) {
                     suppressMapMoveEventsTemporarily()
@@ -298,5 +322,47 @@ class MapActivity : AppCompatActivity() {
 
     private fun selectedFolderIds(): Set<String> {
         return TrackSelectionPrefs.selectedFolderIds(this)
+    }
+
+    private fun setupKdeScaleSlider() {
+        binding.kdeScaleSliderMap.valueFrom = 0f
+        binding.kdeScaleSliderMap.valueTo = KdeScaleSlider.INTERNAL_MAX
+        binding.kdeScaleSliderMap.value = appState.sharedKdeSliderInternalValue
+        binding.kdeScaleSliderMap.setLabelFormatter { value ->
+            "%.1f".format(Locale.US, KdeScaleSlider.internalToMinutes(value))
+        }
+        binding.kdeScaleSliderMap.addOnChangeListener { _: Slider, value: Float, fromUser: Boolean ->
+            if (!fromUser) return@addOnChangeListener
+            appState.sharedKdeSliderInternalValue = value
+            if (!isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR) {
+                refreshMapTracks(latestActivePoints)
+            }
+        }
+        updateLegendVisibility()
+    }
+
+    private fun currentKdeScaleSeconds(): Double {
+        val minutes = KdeScaleSlider.internalToMinutes(appState.sharedKdeSliderInternalValue)
+        return (minutes * 60.0).coerceAtLeast(1e-3)
+    }
+
+    private fun updateLegendVisibility() {
+        val showKernelSlider = !isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR
+        binding.colorLegendContent.visibility = if (showKernelSlider) View.GONE else View.VISIBLE
+        binding.kdeScaleSliderMap.visibility = if (showKernelSlider) View.VISIBLE else View.GONE
+    }
+
+    private fun updateModeUi(toggleItem: MenuItem?) {
+        toggleItem ?: return
+        val (iconRes, titleRes) = when (plotMode) {
+            PlotMode.SLIDING_WINDOW -> {
+                R.drawable.baseline_planner_review_24 to R.string.time_plot_switch_to_kernel_estimator
+            }
+            PlotMode.KERNEL_ESTIMATOR -> {
+                R.drawable.baseline_bar_chart_24 to R.string.time_plot_switch_to_sliding_window
+            }
+        }
+        toggleItem.setIcon(iconRes)
+        toggleItem.title = getString(titleRes)
     }
 }

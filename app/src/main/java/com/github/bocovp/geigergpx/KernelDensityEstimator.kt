@@ -7,6 +7,9 @@ import kotlin.math.floor
  * @param coeff  calibration factor [µSv/h per cps] — converts count rate to dose rate
  */
 class KernelDensityEstimator(private val coeff: Double) {
+    companion object {
+        private const val MAX_COUNTS_PER_POINT = 10
+    }
 
     // Timestamps in seconds, maintained in sorted order.
     // addPoint appends and bubbles back; rare out-of-order events from thread races
@@ -76,6 +79,36 @@ class KernelDensityEstimator(private val coeff: Double) {
             ns[i - 1] = ns[i];
             ns[i] = tmpN
             i--
+        }
+    }
+
+    /**
+     * Adds a count sample that spans a time interval.
+     *
+     * For numerical stability and better KDE conditioning, large counts are split into
+     * multiple pseudo-events distributed uniformly across the interval midpoint grid.
+     */
+    fun addSampleInterval(
+        intervalStartSeconds: Double,
+        durationSeconds: Double,
+        counts: Int
+    ) {
+        if (counts <= 0) return
+
+        val safeDuration = durationSeconds.coerceAtLeast(0.0)
+        val intervalEndSeconds = intervalStartSeconds + safeDuration
+        val groupCount = kotlin.math.ceil(counts / MAX_COUNTS_PER_POINT.toDouble()).toInt().coerceAtLeast(1)
+        val baseGroupSize = counts / groupCount
+        val groupsWithExtraCount = counts % groupCount
+
+        for (groupIndex in 0 until groupCount) {
+            val groupSize = baseGroupSize + if (groupIndex < groupsWithExtraCount) 1 else 0
+            val timestamp = if (safeDuration <= 0.0) {
+                intervalStartSeconds
+            } else {
+                intervalStartSeconds + ((groupIndex + 0.5) / groupCount) * (intervalEndSeconds - intervalStartSeconds)
+            }
+            addPoint(timestamp, groupSize)
         }
     }
 

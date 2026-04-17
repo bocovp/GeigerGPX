@@ -29,24 +29,40 @@ class TrackMapRenderer(
     private var lastRenderedTracks: List<MapTrack> = emptyList()
     private var lastRenderedPois: List<PoiMapItem> = emptyList()
     private var lastFallbackPoint: GeoPoint? = null
+    private var lastUseKernelEstimator: Boolean = false
+    private var lastKdeScaleSeconds: Double? = null
+    private var lastGeneralizedTotalPointCount: Int = -1
 
     fun renderTracks(
         tracks: List<MapTrack>,
         pois: List<PoiMapItem>,
         isHeatmapMode: Boolean,
-        shouldAutoFit: Boolean
+        shouldAutoFit: Boolean,
+        useKernelEstimator: Boolean = false,
+        kdeScaleSeconds: Double? = null
     ): Boolean {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
         val doseCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         val activeTrackIds = tracks.map { it.id }.toSet()
         val currentZoomLevel = mapView.zoomLevelDouble
+        val totalPointCount = tracks.sumOf { it.points.size }
         val zoomChangedForGeneralization = lastGeneralizationZoomLevel == null ||
             kotlin.math.abs((lastGeneralizationZoomLevel ?: currentZoomLevel) - currentZoomLevel) > 1e-9
+        val modeChangedForGeneralization = lastUseKernelEstimator != useKernelEstimator
+        val scaleChangedForGeneralization = kotlin.math.abs((lastKdeScaleSeconds ?: -1.0) - (kdeScaleSeconds ?: -1.0)) > 1e-9
+        val pointsChangedForGeneralization = lastGeneralizedTotalPointCount != totalPointCount
+        val generalizationChanged = zoomChangedForGeneralization ||
+            modeChangedForGeneralization ||
+            scaleChangedForGeneralization ||
+            pointsChangedForGeneralization
 
-        if (zoomChangedForGeneralization) {
-            recalculateGeneralizedTracks(tracks, currentZoomLevel)
+        if (generalizationChanged) {
+            recalculateGeneralizedTracks(tracks, currentZoomLevel, useKernelEstimator, kdeScaleSeconds)
             lastGeneralizationZoomLevel = currentZoomLevel
+            lastUseKernelEstimator = useKernelEstimator
+            lastKdeScaleSeconds = kdeScaleSeconds
+            lastGeneralizedTotalPointCount = totalPointCount
         }
 
         var currentMax = Double.NEGATIVE_INFINITY
@@ -137,7 +153,7 @@ class TrackMapRenderer(
                 latestPoint = GeoPoint(trackPoints.last().latitude, trackPoints.last().longitude)
 
                 val previousCount = renderedPointCounts[track.id] ?: 0
-                if (previousCount != trackPoints.size || scaleChanged) {
+                if (previousCount != trackPoints.size || scaleChanged || generalizationChanged) {
                     val overlay = trackOverlays.getOrPut(track.id) {
                         GradientTrackOverlay().also { mapView.overlays.add(it) }
                     }
@@ -257,7 +273,12 @@ class TrackMapRenderer(
         }
     }
 
-    private fun recalculateGeneralizedTracks(tracks: List<MapTrack>, zoomLevel: Double) {
+    private fun recalculateGeneralizedTracks(
+        tracks: List<MapTrack>,
+        zoomLevel: Double,
+        useKernelEstimator: Boolean,
+        kdeScaleSeconds: Double?
+    ) {
         val mapLatitude = mapView.mapCenter.latitude
         val metersPerPixel = TileSystem.GroundResolution(mapLatitude, zoomLevel)
         val minDistanceMeters = metersPerPixel * 10.0
@@ -267,10 +288,11 @@ class TrackMapRenderer(
 
 
         val generalizer = TrackGeneralizer(minDistanceMeters, coeff)
+        val kdeScale = if (useKernelEstimator) kdeScaleSeconds?.coerceAtLeast(1e-3) else null
 
         generalizedTracksById.clear()
         tracks.forEach { track ->
-            generalizedTracksById[track.id] = generalizer.generalize(track).points
+            generalizedTracksById[track.id] = generalizer.generalize(track, kdeScale).points
         }
     }
 }
