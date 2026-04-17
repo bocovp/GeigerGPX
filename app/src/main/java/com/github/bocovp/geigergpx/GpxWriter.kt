@@ -73,7 +73,7 @@ object GpxWriter {
             TrackCatalog.onTrackMoved(context, "file:${backupFile.absolutePath}", newTrackId, null)
             newName
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("GPX", "Failed to restore backup", e)
             null
         }
     }

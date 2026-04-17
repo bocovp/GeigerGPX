@@ -13,6 +13,7 @@ class GeigerGpxApp : Application() {
         super.onCreate()
     }
 
+    @Synchronized
     fun restoreBackupIfNeeded(): String? {
         if (!backupRestoreAttempted) {
             // Restore abandoned backup once per process start. This avoids restoring during
