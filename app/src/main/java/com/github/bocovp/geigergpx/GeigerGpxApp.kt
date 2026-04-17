@@ -16,11 +16,16 @@ class GeigerGpxApp : Application() {
     @Synchronized
     fun restoreBackupIfNeeded(): String? {
         if (!backupRestoreAttempted) {
-            // Restore abandoned backup once per process start. This avoids restoring during
-            // Activity recreation (e.g. screen rotation) while tracking is ongoing.
-            restoredBackupName = GpxWriter.restoreBackupIfPresent(this)
-            backupRestoreAttempted = true
-        }
+            backupRestoreAttempted = true // Mark as attempted immediately
+
+            // Abort restoration if a tracking session is already active.
+            // This prevents moving/deleting the Backup.gpx file that the
+            // background service is currently writing to.
+            if (trackingRepository.isTracking.value == true) {
+                return null
+            }
+
+            restoredBackupName = GpxWriter.restoreBackupIfPresent(this)        }
         return consumeRestoredBackupName()
     }
 
