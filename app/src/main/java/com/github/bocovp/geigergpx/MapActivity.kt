@@ -26,19 +26,19 @@ class MapActivity : AppCompatActivity() {
     companion object {
         private var rememberedViewportState: TrackMapRenderer.MapViewportState? = null
         private var isAutoZoomDisabledByUser: Boolean = false
+        private var isHeatmapMode: Boolean = false
+        private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
     }
 
     private lateinit var binding: ActivityMapBinding
     private lateinit var trackMapRenderer: TrackMapRenderer
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
 
-    private var isHeatmapMode: Boolean = false
     private var latestActivePoints: List<TrackPoint> = emptyList()
     private val mapLoadRequestSequence = AtomicInteger(0)
     private var hasLoadedMapTracks = false
     private var hasVisibleMapContent = false
     private var ignoreMapMoveEventsUntilMillis: Long = 0L
-    private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,15 +99,7 @@ class MapActivity : AppCompatActivity() {
         val tvMax = findViewById<TextView>(R.id.tvMaxDose)
         trackMapRenderer = TrackMapRenderer(binding.mapView, tvHalf, tvMax)
 
-        if (savedInstanceState != null) {
-            isHeatmapMode = savedInstanceState.getBoolean("heatmap_mode", false)
-        }
         observeTrack()
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putBoolean("heatmap_mode", isHeatmapMode)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -150,7 +142,8 @@ class MapActivity : AppCompatActivity() {
                 true
             }
             R.id.action_toggle_plot_mode -> {
-                if (isHeatmapMode) return true
+                // Trying to use  kde for heatmap:
+                // if (isHeatmapMode) return true
                 plotMode = if (plotMode == PlotMode.SLIDING_WINDOW) {
                     PlotMode.KERNEL_ESTIMATOR
                 } else {
@@ -349,7 +342,8 @@ class MapActivity : AppCompatActivity() {
     }
 
     private fun updateLegendVisibility() {
-        val showKernelSlider = !isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR
+        val showKernelSlider = false && (!isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR)
+        // slider is disabled for novv
         binding.colorLegendContent.visibility = if (showKernelSlider) View.GONE else View.VISIBLE
         binding.kdeScaleSliderMap.visibility = if (showKernelSlider) View.VISIBLE else View.GONE
     }

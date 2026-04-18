@@ -74,7 +74,7 @@ class TrackGeneralizer(
                 if (secondsSum >= minDurationSeconds) {
                     flushAveragedPoint()
                 }
-            } else {
+            } else if (!sourcePoint.badCoordinates && !currentLastPoint.badCoordinates) {
                 geoPointSource.setCoords(sourcePoint.latitude, sourcePoint.longitude)
                 geoPointLast.setCoords(currentLastPoint.latitude, currentLastPoint.longitude)
                 val distanceMeters = geoPointSource.distanceToAsDouble(geoPointLast)

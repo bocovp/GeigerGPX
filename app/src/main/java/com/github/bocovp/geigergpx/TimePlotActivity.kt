@@ -33,7 +33,6 @@ class TimePlotActivity : AppCompatActivity() {
     private val failedTrackIdsForPlot = mutableSetOf<String>()
     private var selectedTrackIdForPlot: String? = null
     private var plotCandidates: List<PlotCandidate> = emptyList()
-    private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
     private var plotLoadRequestToken: Long = 0L
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
 
@@ -287,12 +286,13 @@ class TimePlotActivity : AppCompatActivity() {
         if (messageResId == null) {
             binding.loadingLabel.visibility = View.GONE
             binding.timePlotView.visibility = View.VISIBLE
-            return
+            binding.trackNameField.visibility = View.VISIBLE
+        } else {
+            binding.loadingLabel.setText(messageResId)
+            binding.loadingLabel.visibility = View.VISIBLE
+            binding.timePlotView.visibility = View.INVISIBLE
+            binding.trackNameField.visibility = View.INVISIBLE
         }
-
-        binding.loadingLabel.setText(messageResId)
-        binding.loadingLabel.visibility = View.VISIBLE
-        binding.timePlotView.visibility = View.INVISIBLE
     }
 
     private fun loadTrackForPlot(trackId: String?): Boolean {
@@ -531,6 +531,8 @@ class TimePlotActivity : AppCompatActivity() {
         const val CURRENT_TRACK_TITLE = "Currently recording"
         private const val SECONDS_PER_MINUTE = 60f
         private const val KDE_PLOT_SAMPLE_COUNT = 240
+
+        private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
 
         fun rememberTrackSelection(context: android.content.Context, trackId: String) {
             val app = context.applicationContext as? GeigerGpxApp ?: return

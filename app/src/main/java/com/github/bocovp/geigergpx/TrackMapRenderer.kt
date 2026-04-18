@@ -47,15 +47,15 @@ class TrackMapRenderer(
         val activeTrackIds = tracks.map { it.id }.toSet()
         val currentZoomLevel = mapView.zoomLevelDouble
         val zoomChangedForGeneralization = lastGeneralizationZoomLevel == null ||
-            kotlin.math.abs((lastGeneralizationZoomLevel ?: currentZoomLevel) - currentZoomLevel) > 1e-9
+                kotlin.math.abs((lastGeneralizationZoomLevel ?: currentZoomLevel) - currentZoomLevel) > 1e-9
         val modeChangedForGeneralization = lastUseKernelEstimator != useKernelEstimator
         val scaleChangedForGeneralization = kotlin.math.abs((lastKdeScaleSeconds ?: -1.0) - (kdeScaleSeconds ?: -1.0)) > 1e-9
         val currentTrackFingerprint = buildGeneralizationTrackFingerprint(tracks)
         val trackDataChangedForGeneralization = currentTrackFingerprint != lastGeneralizationTrackFingerprint
         val generalizationChanged = zoomChangedForGeneralization ||
-            modeChangedForGeneralization ||
-            scaleChangedForGeneralization ||
-            trackDataChangedForGeneralization
+                modeChangedForGeneralization ||
+                scaleChangedForGeneralization ||
+                trackDataChangedForGeneralization
 
         if (generalizationChanged) {
             recalculateGeneralizedTracks(tracks, currentZoomLevel, useKernelEstimator, kdeScaleSeconds)
@@ -82,7 +82,7 @@ class TrackMapRenderer(
         }
 
         val currentMin = 0.0
-        if (!currentMax.isFinite() || currentMax > 0.5) {
+        if (!currentMax.isFinite() || currentMax > 0.5 || currentMax < 1e-9) {
             currentMax = 0.5
         }
 
@@ -152,7 +152,12 @@ class TrackMapRenderer(
             removeDeletedTracks(activeTrackIds)
 
             tracks.forEach { track ->
-                val trackPoints = generalizedTracksById[track.id] ?: track.points
+                val trackPoints = if (useKernelEstimator) {
+                    generalizedTracksById[track.id] ?: track.points
+                } else {
+                    track.points
+                }
+
                 if (trackPoints.isEmpty()) return@forEach
 
                 latestPoint = GeoPoint(trackPoints.last().latitude, trackPoints.last().longitude)
@@ -177,13 +182,16 @@ class TrackMapRenderer(
                 poiOverlay = it
                 shouldInvalidate = true
             }
-            overlay.points = pois
-            overlay.minDose = currentMin
-            overlay.maxDose = currentMax
+            val poisChanged = pois != lastRenderedPois
+            if (poisChanged || scaleChanged) {
+                overlay.points = pois
+                overlay.minDose = currentMin
+                overlay.maxDose = currentMax
+                shouldInvalidate = true
+            }
             if (pois.isNotEmpty()) {
                 latestPoint = GeoPoint(pois.last().latitude, pois.last().longitude)
             }
-            shouldInvalidate = true
         }
 
         val renderFingerprint = buildString {
