@@ -56,3 +56,7 @@ captures/
 
 # Firebase config (contains API keys)
 google-services.json
+
+# Compiled Baseline Profile artifacts
+**/*.dm
+**/*.profm
