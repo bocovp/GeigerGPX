@@ -100,9 +100,7 @@ class EditTrackActivity : AppCompatActivity() {
         }
 
         binding.btnCancel.setOnClickListener {
-            selectedIndices = emptyList()
-            boundaryIndex = null
-            refreshUiState()
+            finish()
         }
 
         binding.btnApply.setOnClickListener {

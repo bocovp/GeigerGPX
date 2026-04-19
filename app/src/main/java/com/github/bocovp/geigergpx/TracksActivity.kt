@@ -265,7 +265,7 @@ class TracksActivity : AppCompatActivity() {
 
         if (!item.isCurrentTrack) {
             menu.add(MENU_GROUP_MANAGE, MENU_EDIT_TRACK, Menu.NONE, "Edit track")
-                .setIcon(R.drawable.baseline_edit_24)
+                .setIcon(R.drawable.baseline_rebase_edit_24)
             menu.add(MENU_GROUP_MANAGE, MENU_RENAME, Menu.NONE, "Rename")
                 .setIcon(R.drawable.baseline_edit_24)
 

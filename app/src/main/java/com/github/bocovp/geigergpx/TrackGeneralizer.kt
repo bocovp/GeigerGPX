@@ -82,6 +82,12 @@ class TrackGeneralizer(
                 if (distanceMeters >= minDistanceMeters && secondsSum >= minDurationSeconds) {
                     flushAveragedPoint()
                 }
+            } else {
+                // At least one endpoint has bad coordinates — distance is meaningless,
+                // fall back to duration-only flushing (same logic as the first-point case)
+                if (secondsSum >= minDurationSeconds) {
+                    flushAveragedPoint()
+                }
             }
         }
 

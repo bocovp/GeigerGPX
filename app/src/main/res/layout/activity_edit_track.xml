@@ -39,36 +39,59 @@
             android:id="@+id/editModeToggle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center"
+            android:layout_gravity="center"
             app:singleSelection="true"
             app:selectionRequired="false">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnMarkBad"
                 style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:layout_height="wrap_content"
-                android:text="Mark bad points" />
+                android:text="Mark bad"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCutBefore"
                 style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:layout_height="wrap_content"
-                android:text="Cut before" />
+                android:text="Cut before"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCutAfter"
                 style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:layout_height="wrap_content"
-                android:text="Cut after" />
+                android:text="Cut after"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSplit"
                 style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:layout_height="wrap_content"
-                android:text="Split" />
+                android:text="Split"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
 
         <com.google.android.material.textfield.TextInputLayout

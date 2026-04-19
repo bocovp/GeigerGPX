@@ -139,7 +139,6 @@ object EditableTrackStorage {
             val points = mutableListOf<TrackPoint>()
             var lat = 0.0
             var lon = 0.0
-            var cps = 0.0
             var counts = 0
             var seconds = 0.0
             var timeMs = 0L
@@ -158,7 +157,6 @@ object EditableTrackStorage {
                             insideTrkpt = true
                             lat = parser.getAttributeValue(null, "lat")?.toDoubleOrNull() ?: 0.0
                             lon = parser.getAttributeValue(null, "lon")?.toDoubleOrNull() ?: 0.0
-                            cps = 0.0
                             counts = 0
                             seconds = 0.0
                             timeMs = 0L
