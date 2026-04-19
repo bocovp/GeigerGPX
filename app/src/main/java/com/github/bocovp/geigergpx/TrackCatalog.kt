@@ -283,6 +283,38 @@ object TrackCatalog {
         persistTrackCache(context)
     }
 
+    fun onTrackSavedById(
+        context: Context,
+        trackId: String,
+        displayName: String,
+        folderName: String?,
+        points: List<TrackPoint>
+    ) {
+        ensureDiskCacheLoaded(context)
+        val stats = statsFromTrackPoints(points)
+        val samples = points.map {
+            TrackSample(
+                latitude = it.latitude,
+                longitude = it.longitude,
+                doseRate = it.cps,
+                counts = it.counts,
+                seconds = it.seconds,
+                badCoordinates = it.badCoordinates
+            )
+        }
+        synchronized(this) {
+            parsedTrackCache[trackId] = CachedParsedTrack(
+                sourceId = trackId,
+                displayName = displayName,
+                folderName = folderName,
+                stats = stats,
+                sampleCache = samples
+            )
+            refreshCachedSubfolders()
+        }
+        persistTrackCache(context)
+    }
+
     fun onTrackRenamed(context: Context, oldTrackId: String, newTrackId: String, newDisplayName: String) {
         ensureDiskCacheLoaded(context)
         synchronized(this) {
