@@ -57,6 +57,9 @@ captures/
 # Firebase config (contains API keys)
 google-services.json
 
+# Release build outputs
+app/release/
+
 # Compiled Baseline Profile artifacts
 **/*.dm
 **/*.profm
