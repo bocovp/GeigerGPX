@@ -95,7 +95,7 @@ object FileStorageManager {
             file.outputStream().use(writer)
             Uri.fromFile(file)
         } catch (e: Exception) {
-            Log.e("FileStorageManager", "description", e)
+            Log.e("FileStorageManager", "Error writing to $normalizedPath", e)
             null
         }
     }
@@ -165,7 +165,7 @@ object FileStorageManager {
                 } != null
             }
         } catch (e: Exception) {
-            Log.e("FileStorageManager", "description", e)
+            Log.e("FileStorageManager", "Error in copyFileStream", e)
             false
         }
     }
@@ -191,7 +191,7 @@ object FileStorageManager {
                     .mapNotNull { toStorageFile(context, it, null) }
                     .sortedWith(storageFileComparator())
             } catch (e: Exception) {
-                Log.e("FileStorageManager", "description", e)
+                Log.e("FileStorageManager", "Error in list Files", e)
                 emptyList()
             }
         }
@@ -204,7 +204,7 @@ object FileStorageManager {
                 ?.sortedWith(storageFileComparator())
                 ?: emptyList()
         } catch (e: Exception) {
-            Log.e("FileStorageManager", "description", e)
+            Log.e("FileStorageManager", "Error in list Files", e)
             emptyList()
         }
     }
@@ -225,7 +225,7 @@ object FileStorageManager {
                     .mapNotNull { toStorageFile(context, it, normalizedPath) }
                     .sortedWith(storageFileComparator())
             } catch (e: Exception) {
-                Log.e("FileStorageManager", "description", e)
+                Log.e("FileStorageManager", "Error in listFilesInDirectory", e)
                 emptyList()
             }
         }
@@ -239,7 +239,7 @@ object FileStorageManager {
                 ?.sortedWith(storageFileComparator())
                 ?: emptyList()
         } catch (e: Exception) {
-            Log.e("FileStorageManager", "description", e)
+            Log.e("FileStorageManager", "Error in listFilesInDirectory", e)
             emptyList()
         }
     }

@@ -215,87 +215,91 @@ class MapActivity : AppCompatActivity() {
         val includeCurrentTrack = viewModel.isTracking.value == true
 
         refreshJob = lifecycleScope.launch {
-            // ---- IO-bound work -----------------------------------------------
-            val result = withContext(Dispatchers.IO) {
-                val selectedTrackIds = selectedTrackIds()
-                val selectedFolders = selectedFolderIds()
-                val mapTrackIds = selectedTrackIds.ifEmpty { setOf(TrackCatalog.currentTrackId()) }
+            try {
+                // ---- IO-bound work -----------------------------------------------
+                val result = withContext(Dispatchers.IO) {
+                    val selectedTrackIds = selectedTrackIds()
+                    val selectedFolders = selectedFolderIds()
+                    val mapTrackIds = selectedTrackIds.ifEmpty { setOf(TrackCatalog.currentTrackId()) }
 
-                val allItems = TrackCatalog.loadTrackListItems(
-                    context = this@MapActivity,
-                    activePoints = activePoints,
-                    includeCurrentTrack = includeCurrentTrack,
-                    includeMapTracks = true,
-                    mapTrackIds = mapTrackIds,
-                    includeSubfolderTracks = true
-                )
-
-                val visibleTracks = allItems
-                    .filter { item ->
-                        when {
-                            item.itemType != TrackListItemType.TRACK -> false
-                            item.folderName != null ->
-                                selectedTrackIds.contains(item.id) &&
-                                        selectedFolders.contains(item.folderName)
-                            else ->
-                                selectedTrackIds.contains(item.id) ||
-                                        (selectedTrackIds.isEmpty() && item.defaultVisible)
-                        }
-                    }
-                    .mapNotNull { it.mapTrack }
-
-                val allPois = PoiLibrary.loadPoiLibrary(this@MapActivity).entries
-                val selectedPoiIds = ensurePoiSelectionInitialized(allPois.map { it.id }.toSet())
-                val visiblePois = allPois.filter { it.id in selectedPoiIds }
-
-                val coeff = PreferenceManager.getDefaultSharedPreferences(this@MapActivity)
-                    .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-                val showCpsUnit = kotlin.math.abs(coeff - 1.0) < 1e-9
-
-                val poiMapItems = visiblePois.map { poi ->
-                    val cps = if (poi.seconds > 0.0001) poi.counts / poi.seconds else 0.0
-                    val doseRate = cps * coeff
-                    val value = if (showCpsUnit) cps else doseRate
-                    val unit = if (showCpsUnit) "cps" else "μSv/h"
-                    PoiMapItem(
-                        id = poi.id,
-                        name = poi.description,
-                        latitude = poi.latitude,
-                        longitude = poi.longitude,
-                        doseRateForColor = doseRate,
-                        counts = poi.counts,
-                        seconds = poi.seconds,
-                        doseLabel = String.format(Locale.US, "%.3f %s", value, unit)
+                    val allItems = TrackCatalog.loadTrackListItems(
+                        context = this@MapActivity,
+                        activePoints = activePoints,
+                        includeCurrentTrack = includeCurrentTrack,
+                        includeMapTracks = true,
+                        mapTrackIds = mapTrackIds,
+                        includeSubfolderTracks = true
                     )
+
+                    val visibleTracks = allItems
+                        .filter { item ->
+                            when {
+                                item.itemType != TrackListItemType.TRACK -> false
+                                item.folderName != null ->
+                                    selectedTrackIds.contains(item.id) &&
+                                            selectedFolders.contains(item.folderName)
+
+                                else ->
+                                    selectedTrackIds.contains(item.id) ||
+                                            (selectedTrackIds.isEmpty() && item.defaultVisible)
+                            }
+                        }
+                        .mapNotNull { it.mapTrack }
+
+                    val allPois = PoiLibrary.loadPoiLibrary(this@MapActivity).entries
+                    val selectedPoiIds = ensurePoiSelectionInitialized(allPois.map { it.id }.toSet())
+                    val visiblePois = allPois.filter { it.id in selectedPoiIds }
+
+                    val coeff = PreferenceManager.getDefaultSharedPreferences(this@MapActivity)
+                        .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+                    val showCpsUnit = kotlin.math.abs(coeff - 1.0) < 1e-9
+
+                    val poiMapItems = visiblePois.map { poi ->
+                        val cps = if (poi.seconds > 0.0001) poi.counts / poi.seconds else 0.0
+                        val doseRate = cps * coeff
+                        val value = if (showCpsUnit) cps else doseRate
+                        val unit = if (showCpsUnit) "cps" else "μSv/h"
+                        PoiMapItem(
+                            id = poi.id,
+                            name = poi.description,
+                            latitude = poi.latitude,
+                            longitude = poi.longitude,
+                            doseRateForColor = doseRate,
+                            counts = poi.counts,
+                            seconds = poi.seconds,
+                            doseLabel = String.format(Locale.US, "%.3f %s", value, unit)
+                        )
+                    }
+
+                    visibleTracks to poiMapItems
                 }
+                // ---- Back on Main — only runs if the job was NOT cancelled --------
+                // If the user triggered a new refresh while IO was in flight,
+                // refreshJob?.cancel() has already been called and this block
+                // is skipped automatically by the coroutine runtime.
 
-                visibleTracks to poiMapItems
+                val (visibleTracks, poiMapItems) = result
+
+                // Re-read UI-mode flags here, on the main thread, so we always use
+                // the latest values. If these flags changed mid-flight the old job
+                // was cancelled and replaced, so whatever values we read now are correct.
+                hasLoadedMapTracks = true
+                val autoFitApplied = trackMapRenderer.renderTracks(
+                    tracks = visibleTracks,
+                    pois = poiMapItems,
+                    isHeatmapMode = isHeatmapMode,
+                    shouldAutoFit = !isAutoZoomDisabledByUser,
+                    useKernelEstimator = !isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR,
+                    kdeScaleSeconds = currentKdeScaleSeconds()
+                )
+                if (autoFitApplied) {
+                    suppressMapMoveEventsTemporarily()
+                    rememberViewportAfterProgrammaticAutoZoom()
+                }
+                hasVisibleMapContent = visibleTracks.isNotEmpty() || poiMapItems.isNotEmpty()
+            } finally {
+                binding.loadingLabel.visibility = View.GONE
             }
-            // ---- Back on Main — only runs if the job was NOT cancelled --------
-            // If the user triggered a new refresh while IO was in flight,
-            // refreshJob?.cancel() has already been called and this block
-            // is skipped automatically by the coroutine runtime.
-
-            val (visibleTracks, poiMapItems) = result
-
-            // Re-read UI-mode flags here, on the main thread, so we always use
-            // the latest values. If these flags changed mid-flight the old job
-            // was cancelled and replaced, so whatever values we read now are correct.
-            hasLoadedMapTracks = true
-            val autoFitApplied = trackMapRenderer.renderTracks(
-                tracks = visibleTracks,
-                pois = poiMapItems,
-                isHeatmapMode = isHeatmapMode,
-                shouldAutoFit = !isAutoZoomDisabledByUser,
-                useKernelEstimator = !isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR,
-                kdeScaleSeconds = currentKdeScaleSeconds()
-            )
-            if (autoFitApplied) {
-                suppressMapMoveEventsTemporarily()
-                rememberViewportAfterProgrammaticAutoZoom()
-            }
-            hasVisibleMapContent = visibleTracks.isNotEmpty() || poiMapItems.isNotEmpty()
-            binding.loadingLabel.visibility = View.GONE
         }
     }
 
