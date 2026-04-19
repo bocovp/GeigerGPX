@@ -11,6 +11,10 @@ class GradientTrackOverlay : Overlay() {
     var minDose: Double = 0.0
     var maxDose: Double = 1.0
 
+    val gp1 = GeoPoint(0.0, 0.0)
+    val gp2 = GeoPoint(0.0, 0.0)
+
+
     private val paint = Paint().apply {
         strokeWidth = 10f
         style = Paint.Style.STROKE
@@ -33,8 +37,10 @@ class GradientTrackOverlay : Overlay() {
             val p2 = points[i + 1]
             if (p1.badCoordinates || p2.badCoordinates) continue
 
-            projection.toPixels(GeoPoint(p1.latitude, p1.longitude), p1Pixels)
-            projection.toPixels(GeoPoint(p2.latitude, p2.longitude), p2Pixels)
+            gp1.setCoords(p1.latitude, p1.longitude)
+            gp2.setCoords(p2.latitude, p2.longitude)
+            projection.toPixels(gp1, p1Pixels)
+            projection.toPixels(gp2, p2Pixels)
 
             paint.shader = LinearGradient(
                 p1Pixels.x.toFloat(), p1Pixels.y.toFloat(),

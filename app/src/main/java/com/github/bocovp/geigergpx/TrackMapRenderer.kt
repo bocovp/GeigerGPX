@@ -322,7 +322,7 @@ class TrackMapRenderer(
 
 
         val generalizer = TrackGeneralizer(minDistanceMeters, coeff)
-        val kdeScale = if (useKernelEstimator) kdeScaleSeconds?.coerceAtLeast(KdeScaleSlider.MIN_SECONDS) else null
+        val kdeScale = if (useKernelEstimator) kdeScaleSeconds?.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble()) else null
 
         generalizedTracksById.clear()
         tracks.forEach { track ->
