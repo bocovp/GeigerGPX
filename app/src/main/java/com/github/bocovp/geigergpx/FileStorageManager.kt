@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
+import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import androidx.preference.PreferenceManager
 import java.io.File
@@ -94,7 +95,7 @@ object FileStorageManager {
             file.outputStream().use(writer)
             Uri.fromFile(file)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("FileStorageManager", "description", e)
             null
         }
     }
@@ -164,7 +165,7 @@ object FileStorageManager {
                 } != null
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("FileStorageManager", "description", e)
             false
         }
     }
@@ -190,7 +191,7 @@ object FileStorageManager {
                     .mapNotNull { toStorageFile(context, it, null) }
                     .sortedWith(storageFileComparator())
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("FileStorageManager", "description", e)
                 emptyList()
             }
         }
@@ -203,7 +204,7 @@ object FileStorageManager {
                 ?.sortedWith(storageFileComparator())
                 ?: emptyList()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("FileStorageManager", "description", e)
             emptyList()
         }
     }
@@ -224,7 +225,7 @@ object FileStorageManager {
                     .mapNotNull { toStorageFile(context, it, normalizedPath) }
                     .sortedWith(storageFileComparator())
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("FileStorageManager", "description", e)
                 emptyList()
             }
         }
@@ -238,7 +239,7 @@ object FileStorageManager {
                 ?.sortedWith(storageFileComparator())
                 ?: emptyList()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("FileStorageManager", "description", e)
             emptyList()
         }
     }

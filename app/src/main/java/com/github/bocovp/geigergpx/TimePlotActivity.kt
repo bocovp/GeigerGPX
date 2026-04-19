@@ -507,7 +507,7 @@ class TimePlotActivity : AppCompatActivity() {
         ) { t2s ->
             estimator.getConfidenceIntervals(
                 t2s = t2s,
-                scale = scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS)
+                scale = scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble())
             )
         }
     }

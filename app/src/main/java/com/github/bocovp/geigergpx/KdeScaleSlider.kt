@@ -5,8 +5,8 @@ import kotlin.math.exp
 object KdeScaleSlider {
     const val INTERNAL_MAX = 1f
     const val MIN_MINUTES = 0.1f
-    const val MIN_SECONDS = MIN_MINUTES * 60.0
-    private const val EXP_SCALE_FACTOR = 0.523957
+    const val MIN_SECONDS = MIN_MINUTES * 60.0f
+    private const val EXP_SCALE_FACTOR = 0.523957f // == MIN_MINUTES/(exp(3*INTERNAL_MAX)-1), MAX_MINUTES = 10
 
     fun internalToMinutes(internalValue: Float): Float {
         val expTerm = exp(3.0 * internalValue.toDouble()) - 1.0
