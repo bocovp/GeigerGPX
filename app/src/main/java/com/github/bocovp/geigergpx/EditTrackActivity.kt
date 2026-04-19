@@ -197,26 +197,29 @@ class EditTrackActivity : AppCompatActivity() {
 
     private fun descriptionText(): String {
         return when (mode) {
-            EditMode.MARK_BAD -> "${selectedIndices.size} points will be marked as having bad coordinates"
+            EditMode.MARK_BAD -> "Mark ${selectedIndices.size} points as 'bad coordinates'"
             EditMode.CUT_BEFORE -> {
                 val count = (boundaryIndex ?: -1) + 1
-                "$count points will be deleted from the start of the track"
+                "Remove first $count points"
             }
             EditMode.CUT_AFTER -> {
                 val boundary = boundaryIndex ?: return ""
-                "${points.size - boundary} points will be deleted from the end of the track"
+                "Remove last ${points.size - boundary} points"
             }
             EditMode.SPLIT -> {
                 val split = boundaryIndex ?: return ""
                 val first = split + 1
                 val second = points.size - first
-                "Track will be split into two containing $first and $second points"
+                "Split into $first and $second points"
             }
             EditMode.NONE -> ""
         }
     }
 
     private fun applyChanges() {
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+
         when (mode) {
             EditMode.NONE -> return
             EditMode.MARK_BAD -> {
@@ -244,13 +247,13 @@ class EditTrackActivity : AppCompatActivity() {
                 points = first.toMutableList()
                 val splitResult = EditableTrackStorage.createSplitTrack(this, trackId, trackTitle, trackFolder, second)
                 if (splitResult != null) {
-                    TrackCatalog.onTrackSavedById(this, splitResult.newTrackId, splitResult.newTrackTitle, trackFolder, second)
+                    TrackCatalog.onTrackSavedById(this, splitResult.newTrackId, splitResult.newTrackTitle, trackFolder, second, coeff)
                 }
             }
         }
 
         EditableTrackStorage.overwriteTrack(this, trackId, points)
-        TrackCatalog.onTrackSavedById(this, trackId, trackTitle, trackFolder, points)
+        TrackCatalog.onTrackSavedById(this, trackId, trackTitle, trackFolder, points, coeff)
         selectedIndices = emptyList()
         boundaryIndex = null
         Toast.makeText(this, "Track updated", Toast.LENGTH_SHORT).show()

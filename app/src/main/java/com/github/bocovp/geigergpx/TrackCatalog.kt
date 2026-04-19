@@ -267,16 +267,27 @@ object TrackCatalog {
         }
     }
 
-    fun onTrackSaved(context: Context, relativePath: String, points: List<TrackPoint>) {
+    fun onTrackSaved(context: Context, relativePath: String, points: List<TrackPoint>, coefficient: Double) {
         ensureDiskCacheLoaded(context)
         val source = sourceFromRelativePath(context, relativePath) ?: return
         val stats = statsFromTrackPoints(points)
+        val samples = points.map {
+            TrackSample(
+                latitude = it.latitude,
+                longitude = it.longitude,
+                doseRate = it.cps * coefficient,
+                counts = it.counts,
+                seconds = it.seconds,
+                badCoordinates = it.badCoordinates
+            )
+        }
         synchronized(this) {
             parsedTrackCache[source.id] = CachedParsedTrack(
                 sourceId = source.id,
                 displayName = source.displayName,
                 folderName = source.folderName,
-                stats = stats
+                stats = stats,
+                sampleCache = samples
             )
             refreshCachedSubfolders()
         }
@@ -288,7 +299,8 @@ object TrackCatalog {
         trackId: String,
         displayName: String,
         folderName: String?,
-        points: List<TrackPoint>
+        points: List<TrackPoint>,
+        coefficient: Double
     ) {
         ensureDiskCacheLoaded(context)
         val stats = statsFromTrackPoints(points)
@@ -296,7 +308,7 @@ object TrackCatalog {
             TrackSample(
                 latitude = it.latitude,
                 longitude = it.longitude,
-                doseRate = it.cps,
+                doseRate = it.cps * coefficient,
                 counts = it.counts,
                 seconds = it.seconds,
                 badCoordinates = it.badCoordinates
