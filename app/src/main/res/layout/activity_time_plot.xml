@@ -10,6 +10,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:minHeight="?attr/actionBarSize"
+        android:layout_marginBottom="0dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -17,12 +18,15 @@
 
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/trackNameInputLayout"
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        style="@style/Widget.Material3.TextInputLayout.FilledBox"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="0dp"
         android:layout_marginEnd="16dp"
+
+        app:boxStrokeWidth="0dp"
+        app:boxStrokeWidthFocused="0dp"
 
         app:hintEnabled="false"
         app:boxCornerRadiusBottomEnd="100dp"
@@ -44,6 +48,10 @@
             android:id="@+id/trackNameField"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+
             android:clickable="false"
             android:cursorVisible="false"
             android:focusable="false"
@@ -64,24 +72,25 @@
         android:layout_marginStart="12dp"
         android:layout_marginTop="4dp"
         android:layout_marginEnd="12dp"
-        android:layout_marginBottom="8dp"
-        app:layout_constraintBottom_toTopOf="@id/placeholderSlider"
+        android:layout_marginBottom="4dp"
+        app:layout_constraintBottom_toTopOf="@id/averagingLabel"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/trackNameInputLayout" />
 
-
     <TextView
-        android:id="@+id/loadingLabel"
-        android:layout_width="wrap_content"
+        android:id="@+id/averagingLabel"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/time_plot_loading"
+        android:layout_marginTop="4dp"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="8dp"
+        android:text="Averaging window:"
         android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="@id/timePlotView"
-        app:layout_constraintEnd_toEndOf="@id/timePlotView"
-        app:layout_constraintStart_toStartOf="@id/timePlotView"
-        app:layout_constraintTop_toTopOf="@id/timePlotView" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/placeholderSlider" />
 
     <com.google.android.material.slider.Slider
         android:id="@+id/placeholderSlider"
@@ -111,4 +120,20 @@
         app:layout_constraintStart_toStartOf="parent"
         app:menu="@menu/main_bottom_nav_menu" />
 
+
+
+
+
+
+    <TextView
+        android:id="@+id/loadingLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/time_plot_loading"
+        android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@id/timePlotView"
+        app:layout_constraintEnd_toEndOf="@id/timePlotView"
+        app:layout_constraintStart_toStartOf="@id/timePlotView"
+        app:layout_constraintTop_toTopOf="@id/timePlotView" />
 </androidx.constraintlayout.widget.ConstraintLayout>

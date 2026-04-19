@@ -59,7 +59,7 @@ class TimePlotView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
 
-    private val leftPaddingPx = 96f
+    private val leftPaddingPx = 80f //96f
     private val rightPaddingPx = 22f
     private val topPaddingPx = 24f
     private val bottomPaddingPx = 70f
@@ -369,7 +369,8 @@ class TimePlotView @JvmOverloads constructor(
             val y = plotBottom - ratio * (plotBottom - plotTop)
             val value = i * verticalTickStep
             canvas.drawLine(plotLeft, y, plotRight, y, gridPaint)
-            canvas.drawText(String.format(java.util.Locale.US, "%.2f", value), 8f, y + 8f, textPaint)
+            val dy = if (i == 0) 0f else 8f
+            canvas.drawText(String.format(java.util.Locale.US, "%.2f", value), 8f, y + dy, textPaint)
         }
         canvas.drawText(yAxisUnit, plotLeft + 8f, plotTop + 28f, textPaint)
     }

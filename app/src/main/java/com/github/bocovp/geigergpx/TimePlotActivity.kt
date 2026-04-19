@@ -322,7 +322,7 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun updateSliderDescription(valueMinutes: Float) {
-        binding.topAppBar.subtitle = "Averaging window: ${"%.1f".format(Locale.US, valueMinutes)} min"
+        binding.averagingLabel.text = "Averaging window: ${"%.1f".format(Locale.US, valueMinutes)} min"
     }
 
     private fun updatePlot(recalculateVerticalAxis: Boolean = true) {
