@@ -95,6 +95,35 @@ class TracksActivity : AppCompatActivity() {
         viewModel.isTracking.observe(this) {
             refreshTrackList()
         }
+
+        TrackCatalog.rebuildProgress.observe(this) { progress ->
+            updateLoadingUi(progress)
+            if (progress == null) {
+                refreshTrackList()
+            }
+        }
+    }
+
+    private fun updateLoadingUi(progress: Int?) {
+        val showProgress = progress != null
+        binding.progressContainer.visibility = if (showProgress) View.VISIBLE else View.GONE
+        
+        if (showProgress) {
+            binding.tracksRecyclerView.visibility = View.GONE
+            binding.emptyStateLabel.visibility = View.GONE
+        }
+
+        if (progress != null) {
+            binding.rebuildProgressBar.isIndeterminate = progress == 0
+            if (progress > 0) {
+                binding.rebuildProgressBar.progress = progress
+            }
+            binding.progressLabel.text = if (progress == 0) {
+                getString(R.string.loading_files)
+            } else {
+                "Parsing tracks: $progress%"
+            }
+        }
     }
 
     override fun onResume() {
@@ -127,17 +156,19 @@ class TracksActivity : AppCompatActivity() {
 
         val showLoading = effectiveForceLoading || rebuildInProgress || !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty(this)
         if (showLoading && !loadingStateActive) {
-            binding.loadingLabel.setText(R.string.loading_tracks)
             if (clearTracksWhileLoading) {
                 adapter.submit(emptyList(), emptySet(), emptySet())
             }
         }
         loadingStateActive = showLoading
-        binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
-        binding.tracksRecyclerView.visibility = if (showLoading) View.GONE else View.VISIBLE
+        
+        // If we are not rebuilding but still "loading" (e.g. initial disk scan), 
+        // show indeterminate progress.
+        if (showLoading && !rebuildInProgress) {
+            updateLoadingUi(0)
+        }
 
         if (rebuildInProgress) {
-            scheduleRefreshPoll()
             return
         }
 
@@ -160,12 +191,15 @@ class TracksActivity : AppCompatActivity() {
                 hasLoadedTrackList = true
                 adapter.submit(items, selectedTracks, selectedFolders)
                 val hasTracks = items.isNotEmpty()
-                if (loadingStateActive) {
-                    binding.loadingLabel.setText(if (hasTracks) R.string.loading_files else R.string.no_tracks_found)
-                }
+                
                 loadingStateActive = false
-                binding.loadingLabel.visibility = if (hasTracks) View.GONE else View.VISIBLE
+                // Only hide loading UI if a rebuild isn't currently happening
+                if (!TrackCatalog.isTrackCacheRebuildInProgress()) {
+                    updateLoadingUi(null)
+                }
+                
                 binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
+                binding.emptyStateLabel.visibility = if (!hasTracks && !showLoading) View.VISIBLE else View.GONE
             }
         }.start()
     }
