@@ -26,10 +26,14 @@ object EditableTrackStorage {
     }
 
     fun overwriteTrack(context: Context, trackId: String, points: List<TrackPoint>) {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
+        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+
         val output = openOutputStream(context, trackId) ?: return
         output.use { out ->
             out.bufferedWriter().use { writer ->
-                writeTrack(writer, points)
+                writeTrack(writer, points, saveDoseRateInEle, coeff)
             }
         }
     }
@@ -41,6 +45,10 @@ object EditableTrackStorage {
         folderName: String?,
         points: List<TrackPoint>
     ): SplitResult? {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
+        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+
         val nextName = uniqueSplitFileName(context, sourceTitle, folderName)
         val uri = when {
             sourceTrackId.startsWith("file:") -> {
@@ -48,7 +56,9 @@ object EditableTrackStorage {
                 val parentDir = sourceFile.parentFile ?: return null
                 val target = File(parentDir, nextName)
                 target.outputStream().use { out ->
-                    out.bufferedWriter().use { writer -> writeTrack(writer, points) }
+                    out.bufferedWriter().use { writer ->
+                        writeTrack(writer, points, saveDoseRateInEle, coeff)
+                    }
                 }
                 Uri.fromFile(target)
             }
@@ -60,7 +70,9 @@ object EditableTrackStorage {
                 } ?: rootDoc
                 val created = targetDir?.createFile("application/gpx+xml", nextName) ?: return null
                 context.contentResolver.openOutputStream(created.uri)?.use { out ->
-                    out.bufferedWriter().use { writer -> writeTrack(writer, points) }
+                    out.bufferedWriter().use { writer ->
+                        writeTrack(writer, points, saveDoseRateInEle, coeff)
+                    }
                 } ?: return null
                 created.uri
             }
@@ -135,6 +147,7 @@ object EditableTrackStorage {
             var insideTrkpt = false
             var currentTag: String? = null
             var currentNs: String? = null
+            var storedDoseRate = 0.0
 
             while (parser.eventType != XmlPullParser.END_DOCUMENT) {
                 when (parser.eventType) {
@@ -162,14 +175,18 @@ object EditableTrackStorage {
                             currentTag == "time" -> timeMs = parseIso(value)
                             currentTag == "fix" && value.equals("none", true) -> bad = true
                             currentTag == "badCoordinates" && currentNs == RAD_NAMESPACE -> bad = true
-                            currentTag == "doseRate" && currentNs == RAD_NAMESPACE -> cps = value.toDoubleOrNull() ?: 0.0
+                            currentTag == "doseRate" && currentNs == RAD_NAMESPACE -> storedDoseRate = value.toDoubleOrNull() ?: 0.0
                             currentTag == "counts" && currentNs == RAD_NAMESPACE -> counts = value.toIntOrNull() ?: 0
                             currentTag == "seconds" && currentNs == RAD_NAMESPACE -> seconds = value.toDoubleOrNull() ?: 0.0
                         }
                     }
                     XmlPullParser.END_TAG -> {
                         if (parser.name == "trkpt" && insideTrkpt) {
-                            val cpsValue = if (seconds > 0.00001) counts / seconds else cps
+                            val cpsValue = when {
+                                seconds > 0.00001 -> counts / seconds
+                                storedDoseRate > 0.0 -> storedDoseRate
+                                else -> 0.0
+                            }
                             points.add(
                                 TrackPoint(
                                     latitude = lat,
@@ -194,21 +211,34 @@ object EditableTrackStorage {
         }
     }
 
-    private fun writeTrack(writer: java.io.BufferedWriter, points: List<TrackPoint>) {
+    private fun writeTrack(
+        writer: java.io.BufferedWriter,
+        points: List<TrackPoint>,
+        saveDoseRateInEle: Boolean,
+        coeff: Double
+    ) {
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
         writer.write("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
         writer.write("\t<trk>\n\t\t<trkseg>\n")
 
         points.forEach { p ->
             val ts = if (p.timeMillis > 0L) DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(p.timeMillis)) else ""
-            val doseRate = p.cps
-            writer.write("\t\t\t<trkpt lat=\"${p.latitude}\" lon=\"${p.longitude}\">\n")
+            val doseRate = p.cps * coeff
+            
+            val latStr = "%.8f".format(Locale.US, p.latitude)
+            val lonStr = "%.8f".format(Locale.US, p.longitude)
+            val doseStr = "%.5f".format(Locale.US, doseRate)
+            val secondsStr = "%.3f".format(Locale.US, p.seconds)
+
+            writer.write("\t\t\t<trkpt lat=\"$latStr\" lon=\"$lonStr\">\n")
             if (ts.isNotEmpty()) writer.write("\t\t\t\t<time>$ts</time>\n")
             if (p.badCoordinates) writer.write("\t\t\t\t<fix>none</fix>\n")
+            if (saveDoseRateInEle) writer.write("\t\t\t\t<ele>$doseStr</ele>\n")
+            
             writer.write("\t\t\t\t<extensions>\n")
-            writer.write("\t\t\t\t\t<rad:doseRate>${"%.5f".format(Locale.US, doseRate)}</rad:doseRate>\n")
+            writer.write("\t\t\t\t\t<rad:doseRate>$doseStr</rad:doseRate>\n")
             writer.write("\t\t\t\t\t<rad:counts>${p.counts}</rad:counts>\n")
-            writer.write("\t\t\t\t\t<rad:seconds>${"%.3f".format(Locale.US, p.seconds)}</rad:seconds>\n")
+            writer.write("\t\t\t\t\t<rad:seconds>$secondsStr</rad:seconds>\n")
             writer.write("\t\t\t\t</extensions>\n")
             writer.write("\t\t\t</trkpt>\n")
         }

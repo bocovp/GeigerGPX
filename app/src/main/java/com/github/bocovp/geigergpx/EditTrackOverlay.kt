@@ -74,7 +74,7 @@ class EditTrackOverlay : Overlay() {
 class RectangleSelectionOverlay(
     private val onSelectionComplete: (RectF) -> Unit
 ) : Overlay() {
-    var enabled: Boolean = false
+    var selectionEnabled: Boolean = false
     private var startX = 0f
     private var startY = 0f
     private var endX = 0f
@@ -92,7 +92,7 @@ class RectangleSelectionOverlay(
     }
 
     override fun onTouchEvent(event: android.view.MotionEvent?, mapView: org.osmdroid.views.MapView?): Boolean {
-        if (!enabled || event == null || mapView == null) return false
+        if (!selectionEnabled || event == null || mapView == null) return false
         when (event.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
                 selecting = true
@@ -131,7 +131,7 @@ class RectangleSelectionOverlay(
     }
 
     override fun draw(canvas: Canvas, projection: Projection) {
-        if (!enabled || !selecting) return
+        if (!selectionEnabled || !selecting) return
         val rect = RectF(
             kotlin.math.min(startX, endX),
             kotlin.math.min(startY, endY),

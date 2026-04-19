@@ -124,11 +124,16 @@ class EditTrackActivity : AppCompatActivity() {
 
     private fun fitMapToTrack() {
         val geoPoints = points.map { GeoPoint(it.latitude, it.longitude) }
-        if (geoPoints.size > 1) {
-            binding.mapView.zoomToBoundingBox(BoundingBox.fromGeoPointsSafe(geoPoints), true, 64)
-        } else if (geoPoints.size == 1) {
-            binding.mapView.controller.setCenter(geoPoints.first())
-            binding.mapView.controller.setZoom(17.0)
+        if (geoPoints.isEmpty()) return
+        binding.mapView.post {
+            // Must set a valid zoom first so osmdroid can compute a non-NaN map size
+            binding.mapView.controller.setZoom(15.0)
+            if (geoPoints.size > 1) {
+                binding.mapView.zoomToBoundingBox(BoundingBox.fromGeoPointsSafe(geoPoints), false, 64)
+            } else {
+                binding.mapView.controller.setCenter(geoPoints.first())
+                binding.mapView.controller.setZoom(17.0)
+            }
         }
     }
 
@@ -171,7 +176,7 @@ class EditTrackActivity : AppCompatActivity() {
         binding.btnLeft.isEnabled = adjustEnabled && (boundaryIndex ?: 0) > 0
         binding.btnRight.isEnabled = adjustEnabled && (boundaryIndex != null) && (boundaryIndex!! < points.lastIndex)
 
-        selectionOverlay.enabled = mode != EditMode.NONE
+        selectionOverlay.selectionEnabled = mode != EditMode.NONE
         binding.descriptionText.setText(descriptionText())
         binding.mapView.invalidate()
     }
