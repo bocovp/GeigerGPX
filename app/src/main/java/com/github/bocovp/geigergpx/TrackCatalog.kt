@@ -68,9 +68,11 @@ object TrackCatalog {
     }
 
     fun isTrackCacheEmpty(context: Context): Boolean {
-        if (parsedTrackCache.isNotEmpty() || cachedSubfolders.isNotEmpty()) return false
-        val cacheFile = trackCacheFile(context)
-        return !cacheFile.exists() || cacheFile.length() == 0L
+        synchronized(this) {
+            if (parsedTrackCache.isNotEmpty() || cachedSubfolders.isNotEmpty()) return false
+            val cacheFile = trackCacheFile(context)
+            return !cacheFile.exists() || cacheFile.length() == 0L
+        }
     }
 
     fun rebuildTrackCache(context: Context) {
@@ -154,11 +156,11 @@ object TrackCatalog {
             )
         }
 
-        val cachedTracks = parsedTrackCache.values.toList()
+        val cachedTracksSnapshot = synchronized(this) { parsedTrackCache.values.toList() }
         val sources = when {
-            browseFolderName != null -> cachedTracks.filter { it.folderName == browseFolderName }
-            includeSubfolderTracks -> cachedTracks
-            else -> cachedTracks.filter { it.folderName == null }
+            browseFolderName != null -> cachedTracksSnapshot.filter { it.folderName == browseFolderName }
+            includeSubfolderTracks -> cachedTracksSnapshot
+            else -> cachedTracksSnapshot.filter { it.folderName == null }
         }
 
         val sortedSources = sources.sortedByDescending { it.displayName.lowercase() }
@@ -170,7 +172,9 @@ object TrackCatalog {
                     val parsed = openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(it) }
                     if (parsed != null) {
                         val updated = source.withSamples(parsed.samples)
-                        parsedTrackCache[source.sourceId] = updated
+                        synchronized(this) {
+                            parsedTrackCache[source.sourceId] = updated
+                        }
                         updated
                     } else {
                         source
@@ -204,10 +208,11 @@ object TrackCatalog {
         }
 
         if (browseFolderName == null && includeFolderEntries) {
-            cachedSubfolders
+            val subfoldersSnapshot = synchronized(this) { cachedSubfolders.toList() }
+            subfoldersSnapshot
                 .sortedBy { it.lowercase() }
                 .forEach { subfolder ->
-                    val trackCount = parsedTrackCache.values.count { it.folderName == subfolder }
+                    val trackCount = cachedTracksSnapshot.count { it.folderName == subfolder }
                     items.add(
                         TrackListItem(
                             id = folderItemId(subfolder),
@@ -231,7 +236,9 @@ object TrackCatalog {
         if (isTrackCacheEmpty(context)) {
             rebuildTrackCache(context)
         }
-        return cachedSubfolders.toList()
+        synchronized(this) {
+            return cachedSubfolders.toList()
+        }
     }
 
     fun onTrackSaved(context: Context, relativePath: String, points: List<TrackPoint>) {
