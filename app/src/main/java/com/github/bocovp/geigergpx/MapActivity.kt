@@ -298,7 +298,9 @@ class MapActivity : AppCompatActivity() {
                 }
                 hasVisibleMapContent = visibleTracks.isNotEmpty() || poiMapItems.isNotEmpty()
             } finally {
-                binding.loadingLabel.visibility = View.GONE
+                if (refreshJob == coroutineContext[Job]) {
+                    binding.loadingLabel.visibility = View.GONE
+                }
             }
         }
     }
