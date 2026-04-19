@@ -4,6 +4,8 @@ import android.content.Context
 import android.location.Location
 import android.net.Uri
 import android.util.Log
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.preference.PreferenceManager
@@ -51,6 +53,8 @@ object TrackCatalog {
     private val cachedSubfolders = linkedSetOf<String>()
     private val cacheRebuildExecutor = Executors.newSingleThreadExecutor()
     private val isCacheRebuildInProgress = AtomicBoolean(false)
+    private val _rebuildProgress = MutableLiveData<Int?>(null)
+    val rebuildProgress: LiveData<Int?> = _rebuildProgress
     @Volatile private var diskCacheLoaded = false
 
     fun currentTrackId(): String = CURRENT_TRACK_ID
@@ -59,6 +63,7 @@ object TrackCatalog {
         synchronized(this) {
             parsedTrackCache.clear()
             cachedSubfolders.clear()
+            _rebuildProgress.postValue(null)
             diskCacheLoaded = true
             val cacheFile = trackCacheFile(context)
             if (cacheFile.exists() && !cacheFile.delete()) {
@@ -68,37 +73,60 @@ object TrackCatalog {
     }
 
     fun isTrackCacheEmpty(context: Context): Boolean {
-        if (parsedTrackCache.isNotEmpty() || cachedSubfolders.isNotEmpty()) return false
-        val cacheFile = trackCacheFile(context)
-        return !cacheFile.exists() || cacheFile.length() == 0L
+        synchronized(this) {
+            if (parsedTrackCache.isNotEmpty() || cachedSubfolders.isNotEmpty()) return false
+            val cacheFile = trackCacheFile(context)
+            return !cacheFile.exists() || cacheFile.length() == 0L
+        }
     }
 
     fun rebuildTrackCache(context: Context) {
         ensureDiskCacheLoaded(context)
+        _rebuildProgress.postValue(0)
         val sourceListing = listTrackFiles(context)
         if (sourceListing is TrackSourceListing.Failure) {
             Log.w("GPX", "Unable to rebuild track cache", sourceListing.error)
+            _rebuildProgress.postValue(null)
             return
         }
 
         val snapshot = (sourceListing as TrackSourceListing.Success).snapshot
+        val allSources = snapshot.allSources()
+        val totalCount = allSources.size
         val updatedTracks = linkedMapOf<String, CachedParsedTrack>()
-        snapshot.allSources().forEach { source ->
+
+        allSources.forEachIndexed { index, source ->
             try {
-                val parsed = parseGpxTrack(source.openStream()) ?: return@forEach
-                updatedTracks[source.id] = CachedParsedTrack.from(source, parsed)
+                val parsed = parseGpxTrack(source.openStream())
+                if (parsed != null) {
+                    updatedTracks[source.id] = CachedParsedTrack.from(source, parsed)
+                }
             } catch (e: Exception) {
                 Log.e("GPX", "Unable to parse track ${source.displayName}", e)
+            }
+            if (totalCount > 0) {
+                val progressPercent = ((index + 1) * 100) / totalCount
+                _rebuildProgress.postValue(maxOf(1, progressPercent))
             }
         }
 
         synchronized(this) {
             parsedTrackCache.clear()
             parsedTrackCache.putAll(updatedTracks)
-            cachedSubfolders.clear()
-            snapshot.subfolders.mapTo(cachedSubfolders) { it.name }
+            refreshCachedSubfolders()
         }
         persistTrackCache(context)
+        _rebuildProgress.postValue(null)
+    }
+
+    private fun refreshCachedSubfolders() {
+        synchronized(this) {
+            cachedSubfolders.clear()
+            parsedTrackCache.values
+                .mapNotNull { it.folderName }
+                .distinct()
+                .forEach { cachedSubfolders.add(it) }
+        }
     }
 
     fun isTrackCacheRebuildInProgress(): Boolean = isCacheRebuildInProgress.get()
@@ -154,11 +182,11 @@ object TrackCatalog {
             )
         }
 
-        val cachedTracks = parsedTrackCache.values.toList()
+        val cachedTracksSnapshot = synchronized(this) { parsedTrackCache.values.toList() }
         val sources = when {
-            browseFolderName != null -> cachedTracks.filter { it.folderName == browseFolderName }
-            includeSubfolderTracks -> cachedTracks
-            else -> cachedTracks.filter { it.folderName == null }
+            browseFolderName != null -> cachedTracksSnapshot.filter { it.folderName == browseFolderName }
+            includeSubfolderTracks -> cachedTracksSnapshot
+            else -> cachedTracksSnapshot.filter { it.folderName == null }
         }
 
         val sortedSources = sources.sortedByDescending { it.displayName.lowercase() }
@@ -170,7 +198,9 @@ object TrackCatalog {
                     val parsed = openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(it) }
                     if (parsed != null) {
                         val updated = source.withSamples(parsed.samples)
-                        parsedTrackCache[source.sourceId] = updated
+                        synchronized(this) {
+                            parsedTrackCache[source.sourceId] = updated
+                        }
                         updated
                     } else {
                         source
@@ -204,10 +234,11 @@ object TrackCatalog {
         }
 
         if (browseFolderName == null && includeFolderEntries) {
-            cachedSubfolders
+            val subfoldersSnapshot = synchronized(this) { cachedSubfolders.toList() }
+            subfoldersSnapshot
                 .sortedBy { it.lowercase() }
                 .forEach { subfolder ->
-                    val trackCount = parsedTrackCache.values.count { it.folderName == subfolder }
+                    val trackCount = cachedTracksSnapshot.count { it.folderName == subfolder }
                     items.add(
                         TrackListItem(
                             id = folderItemId(subfolder),
@@ -231,7 +262,9 @@ object TrackCatalog {
         if (isTrackCacheEmpty(context)) {
             rebuildTrackCache(context)
         }
-        return cachedSubfolders.toList()
+        synchronized(this) {
+            return cachedSubfolders.toList()
+        }
     }
 
     fun onTrackSaved(context: Context, relativePath: String, points: List<TrackPoint>) {
@@ -245,7 +278,7 @@ object TrackCatalog {
                 folderName = source.folderName,
                 stats = stats
             )
-            source.folderName?.let { cachedSubfolders.add(it) }
+            refreshCachedSubfolders()
         }
         persistTrackCache(context)
     }
@@ -258,6 +291,7 @@ object TrackCatalog {
                 sourceId = newTrackId,
                 displayName = newDisplayName
             )
+            refreshCachedSubfolders()
         }
         persistTrackCache(context)
     }
@@ -275,7 +309,7 @@ object TrackCatalog {
                     sourceId = newTrackId,
                     folderName = destinationFolder
                 )
-                destinationFolder?.let { cachedSubfolders.add(it) }
+                refreshCachedSubfolders()
                 shouldPersist = true
             } else {
                 needsFallbackLoad = true
@@ -288,7 +322,7 @@ object TrackCatalog {
                 synchronized(this) {
                     if (!parsedTrackCache.containsKey(newTrackId)) {
                         parsedTrackCache[newTrackId] = loaded
-                        destinationFolder?.let { cachedSubfolders.add(it) }
+                        refreshCachedSubfolders()
                         shouldPersist = true
                     }
                 }
@@ -302,9 +336,32 @@ object TrackCatalog {
 
 
     private fun loadTrackForCacheById(context: Context, trackId: String, folderName: String?): CachedParsedTrack? {
-        val sourceListing = listTrackFiles(context)
-        if (sourceListing !is TrackSourceListing.Success) return null
-        val source = sourceListing.snapshot.allSources().firstOrNull { it.id == trackId } ?: return null
+        // Try to avoid full listTrackFiles scan if we can resolve the source directly
+        val source = when {
+            trackId.startsWith("file:") -> {
+                val path = trackId.removePrefix("file:")
+                val file = File(path)
+                if (file.exists()) {
+                    TrackSource(
+                        id = trackId,
+                        displayName = file.name,
+                        lastModified = file.lastModified(),
+                        sizeBytes = file.length(),
+                        metadataReliable = true,
+                        folderName = folderName,
+                        openStream = { file.inputStream() }
+                    )
+                } else null
+            }
+            else -> {
+                // For tree: URIs or others, fall back to listing if we can't easily resolve.
+                // However, GpxWriter.restoreBackupIfPresent provides a normalized path/uri.
+                val sourceListing = listTrackFiles(context)
+                if (sourceListing !is TrackSourceListing.Success) return null
+                sourceListing.snapshot.allSources().firstOrNull { it.id == trackId }
+            }
+        } ?: return null
+
         val parsed = runCatching { source.openStream().use { parseGpxTrack(it) } }.getOrNull() ?: return null
         return CachedParsedTrack.from(source.copy(folderName = folderName), parsed)
     }
@@ -313,6 +370,7 @@ object TrackCatalog {
         ensureDiskCacheLoaded(context)
         synchronized(this) {
             parsedTrackCache.remove(trackId) ?: return
+            refreshCachedSubfolders()
         }
         persistTrackCache(context)
     }
@@ -509,7 +567,14 @@ object TrackCatalog {
         val mm = (durationSeconds % 3600) / 60
         val ss = durationSeconds % 60
         val durationText = String.format("%02d:%02d:%02d", hh, mm, ss)
-        return "${stats.pointCount} points · $durationText · %.1f m".format(java.util.Locale.US, stats.distanceMeters)
+        
+        val distanceText = if (stats.distanceMeters < 1000.0) {
+            "%.0f m".format(java.util.Locale.US, stats.distanceMeters)
+        } else {
+            "%.1f km".format(java.util.Locale.US, stats.distanceMeters / 1000.0)
+        }
+        
+        return "${stats.pointCount} points · $durationText · $distanceText"
     }
 
     private data class CachedParsedTrack(
