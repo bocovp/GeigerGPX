@@ -11,7 +11,7 @@ class MapDoseLongPressOverlay(
     private val onLongPressPositionChanged: (x: Float, y: Float) -> Unit,
     private val onLongPressFinished: () -> Unit
 ) : Overlay() {
-    var enabled: Boolean = true
+    var longPressEnabled: Boolean = true
 
     private var longPressTriggered = false
     private var downX = 0f
@@ -22,14 +22,14 @@ class MapDoseLongPressOverlay(
 
     private val longPressRunnable = Runnable {
         val mapView = currentMapView ?: return@Runnable
-        if (!enabled) return@Runnable
+        if (!longPressEnabled) return@Runnable
         longPressTriggered = true
         mapView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         onLongPressPositionChanged(downX, downY)
     }
 
     override fun onTouchEvent(event: MotionEvent?, mapView: MapView?): Boolean {
-        if (!enabled || event == null || mapView == null) return false
+        if (!longPressEnabled || event == null || mapView == null) return false
         currentMapView = mapView
 
         if (touchSlop == 0f) {

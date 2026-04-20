@@ -112,7 +112,7 @@ class MapActivity : AppCompatActivity() {
                     screenX = x,
                     screenY = y,
                     useKernelEstimator = !isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR,
-                    maxDistancePx = 48f * resources.displayMetrics.density
+                    maxDistancePx = 48.0 * resources.displayMetrics.density
                 )
                 if (!handled) {
                     trackMapRenderer.clearHighlightedPoint()
@@ -120,7 +120,7 @@ class MapActivity : AppCompatActivity() {
             },
             onLongPressFinished = { /* Keep selected dose point visible until next interaction */ }
         )
-        mapDoseLongPressOverlay.enabled = !isHeatmapMode
+        mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
         binding.mapView.overlays.add(mapDoseLongPressOverlay)
 
         observeTrack()
@@ -162,7 +162,7 @@ class MapActivity : AppCompatActivity() {
                 isHeatmapMode = !isHeatmapMode
                 updateLegendVisibility()
                 invalidateOptionsMenu()
-                mapDoseLongPressOverlay.enabled = !isHeatmapMode
+                mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
                 if (isHeatmapMode) {
                     trackMapRenderer.clearHighlightedPoint()
                 }
@@ -179,7 +179,7 @@ class MapActivity : AppCompatActivity() {
                 }
                 updateLegendVisibility()
                 invalidateOptionsMenu()
-                mapDoseLongPressOverlay.enabled = !isHeatmapMode
+                mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
                 if (isHeatmapMode) {
                     trackMapRenderer.clearHighlightedPoint()
                 }
@@ -195,7 +195,7 @@ class MapActivity : AppCompatActivity() {
         syncBottomNavigationSelection()
         binding.mapView.onResume()
         rememberedViewportState?.let { trackMapRenderer.restoreViewport(it) }
-        mapDoseLongPressOverlay.enabled = !isHeatmapMode
+        mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
         refreshMapTracks(latestActivePoints)
     }
 
