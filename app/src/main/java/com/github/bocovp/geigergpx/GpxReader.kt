@@ -11,6 +11,11 @@ object GpxReader {
 
     private const val RAD_NAMESPACE = "https://github.com/bocovp/GeigerGPX"
 
+    private val parserFactory = XmlPullParserFactory.newInstance().apply {
+        isNamespaceAware = true
+    }
+    private val distanceResult = FloatArray(1)
+
     data class TrackReadResult(
         val samples: List<TrackSample>,
         val stats: TrackStats,
@@ -19,15 +24,14 @@ object GpxReader {
 
     fun readTrack(inputStream: InputStream, cpsCoefficient: Double = 1.0): TrackReadResult? {
         inputStream.use { stream ->
-            val parser = XmlPullParserFactory.newInstance().apply {
-                isNamespaceAware = true
-            }.newPullParser().apply {
+            val parser = parserFactory.newPullParser().apply {
                 setInput(stream, null)
             }
 
             val samples = mutableListOf<TrackSample>()
             val points = mutableListOf<TrackPoint>()
-            val timestamps = mutableListOf<Long>()
+            var firstTimestamp = Long.MAX_VALUE
+            var lastTimestamp = Long.MIN_VALUE
 
             var lat = 0.0
             var lon = 0.0
@@ -105,7 +109,11 @@ object GpxReader {
                                     badCoordinates = badCoordinates
                                 )
                             )
-                            if (timeMs > 0L && !badCoordinates) timestamps.add(timeMs)
+                            if (timeMs > 0L && !badCoordinates)
+                            {
+                                if (timeMs < firstTimestamp) firstTimestamp = timeMs
+                                if (timeMs > lastTimestamp) lastTimestamp = timeMs
+                            }
                             insideTrkpt = false
                         }
                         currentTag = null
@@ -118,7 +126,7 @@ object GpxReader {
             if (samples.isEmpty()) return null
             return TrackReadResult(
                 samples = samples,
-                stats = buildTrackStats(samples, timestamps),
+                stats = buildTrackStats(samples, firstTimestamp, lastTimestamp),
                 points = points
             )
         }
@@ -126,9 +134,7 @@ object GpxReader {
 
     fun readPois(xml: String): List<PoiEntry> {
         if (xml.isBlank()) return emptyList()
-        val parser = XmlPullParserFactory.newInstance().apply {
-            isNamespaceAware = true
-        }.newPullParser().apply {
+        val parser = parserFactory.newPullParser().apply {
             setInput(StringReader(xml))
         }
         return readPois(parser)
@@ -136,9 +142,7 @@ object GpxReader {
 
     fun readPois(inputStream: InputStream): List<PoiEntry> {
         inputStream.use { stream ->
-            val parser = XmlPullParserFactory.newInstance().apply {
-                isNamespaceAware = true
-            }.newPullParser().apply {
+            val parser = parserFactory.newPullParser().apply {
                 setInput(stream, null)
             }
             return readPois(parser)
@@ -220,7 +224,7 @@ object GpxReader {
         return result.sortedByDescending { it.timestampMillis }
     }
 
-    private fun buildTrackStats(samples: List<TrackSample>, timestamps: List<Long>): TrackStats {
+    private fun buildTrackStats(samples: List<TrackSample>, firstTimestamp: Long, lastTimestamp: Long): TrackStats {
         var distance = 0.0
         var lastValid: TrackSample? = null
         for (sample in samples) {
@@ -236,18 +240,14 @@ object GpxReader {
             }
             lastValid = sample
         }
-        val duration = if (timestamps.size >= 2) {
-            (timestamps.last() - timestamps.first()).coerceAtLeast(0L)
-        } else {
-            0L
-        }
+
+        val duration = if (lastTimestamp > firstTimestamp) lastTimestamp - firstTimestamp else 0L
         return TrackStats(samples.size, duration, distance)
     }
 
     private fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val result = FloatArray(1)
-        Location.distanceBetween(lat1, lon1, lat2, lon2, result)
-        return result[0].toDouble()
+        Location.distanceBetween(lat1, lon1, lat2, lon2, distanceResult)
+        return distanceResult[0].toDouble()
     }
 
     private fun parseIsoTime(value: String?): Long {
