@@ -36,6 +36,7 @@ class MapActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMapBinding
     private lateinit var trackMapRenderer: TrackMapRenderer
+    private lateinit var mapDoseLongPressOverlay: MapDoseLongPressOverlay
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
 
     private var latestActivePoints: List<TrackPoint> = emptyList()
@@ -105,6 +106,23 @@ class MapActivity : AppCompatActivity() {
         val tvMax = findViewById<TextView>(R.id.tvMaxDose)
         trackMapRenderer = TrackMapRenderer(binding.mapView, tvHalf, tvMax)
 
+        mapDoseLongPressOverlay = MapDoseLongPressOverlay(
+            onLongPressPositionChanged = { x, y ->
+                val handled = trackMapRenderer.updateHighlightedPointForScreenPosition(
+                    screenX = x,
+                    screenY = y,
+                    useKernelEstimator = !isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR,
+                    maxDistancePx = 48.0 * resources.displayMetrics.density
+                )
+                if (!handled) {
+                    trackMapRenderer.clearHighlightedPoint()
+                }
+            },
+            onLongPressFinished = { /* Keep selected dose point visible until next interaction */ }
+        )
+        mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
+        binding.mapView.overlays.add(mapDoseLongPressOverlay)
+
         observeTrack()
     }
 
@@ -144,6 +162,10 @@ class MapActivity : AppCompatActivity() {
                 isHeatmapMode = !isHeatmapMode
                 updateLegendVisibility()
                 invalidateOptionsMenu()
+                mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
+                if (isHeatmapMode) {
+                    trackMapRenderer.clearHighlightedPoint()
+                }
                 refreshMapTracks(latestActivePoints)
                 true
             }
@@ -157,6 +179,10 @@ class MapActivity : AppCompatActivity() {
                 }
                 updateLegendVisibility()
                 invalidateOptionsMenu()
+                mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
+                if (isHeatmapMode) {
+                    trackMapRenderer.clearHighlightedPoint()
+                }
                 refreshMapTracks(latestActivePoints)
                 true
             }
@@ -169,6 +195,7 @@ class MapActivity : AppCompatActivity() {
         syncBottomNavigationSelection()
         binding.mapView.onResume()
         rememberedViewportState?.let { trackMapRenderer.restoreViewport(it) }
+        mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
         refreshMapTracks(latestActivePoints)
     }
 
