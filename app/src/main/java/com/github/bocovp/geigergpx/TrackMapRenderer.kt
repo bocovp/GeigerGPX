@@ -33,8 +33,11 @@ class TrackMapRenderer(
     private var lastUseKernelEstimator: Boolean = false
     private var lastKdeScaleSeconds: Double? = null
     private var lastGeneralizationTrackFingerprint: String = ""
+    private var cachedShowCpsUnit: Boolean = false
     private var highlightOverlay: DoseRateHighlightOverlay? = null
     private var highlightedPoint: DoseRateHighlightOverlay.HighlightPoint? = null
+    private val nearestScreenPoint = android.graphics.Point()
+    private val nearestGeoPoint = GeoPoint(0.0, 0.0)
 
     fun renderTracks(
         tracks: List<MapTrack>,
@@ -46,11 +49,7 @@ class TrackMapRenderer(
     ): Boolean {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
         val doseCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-
-        val activeHighlightOverlay = highlightOverlay ?: DoseRateHighlightOverlay().also {
-            mapView.overlays.add(it)
-            highlightOverlay = it
-        }
+        cachedShowCpsUnit = kotlin.math.abs(doseCoefficient - 1.0) < 1e-9
 
         val activeTrackIds = tracks.map { it.id }.toSet()
         val currentZoomLevel = mapView.zoomLevelDouble
@@ -101,10 +100,6 @@ class TrackMapRenderer(
             tvHalf?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax / 2)
             tvMax?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax)
         }
-        activeHighlightOverlay.minDose = currentMin
-        activeHighlightOverlay.maxDose = currentMax
-        activeHighlightOverlay.highlightedPoint = highlightedPoint
-
         var latestPoint: GeoPoint? = null
         var shouldInvalidate = false
         var autoFitApplied = false
@@ -223,6 +218,7 @@ class TrackMapRenderer(
         lastRenderedTracks = tracks
         lastRenderedPois = pois
         lastFallbackPoint = latestPoint
+        ensureHighlightOverlayOnTop(currentMin, currentMax)
 
         if (shouldInvalidate) {
             mapView.invalidate()
@@ -329,12 +325,10 @@ class TrackMapRenderer(
         useKernelEstimator: Boolean,
         maxDistancePx: Double
     ): TrackSample? {
+        val projection = mapView.projection
         var nearest: TrackSample? = null
         var nearestDistanceSquared = Double.POSITIVE_INFINITY
         val maxDistanceSquared = maxDistancePx.pow(2)
-
-        val screenPoint = android.graphics.Point()
-        val geoPoint = GeoPoint(0.0, 0.0)
 
         lastRenderedTracks.forEach { track ->
             val points = if (useKernelEstimator) {
@@ -346,10 +340,10 @@ class TrackMapRenderer(
             points.forEach { sample ->
                 if (sample.badCoordinates) return@forEach
 
-                geoPoint.setCoords(sample.latitude, sample.longitude)
-                mapView.projection.toPixels(geoPoint, screenPoint)
-                val dx = screenPoint.x - screenX
-                val dy = screenPoint.y - screenY
+                nearestGeoPoint.setCoords(sample.latitude, sample.longitude)
+                projection.toPixels(nearestGeoPoint, nearestScreenPoint)
+                val dx = nearestScreenPoint.x - screenX
+                val dy = nearestScreenPoint.y - screenY
                 val distanceSquared = dx * dx + dy * dy
                 if (distanceSquared < nearestDistanceSquared) {
                     nearestDistanceSquared = distanceSquared.toDouble()
@@ -362,9 +356,21 @@ class TrackMapRenderer(
     }
 
     private fun showCpsUnit(): Boolean {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(mapView.context)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        return kotlin.math.abs(coeff - 1.0) < 1e-9
+        return cachedShowCpsUnit
+    }
+
+    private fun ensureHighlightOverlayOnTop(minDose: Double, maxDose: Double) {
+        val overlay = highlightOverlay ?: DoseRateHighlightOverlay().also {
+            highlightOverlay = it
+        }
+        overlay.minDose = minDose
+        overlay.maxDose = maxDose
+        overlay.highlightedPoint = highlightedPoint
+
+        if (mapView.overlays.lastOrNull() !== overlay) {
+            mapView.overlays.remove(overlay)
+            mapView.overlays.add(overlay)
+        }
     }
 
     private fun removeDeletedTracks(activeIds: Set<String>) {
