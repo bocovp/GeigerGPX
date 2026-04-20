@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityEditTrackBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -173,7 +174,9 @@ class EditTrackActivity : AppCompatActivity() {
     }
 
     private fun refreshUiState() {
-        val samples = points.map { TrackSample(it.latitude, it.longitude, it.cps, it.counts, it.seconds, it.badCoordinates) }
+        val coeff = PreferenceManager.getDefaultSharedPreferences(this)
+            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val samples = points.map { TrackSample(it.latitude, it.longitude, it.cps * coeff, it.counts, it.seconds, it.badCoordinates) }
         editOverlay.points = samples
         editOverlay.minDose = 0.0
         editOverlay.maxDose = (samples.maxOfOrNull { it.doseRate } ?: 0.5).coerceIn(0.5, 10.0)
