@@ -6,6 +6,7 @@ import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.TileSystem
 import org.osmdroid.views.MapView
+import kotlin.math.pow
 
 class TrackMapRenderer(
     private val mapView: MapView,
@@ -32,6 +33,8 @@ class TrackMapRenderer(
     private var lastUseKernelEstimator: Boolean = false
     private var lastKdeScaleSeconds: Double? = null
     private var lastGeneralizationTrackFingerprint: String = ""
+    private var highlightOverlay: DoseRateHighlightOverlay? = null
+    private var highlightedPoint: DoseRateHighlightOverlay.HighlightPoint? = null
 
     fun renderTracks(
         tracks: List<MapTrack>,
@@ -43,6 +46,11 @@ class TrackMapRenderer(
     ): Boolean {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
         val doseCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+
+        val activeHighlightOverlay = highlightOverlay ?: DoseRateHighlightOverlay().also {
+            mapView.overlays.add(it)
+            highlightOverlay = it
+        }
 
         val activeTrackIds = tracks.map { it.id }.toSet()
         val currentZoomLevel = mapView.zoomLevelDouble
@@ -93,12 +101,16 @@ class TrackMapRenderer(
             tvHalf?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax / 2)
             tvMax?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax)
         }
+        activeHighlightOverlay.minDose = currentMin
+        activeHighlightOverlay.maxDose = currentMax
+        activeHighlightOverlay.highlightedPoint = highlightedPoint
 
         var latestPoint: GeoPoint? = null
         var shouldInvalidate = false
         var autoFitApplied = false
 
         if (isHeatmapMode) {
+            clearHighlightedPoint()
             if (trackOverlays.isNotEmpty()) {
                 trackOverlays.values.forEach { mapView.overlays.remove(it) }
                 trackOverlays.clear()
@@ -273,6 +285,86 @@ class TrackMapRenderer(
             }
         }
         return false
+    }
+
+
+    fun clearHighlightedPoint() {
+        highlightedPoint = null
+        highlightOverlay?.highlightedPoint = null
+        mapView.invalidate()
+    }
+
+    fun updateHighlightedPointForScreenPosition(
+        screenX: Float,
+        screenY: Float,
+        useKernelEstimator: Boolean,
+        maxDistancePx: Double
+    ): Boolean {
+        val nearest = findNearestTrackSample(screenX, screenY, useKernelEstimator, maxDistancePx)
+
+        highlightedPoint = nearest?.let { sample ->
+            val value = if (showCpsUnit()) {
+                val seconds = sample.seconds.takeIf { it > 1e-9 } ?: 1.0
+                sample.counts / seconds
+            } else {
+                sample.doseRate
+            }
+            val unit = if (showCpsUnit()) "cps" else "μSv/h"
+            DoseRateHighlightOverlay.HighlightPoint(
+                latitude = sample.latitude,
+                longitude = sample.longitude,
+                doseRateForColor = sample.doseRate,
+                doseLabel = String.format(java.util.Locale.US, "%.3f %s", value, unit)
+            )
+        }
+
+        highlightOverlay?.highlightedPoint = highlightedPoint
+        mapView.invalidate()
+        return nearest != null
+    }
+
+    private fun findNearestTrackSample(
+        screenX: Float,
+        screenY: Float,
+        useKernelEstimator: Boolean,
+        maxDistancePx: Double
+    ): TrackSample? {
+        var nearest: TrackSample? = null
+        var nearestDistanceSquared = Double.POSITIVE_INFINITY
+        val maxDistanceSquared = maxDistancePx.pow(2)
+
+        val screenPoint = android.graphics.Point()
+        val geoPoint = GeoPoint(0.0, 0.0)
+
+        lastRenderedTracks.forEach { track ->
+            val points = if (useKernelEstimator) {
+                generalizedTracksById[track.id] ?: track.points
+            } else {
+                generalizedTracksById[track.id] ?: track.points
+            }
+
+            points.forEach { sample ->
+                if (sample.badCoordinates) return@forEach
+
+                geoPoint.setCoords(sample.latitude, sample.longitude)
+                mapView.projection.toPixels(geoPoint, screenPoint)
+                val dx = screenPoint.x - screenX
+                val dy = screenPoint.y - screenY
+                val distanceSquared = dx * dx + dy * dy
+                if (distanceSquared < nearestDistanceSquared) {
+                    nearestDistanceSquared = distanceSquared.toDouble()
+                    nearest = sample
+                }
+            }
+        }
+
+        return if (nearestDistanceSquared <= maxDistanceSquared) nearest else null
+    }
+
+    private fun showCpsUnit(): Boolean {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(mapView.context)
+        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        return kotlin.math.abs(coeff - 1.0) < 1e-9
     }
 
     private fun removeDeletedTracks(activeIds: Set<String>) {
