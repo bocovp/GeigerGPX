@@ -16,6 +16,10 @@ data class PoiEntry(
     val description: String
 )
 
+fun buildPoiId(timestampMillis: Long, latitude: Double, longitude: Double): String {
+    return "${timestampMillis}_${latitude}_${longitude}"
+}
+
 object PoiLibrary {
     data class SaveResult(
         val success: Boolean,
@@ -73,7 +77,7 @@ object PoiLibrary {
     ): SaveResult {
         return modifyPoiFile(context) { list ->
             list + PoiEntry(
-                id = "${timestampMillis}_${latitude}_${longitude}",
+                id = buildPoiId(timestampMillis, latitude, longitude),
                 timestampMillis = timestampMillis,
                 latitude = latitude,
                 longitude = longitude,

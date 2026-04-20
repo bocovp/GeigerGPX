@@ -190,7 +190,7 @@ object GpxReader {
 
                 XmlPullParser.END_TAG -> {
                     if (parser.name.equals("wpt", ignoreCase = true) && insideWpt) {
-                        val id = "${time}_${lat}_${lon}_${name}_${counts}_${seconds}"
+                        val id = buildPoiId(time, lat, lon)
                         result.add(
                             PoiEntry(
                                 id = id,

@@ -4,9 +4,10 @@ import android.content.Context
 import android.net.Uri
 import androidx.preference.PreferenceManager
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
 
 object GpxWriter {
 
@@ -86,16 +87,14 @@ object GpxWriter {
         saveDoseRateInEle: Boolean,
         coeff: Double
     ) {
-        val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
+        val formatter = DateTimeFormatter.ISO_INSTANT
 
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
         writer.write("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
         writer.write("\t<trk>\n\t\t<trkseg>\n")
 
         for (p in points) {
-            val timeStr = iso.format(Date(p.timeMillis))
+            val timeStr = if (p.timeMillis > 0L) formatter.format(Instant.ofEpochMilli(p.timeMillis)) else null
             val doseRate = p.cps * coeff
             val doseStr = "%.5f".format(Locale.US, doseRate)
             val secondsStr = "%.3f".format(Locale.US, p.seconds)
@@ -103,7 +102,9 @@ object GpxWriter {
             val lonStr = "%.8f".format(Locale.US, p.longitude)
 
             writer.write("\t\t\t<trkpt lat=\"$latStr\" lon=\"$lonStr\">\n")
-            writer.write("\t\t\t\t<time>$timeStr</time>\n")
+            if (timeStr != null) {
+                writer.write("\t\t\t\t<time>$timeStr</time>\n")
+            }
             if (p.badCoordinates) {
                 writer.write("\t\t\t\t<fix>none</fix>\n")
             }
@@ -121,15 +122,13 @@ object GpxWriter {
     }
 
     fun serializePoiEntries(entries: List<PoiEntry>): String {
-        val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
+        val formatter = DateTimeFormatter.ISO_INSTANT
         val builder = StringBuilder()
         builder.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
         builder.append("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
 
         entries.sortedBy { it.timestampMillis }.forEach { poi ->
-            val timeValue = if (poi.timestampMillis > 0) iso.format(Date(poi.timestampMillis)) else ""
+            val timeValue = if (poi.timestampMillis > 0) formatter.format(Instant.ofEpochMilli(poi.timestampMillis)) else ""
             builder.append("\t<wpt lat=\"${"%.8f".format(Locale.US, poi.latitude)}\" lon=\"${"%.8f".format(Locale.US, poi.longitude)}\">\n")
             builder.append("\t\t<name>${escapeXml(poi.description)}</name>\n")
             if (timeValue.isNotBlank()) {
