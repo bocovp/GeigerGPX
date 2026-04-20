@@ -9,13 +9,10 @@ import androidx.lifecycle.MutableLiveData
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.preference.PreferenceManager
-import org.xmlpull.v1.XmlPullParser
-import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.InputStream
-import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -23,7 +20,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 private const val CURRENT_TRACK_ID = "active-track"
 private const val CURRENT_TRACK_TITLE = "Currently recording"
 private val EXCLUDED_GPX_FILE_SET = setOf("Backup.gpx", "POI.gpx", "POI-Backup.gpx")
-private const val RAD_NAMESPACE = "https://github.com/bocovp/GeigerGPX"
 
 data class TrackStats(
     val pointCount: Int,
@@ -494,109 +490,8 @@ object TrackCatalog {
     }
 
     private fun parseGpxTrack(inputStream: InputStream): ParsedTrack? {
-        inputStream.use { stream ->
-            val factory = XmlPullParserFactory.newInstance().apply {
-                isNamespaceAware = true
-            }
-            val parser = factory.newPullParser().apply {
-                setInput(stream, null)
-            }
-
-            val samples = mutableListOf<TrackSample>()
-            val timestamps = mutableListOf<Long>()
-
-            var lat = 0.0
-            var lon = 0.0
-            var doseRate = 0.0
-            var counts = 0
-            var seconds = 0.0
-            var badCoordinates = false
-            var timeMs = 0L
-            var insideTrkpt = false
-            var currentTag: String? = null
-            var currentNamespace: String? = null
-
-            while (parser.eventType != XmlPullParser.END_DOCUMENT) {
-                when (parser.eventType) {
-                    XmlPullParser.START_TAG -> {
-                        currentTag = parser.name
-                        currentNamespace = parser.namespace
-                        if (parser.name.equals("trkpt", ignoreCase = true)) {
-                            insideTrkpt = true
-                            lat = parser.getAttributeValue(null, "lat")?.toDoubleOrNull() ?: 0.0
-                            lon = parser.getAttributeValue(null, "lon")?.toDoubleOrNull() ?: 0.0
-                            doseRate = 0.0
-                            counts = 0
-                            seconds = 0.0
-                            badCoordinates = false
-                            timeMs = 0L
-                        }
-                        if (insideTrkpt && currentNamespace == RAD_NAMESPACE && parser.name == "badCoordinates") {
-                            badCoordinates = true
-                        } // Keeping this for backward compatibility. Remove in the future
-                    }
-
-                    XmlPullParser.TEXT -> {
-                        if (insideTrkpt) {
-                            when {
-                                currentTag == "time" -> timeMs = parseIsoTime(parser.text)
-                                currentTag == "fix" && parser.text?.trim()?.equals("none", ignoreCase = true) == true -> {
-                                    badCoordinates = true
-                                }
-                                currentNamespace == RAD_NAMESPACE && currentTag == "doseRate" -> {
-                                    doseRate = parser.text?.trim()?.toDoubleOrNull() ?: 0.0
-                                }
-                                currentNamespace == RAD_NAMESPACE && currentTag == "counts" -> {
-                                    counts = parser.text?.trim()?.toIntOrNull() ?: 0
-                                }
-                                currentNamespace == RAD_NAMESPACE && currentTag == "seconds" -> {
-                                    seconds = parser.text?.trim()?.toDoubleOrNull() ?: 0.0
-                                }
-                            }
-                        }
-                    }
-
-                    XmlPullParser.END_TAG -> {
-                        if (parser.name == "trkpt" && insideTrkpt) {
-                            samples.add(TrackSample(lat, lon, doseRate, counts, seconds, badCoordinates))
-                            if (timeMs > 0L && !badCoordinates) timestamps.add(timeMs)
-                            insideTrkpt = false
-                        }
-                        currentTag = null
-                        currentNamespace = null
-                    }
-                }
-                parser.next()
-            }
-
-            if (samples.isEmpty()) return null
-            var distance = 0.0
-            val validSamples = samples.filterNot { it.badCoordinates }
-            for (i in 1 until validSamples.size) {
-                distance += distanceBetween(
-                    validSamples[i - 1].latitude,
-                    validSamples[i - 1].longitude,
-                    validSamples[i].latitude,
-                    validSamples[i].longitude
-                )
-            }
-            val duration = if (timestamps.size >= 2) {
-                (timestamps.last() - timestamps.first()).coerceAtLeast(0L)
-            } else {
-                0L
-            }
-
-            return ParsedTrack(samples, TrackStats(samples.size, duration, distance))
-        }
-    }
-
-    private fun parseIsoTime(value: String?): Long {
-        if (value.isNullOrBlank()) return 0L
-        return try {
-            Instant.parse(value.trim()).toEpochMilli()
-        } catch (_: Exception) {
-            0L
-        }
+        val parsed = GpxReader.readTrack(inputStream) ?: return null
+        return ParsedTrack(parsed.samples, parsed.stats)
     }
 
     private fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
