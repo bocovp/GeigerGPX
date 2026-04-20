@@ -92,17 +92,17 @@ object EditableTrackStorage {
 
     private fun uniqueSplitFileName(context: Context, sourceTitle: String, folderName: String?): String {
         val baseName = sourceTitle.removeSuffix(".gpx")
+        val existingTitles = TrackCatalog.loadTrackListItems(
+            context = context,
+            activePoints = emptyList(),
+            includeCurrentTrack = false,
+            includeMapTracks = false,
+            browseFolderName = folderName
+        ).map { it.title.lowercase() }.toSet()
         var index = 2
         while (true) {
             val candidate = "$baseName-part$index.gpx"
-            val exists = TrackCatalog.loadTrackListItems(
-                context = context,
-                activePoints = emptyList(),
-                includeCurrentTrack = false,
-                includeMapTracks = false,
-                browseFolderName = folderName
-            ).any { it.title.equals(candidate, ignoreCase = true) }
-            if (!exists) return candidate
+            if (candidate.lowercase() !in existingTitles) return candidate
             index += 1
         }
     }

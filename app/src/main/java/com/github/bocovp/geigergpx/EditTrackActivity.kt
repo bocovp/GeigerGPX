@@ -3,7 +3,11 @@ package com.github.bocovp.geigergpx
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.github.bocovp.geigergpx.databinding.ActivityEditTrackBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.osmdroid.config.Configuration
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -109,15 +113,19 @@ class EditTrackActivity : AppCompatActivity() {
     }
 
     private fun loadTrack() {
-        val loaded = EditableTrackStorage.loadTrack(this, trackId)
-        if (loaded == null || loaded.points.isEmpty()) {
-            Toast.makeText(this, "Unable to load track", Toast.LENGTH_SHORT).show()
-            finish()
-            return
+        lifecycleScope.launch {
+            val loaded = withContext(Dispatchers.IO) {
+                EditableTrackStorage.loadTrack(this@EditTrackActivity, trackId)
+            }
+            if (loaded == null || loaded.points.isEmpty()) {
+                Toast.makeText(this@EditTrackActivity, "Unable to load track", Toast.LENGTH_SHORT).show()
+                finish()
+                return@launch
+            }
+            points = loaded.points.toMutableList()
+            fitMapToTrack()
+            refreshUiState()
         }
-        points = loaded.points.toMutableList()
-        fitMapToTrack()
-        refreshUiState()
     }
 
     private fun fitMapToTrack() {
@@ -219,45 +227,73 @@ class EditTrackActivity : AppCompatActivity() {
     private fun applyChanges() {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val updatedPoints = points.toMutableList()
+        var splitPoints: List<TrackPoint>? = null
 
         when (mode) {
             EditMode.NONE -> return
             EditMode.MARK_BAD -> {
                 if (selectedIndices.isEmpty()) return
                 selectedIndices.forEach { idx ->
-                    points[idx] = points[idx].copy(badCoordinates = true)
+                    updatedPoints[idx] = updatedPoints[idx].copy(badCoordinates = true)
                 }
             }
             EditMode.CUT_BEFORE -> {
                 val boundary = boundaryIndex ?: return
-                points = points.drop(boundary + 1).toMutableList()
+                updatedPoints.clear()
+                updatedPoints.addAll(points.drop(boundary + 1))
             }
             EditMode.CUT_AFTER -> {
                 val boundary = boundaryIndex ?: return
-                points = points.take(boundary).toMutableList()
+                updatedPoints.clear()
+                updatedPoints.addAll(points.take(boundary))
             }
             EditMode.SPLIT -> {
                 val split = boundaryIndex ?: return
-                val first = points.take(split + 1)
+                val first = updatedPoints.take(split + 1)
                 val second = points.drop(split + 1)
                 if (first.isEmpty() || second.isEmpty()) {
                     Toast.makeText(this, "Unable to split at selected point", Toast.LENGTH_SHORT).show()
                     return
                 }
-                points = first.toMutableList()
-                val splitResult = EditableTrackStorage.createSplitTrack(this, trackId, trackTitle, trackFolder, second)
-                if (splitResult != null) {
-                    TrackCatalog.onTrackSavedById(this, splitResult.newTrackId, splitResult.newTrackTitle, trackFolder, second, coeff)
-                }
+                updatedPoints.clear()
+                updatedPoints.addAll(first)
+                splitPoints = second
             }
         }
 
-        EditableTrackStorage.overwriteTrack(this, trackId, points)
-        TrackCatalog.onTrackSavedById(this, trackId, trackTitle, trackFolder, points, coeff)
-        selectedIndices = emptyList()
-        boundaryIndex = null
-        Toast.makeText(this, "Track updated", Toast.LENGTH_SHORT).show()
-        refreshUiState()
+        binding.btnApply.isEnabled = false
+        lifecycleScope.launch {
+            val splitResult = withContext(Dispatchers.IO) {
+                splitPoints?.let {
+                    EditableTrackStorage.createSplitTrack(this@EditTrackActivity, trackId, trackTitle, trackFolder, it)
+                }
+            }
+            withContext(Dispatchers.IO) {
+                splitPoints?.let { second ->
+                    splitResult?.let {
+                        TrackCatalog.onTrackSavedById(
+                            this@EditTrackActivity,
+                            it.newTrackId,
+                            it.newTrackTitle,
+                            trackFolder,
+                            second,
+                            coeff
+                        )
+                    }
+                }
+                EditableTrackStorage.overwriteTrack(this@EditTrackActivity, trackId, updatedPoints)
+                TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints, coeff)
+            }
+
+            points = updatedPoints
+            selectedIndices = emptyList()
+            boundaryIndex = null
+            binding.btnCancel.text = "Cancel (Finish)"
+            binding.btnApply.isEnabled = true
+            Toast.makeText(this@EditTrackActivity, "Track updated", Toast.LENGTH_SHORT).show()
+            refreshUiState()
+        }
     }
 
     companion object {
