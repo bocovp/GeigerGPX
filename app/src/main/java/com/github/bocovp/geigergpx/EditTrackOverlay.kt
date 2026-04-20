@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.Point
 import android.graphics.RectF
 import android.graphics.Shader
+import android.view.HapticFeedbackConstants
 import android.view.ViewConfiguration
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
@@ -89,12 +90,15 @@ class RectangleSelectionOverlay(
     private var downY = 0f
     private var lastX = 0f
     private var lastY = 0f
+    private var currentMapView: org.osmdroid.views.MapView? = null
 
     private val longPressRunnable = Runnable {
         if (!selectionEnabled || !selecting) return@Runnable
         longPressPanning = true
         longPressTriggered = true
         selecting = false
+        currentMapView?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        currentMapView?.invalidate()
     }
 
     private val fillPaint = Paint().apply {
@@ -109,6 +113,7 @@ class RectangleSelectionOverlay(
 
     override fun onTouchEvent(event: android.view.MotionEvent?, mapView: org.osmdroid.views.MapView?): Boolean {
         if (!selectionEnabled || event == null || mapView == null) return false
+        currentMapView = mapView
 
         if (touchSlop == 0f) {
             val viewConfig = ViewConfiguration.get(mapView.context)
@@ -164,10 +169,14 @@ class RectangleSelectionOverlay(
                 if (longPressPanning) {
                     longPressPanning = false
                     selecting = false
+                    currentMapView = null
                     return true
                 }
 
-                if (!selecting) return true
+                if (!selecting) {
+                    currentMapView = null
+                    return true
+                }
                 endX = event.x
                 endY = event.y
                 selecting = false
@@ -179,6 +188,7 @@ class RectangleSelectionOverlay(
                 )
                 onSelectionComplete(rect)
                 mapView.invalidate()
+                currentMapView = null
                 return true
             }
         }
