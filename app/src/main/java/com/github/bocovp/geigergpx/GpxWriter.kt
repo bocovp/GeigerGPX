@@ -92,6 +92,8 @@ object GpxWriter {
         writer.write("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
         writer.write("\t<trk>\n\t\t<trkseg>\n")
 
+        val sb = StringBuilder(256)
+
         for (p in points) {
             val timeStr = if (p.timeMillis > 0L) ISO_INSTANT_FORMATTER.format(Instant.ofEpochMilli(p.timeMillis)) else null
             val doseRate = p.cps * coeff
@@ -100,22 +102,25 @@ object GpxWriter {
             val latStr = "%.8f".format(Locale.US, p.latitude)
             val lonStr = "%.8f".format(Locale.US, p.longitude)
 
-            writer.write("\t\t\t<trkpt lat=\"$latStr\" lon=\"$lonStr\">\n")
+            sb.setLength(0)
+            sb.append("\t\t\t<trkpt lat=\"").append(latStr).append("\" lon=\"").append(lonStr).append("\">\n")
             if (timeStr != null) {
-                writer.write("\t\t\t\t<time>$timeStr</time>\n")
+                sb.append("\t\t\t\t<time>").append(timeStr).append("</time>\n")
             }
             if (p.badCoordinates) {
-                writer.write("\t\t\t\t<fix>none</fix>\n")
+                sb.append("\t\t\t\t<fix>none</fix>\n")
             }
             if (saveDoseRateInEle) {
-                writer.write("\t\t\t\t<ele>$doseStr</ele>\n")
+                sb.append("\t\t\t\t<ele>").append(doseStr).append("</ele>\n")
             }
-            writer.write("\t\t\t\t<extensions>\n")
-            writer.write("\t\t\t\t\t<rad:doseRate>$doseStr</rad:doseRate>\n")
-            writer.write("\t\t\t\t\t<rad:counts>${p.counts}</rad:counts>\n")
-            writer.write("\t\t\t\t\t<rad:seconds>$secondsStr</rad:seconds>\n")
-            writer.write("\t\t\t\t</extensions>\n")
-            writer.write("\t\t\t</trkpt>\n")
+            sb.append("\t\t\t\t<extensions>\n")
+            sb.append("\t\t\t\t\t<rad:doseRate>").append(doseStr).append("</rad:doseRate>\n")
+            sb.append("\t\t\t\t\t<rad:counts>").append(p.counts).append("</rad:counts>\n")
+            sb.append("\t\t\t\t\t<rad:seconds>").append(secondsStr).append("</rad:seconds>\n")
+            sb.append("\t\t\t\t</extensions>\n")
+            sb.append("\t\t\t</trkpt>\n")
+
+            writer.write(sb.toString())
         }
         writer.write("\t\t</trkseg>\n\t</trk>\n</gpx>\n")
     }
