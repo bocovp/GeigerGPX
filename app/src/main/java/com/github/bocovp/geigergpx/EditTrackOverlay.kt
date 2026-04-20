@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.Point
 import android.graphics.RectF
 import android.graphics.Shader
+import android.view.ViewConfiguration
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
@@ -80,6 +81,21 @@ class RectangleSelectionOverlay(
     private var endX = 0f
     private var endY = 0f
     private var selecting = false
+    private var longPressPanning = false
+    private var longPressTriggered = false
+    private var longPressTimeoutMs = 500L
+    private var touchSlop = 0f
+    private var downX = 0f
+    private var downY = 0f
+    private var lastX = 0f
+    private var lastY = 0f
+
+    private val longPressRunnable = Runnable {
+        if (!selectionEnabled || !selecting) return@Runnable
+        longPressPanning = true
+        longPressTriggered = true
+        selecting = false
+    }
 
     private val fillPaint = Paint().apply {
         style = Paint.Style.FILL
@@ -93,17 +109,48 @@ class RectangleSelectionOverlay(
 
     override fun onTouchEvent(event: android.view.MotionEvent?, mapView: org.osmdroid.views.MapView?): Boolean {
         if (!selectionEnabled || event == null || mapView == null) return false
+
+        if (touchSlop == 0f) {
+            val viewConfig = ViewConfiguration.get(mapView.context)
+            touchSlop = viewConfig.scaledTouchSlop.toFloat()
+            longPressTimeoutMs = ViewConfiguration.getLongPressTimeout().toLong()
+        }
+
         when (event.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
+                mapView.removeCallbacks(longPressRunnable)
                 selecting = true
+                longPressPanning = false
+                longPressTriggered = false
                 startX = event.x
                 startY = event.y
                 endX = event.x
                 endY = event.y
+                downX = event.x
+                downY = event.y
+                lastX = event.x
+                lastY = event.y
+                mapView.postDelayed(longPressRunnable, longPressTimeoutMs)
                 mapView.invalidate()
                 return true
             }
             android.view.MotionEvent.ACTION_MOVE -> {
+                if (longPressPanning) {
+                    val dx = (lastX - event.x).toInt()
+                    val dy = (lastY - event.y).toInt()
+                    if (dx != 0 || dy != 0) {
+                        mapView.scrollBy(dx, dy)
+                    }
+                    lastX = event.x
+                    lastY = event.y
+                    return true
+                }
+
+                val moved = kotlin.math.abs(event.x - downX) > touchSlop || kotlin.math.abs(event.y - downY) > touchSlop
+                if (moved && !longPressTriggered) {
+                    mapView.removeCallbacks(longPressRunnable)
+                }
+
                 if (!selecting) return true
                 endX = event.x
                 endY = event.y
@@ -112,6 +159,14 @@ class RectangleSelectionOverlay(
             }
             android.view.MotionEvent.ACTION_UP,
             android.view.MotionEvent.ACTION_CANCEL -> {
+                mapView.removeCallbacks(longPressRunnable)
+
+                if (longPressPanning) {
+                    longPressPanning = false
+                    selecting = false
+                    return true
+                }
+
                 if (!selecting) return true
                 endX = event.x
                 endY = event.y
