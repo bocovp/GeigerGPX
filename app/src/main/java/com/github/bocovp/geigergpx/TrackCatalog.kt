@@ -93,7 +93,7 @@ object TrackCatalog {
 
         allSources.forEachIndexed { index, source ->
             try {
-                val parsed = parseGpxTrack(source.openStream())
+                val parsed = parseGpxTrack(context, source.openStream())
                 if (parsed != null) {
                     updatedTracks[source.id] = CachedParsedTrack.from(source, parsed)
                 }
@@ -191,7 +191,7 @@ object TrackCatalog {
             val shouldIncludeMapTrack = includeMapTracks && (mapTrackIds == null || source.sourceId in mapTrackIds)
             val cached = if (shouldIncludeMapTrack && !source.hasSamples()) {
                 try {
-                    val parsed = openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(it) }
+                    val parsed = openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(context, it) }
                     if (parsed != null) {
                         val updated = source.withSamples(parsed.samples)
                         synchronized(this) {
@@ -402,7 +402,7 @@ object TrackCatalog {
             }
         } ?: return null
 
-        val parsed = runCatching { source.openStream().use { parseGpxTrack(it) } }.getOrNull() ?: return null
+        val parsed = runCatching { source.openStream().use { parseGpxTrack(context, it) } }.getOrNull() ?: return null
         return CachedParsedTrack.from(source.copy(folderName = folderName), parsed)
     }
 
@@ -431,7 +431,7 @@ object TrackCatalog {
         val samples = if (cached.hasSamples()) {
             cached.samplesOrEmpty()
         } else {
-            val parsed = openInputStreamForTrack(context, trackId)?.use { parseGpxTrack(it) } ?: return null
+            val parsed = openInputStreamForTrack(context, trackId)?.use { parseGpxTrack(context, it) } ?: return null
             synchronized(this) {
                 val updated = cached.withSamples(parsed.samples)
                 parsedTrackCache[trackId] = updated
@@ -489,8 +489,10 @@ object TrackCatalog {
         return TrackStats(points.size, duration, distance)
     }
 
-    private fun parseGpxTrack(inputStream: InputStream): ParsedTrack? {
-        val parsed = GpxReader.readTrack(inputStream) ?: return null
+    private fun parseGpxTrack(context: Context, inputStream: InputStream): ParsedTrack? {
+        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
+            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val parsed = GpxReader.readTrack(inputStream, cpsCoefficient = coeff) ?: return null
         return ParsedTrack(parsed.samples, parsed.stats)
     }
 

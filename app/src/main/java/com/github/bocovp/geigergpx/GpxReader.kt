@@ -87,7 +87,12 @@ object GpxReader {
                                 cpsCoefficient > 0.0 -> doseRate / cpsCoefficient
                                 else -> doseRate
                             }
-                            samples.add(TrackSample(lat, lon, doseRate, counts, seconds, badCoordinates))
+                            val resolvedDoseRate = when {
+                                doseRate > 0.0 -> doseRate
+                                cpsCoefficient > 0.0 -> cps * cpsCoefficient
+                                else -> cps
+                            }
+                            samples.add(TrackSample(lat, lon, resolvedDoseRate, counts, seconds, badCoordinates))
                             points.add(
                                 TrackPoint(
                                     latitude = lat,
@@ -217,14 +222,19 @@ object GpxReader {
 
     private fun buildTrackStats(samples: List<TrackSample>, timestamps: List<Long>): TrackStats {
         var distance = 0.0
-        val validSamples = samples.filterNot { it.badCoordinates }
-        for (i in 1 until validSamples.size) {
-            distance += distanceBetween(
-                validSamples[i - 1].latitude,
-                validSamples[i - 1].longitude,
-                validSamples[i].latitude,
-                validSamples[i].longitude
-            )
+        var lastValid: TrackSample? = null
+        for (sample in samples) {
+            if (sample.badCoordinates) continue
+            val previous = lastValid
+            if (previous != null) {
+                distance += distanceBetween(
+                    previous.latitude,
+                    previous.longitude,
+                    sample.latitude,
+                    sample.longitude
+                )
+            }
+            lastValid = sample
         }
         val duration = if (timestamps.size >= 2) {
             (timestamps.last() - timestamps.first()).coerceAtLeast(0L)
