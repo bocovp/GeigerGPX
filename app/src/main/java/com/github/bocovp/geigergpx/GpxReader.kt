@@ -14,8 +14,6 @@ object GpxReader {
     private val parserFactory = XmlPullParserFactory.newInstance().apply {
         isNamespaceAware = true
     }
-    private val distanceResult = FloatArray(1)
-
     data class TrackReadResult(
         val samples: List<TrackSample>,
         val stats: TrackStats,
@@ -109,10 +107,13 @@ object GpxReader {
                                     badCoordinates = badCoordinates
                                 )
                             )
-                            if (timeMs > 0L && !badCoordinates)
-                            {
-                                if (timeMs < firstTimestamp) firstTimestamp = timeMs
-                                if (timeMs > lastTimestamp) lastTimestamp = timeMs
+                            if (timeMs > 0L && !badCoordinates) {
+                                if (timeMs < firstTimestamp) {
+                                    firstTimestamp = timeMs
+                                }
+                                if (timeMs > lastTimestamp) {
+                                    lastTimestamp = timeMs
+                                }
                             }
                             insideTrkpt = false
                         }
@@ -246,8 +247,9 @@ object GpxReader {
     }
 
     private fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        Location.distanceBetween(lat1, lon1, lat2, lon2, distanceResult)
-        return distanceResult[0].toDouble()
+        val result = FloatArray(1)
+        Location.distanceBetween(lat1, lon1, lat2, lon2, result)
+        return result[0].toDouble()
     }
 
     private fun parseIsoTime(value: String?): Long {
