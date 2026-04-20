@@ -14,6 +14,7 @@ object GpxWriter {
     private const val BACKUP_FILE_NAME = "Backup.gpx"
     private const val GPX_NAMESPACE = "http://www.topografix.com/GPX/1/1"
     private const val RAD_NAMESPACE = "https://github.com/bocovp/GeigerGPX"
+    private val ISO_INSTANT_FORMATTER: DateTimeFormatter = DateTimeFormatter.ISO_INSTANT
 
     data class SaveTrackResult(
         val displayPath: String,
@@ -87,14 +88,12 @@ object GpxWriter {
         saveDoseRateInEle: Boolean,
         coeff: Double
     ) {
-        val formatter = DateTimeFormatter.ISO_INSTANT
-
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
         writer.write("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
         writer.write("\t<trk>\n\t\t<trkseg>\n")
 
         for (p in points) {
-            val timeStr = if (p.timeMillis > 0L) formatter.format(Instant.ofEpochMilli(p.timeMillis)) else null
+            val timeStr = if (p.timeMillis > 0L) ISO_INSTANT_FORMATTER.format(Instant.ofEpochMilli(p.timeMillis)) else null
             val doseRate = p.cps * coeff
             val doseStr = "%.5f".format(Locale.US, doseRate)
             val secondsStr = "%.3f".format(Locale.US, p.seconds)
@@ -122,13 +121,12 @@ object GpxWriter {
     }
 
     fun serializePoiEntries(entries: List<PoiEntry>): String {
-        val formatter = DateTimeFormatter.ISO_INSTANT
         val builder = StringBuilder()
         builder.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
         builder.append("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
 
         entries.sortedBy { it.timestampMillis }.forEach { poi ->
-            val timeValue = if (poi.timestampMillis > 0) formatter.format(Instant.ofEpochMilli(poi.timestampMillis)) else ""
+            val timeValue = if (poi.timestampMillis > 0) ISO_INSTANT_FORMATTER.format(Instant.ofEpochMilli(poi.timestampMillis)) else ""
             builder.append("\t<wpt lat=\"${"%.8f".format(Locale.US, poi.latitude)}\" lon=\"${"%.8f".format(Locale.US, poi.longitude)}\">\n")
             builder.append("\t\t<name>${escapeXml(poi.description)}</name>\n")
             if (timeValue.isNotBlank()) {
