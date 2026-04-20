@@ -114,9 +114,11 @@ class EditTrackActivity : AppCompatActivity() {
 
     private fun loadTrack() {
         lifecycleScope.launch {
-            val loaded = withContext(Dispatchers.IO) {
-                EditableTrackStorage.loadTrack(this@EditTrackActivity, trackId)
-            }
+            val loaded = runCatching {
+                withContext(Dispatchers.IO) {
+                    EditableTrackStorage.loadTrack(this@EditTrackActivity, trackId)
+                }
+            }.getOrNull()
             if (loaded == null || loaded.points.isEmpty()) {
                 Toast.makeText(this@EditTrackActivity, "Unable to load track", Toast.LENGTH_SHORT).show()
                 finish()
@@ -264,35 +266,37 @@ class EditTrackActivity : AppCompatActivity() {
 
         binding.btnApply.isEnabled = false
         lifecycleScope.launch {
-            val splitResult = withContext(Dispatchers.IO) {
-                splitPoints?.let {
-                    EditableTrackStorage.createSplitTrack(this@EditTrackActivity, trackId, trackTitle, trackFolder, it)
-                }
-            }
-            withContext(Dispatchers.IO) {
-                splitPoints?.let { second ->
-                    splitResult?.let {
-                        TrackCatalog.onTrackSavedById(
-                            this@EditTrackActivity,
-                            it.newTrackId,
-                            it.newTrackTitle,
-                            trackFolder,
-                            second,
-                            coeff
-                        )
+            try {
+                val success = withContext(Dispatchers.IO) {
+                    val splitResult = splitPoints?.let {
+                        EditableTrackStorage.createSplitTrack(this@EditTrackActivity, trackId, trackTitle, trackFolder, it)
+                            ?: return@withContext false
                     }
+                    splitPoints?.let { second ->
+                        splitResult?.let { result ->
+                            TrackCatalog.onTrackSavedById(this@EditTrackActivity, result.newTrackId, result.newTrackTitle, trackFolder, second, coeff)
+                        }
+                    }
+                    EditableTrackStorage.overwriteTrack(this@EditTrackActivity, trackId, updatedPoints)
+                    TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints, coeff)
+                    true
                 }
-                EditableTrackStorage.overwriteTrack(this@EditTrackActivity, trackId, updatedPoints)
-                TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints, coeff)
-            }
 
-            points = updatedPoints
-            selectedIndices = emptyList()
-            boundaryIndex = null
-            binding.btnCancel.text = "Cancel (Finish)"
-            binding.btnApply.isEnabled = true
-            Toast.makeText(this@EditTrackActivity, "Track updated", Toast.LENGTH_SHORT).show()
-            refreshUiState()
+                if (success) {
+                    points = updatedPoints
+                    selectedIndices = emptyList()
+                    boundaryIndex = null
+                    binding.btnCancel.text = "Cancel (Finish)"
+                    Toast.makeText(this@EditTrackActivity, "Track updated", Toast.LENGTH_SHORT).show()
+                    refreshUiState()
+                } else {
+                    Toast.makeText(this@EditTrackActivity, "Failed to split track", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this@EditTrackActivity, "Error saving changes", Toast.LENGTH_SHORT).show()
+            } finally {
+                binding.btnApply.isEnabled = true
+            }
         }
     }
 
