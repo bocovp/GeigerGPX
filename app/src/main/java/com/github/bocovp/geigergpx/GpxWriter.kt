@@ -28,7 +28,9 @@ object GpxWriter {
         val fileName = defaultTimestampFileName()
         val result = writeGpxFile(context, points, fileName)
         if (result != null) {
-            TrackCatalog.onTrackSaved(context, fileName, points)
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+            TrackCatalog.onTrackSaved(context, fileName, points, coeff)
         }
         return result
     }

@@ -36,6 +36,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".EditTrackActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".PoiActivity"
             android:exported="false" />
 

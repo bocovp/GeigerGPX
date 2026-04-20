@@ -264,6 +264,8 @@ class TracksActivity : AppCompatActivity() {
             .setIcon(R.drawable.baseline_share_24)
 
         if (!item.isCurrentTrack) {
+            menu.add(MENU_GROUP_MANAGE, MENU_EDIT_TRACK, Menu.NONE, "Edit track")
+                .setIcon(R.drawable.baseline_rebase_edit_24)
             menu.add(MENU_GROUP_MANAGE, MENU_RENAME, Menu.NONE, "Rename")
                 .setIcon(R.drawable.baseline_edit_24)
 
@@ -294,6 +296,7 @@ class TracksActivity : AppCompatActivity() {
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 MENU_RENAME -> showRenameDialog(item)
+                MENU_EDIT_TRACK -> openTrackEditor(item)
                 MENU_DELETE -> confirmDeleteTrack(item)
                 MENU_OPEN_DEFAULT -> openInDefaultApp(item)
                 MENU_SHARE -> shareTrack(item)
@@ -304,6 +307,16 @@ class TracksActivity : AppCompatActivity() {
             true
         }
         popup.show()
+    }
+
+    private fun openTrackEditor(item: TrackListItem) {
+        if (item.isCurrentTrack) return
+        startActivity(
+            Intent(this, EditTrackActivity::class.java)
+                .putExtra(EditTrackActivity.EXTRA_TRACK_ID, item.id)
+                .putExtra(EditTrackActivity.EXTRA_TRACK_TITLE, item.title)
+                .putExtra(EditTrackActivity.EXTRA_TRACK_FOLDER, item.folderName)
+        )
     }
 
     private fun handleMoveAction(item: TrackListItem, targetFolder: String?) {
@@ -597,6 +610,7 @@ class TracksActivity : AppCompatActivity() {
         private const val MENU_DELETE = 2
         private const val MENU_OPEN_DEFAULT = 3
         private const val MENU_SHARE = 4
+        private const val MENU_EDIT_TRACK = 5
         private const val MENU_MOVE_SUBMENU = 6
         private const val MENU_MOVE_BASE = 100
         private const val GPX_MIME = "application/gpx+xml"
