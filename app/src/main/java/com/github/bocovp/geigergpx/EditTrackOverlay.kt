@@ -14,7 +14,7 @@ import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
 
 class EditTrackOverlay : Overlay() {
-    var points: List<TrackSample> = emptyList()
+    var points: List<TrackPoint> = emptyList()
     var highlightedIndices: Set<Int> = emptySet()
     var minDose: Double = 0.0
     var maxDose: Double = 1.0
@@ -60,11 +60,11 @@ class EditTrackOverlay : Overlay() {
         }
         linePaint.shader = null
 
-        points.forEachIndexed { index, sample ->
-            projection.toPixels(GeoPoint(sample.latitude, sample.longitude), p1)
+        points.forEachIndexed { index, pt ->
+            projection.toPixels(GeoPoint(pt.latitude, pt.longitude), p1)
             pointFillPaint.color = when {
                 highlightedIndices.contains(index) -> Color.parseColor("#1E88E5")
-                sample.badCoordinates -> Color.GRAY
+                pt.badCoordinates -> Color.GRAY
                 else -> Color.WHITE
             }
             canvas.drawCircle(p1.x.toFloat(), p1.y.toFloat(), 8f, pointFillPaint)

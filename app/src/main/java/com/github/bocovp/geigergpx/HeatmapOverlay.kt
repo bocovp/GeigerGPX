@@ -76,14 +76,14 @@ class HeatmapOverlay(
         // A. Binning Phase
         // Transform and bucket every point from every track
         for (track in tracks) {
-            for (sample in track.points) {
+            for (pt in track.points) {
                 // Skip if count is 0 (as per requirements)
-                if (sample.counts == 0) continue
-                if (sample.badCoordinates) continue
+                if (pt.counts == 0) continue
+                if (pt.badCoordinates) continue
 
                 // Project Lat/Lon to Screen Pixels
                 // Note: reuse GeoPoint to reduce allocation in tight loops if possible
-                geoPoint.setCoords(sample.latitude, sample.longitude)
+                geoPoint.setCoords(pt.latitude, pt.longitude)
                 projection.toPixels(geoPoint, pPixels)
 
                 val col = (pPixels.x + offsetX) / gridSizePixels
@@ -92,8 +92,8 @@ class HeatmapOverlay(
                 // Check bounds
                 if (col in 0 until cols && row in 0 until rows) {
                     val index = row * cols + col
-                    sumCounts[index] += sample.counts
-                    sumSeconds[index] += sample.seconds
+                    sumCounts[index] += pt.counts
+                    sumSeconds[index] += pt.seconds
                 }
             }
         }

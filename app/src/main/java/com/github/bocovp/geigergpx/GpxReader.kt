@@ -15,7 +15,6 @@ object GpxReader {
         isNamespaceAware = true
     }
     data class TrackReadResult(
-        val samples: List<TrackSample>,
         val stats: TrackStats,
         val points: List<TrackPoint>
     )
@@ -26,7 +25,6 @@ object GpxReader {
                 setInput(stream, null)
             }
 
-            val samples = mutableListOf<TrackSample>()
             val points = mutableListOf<TrackPoint>()
             var firstTimestamp = Long.MAX_VALUE
             var lastTimestamp = Long.MIN_VALUE
@@ -84,24 +82,18 @@ object GpxReader {
 
                     XmlPullParser.END_TAG -> {
                         if (parser.name == "trkpt" && insideTrkpt) {
-                            val cps = when {
-                                seconds > 0.000001 -> counts / seconds
-                                cpsCoefficient > 0.0 -> doseRate / cpsCoefficient
-                                else -> doseRate
-                            }
                             val resolvedDoseRate = when {
                                 doseRate > 0.0 -> doseRate
-                                cpsCoefficient > 0.0 -> cps * cpsCoefficient
-                                else -> cps
+                                seconds > 0.000001 -> (counts / seconds) * cpsCoefficient
+                                else -> 0.0
                             }
-                            samples.add(TrackSample(lat, lon, resolvedDoseRate, counts, seconds, badCoordinates))
+                            
                             points.add(
                                 TrackPoint(
                                     latitude = lat,
                                     longitude = lon,
                                     timeMillis = timeMs,
-                                    distanceFromLast = 0.0,
-                                    cps = cps,
+                                    doseRate = resolvedDoseRate,
                                     counts = counts,
                                     seconds = seconds,
                                     badCoordinates = badCoordinates
@@ -124,10 +116,9 @@ object GpxReader {
                 parser.next()
             }
 
-            if (samples.isEmpty()) return null
+            if (points.isEmpty()) return null
             return TrackReadResult(
-                samples = samples,
-                stats = buildTrackStats(samples, firstTimestamp, lastTimestamp),
+                stats = buildTrackStats(points, firstTimestamp, lastTimestamp),
                 points = points
             )
         }
@@ -225,25 +216,25 @@ object GpxReader {
         return result.sortedByDescending { it.timestampMillis }
     }
 
-    private fun buildTrackStats(samples: List<TrackSample>, firstTimestamp: Long, lastTimestamp: Long): TrackStats {
+    private fun buildTrackStats(points: List<TrackPoint>, firstTimestamp: Long, lastTimestamp: Long): TrackStats {
         var distance = 0.0
-        var lastValid: TrackSample? = null
-        for (sample in samples) {
-            if (sample.badCoordinates) continue
+        var lastValid: TrackPoint? = null
+        for (p in points) {
+            if (p.badCoordinates) continue
             val previous = lastValid
             if (previous != null) {
                 distance += distanceBetween(
                     previous.latitude,
                     previous.longitude,
-                    sample.latitude,
-                    sample.longitude
+                    p.latitude,
+                    p.longitude
                 )
             }
-            lastValid = sample
+            lastValid = p
         }
 
         val duration = if (lastTimestamp > firstTimestamp) lastTimestamp - firstTimestamp else 0L
-        return TrackStats(samples.size, duration, distance)
+        return TrackStats(points.size, duration, distance)
     }
 
     private fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {

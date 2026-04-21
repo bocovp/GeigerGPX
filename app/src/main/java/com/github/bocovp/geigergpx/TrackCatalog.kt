@@ -168,7 +168,7 @@ object TrackCatalog {
                     title = CURRENT_TRACK_TITLE,
                     subtitle = formatStats(currentTrack.stats),
                     mapTrack = if (includeCurrentMapTrack) {
-                        MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.samples)
+                        MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.points)
                     } else {
                         null
                     },
@@ -189,11 +189,11 @@ object TrackCatalog {
 
         sortedSources.forEach { source ->
             val shouldIncludeMapTrack = includeMapTracks && (mapTrackIds == null || source.sourceId in mapTrackIds)
-            val cached = if (shouldIncludeMapTrack && !source.hasSamples()) {
+            val cached = if (shouldIncludeMapTrack && !source.hasPoints()) {
                 try {
                     val parsed = openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(context, it) }
                     if (parsed != null) {
-                        val updated = source.withSamples(parsed.samples)
+                        val updated = source.withPoints(parsed.points)
                         synchronized(this) {
                             parsedTrackCache[source.sourceId] = updated
                         }
@@ -212,7 +212,7 @@ object TrackCatalog {
             val stats = cached.stats
             val mapTrack = when {
                 !shouldIncludeMapTrack -> null
-                else -> MapTrack(source.sourceId, source.displayName, cached.samplesOrEmpty())
+                else -> MapTrack(source.sourceId, source.displayName, cached.pointsOrEmpty())
             }
 
             items.add(
@@ -267,23 +267,14 @@ object TrackCatalog {
         ensureDiskCacheLoaded(context)
         val source = sourceFromRelativePath(context, relativePath) ?: return
         val stats = statsFromTrackPoints(points)
-        val samples = points.map {
-            TrackSample(
-                latitude = it.latitude,
-                longitude = it.longitude,
-                doseRate = it.cps * coefficient,
-                counts = it.counts,
-                seconds = it.seconds,
-                badCoordinates = it.badCoordinates
-            )
-        }
+        // Note: TrackingService already calculated doseRate for these points
         synchronized(this) {
             parsedTrackCache[source.id] = CachedParsedTrack(
                 sourceId = source.id,
                 displayName = source.displayName,
                 folderName = source.folderName,
                 stats = stats,
-                sampleCache = samples
+                pointCache = points
             )
             refreshCachedSubfolders()
         }
@@ -300,23 +291,15 @@ object TrackCatalog {
     ) {
         ensureDiskCacheLoaded(context)
         val stats = statsFromTrackPoints(points)
-        val samples = points.map {
-            TrackSample(
-                latitude = it.latitude,
-                longitude = it.longitude,
-                doseRate = it.cps * coefficient,
-                counts = it.counts,
-                seconds = it.seconds,
-                badCoordinates = it.badCoordinates
-            )
-        }
+        // Note: The points passed here (e.g. from EditTrackActivity) should already have 
+        // their doseRate set correctly.
         synchronized(this) {
             parsedTrackCache[trackId] = CachedParsedTrack(
                 sourceId = trackId,
                 displayName = displayName,
                 folderName = folderName,
                 stats = stats,
-                sampleCache = samples
+                pointCache = points
             )
             refreshCachedSubfolders()
         }
@@ -418,7 +401,7 @@ object TrackCatalog {
     data class TrackPlotData(
         val id: String,
         val title: String,
-        val samples: List<TrackSample>
+        val points: List<TrackPoint>
     )
 
     fun loadTrackSamplesById(context: Context, trackId: String): TrackPlotData? {
@@ -428,24 +411,24 @@ object TrackCatalog {
         }
 
         val cached = parsedTrackCache[trackId] ?: return null
-        val samples = if (cached.hasSamples()) {
-            cached.samplesOrEmpty()
+        val points = if (cached.hasPoints()) {
+            cached.pointsOrEmpty()
         } else {
             val parsed = openInputStreamForTrack(context, trackId)?.use { parseGpxTrack(context, it) } ?: return null
             synchronized(this) {
-                val updated = cached.withSamples(parsed.samples)
+                val updated = cached.withPoints(parsed.points)
                 parsedTrackCache[trackId] = updated
             }
             persistTrackCache(context)
-            parsed.samples
+            parsed.points
         }
-        return TrackPlotData(id = trackId, title = cached.displayName, samples = samples)
+        return TrackPlotData(id = trackId, title = cached.displayName, points = points)
     }
 
     fun folderItemId(folderName: String): String = "folder:$folderName"
 
     private data class CurrentTrackData(
-        val samples: List<TrackSample>,
+        val points: List<TrackPoint>,
         val stats: TrackStats
     )
 
@@ -463,10 +446,7 @@ object TrackCatalog {
             return CurrentTrackData(emptyList(), TrackStats(0, 0L, 0.0))
         }
 
-        val samples = currentPoints.map {
-            TrackSample(it.latitude, it.longitude, it.cps * coeff, it.counts, it.seconds, it.badCoordinates)
-        }
-        return CurrentTrackData(samples, statsFromTrackPoints(currentPoints))
+        return CurrentTrackData(currentPoints, statsFromTrackPoints(currentPoints))
     }
 
     private fun statsFromTrackPoints(points: List<TrackPoint>): TrackStats {
@@ -493,7 +473,7 @@ object TrackCatalog {
         val coeff = PreferenceManager.getDefaultSharedPreferences(context)
             .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
         val parsed = GpxReader.readTrack(inputStream, cpsCoefficient = coeff) ?: return null
-        return ParsedTrack(parsed.samples, parsed.stats)
+        return ParsedTrack(parsed.points, parsed.stats)
     }
 
     private fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
@@ -523,13 +503,13 @@ object TrackCatalog {
         val displayName: String,
         val folderName: String?,
         val stats: TrackStats,
-        @Volatile private var sampleCache: List<TrackSample>? = null
+        @Volatile private var pointCache: List<TrackPoint>? = null
     ) {
-        fun hasSamples(): Boolean = sampleCache != null
+        fun hasPoints(): Boolean = pointCache != null
 
-        fun samplesOrEmpty(): List<TrackSample> = sampleCache ?: emptyList()
+        fun pointsOrEmpty(): List<TrackPoint> = pointCache ?: emptyList()
 
-        fun withSamples(samples: List<TrackSample>): CachedParsedTrack = copy(sampleCache = samples)
+        fun withPoints(points: List<TrackPoint>): CachedParsedTrack = copy(pointCache = points)
 
         fun toJson(): JSONObject {
             return JSONObject()
@@ -549,7 +529,7 @@ object TrackCatalog {
                     displayName = source.displayName,
                     folderName = source.folderName,
                     stats = parsedTrack.stats,
-                    sampleCache = parsedTrack.samples
+                    pointCache = parsedTrack.points
                 )
             }
 
@@ -575,7 +555,7 @@ object TrackCatalog {
     }
 
     private data class ParsedTrack(
-        val samples: List<TrackSample>,
+        val points: List<TrackPoint>,
         val stats: TrackStats
     )
 

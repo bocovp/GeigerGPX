@@ -23,7 +23,7 @@ class TimePlotActivity : AppCompatActivity() {
     private lateinit var binding: ActivityTimePlotBinding
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var cpsToUSvhCoeff: Double = 1.0
-    private var currentSamples: List<TrackSample> = emptyList()
+    private var currentPoints: List<TrackPoint> = emptyList()
     private var activeTrackObserverAttached = false
     private var trackingObserverAttached = false
     /**
@@ -185,15 +185,7 @@ class TimePlotActivity : AppCompatActivity() {
             // Prevent the live recording stream from overwriting the plot after the user switches
             // to a saved track (or to a no-data state).
             if (selectedTrackIdForPlot != TrackCatalog.currentTrackId()) return@observe
-            currentSamples = points.map {
-                TrackSample(
-                    latitude = it.latitude,
-                    longitude = it.longitude,
-                    doseRate = it.cps * cpsToUSvhCoeff,
-                    counts = it.counts,
-                    seconds = it.seconds
-                )
-            }
+            currentPoints = points
             updatePlot(recalculateVerticalAxis = true)
         }
     }
@@ -208,9 +200,9 @@ class TimePlotActivity : AppCompatActivity() {
                 updateTrackSelectorUi()
                 if (resolvedTrackId == null) {
                     selectedTrackIdForPlot = null
-                    currentSamples = emptyList()
+                    currentPoints = emptyList()
                     updateTrackTitle(null)
-                    binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
+                    binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
                     showPlotMessage(R.string.time_plot_no_track_data)
                 } else {
                     loadTrackForPlotAsync(resolvedTrackId)
@@ -317,7 +309,7 @@ class TimePlotActivity : AppCompatActivity() {
         rememberTrackSelection(this, trackId)
         updateTrackTitle(selectedTrack.title)
         updateTrackSelectorUi()
-        currentSamples = selectedTrack.samples
+        currentPoints = selectedTrack.points
         updatePlot()
     }
 
@@ -342,15 +334,15 @@ class TimePlotActivity : AppCompatActivity() {
         val track = MapTrack(
             id = CURRENT_TRACK_TITLE,
             title = binding.trackNameField.text?.toString().orEmpty(),
-            points = currentSamples
+            points = currentPoints
         )
         val generalized = TrackGeneralizer(
             minDistanceMeters = 0.0,
             coeff = cpsToUSvhCoeff,
             minDurationSeconds = minDurationSeconds
         ).generalize(track)
-        binding.timePlotView.setSamples(
-            samples = generalized.points,
+        binding.timePlotView.setPoints(
+            points = generalized.points,
             cpsToUSvh = cpsToUSvhCoeff,
             recalculateVerticalAxis = recalculateVerticalAxis
         )
@@ -413,8 +405,8 @@ class TimePlotActivity : AppCompatActivity() {
         if (isCurrentTrack) {
             updateKernelEstimatorPlotForCurrentTrack(scaleSeconds, recalculateVerticalAxis)
         } else {
-            updateKernelEstimatorPlotFromSamples(
-                samples = currentSamples,
+            updateKernelEstimatorPlotFromPoints(
+                points = currentPoints,
                 scaleSeconds = scaleSeconds,
                 recalculateVerticalAxis = recalculateVerticalAxis
             )
@@ -443,7 +435,7 @@ class TimePlotActivity : AppCompatActivity() {
         getConfidenceIntervals: (DoubleArray) -> Triple<DoubleArray, DoubleArray, DoubleArray>?
     ) {
         if (bounds == null || bounds.second < bounds.first) {
-            binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
+            binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
             showPlotMessage(R.string.time_plot_no_track_data)
             return
         }
@@ -458,7 +450,7 @@ class TimePlotActivity : AppCompatActivity() {
         }
         val ci = getConfidenceIntervals(ts2)
         if (ci == null) {
-            binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
+            binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
             showPlotMessage(R.string.time_plot_no_track_data)
             return
         }
@@ -479,25 +471,25 @@ class TimePlotActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateKernelEstimatorPlotFromSamples(
-        samples: List<TrackSample>,
+    private fun updateKernelEstimatorPlotFromPoints(
+        points: List<TrackPoint>,
         scaleSeconds: Double,
         recalculateVerticalAxis: Boolean
     ) {
-        if (samples.isEmpty()) {
-            binding.timePlotView.setSamples(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
+        if (points.isEmpty()) {
+            binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
             showPlotMessage(R.string.time_plot_no_track_data)
             return
         }
 
         val estimator = KernelDensityEstimator(cpsToUSvhCoeff)
         var accumulatedSeconds = 0.0
-        for (sample in samples) {
-            val durationSeconds = sample.seconds.coerceAtLeast(0.0)
+        for (p in points) {
+            val durationSeconds = p.seconds.coerceAtLeast(0.0)
             estimator.addSampleInterval(
                 intervalStartSeconds = accumulatedSeconds,
                 durationSeconds = durationSeconds,
-                counts = sample.counts.coerceAtLeast(0)
+                counts = p.counts.coerceAtLeast(0)
             )
             accumulatedSeconds += durationSeconds
         }

@@ -7,7 +7,7 @@ import org.osmdroid.views.overlay.Overlay
 
 class GradientTrackOverlay : Overlay() {
     // We store our own copy of points to draw
-    var points: List<TrackSample> = emptyList()
+    var points: List<TrackPoint> = emptyList()
     var minDose: Double = 0.0
     var maxDose: Double = 1.0
 
@@ -33,20 +33,20 @@ class GradientTrackOverlay : Overlay() {
         val p2Pixels = Point()
 
         for (i in 0 until points.size - 1) {
-            val p1 = points[i]
-            val p2 = points[i + 1]
-            if (p1.badCoordinates || p2.badCoordinates) continue
+            val pt1 = points[i]
+            val pt2 = points[i + 1]
+            if (pt1.badCoordinates || pt2.badCoordinates) continue
 
-            gp1.setCoords(p1.latitude, p1.longitude)
-            gp2.setCoords(p2.latitude, p2.longitude)
+            gp1.setCoords(pt1.latitude, pt1.longitude)
+            gp2.setCoords(pt2.latitude, pt2.longitude)
             projection.toPixels(gp1, p1Pixels)
             projection.toPixels(gp2, p2Pixels)
 
             paint.shader = LinearGradient(
                 p1Pixels.x.toFloat(), p1Pixels.y.toFloat(),
                 p2Pixels.x.toFloat(), p2Pixels.y.toFloat(),
-                DoseColorScale.colorForDose(p1.doseRate, minDose, maxDose),
-                DoseColorScale.colorForDose(p2.doseRate, minDose, maxDose),
+                DoseColorScale.colorForDose(pt1.doseRate, minDose, maxDose),
+                DoseColorScale.colorForDose(pt2.doseRate, minDose, maxDose),
                 Shader.TileMode.CLAMP
             )
 
@@ -82,12 +82,12 @@ class GradientTrackOverlay : Overlay() {
 
             val badPointsCount = runEndExclusive - runStart
             for (badPointIndex in 0 until badPointsCount) {
-                val sample = points[runStart + badPointIndex]
+                val pt = points[runStart + badPointIndex]
                 val ratio = (badPointIndex + 1).toFloat() / (badPointsCount + 1).toFloat()
                 val x = p1Pixels.x + (p2Pixels.x - p1Pixels.x) * ratio
                 val y = p1Pixels.y + (p2Pixels.y - p1Pixels.y) * ratio
 
-                badPointPaint.color = DoseColorScale.colorForDose(sample.doseRate, minDose, maxDose)
+                badPointPaint.color = DoseColorScale.colorForDose(pt.doseRate, minDose, maxDose)
                 canvas.drawCircle(x, y, paint.strokeWidth / 2f, badPointPaint)
             }
         }

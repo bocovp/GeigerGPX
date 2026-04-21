@@ -131,7 +131,7 @@ class MapActivity : AppCompatActivity() {
         return true
     }
 
-    override fun onPrepareOptionsMenu(menu: Menu?): Boolean {
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         val toggleItem = menu?.findItem(R.id.action_toggle_heatmap)
         val modeItem = menu?.findItem(R.id.action_toggle_plot_mode)
 
