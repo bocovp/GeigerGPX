@@ -8,8 +8,7 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.content.pm.ServiceInfo
-import android.media.Ringtone
-import android.media.RingtoneManager
+import android.media.ToneGenerator
 import androidx.preference.PreferenceManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -94,7 +93,7 @@ class TrackingService : Service() {
     @Volatile private var maxTimeWithoutGpsS: Double = 60.0
     @Volatile private var alertDoseRate: Double = 0.0
     @Volatile private var cpsToUsvhCoefficient: Double = 1.0
-    private var alertRingtone: Ringtone? = null
+    private var toneGenerator: ToneGenerator? = null
     private var lastAlertAtMillis: Long = 0L
     private val doseRateMeasurement = DoseRateMeasurement()
     private var kde: KernelDensityEstimator? = null
@@ -142,8 +141,8 @@ class TrackingService : Service() {
         stopUiTickLoop()
         gpsManager.stopUpdates()
         stopBeepDetector()
-        alertRingtone?.stop()
-        alertRingtone = null
+        toneGenerator?.release()
+        toneGenerator = null
         serviceScope.cancel()
         prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
         super.onDestroy()
@@ -527,19 +526,22 @@ class TrackingService : Service() {
 
     private fun playAlertSound(soundCount: Int) {
         if (soundCount <= 0) return
-        if (alertRingtone == null) {
-            val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            alertRingtone = RingtoneManager.getRingtone(this, defaultSoundUri)
+        if (toneGenerator == null) {
+            try {
+                toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 100)
+            } catch (e: Exception) {
+                android.util.Log.e("TrackingService", "Failed to create ToneGenerator", e)
+                return
+            }
         }
 
-        val ringtone = alertRingtone ?: return
+        val tg = toneGenerator ?: return
         serviceScope.launch(Dispatchers.Main) {
             repeat(soundCount) { index ->
                 try {
-                    ringtone.play()
-                } catch (_: Exception) {
+                    tg.startTone(ToneGenerator.TONE_CDMA_HIGH_L, 200)
+                } catch (e: Exception) {
+                    android.util.Log.e("TrackingService", "Failed to play tone", e)
                     return@launch
                 }
                 if (index < soundCount - 1) {

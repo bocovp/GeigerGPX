@@ -162,6 +162,7 @@ class DoseRateMeasurement(
     private fun evaluateAlertLocked(): AlertEvent? {
         if (measurementModeEnabled) return null
         if (alertDoseRate <= 0.0) return null
+        if (mainCpsBeepCount < windowSize) return null
 
         val meanDoseRate = calculateMainScreenCpsLocked() * cpsToUsvhCoefficient
         if (meanDoseRate < alertDoseRate) return null
