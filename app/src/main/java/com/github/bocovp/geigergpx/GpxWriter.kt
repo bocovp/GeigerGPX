@@ -96,7 +96,7 @@ object GpxWriter {
 
         for (p in points) {
             val timeStr = if (p.timeMillis > 0L) ISO_INSTANT_FORMATTER.format(Instant.ofEpochMilli(p.timeMillis)) else null
-            val doseRate = p.cps * coeff
+            val doseRate = p.doseRate
             val doseStr = "%.5f".format(Locale.US, doseRate)
             val secondsStr = "%.3f".format(Locale.US, p.seconds)
             val latStr = "%.8f".format(Locale.US, p.latitude)

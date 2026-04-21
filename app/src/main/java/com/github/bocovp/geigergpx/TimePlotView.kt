@@ -112,28 +112,11 @@ class TimePlotView @JvmOverloads constructor(
         cpsToUSvh: Double,
         recalculateVerticalAxis: Boolean = true
     ) {
-        val samples = points.map {
-            TrackSample(
-                latitude = it.latitude,
-                longitude = it.longitude,
-                doseRate = it.cps * cpsToUSvh,
-                counts = it.counts,
-                seconds = it.seconds
-            )
-        }
-        setSamples(samples, cpsToUSvh, recalculateVerticalAxis)
-    }
-
-    fun setSamples(
-        samples: List<TrackSample>,
-        cpsToUSvh: Double,
-        recalculateVerticalAxis: Boolean = true
-    ) {
         kernelSeries = emptyList()
         plotSegments.clear()
         yAxisUnit = if (kotlin.math.abs(cpsToUSvh - 1.0) < 1e-9) "cps" else "μSv/h"
 
-        if (samples.isEmpty()) {
+        if (points.isEmpty()) {
             trackDurationSeconds = 0.0
             updateXAxisUnit()
             maxDoseValue = 1.0
@@ -147,10 +130,10 @@ class TimePlotView @JvmOverloads constructor(
         }
 
         var elapsedSeconds = 0.0
-        for (sample in samples) {
-            val seconds = sample.seconds.coerceAtLeast(0.001)
-            val ci = ConfidenceInterval(0.0, seconds, sample.counts, false)
-            val value = sample.doseRate
+        for (p in points) {
+            val seconds = p.seconds.coerceAtLeast(0.001)
+            val ci = ConfidenceInterval(0.0, seconds, p.counts, false)
+            val value = p.doseRate
             plotSegments += PlotSegment(
                 startSeconds = elapsedSeconds,
                 endSeconds = elapsedSeconds + seconds,

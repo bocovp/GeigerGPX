@@ -86,8 +86,8 @@ class DoseRateMeasurement(
         if (beepCount <= 0) return null
         return synchronized(mainCpsLock) {
             repeat(beepCount) {
-                mainCpsBeepTimes[mainCpsBeepNextIndex] = nowProvider()
-                val beepTime = mainCpsBeepTimes[mainCpsBeepNextIndex]
+                val beepTime = nowProvider()
+                mainCpsBeepTimes[mainCpsBeepNextIndex] = beepTime
                 mainCpsBeepNextIndex = (mainCpsBeepNextIndex + 1) % windowSize
                 if (mainCpsBeepCount < windowSize) {
                     mainCpsBeepCount += 1

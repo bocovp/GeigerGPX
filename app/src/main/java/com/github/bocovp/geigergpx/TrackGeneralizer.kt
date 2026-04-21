@@ -15,9 +15,9 @@ class TrackGeneralizer(
         val geoPointSource = GeoPoint(0.0, 0.0)
         val geoPointLast = GeoPoint(0.0, 0.0)
 
-        val generalized = ArrayList<TrackSample>(track.points.size)
+        val generalized = ArrayList<TrackPoint>(track.points.size)
 
-        var lastGeneralizedPoint: TrackSample? = null
+        var lastGeneralizedPoint: TrackPoint? = null
 
         var latSum = 0.0
         var lonSum = 0.0
@@ -25,27 +25,28 @@ class TrackGeneralizer(
         var secondsSum = 0.0
         var averagedCoordinatePoints = 0
         var averagedDosePoints = 0
-        var lastSourcePoint: TrackSample? = null
+        var lastSourcePoint: TrackPoint? = null
 
-        fun addToAveraging(sample: TrackSample) {
-            if (!sample.badCoordinates) {
-                latSum += sample.latitude
-                lonSum += sample.longitude
+        fun addToAveraging(p: TrackPoint) {
+            if (!p.badCoordinates) {
+                latSum += p.latitude
+                lonSum += p.longitude
                 averagedCoordinatePoints += 1
             }
-            countsSum += sample.counts
-            secondsSum += sample.seconds
+            countsSum += p.counts
+            secondsSum += p.seconds
             averagedDosePoints += 1
-            lastSourcePoint = sample
+            lastSourcePoint = p
         }
 
         fun flushAveragedPoint() {
             if (averagedDosePoints == 0) return
             val fallbackPoint = lastSourcePoint ?: return
 
-            val averagedPoint = TrackSample(
+            val averagedPoint = TrackPoint(
                 latitude = if (averagedCoordinatePoints > 0) latSum / averagedCoordinatePoints else fallbackPoint.latitude,
                 longitude = if (averagedCoordinatePoints > 0) lonSum / averagedCoordinatePoints else fallbackPoint.longitude,
+                timeMillis = fallbackPoint.timeMillis,
                 doseRate = if (secondsSum > 0.0) countsSum * coeff / secondsSum else 0.0,
                 counts = countsSum,
                 seconds = secondsSum,
@@ -101,9 +102,9 @@ class TrackGeneralizer(
 
     private fun applyKdeToGeneralizedTrack(
         sourceTrack: MapTrack,
-        generalizedTrackPoints: List<TrackSample>,
+        generalizedTrackPoints: List<TrackPoint>,
         kdeScale: Double
-    ): List<TrackSample> {
+    ): List<TrackPoint> {
         if (generalizedTrackPoints.isEmpty() || kdeScale <= 0.0) return generalizedTrackPoints
 
         val kernelEstimator = KernelDensityEstimator(coeff)

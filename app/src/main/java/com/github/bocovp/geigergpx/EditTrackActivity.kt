@@ -174,12 +174,9 @@ class EditTrackActivity : AppCompatActivity() {
     }
 
     private fun refreshUiState() {
-        val coeff = PreferenceManager.getDefaultSharedPreferences(this)
-            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        val samples = points.map { TrackSample(it.latitude, it.longitude, it.cps * coeff, it.counts, it.seconds, it.badCoordinates) }
-        editOverlay.points = samples
+        editOverlay.points = points
         editOverlay.minDose = 0.0
-        editOverlay.maxDose = (samples.maxOfOrNull { it.doseRate } ?: 0.5).coerceIn(0.5, 10.0)
+        editOverlay.maxDose = (points.maxOfOrNull { it.doseRate } ?: 0.5).coerceIn(0.5, 10.0)
         editOverlay.highlightedIndices = highlightedIndices()
 
         val adjustEnabled = mode == EditMode.CUT_BEFORE || mode == EditMode.CUT_AFTER || mode == EditMode.SPLIT

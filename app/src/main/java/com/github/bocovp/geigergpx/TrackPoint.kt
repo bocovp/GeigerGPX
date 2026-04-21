@@ -4,8 +4,7 @@ data class TrackPoint(
     val latitude: Double,
     val longitude: Double,
     val timeMillis: Long,
-    val distanceFromLast: Double,
-    val cps: Double,
+    val doseRate: Double,
     val counts: Int,
     val seconds: Double,
     val badCoordinates: Boolean = false

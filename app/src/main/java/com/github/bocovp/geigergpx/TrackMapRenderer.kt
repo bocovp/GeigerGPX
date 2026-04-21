@@ -23,7 +23,7 @@ class TrackMapRenderer(
     private var poiOverlay: PoiOverlay? = null
     private var heatmapOverlay: HeatmapOverlay? = null
     private val renderedPointCounts = mutableMapOf<String, Int>()
-    private val generalizedTracksById = mutableMapOf<String, List<TrackSample>>()
+    private val generalizedTracksById = mutableMapOf<String, List<TrackPoint>>()
     private var lastMaxDose = Double.NEGATIVE_INFINITY
     private var lastRenderFingerprint: String = ""
     private var lastGeneralizationZoomLevel: Double? = null
@@ -79,9 +79,9 @@ class TrackMapRenderer(
             } else {
                 track.points
             }
-            pointsForColorScale.forEach { sample ->
-                if (sample.badCoordinates) return@forEach
-                if (sample.doseRate > currentMax) currentMax = sample.doseRate
+            pointsForColorScale.forEach { p ->
+                if (p.badCoordinates) return@forEach
+                if (p.doseRate > currentMax) currentMax = p.doseRate
             }
         }
         pois.forEach { poi ->
@@ -122,18 +122,20 @@ class TrackMapRenderer(
             }
             overlay.doseCoefficient = doseCoefficient
 
+            val poiPoints = pois.map {
+                TrackPoint(
+                    latitude = it.latitude,
+                    longitude = it.longitude,
+                    timeMillis = 0L,
+                    doseRate = it.doseRateForColor,
+                    counts = it.counts,
+                    seconds = it.seconds
+                )
+            }
             val poiTrack = MapTrack(
                 id = "__pois__",
                 title = "POIs",
-                points = pois.map {
-                    TrackSample(
-                        latitude = it.latitude,
-                        longitude = it.longitude,
-                        doseRate = it.doseRateForColor,
-                        counts = it.counts,
-                        seconds = it.seconds
-                    )
-                }
+                points = poiPoints
             )
             val filteredTracks = tracks.map { track ->
                 track.copy(points = track.points.filterNot { it.badCoordinates })
@@ -252,7 +254,7 @@ class TrackMapRenderer(
     ): Boolean {
         val trackGeoPoints = tracks
             .flatMap { track -> track.points.filterNot { it.badCoordinates } }
-            .map { sample -> GeoPoint(sample.latitude, sample.longitude) }
+            .map { p -> GeoPoint(p.latitude, p.longitude) }
 
         if (trackGeoPoints.isNotEmpty()) {
             return fitToPoints(trackGeoPoints, fallbackPoint, animate)
@@ -298,18 +300,18 @@ class TrackMapRenderer(
     ): Boolean {
         val nearest = findNearestTrackSample(screenX, screenY, useKernelEstimator, maxDistancePx)
 
-        highlightedPoint = nearest?.let { sample ->
+        highlightedPoint = nearest?.let { p ->
             val value = if (showCpsUnit()) {
-                val seconds = sample.seconds.takeIf { it > 1e-9 } ?: 1.0
-                sample.counts / seconds
+                val seconds = p.seconds.takeIf { it > 1e-9 } ?: 1.0
+                p.counts / seconds
             } else {
-                sample.doseRate
+                p.doseRate
             }
             val unit = if (showCpsUnit()) "cps" else "μSv/h"
             DoseRateHighlightOverlay.HighlightPoint(
-                latitude = sample.latitude,
-                longitude = sample.longitude,
-                doseRateForColor = sample.doseRate,
+                latitude = p.latitude,
+                longitude = p.longitude,
+                doseRateForColor = p.doseRate,
                 doseLabel = String.format(java.util.Locale.US, "%.3f %s", value, unit)
             )
         }
@@ -324,9 +326,9 @@ class TrackMapRenderer(
         screenY: Float,
         useKernelEstimator: Boolean,
         maxDistancePx: Double
-    ): TrackSample? {
+    ): TrackPoint? {
         val projection = mapView.projection
-        var nearest: TrackSample? = null
+        var nearest: TrackPoint? = null
         var nearestDistanceSquared = Double.POSITIVE_INFINITY
         val maxDistanceSquared = maxDistancePx.pow(2)
 
@@ -337,17 +339,17 @@ class TrackMapRenderer(
                 generalizedTracksById[track.id] ?: track.points
             }
 
-            points.forEach { sample ->
-                if (sample.badCoordinates) return@forEach
+            points.forEach { p ->
+                if (p.badCoordinates) return@forEach
 
-                nearestGeoPoint.setCoords(sample.latitude, sample.longitude)
+                nearestGeoPoint.setCoords(p.latitude, p.longitude)
                 projection.toPixels(nearestGeoPoint, nearestScreenPoint)
                 val dx = nearestScreenPoint.x - screenX
                 val dy = nearestScreenPoint.y - screenY
                 val distanceSquared = dx * dx + dy * dy
                 if (distanceSquared < nearestDistanceSquared) {
                     nearestDistanceSquared = distanceSquared.toDouble()
-                    nearest = sample
+                    nearest = p
                 }
             }
         }

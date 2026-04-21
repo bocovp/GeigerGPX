@@ -420,7 +420,8 @@ class TrackingService : Service() {
                     totalBeeps = totalBeeps,
                     spacingM = spacingM,
                     minCountsPerPoint = minCountsPerPoint,
-                    maxTimeWithoutCountsS = maxTimeWithoutCountsS
+                    maxTimeWithoutCountsS = maxTimeWithoutCountsS,
+                    coefficient = cpsToUsvhCoefficient
                 )
             } else {
                 maybeCommitNoGpsPoint(
@@ -657,7 +658,8 @@ class TrackingService : Service() {
             now = now,
             totalBeeps = totalBeeps,
             minCountsPerPoint = minCountsPerPoint,
-            maxTimeWithoutCountsS = maxTimeWithoutCountsS
+            maxTimeWithoutCountsS = maxTimeWithoutCountsS,
+            coefficient = cpsToUsvhCoefficient
         )
     }
 }

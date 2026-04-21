@@ -95,7 +95,8 @@ class TrackWriter {
         totalBeeps: Int,
         spacingM: Double,
         minCountsPerPoint: Int,
-        maxTimeWithoutCountsS: Double
+        maxTimeWithoutCountsS: Double,
+        coefficient: Double
     ): ProcessLocationResult = synchronized(lock) {
         if (lastWrittenLocation == null) {
             initializeAnchor(loc, now, totalBeeps)
@@ -115,17 +116,18 @@ class TrackWriter {
             return ProcessLocationResult()
         }
 
-        val snapshot = commitPoint(loc, now, movementStats, totalBeeps)
+        val snapshot = commitPoint(loc, now, movementStats, totalBeeps, coefficient)
         ProcessLocationResult(snapshot = snapshot)
     }
 
-    private fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int): List<TrackPoint> = synchronized(lock) {
+    private fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int, coefficient: Double): List<TrackPoint> = synchronized(lock) {
         return commitPointInternal(
             loc = loc,
             now = now,
             movementStats = movementStats,
             totalBeeps = totalBeeps,
-            badCoordinates = false
+            badCoordinates = false,
+            coefficient = coefficient
         )
     }
 
@@ -135,7 +137,8 @@ class TrackWriter {
         now: Long,
         totalBeeps: Int,
         minCountsPerPoint: Int,
-        maxTimeWithoutCountsS: Double
+        maxTimeWithoutCountsS: Double,
+        coefficient: Double
     ): ProcessLocationResult = synchronized(lock) {
         if (mode == GpsMode.ACTIVE) return ProcessLocationResult()
         val lastLoc = lastWrittenLocation ?: return ProcessLocationResult()
@@ -161,7 +164,8 @@ class TrackWriter {
             now = now,
             movementStats = movementStats,
             totalBeeps = totalBeeps,
-            badCoordinates = true
+            badCoordinates = true,
+            coefficient = coefficient
         )
         ProcessLocationResult(snapshot = snapshot)
     }
@@ -175,7 +179,8 @@ class TrackWriter {
         now: Long,
         movementStats: MovementStats,
         totalBeeps: Int,
-        badCoordinates: Boolean
+        badCoordinates: Boolean,
+        coefficient: Double
     ): List<TrackPoint> = synchronized(lock) {
         val finalBeeps = totalBeeps - lastPointTotalBeeps
         val finalCps = finalBeeps.toDouble() / movementStats.timeDeltaSec // TODO: add -1
@@ -188,8 +193,7 @@ class TrackWriter {
             latitude = avgLat,
             longitude = avgLon,
             timeMillis = avgTimeMillis,
-            distanceFromLast = movementStats.distance,
-            cps = finalCps,
+            doseRate = finalCps * coefficient,
             counts = finalBeeps,
             seconds = movementStats.timeDeltaSec,
             badCoordinates = badCoordinates
