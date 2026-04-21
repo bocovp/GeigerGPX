@@ -22,12 +22,11 @@ object EditableTrackStorage {
     fun overwriteTrack(context: Context, trackId: String, points: List<TrackPoint>) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         val output = openOutputStream(context, trackId) ?: return
         output.use { out ->
             out.bufferedWriter().use { writer ->
-                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, coeff)
+                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle)
             }
         }
     }
@@ -41,7 +40,6 @@ object EditableTrackStorage {
     ): SplitResult? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         val nextName = uniqueSplitFileName(context, sourceTitle, folderName)
         val uri = when {
@@ -51,7 +49,7 @@ object EditableTrackStorage {
                 val target = File(parentDir, nextName)
                 target.outputStream().use { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, coeff)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle)
                     }
                 }
                 Uri.fromFile(target)
@@ -63,7 +61,7 @@ object EditableTrackStorage {
                     relativePath = relativePath
                 ) { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, coeff)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle)
                     }
                 }
                 result.uri ?: return null

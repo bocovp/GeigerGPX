@@ -85,8 +85,7 @@ object GpxWriter {
     fun writeTrackXml(
         writer: java.io.BufferedWriter,
         points: List<TrackPoint>,
-        saveDoseRateInEle: Boolean,
-        coeff: Double
+        saveDoseRateInEle: Boolean
     ) {
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
         writer.write("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
@@ -173,7 +172,6 @@ object GpxWriter {
     ): SaveTrackResult? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         val primaryResult = FileStorageManager.writeStreamDetailed(
             context = context,
@@ -181,7 +179,7 @@ object GpxWriter {
             forceDefaultFolder = forceDefaultFolder
         ) { out ->
             out.bufferedWriter().use { writer ->
-                writeTrackXml(writer, points, saveDoseRateInEle, coeff)
+                writeTrackXml(writer, points, saveDoseRateInEle)
             }
         }
         if (primaryResult.succeeded) {
@@ -199,7 +197,7 @@ object GpxWriter {
             forceDefaultFolder = true
         ) { out ->
             out.bufferedWriter().use { writer ->
-                writeTrackXml(writer, points, saveDoseRateInEle, coeff)
+                writeTrackXml(writer, points, saveDoseRateInEle)
             }
         }
         val fallbackUri = fallbackResult.uri ?: return null
