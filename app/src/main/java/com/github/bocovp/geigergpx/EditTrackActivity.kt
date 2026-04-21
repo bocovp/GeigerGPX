@@ -67,8 +67,8 @@ class EditTrackActivity : AppCompatActivity() {
         binding.mapView.setMultiTouchControls(true)
         binding.mapView.zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
 
-        editOverlay = EditTrackOverlay()
-        selectionOverlay = RectangleSelectionOverlay { rect ->
+        editOverlay = EditTrackOverlay(this)
+        selectionOverlay = RectangleSelectionOverlay(this) { rect ->
             applyRectangleSelection(rect)
         }
         binding.mapView.overlays.add(editOverlay)

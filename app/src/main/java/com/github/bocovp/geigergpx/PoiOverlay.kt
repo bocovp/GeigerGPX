@@ -39,7 +39,8 @@ private class PoiLayout {
     var overlapsText = false
 }
 
-class PoiOverlay : Overlay() {
+class PoiOverlay(context: android.content.Context) : Overlay() {
+    private val density = context.resources.displayMetrics.density
 
     // Setter sets the dirty flag so text widths are remeasured on the next draw.
     var points: List<PoiMapItem> = emptyList()
@@ -56,11 +57,11 @@ class PoiOverlay : Overlay() {
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         color = Color.BLACK
-        strokeWidth = 2f
+        strokeWidth = 1.088f * density
     }
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.BLACK
-        textSize = 24f
+        textSize = 13.056f * density
         typeface = android.graphics.Typeface.create(
             android.graphics.Typeface.DEFAULT,
             android.graphics.Typeface.BOLD
@@ -68,7 +69,7 @@ class PoiOverlay : Overlay() {
     }
     private val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.BLACK
-        textSize = 20f
+        textSize = 10.88f * density
     }
 
     // FontMetrics never change for these paints — compute once at initialisation.
@@ -129,13 +130,13 @@ class PoiOverlay : Overlay() {
 
         // --- Step 4: Derive radius from visible count -------------------------
         val radius = when {
-            visibleCount <= 20  -> 12f
-            visibleCount <= 60  -> 10f
-            visibleCount <= 120 -> 8f
-            else                -> 6f
+            visibleCount <= 20  -> 6.528f * density
+            visibleCount <= 60  -> 5.44f * density
+            visibleCount <= 120 -> 4.352f * density
+            else                -> 3.264f * density
         }
-        val textGap = radius + 6f
-        val subtitleOffset = 18f
+        val textGap = radius + 3.264f * density
+        val subtitleOffset = 9.792f * density
 
         // --- Step 5: Compute per-POI text positions and bounding rects --------
         // RectF.set() updates in-place — no new RectF allocated.
@@ -146,7 +147,7 @@ class PoiOverlay : Overlay() {
             val py = layout.pixel.y.toFloat()
 
             layout.textX    = px + textGap
-            layout.titleY   = py - 2f
+            layout.titleY   = py - 1.088f * density
             layout.subtitleY = layout.titleY + subtitleOffset
 
             val textWidth = maxOf(layout.titleWidth, layout.subtitleWidth)

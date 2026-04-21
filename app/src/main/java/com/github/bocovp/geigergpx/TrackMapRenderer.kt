@@ -174,7 +174,7 @@ class TrackMapRenderer(
                 val previousCount = renderedPointCounts[track.id] ?: 0
                 if (previousCount != trackPoints.size || scaleChanged || generalizationChanged) {
                     val overlay = trackOverlays.getOrPut(track.id) {
-                        GradientTrackOverlay().also { mapView.overlays.add(it) }
+                        GradientTrackOverlay(mapView.context).also { mapView.overlays.add(it) }
                     }
 
                     overlay.points = trackPoints
@@ -186,7 +186,7 @@ class TrackMapRenderer(
                 }
             }
 
-            val overlay = poiOverlay ?: PoiOverlay().also {
+            val overlay = poiOverlay ?: PoiOverlay(mapView.context).also {
                 mapView.overlays.add(it)
                 poiOverlay = it
                 shouldInvalidate = true
@@ -362,7 +362,7 @@ class TrackMapRenderer(
     }
 
     private fun ensureHighlightOverlayOnTop(minDose: Double, maxDose: Double) {
-        val overlay = highlightOverlay ?: DoseRateHighlightOverlay().also {
+        val overlay = highlightOverlay ?: DoseRateHighlightOverlay(mapView.context).also {
             highlightOverlay = it
         }
         overlay.minDose = minDose

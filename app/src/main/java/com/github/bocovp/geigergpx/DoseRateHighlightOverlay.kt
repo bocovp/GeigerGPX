@@ -8,7 +8,9 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
 
-class DoseRateHighlightOverlay : Overlay() {
+class DoseRateHighlightOverlay(context: android.content.Context) : Overlay() {
+    private val density = context.resources.displayMetrics.density
+
     data class HighlightPoint(
         val latitude: Double,
         val longitude: Double,
@@ -26,11 +28,11 @@ class DoseRateHighlightOverlay : Overlay() {
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         color = Color.BLACK
-        strokeWidth = 2f
+        strokeWidth = 1.088f * density
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.BLACK
-        textSize = 20f
+        textSize = 10.88f * density
     }
 
     private val pointPixel = Point()
@@ -44,14 +46,14 @@ class DoseRateHighlightOverlay : Overlay() {
 
         val px = pointPixel.x.toFloat()
         val py = pointPixel.y.toFloat()
-        val radius = 12f
+        val radius = 6.528f * density
 
         fillPaint.color = DoseColorScale.colorForDose(point.doseRateForColor, minDose, maxDose)
         canvas.drawCircle(px, py, radius, fillPaint)
         canvas.drawCircle(px, py, radius, strokePaint)
 
-        val textX = px + radius + 6f
-        val textY = py + 6f
+        val textX = px + radius + 3.264f * density
+        val textY = py + 3.264f * density
         canvas.drawText(point.doseLabel, textX, textY, textPaint)
     }
 }

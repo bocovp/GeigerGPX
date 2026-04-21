@@ -18,6 +18,7 @@ class TimePlotView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
+    private val density = context.resources.displayMetrics.density
 
     private data class PlotSegment(
         val startSeconds: Double,
@@ -39,19 +40,19 @@ class TimePlotView @JvmOverloads constructor(
     )
 
     private val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        strokeWidth = 2f
+        strokeWidth = 1.088f * density
         style = Paint.Style.STROKE
     }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        strokeWidth = 1f
+        strokeWidth = 0.544f * density
         style = Paint.Style.STROKE
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = 28f
+        textSize = 15.232f * density
     }
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(25, 118, 210)
-        strokeWidth = 4f
+        strokeWidth = 2.176f * density
         style = Paint.Style.STROKE
     }
     private val ciPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -59,10 +60,10 @@ class TimePlotView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
 
-    private val leftPaddingPx = 80f //96f
-    private val rightPaddingPx = 22f
-    private val topPaddingPx = 24f
-    private val bottomPaddingPx = 70f
+    private val leftPaddingPx = 43.52f * density
+    private val rightPaddingPx = 11.968f * density
+    private val topPaddingPx = 13.056f * density
+    private val bottomPaddingPx = 38.08f * density
 
     private var trackDurationSeconds = 0.0
     private var maxDoseValue = 1.0

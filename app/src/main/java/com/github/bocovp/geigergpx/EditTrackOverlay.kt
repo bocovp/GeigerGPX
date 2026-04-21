@@ -13,14 +13,16 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
 
-class EditTrackOverlay : Overlay() {
+class EditTrackOverlay(context: android.content.Context) : Overlay() {
+    private val density = context.resources.displayMetrics.density
+
     var points: List<TrackPoint> = emptyList()
     var highlightedIndices: Set<Int> = emptySet()
     var minDose: Double = 0.0
     var maxDose: Double = 1.0
 
     private val linePaint = Paint().apply {
-        strokeWidth = 9f
+        strokeWidth = 4.896f * density
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
         isAntiAlias = true
@@ -33,7 +35,7 @@ class EditTrackOverlay : Overlay() {
 
     private val pointStrokePaint = Paint().apply {
         style = Paint.Style.STROKE
-        strokeWidth = 2f
+        strokeWidth = 1.088f * density
         color = Color.BLACK
         isAntiAlias = true
     }
@@ -67,15 +69,18 @@ class EditTrackOverlay : Overlay() {
                 pt.badCoordinates -> Color.GRAY
                 else -> Color.WHITE
             }
-            canvas.drawCircle(p1.x.toFloat(), p1.y.toFloat(), 8f, pointFillPaint)
-            canvas.drawCircle(p1.x.toFloat(), p1.y.toFloat(), 8f, pointStrokePaint)
+            canvas.drawCircle(p1.x.toFloat(), p1.y.toFloat(), 4.352f * density, pointFillPaint)
+            canvas.drawCircle(p1.x.toFloat(), p1.y.toFloat(), 4.352f * density, pointStrokePaint)
         }
     }
 }
 
 class RectangleSelectionOverlay(
+    context: android.content.Context,
     private val onSelectionComplete: (RectF) -> Unit
 ) : Overlay() {
+    private val density = context.resources.displayMetrics.density
+    
     var selectionEnabled: Boolean = false
     private var startX = 0f
     private var startY = 0f
@@ -107,9 +112,10 @@ class RectangleSelectionOverlay(
     }
     private val borderPaint = Paint().apply {
         style = Paint.Style.STROKE
-        strokeWidth = 3f
+        strokeWidth = 1.632f * density
         color = Color.parseColor("#1E88E5")
     }
+
 
     override fun onTouchEvent(event: android.view.MotionEvent?, mapView: org.osmdroid.views.MapView?): Boolean {
         if (!selectionEnabled || event == null || mapView == null) return false

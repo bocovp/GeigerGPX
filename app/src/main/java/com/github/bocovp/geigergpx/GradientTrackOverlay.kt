@@ -5,7 +5,9 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
 
-class GradientTrackOverlay : Overlay() {
+class GradientTrackOverlay(context: android.content.Context) : Overlay() {
+    private val density = context.resources.displayMetrics.density
+
     // We store our own copy of points to draw
     var points: List<TrackPoint> = emptyList()
     var minDose: Double = 0.0
@@ -16,7 +18,7 @@ class GradientTrackOverlay : Overlay() {
 
 
     private val paint = Paint().apply {
-        strokeWidth = 10f
+        strokeWidth = 5.44f * density
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
         isAntiAlias = true
