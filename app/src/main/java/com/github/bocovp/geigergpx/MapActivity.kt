@@ -32,6 +32,7 @@ class MapActivity : AppCompatActivity() {
         private var isAutoZoomDisabledByUser: Boolean = false
         private var isHeatmapMode: Boolean = false
         private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
+        private const val DOSE_SELECTION_TOUCH_THRESHOLD_DP = 100.0
     }
 
     private lateinit var binding: ActivityMapBinding
@@ -112,7 +113,7 @@ class MapActivity : AppCompatActivity() {
                     screenX = x,
                     screenY = y,
                     useKernelEstimator = !isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR,
-                    maxDistancePx = 48.0 * resources.displayMetrics.density
+                    maxDistancePx = DOSE_SELECTION_TOUCH_THRESHOLD_DP * resources.displayMetrics.density
                 )
                 if (!handled) {
                     trackMapRenderer.clearHighlightedPoint()

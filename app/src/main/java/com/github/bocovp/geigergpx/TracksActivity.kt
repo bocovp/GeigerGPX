@@ -199,7 +199,7 @@ class TracksActivity : AppCompatActivity() {
                 }
                 
                 binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
-                binding.emptyStateLabel.visibility = if (!hasTracks && !showLoading) View.VISIBLE else View.GONE
+                binding.emptyStateLabel.visibility = if (!hasTracks && !loadingStateActive) View.VISIBLE else View.GONE
             }
         }.start()
     }
