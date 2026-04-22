@@ -650,8 +650,12 @@ object TrackCatalog {
                         }
                         val tracks = root.optJSONArray("tracks") ?: JSONArray()
                         for (i in 0 until tracks.length()) {
-                            val entry = CachedParsedTrack.fromJson(tracks.getJSONObject(i))
-                            parsedTrackCache[entry.sourceId] = entry
+                            runCatching {
+                                val entry = CachedParsedTrack.fromJson(tracks.getJSONObject(i))
+                                parsedTrackCache[entry.sourceId] = entry
+                            }.onFailure {
+                                Log.w("GPX", "Failed to parse track cache entry at index $i", it)
+                            }
                         }
                     }
                 }.onFailure {

@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityTimePlotBinding
+import com.github.bocovp.geigergpx.R
 import com.google.android.material.slider.Slider
 import java.util.Locale
 
@@ -35,6 +36,7 @@ class TimePlotActivity : AppCompatActivity() {
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var plotLoadRequestToken: Long = 0L
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
+    @Volatile private var isRefreshing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -191,21 +193,33 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun refreshTrackCandidatesAndPlotAsync(preferredTrackId: String? = null) {
+        if (isRefreshing) return
+        isRefreshing = true
         showLoading(true)
         Thread {
-            val candidates = loadPlotCandidates()
+            val result = runCatching { loadPlotCandidates() }
             runOnUiThread {
-                plotCandidates = candidates
-                val resolvedTrackId = resolveSelectedTrackId(candidates, preferredTrackId)
-                updateTrackSelectorUi()
-                if (resolvedTrackId == null) {
-                    selectedTrackIdForPlot = null
-                    currentPoints = emptyList()
-                    updateTrackTitle(null)
-                    binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
+                result.onSuccess { candidates ->
+                    plotCandidates = candidates
+                    val resolvedTrackId = resolveSelectedTrackId(candidates, preferredTrackId)
+                    updateTrackSelectorUi()
+                    if (resolvedTrackId == null) {
+                        selectedTrackIdForPlot = null
+                        currentPoints = emptyList()
+                        updateTrackTitle(null)
+                        binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
+                        showPlotMessage(R.string.time_plot_no_track_data)
+                        isRefreshing = false
+                    } else if (resolvedTrackId != selectedTrackIdForPlot || currentPoints.isEmpty()) {
+                        // loadTrackForPlotAsync is now responsible for resetting isRefreshing
+                        loadTrackForPlotAsync(resolvedTrackId)
+                    } else {
+                        showLoading(false)
+                        isRefreshing = false
+                    }
+                }.onFailure {
                     showPlotMessage(R.string.time_plot_no_track_data)
-                } else {
-                    loadTrackForPlotAsync(resolvedTrackId)
+                    isRefreshing = false
                 }
             }
         }.start()
@@ -242,6 +256,7 @@ class TimePlotActivity : AppCompatActivity() {
         val normalizedTrackId = trackId?.takeIf { it.isNotBlank() }
         if (normalizedTrackId == null || normalizedTrackId == TrackCatalog.currentTrackId()) {
             loadTrackForPlot(trackId)
+            isRefreshing = false
             return
         }
 
@@ -251,16 +266,25 @@ class TimePlotActivity : AppCompatActivity() {
 
         val requestToken = ++plotLoadRequestToken
         Thread {
-            val selected = TrackCatalog.loadTrackSamplesById(this, normalizedTrackId)
+            val result = runCatching { TrackCatalog.loadTrackSamplesById(this, normalizedTrackId) }
             runOnUiThread {
                 if (requestToken != plotLoadRequestToken || selectedTrackIdForPlot != normalizedTrackId) {
                     return@runOnUiThread
                 }
-                if (selected != null) {
-                    applyLoadedTrack(normalizedTrackId, selected)
-                } else {
+                
+                result.onSuccess { selected ->
+                    if (selected != null) {
+                        applyLoadedTrack(normalizedTrackId, selected)
+                        isRefreshing = false
+                    } else {
+                        failedTrackIdsForPlot.add(normalizedTrackId)
+                        isRefreshing = false
+                        refreshTrackCandidatesAndPlotAsync()
+                    }
+                }.onFailure {
                     failedTrackIdsForPlot.add(normalizedTrackId)
-                    refreshTrackCandidatesAndPlotAsync()
+                    showPlotMessage(R.string.time_plot_no_track_data)
+                    isRefreshing = false
                 }
             }
         }.start()
