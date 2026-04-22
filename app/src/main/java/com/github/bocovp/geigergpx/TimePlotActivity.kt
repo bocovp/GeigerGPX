@@ -275,6 +275,7 @@ class TimePlotActivity : AppCompatActivity() {
                 result.onSuccess { selected ->
                     if (selected != null) {
                         applyLoadedTrack(normalizedTrackId, selected)
+                        isRefreshing = false
                     } else {
                         failedTrackIdsForPlot.add(normalizedTrackId)
                         isRefreshing = false
@@ -283,8 +284,8 @@ class TimePlotActivity : AppCompatActivity() {
                 }.onFailure {
                     failedTrackIdsForPlot.add(normalizedTrackId)
                     showPlotMessage(R.string.time_plot_no_track_data)
+                    isRefreshing = false
                 }
-                isRefreshing = false
             }
         }.start()
     }
