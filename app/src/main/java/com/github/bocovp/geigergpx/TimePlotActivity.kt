@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityTimePlotBinding
+import com.github.bocovp.geigergpx.R
 import com.google.android.material.slider.Slider
 import java.util.Locale
 
@@ -35,6 +36,7 @@ class TimePlotActivity : AppCompatActivity() {
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var plotLoadRequestToken: Long = 0L
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
+    private var isRefreshing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -191,22 +193,30 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun refreshTrackCandidatesAndPlotAsync(preferredTrackId: String? = null) {
+        if (isRefreshing) return
+        isRefreshing = true
         showLoading(true)
         Thread {
-            val candidates = loadPlotCandidates()
-            runOnUiThread {
-                plotCandidates = candidates
-                val resolvedTrackId = resolveSelectedTrackId(candidates, preferredTrackId)
-                updateTrackSelectorUi()
-                if (resolvedTrackId == null) {
-                    selectedTrackIdForPlot = null
-                    currentPoints = emptyList()
-                    updateTrackTitle(null)
-                    binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
-                    showPlotMessage(R.string.time_plot_no_track_data)
-                } else {
-                    loadTrackForPlotAsync(resolvedTrackId)
+            try {
+                val candidates = loadPlotCandidates()
+                runOnUiThread {
+                    plotCandidates = candidates
+                    val resolvedTrackId = resolveSelectedTrackId(candidates, preferredTrackId)
+                    updateTrackSelectorUi()
+                    if (resolvedTrackId == null) {
+                        selectedTrackIdForPlot = null
+                        currentPoints = emptyList()
+                        updateTrackTitle(null)
+                        binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
+                        showPlotMessage(R.string.time_plot_no_track_data)
+                    } else if (resolvedTrackId != selectedTrackIdForPlot || currentPoints.isEmpty()) {
+                        loadTrackForPlotAsync(resolvedTrackId)
+                    } else {
+                        showLoading(false)
+                    }
                 }
+            } finally {
+                isRefreshing = false
             }
         }.start()
     }
@@ -318,6 +328,9 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun updatePlot(recalculateVerticalAxis: Boolean = true) {
+        if (currentPoints.isEmpty() && selectedTrackIdForPlot != TrackCatalog.currentTrackId()) {
+            return
+        }
         val minDurationMinutes = KdeScaleSlider.internalToMinutes(binding.placeholderSlider.value)
         val minDurationSeconds = minDurationMinutes * SECONDS_PER_MINUTE
         if (plotMode == PlotMode.KERNEL_ESTIMATOR) {
