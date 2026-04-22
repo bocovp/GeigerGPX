@@ -14,6 +14,7 @@ No modification to the radiometer is required; signals are recorded via the micr
 - **Long-term Measurement mode:** A dedicated measurement workflow for low-background and long-duration sampling.
 - **Measurement waypoint export:** Measurement results are written to a separate GPX-file as `<wpt>` tags with description, coordinates, timestamp, dose rate, and CI-related fields.
 - **Dose rate plots:** For recorded tracks the application provides a dose rate plot with a manually adjustable averaging window (fixed-duration window or Epanechnikov kernel estimator).
+- **Track editing:** One can crop beginning/end of the track, cut track into two, or mark some points as "bad" so they aren't shown on the map.
 - **Experimental Bluetooth audio input:** Audio capture from Bluetooth headsets is supported as an experimental feature, but it is way less stable and provides lower quality as compared to built-in microphone capture.
 - **High-rate limitation warning:** At high dose rates, RD-1008 may not emit all pulses audibly, so phone-side estimates can be biased low.
 
@@ -22,8 +23,10 @@ No modification to the radiometer is required; signals are recorded via the micr
 <img width="23%" height="auto" alt="Main screen" src="https://github.com/user-attachments/assets/4768d1fd-f57b-4a70-ab51-6ad4ad73ccc7" />
 <img width="23%" height="auto" alt="Tracks screen" src="https://github.com/user-attachments/assets/42c71a24-cc2c-4b0e-985d-4695ceebe921" />
 <img width="23%" height="auto" alt="POI screen" src="https://github.com/user-attachments/assets/01c8e0d5-2d57-4c84-8a04-bfa618e45015" />
-<img width="23%" height="auto" alt="Map screen" src="https://github.com/user-attachments/assets/b09c2f03-38d1-4657-9318-e728685b5a1e" />
+<img width="23%" height="auto" alt="Map screen" src="https://github.com/user-attachments/assets/34d1996c-4d27-413f-ab8f-ff368b37abf5" />
 
-<img width="23%" height="auto" alt="Plot screen 1" src="https://github.com/user-attachments/assets/83d19cf3-1dea-4a6c-abd1-3d1e24fd41b7" />
-<img width="23%" height="auto" alt="Plot screen 2" src="https://github.com/user-attachments/assets/640684d9-241f-426b-9224-02f6dd5f1c0c" />
-<img width="23%" height="auto" alt="Plot screen 3" src="https://github.com/user-attachments/assets/4cbd4244-acf5-46a8-b5e2-40a1396216f9" />
+<img width="23%" height="auto" alt="Plot screen 1" src="https://github.com/user-attachments/assets/158d9525-543d-4c51-9ffb-3bfa0bc3d022" />
+<img width="23%" height="auto" alt="Plot screen 2" src="https://github.com/user-attachments/assets/9f5c1eda-be6c-47f5-90a4-3a707a725a6f" />
+<img width="23%" height="auto" alt="Plot screen 3" src="https://github.com/user-attachments/assets/8d7abab5-72f8-461e-b1ac-3a85ae6c7a85" />
+<img width="23%" height="auto" alt="Edit screen" src="https://github.com/user-attachments/assets/2514316b-203d-4ce6-b0d6-0cc43a89eb1d" />
+
