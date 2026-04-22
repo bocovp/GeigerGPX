@@ -36,7 +36,7 @@ class TimePlotActivity : AppCompatActivity() {
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var plotLoadRequestToken: Long = 0L
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
-    private var isRefreshing = false
+    @Volatile private var isRefreshing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -197,9 +197,9 @@ class TimePlotActivity : AppCompatActivity() {
         isRefreshing = true
         showLoading(true)
         Thread {
-            try {
-                val candidates = loadPlotCandidates()
-                runOnUiThread {
+            val result = runCatching { loadPlotCandidates() }
+            runOnUiThread {
+                result.onSuccess { candidates ->
                     plotCandidates = candidates
                     val resolvedTrackId = resolveSelectedTrackId(candidates, preferredTrackId)
                     updateTrackSelectorUi()
@@ -209,14 +209,18 @@ class TimePlotActivity : AppCompatActivity() {
                         updateTrackTitle(null)
                         binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
                         showPlotMessage(R.string.time_plot_no_track_data)
+                        isRefreshing = false
                     } else if (resolvedTrackId != selectedTrackIdForPlot || currentPoints.isEmpty()) {
+                        // loadTrackForPlotAsync is now responsible for resetting isRefreshing
                         loadTrackForPlotAsync(resolvedTrackId)
                     } else {
                         showLoading(false)
+                        isRefreshing = false
                     }
+                }.onFailure {
+                    showPlotMessage(R.string.time_plot_no_track_data)
+                    isRefreshing = false
                 }
-            } finally {
-                isRefreshing = false
             }
         }.start()
     }
@@ -252,6 +256,7 @@ class TimePlotActivity : AppCompatActivity() {
         val normalizedTrackId = trackId?.takeIf { it.isNotBlank() }
         if (normalizedTrackId == null || normalizedTrackId == TrackCatalog.currentTrackId()) {
             loadTrackForPlot(trackId)
+            isRefreshing = false
             return
         }
 
@@ -261,17 +266,25 @@ class TimePlotActivity : AppCompatActivity() {
 
         val requestToken = ++plotLoadRequestToken
         Thread {
-            val selected = TrackCatalog.loadTrackSamplesById(this, normalizedTrackId)
+            val result = runCatching { TrackCatalog.loadTrackSamplesById(this, normalizedTrackId) }
             runOnUiThread {
                 if (requestToken != plotLoadRequestToken || selectedTrackIdForPlot != normalizedTrackId) {
                     return@runOnUiThread
                 }
-                if (selected != null) {
-                    applyLoadedTrack(normalizedTrackId, selected)
-                } else {
+                
+                result.onSuccess { selected ->
+                    if (selected != null) {
+                        applyLoadedTrack(normalizedTrackId, selected)
+                    } else {
+                        failedTrackIdsForPlot.add(normalizedTrackId)
+                        isRefreshing = false
+                        refreshTrackCandidatesAndPlotAsync()
+                    }
+                }.onFailure {
                     failedTrackIdsForPlot.add(normalizedTrackId)
-                    refreshTrackCandidatesAndPlotAsync()
+                    showPlotMessage(R.string.time_plot_no_track_data)
                 }
+                isRefreshing = false
             }
         }.start()
     }
@@ -328,9 +341,6 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun updatePlot(recalculateVerticalAxis: Boolean = true) {
-        if (currentPoints.isEmpty() && selectedTrackIdForPlot != TrackCatalog.currentTrackId()) {
-            return
-        }
         val minDurationMinutes = KdeScaleSlider.internalToMinutes(binding.placeholderSlider.value)
         val minDurationSeconds = minDurationMinutes * SECONDS_PER_MINUTE
         if (plotMode == PlotMode.KERNEL_ESTIMATOR) {
