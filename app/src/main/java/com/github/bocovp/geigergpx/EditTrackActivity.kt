@@ -93,12 +93,12 @@ class EditTrackActivity : AppCompatActivity() {
             refreshUiState()
         }
 
-        binding.btnLeft.setOnClickListener {
+        binding.btnPrev.setOnClickListener {
             val current = boundaryIndex ?: return@setOnClickListener
             boundaryIndex = (current - 1).coerceAtLeast(0)
             refreshUiState()
         }
-        binding.btnRight.setOnClickListener {
+        binding.btnNext.setOnClickListener {
             val current = boundaryIndex ?: return@setOnClickListener
             boundaryIndex = (current + 1).coerceAtMost(points.lastIndex)
             refreshUiState()
@@ -181,8 +181,8 @@ class EditTrackActivity : AppCompatActivity() {
 
         val adjustEnabled = mode == EditMode.CUT_BEFORE || mode == EditMode.CUT_AFTER || mode == EditMode.SPLIT
         binding.adjustButtonsRow.visibility = if (adjustEnabled) android.view.View.VISIBLE else android.view.View.GONE
-        binding.btnLeft.isEnabled = adjustEnabled && (boundaryIndex ?: 0) > 0
-        binding.btnRight.isEnabled = adjustEnabled && (boundaryIndex != null) && (boundaryIndex!! < points.lastIndex)
+        binding.btnPrev.isEnabled = adjustEnabled && (boundaryIndex ?: 0) > 0
+        binding.btnNext.isEnabled = adjustEnabled && (boundaryIndex != null) && (boundaryIndex!! < points.lastIndex)
 
         selectionOverlay.selectionEnabled = mode != EditMode.NONE
         binding.descriptionText.setText(descriptionText())
