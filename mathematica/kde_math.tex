@@ -1,0 +1,334 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{geometry}
+\usepackage{hyperref}
+\geometry{margin=2.5cm}
+
+\newcommand{\h}{h}                   % bandwidth (scale)
+\newcommand{\km}{k_m}                % kernel mass
+\newcommand{\teff}{T_{\mathrm{eff}}} % effective time
+\newcommand{\neff}{n_{\mathrm{eff}}} % effective count
+\newcommand{\cps}{\,[\mathrm{cps}]}
+\newcommand{\usvh}{\,[\mu\mathrm{Sv/h}]}
+
+\title{Mathematical Description of \texttt{KernelDensityEstimator}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\bigskip
+
+\noindent
+This document describes the mathematics underlying each method of the
+\texttt{KernelDensityEstimator} Kotlin class.  The estimator converts a
+stream of Geiger--Müller counts into a continuous dose-rate curve
+$\hat\lambda(t)$ in $\mu\mathrm{Sv/h}$, together with Garwood Poisson
+confidence intervals.
+
+% ---------------------------------------------------------------------------
+\section{Epanechnikov Kernel}
+
+The class uses the \emph{Epanechnikov} kernel with bandwidth $\h > 0$:
+\begin{equation}
+  K_\h(s) = \frac{3}{4\h}\!\left(1 - \frac{s^2}{\h^2}\right)
+             \mathbf{1}_{\{|s|\le\h\}}.
+  \label{eq:kernel}
+\end{equation}
+It is a symmetric, non-negative, compactly supported kernel that integrates to
+one and minimises asymptotic mean integrated squared error among all kernels.
+
+\paragraph{Kernel CDF.}
+The antiderivative of $K_\h$, needed for interval convolution (Section~\ref{sec:intervals}), is
+\begin{equation}
+  F_K(x) = \int_{-\infty}^{x} K_\h(s)\,ds =
+  \begin{cases}
+    0 & x < -\h, \\[4pt]
+    \dfrac{3}{4}\!\left(\dfrac{x}{\h} - \dfrac{x^3}{3\h^3} + \dfrac{2}{3}\right)
+      & |x| \le \h, \\[4pt]
+    1 & x > \h.
+  \end{cases}
+  \label{eq:Fk}
+\end{equation}
+
+\paragraph{Helper \texttt{epanechnikovIntegral}$(u_{\ell}, u_r)$.}
+Returns the partial mass of the kernel over a normalised sub-interval:
+\begin{equation}
+  \texttt{epanechnikovIntegral}(u_\ell, u_r)
+    = \int_{u_\ell}^{u_r} \tfrac{3}{4}(1 - u^2)\,du
+    = \tfrac{3}{4}\!\left[u - \tfrac{u^3}{3}\right]_{u_\ell}^{u_r}.
+  \label{eq:epInt}
+\end{equation}
+On full support $[-1,1]$ this equals $1$.  It is used for boundary correction
+(Section~\ref{sec:boundary}).
+
+\paragraph{Helper \texttt{epanechnikovSquaredIntegral}$(u_{\ell}, u_r)$.}
+Returns the squared-kernel integral needed for $\teff$:
+\begin{equation}
+  \texttt{epanechnikovSquaredIntegral}(u_\ell, u_r)
+    = \int_{u_\ell}^{u_r}\!\left(\tfrac{3}{4}\right)^2(1-u^2)^2 du
+    = \tfrac{9}{16}\!\left[u - \tfrac{2u^3}{3} + \tfrac{u^5}{5}\right]_{u_\ell}^{u_r}.
+  \label{eq:ep2Int}
+\end{equation}
+On full support $[-1,1]$ this equals $3/5$.
+
+% ---------------------------------------------------------------------------
+\section{KDE Estimate}
+
+Let the data consist of $N$ point events at times $t_i$ with counts $n_i$,
+and independently of $L$ uniformly distributed sample intervals
+$[a_\ell, b_\ell]$ with counts $c_\ell$ (Section~\ref{sec:intervals}).
+Let $t_{\mathrm{start}}$ and $t_{\mathrm{end}}$ be the overall data
+extents, covering both point events and interval endpoints.
+
+The boundary-corrected KDE estimate at query time $t$ is
+\begin{equation}
+  \hat\lambda(t)
+    = \frac{\displaystyle\sum_{i=1}^{N} n_i\, K_\h(t-t_i)
+            \;+\; \Lambda_{\mathrm{iv}}(t)}
+           {\km(t)},
+  \label{eq:kde}
+\end{equation}
+where $\Lambda_{\mathrm{iv}}(t)$ is the interval contribution (Section
+\ref{sec:intervals}) and $\km(t)$ is the boundary-correction mass (Section
+\ref{sec:boundary}).  The estimate is in cps; multiplication by the
+calibration factor $\alpha$ $[\mu\mathrm{Sv/h}/\mathrm{cps}]$ gives dose rate.
+
+% ---------------------------------------------------------------------------
+\section{Point Events: Sliding-Window Accumulator}
+\label{sec:point}
+
+\noindent\textit{Implemented in \texttt{estimateDoseRateHelper}.}
+
+\medskip\noindent
+For a query $t$, only events with $|t - t_i| \le \h$ contribute.  Introducing
+the numerical-stability offset $\tau = t - t_{\mathrm{start}}$ and
+$\tau_i = t_i - t_{\mathrm{start}}$, the point-event numerator of
+\eqref{eq:kde} is
+\begin{align}
+  \sum_{|t-t_i|\le\h} n_i K_\h(t-t_i)
+  &= \frac{3}{4\h}\sum_{|t-t_i|\le\h} n_i\!\left(1 - \frac{(\tau-\tau_i)^2}{\h^2}\right)
+  \nonumber\\
+  &= \frac{3}{4\h}\!\left(S_0 - \frac{\tau^2 S_0 - 2\tau S_1 + S_2}{\h^2}\right),
+  \label{eq:pointsum}
+\end{align}
+where $S_k = \sum_{|t-t_i|\le\h} n_i\,\tau_i^k$ for $k=0,1,2$.
+
+As $t$ moves rightward over the sorted query array, the window $[t-\h, t+\h]$
+slides, and $S_0, S_1, S_2$ are updated in $O(1)$ per admitted or evicted
+event.  Total complexity is $O(N + Q)$ for $Q$ query points.
+
+% ---------------------------------------------------------------------------
+\section{Interval Events: Step Decomposition}
+\label{sec:intervals}
+
+\noindent\textit{Implemented in \texttt{addSampleInterval} and
+\texttt{estimateDoseRateHelper}.}
+
+\medskip\noindent
+An interval $[a, b]$ with $c$ counts models a uniform count-rate density
+$w = c/(b-a)$ $[\mathrm{cps}]$.  Its exact contribution to the KDE numerator
+is
+\begin{equation}
+  \Lambda_{[a,b]}(t) = w\int_a^b K_\h(t-\tau)\,d\tau
+                     = w\bigl[F_K(t-a) - F_K(t-b)\bigr].
+  \label{eq:ivContrib}
+\end{equation}
+This expresses the interval as two \emph{step events}: a rising step at $a$
+with weight $+w$ and a falling step at $b$ with weight $-w$:
+\begin{equation}
+  \Lambda_{[a,b]}(t) = (+w)\,F_K(t - a) + (-w)\,F_K(t - b).
+  \label{eq:stepDecomp}
+\end{equation}
+For $M$ step events at times $\{t_j\}$ with weights $\{w_j\}$ (so $2L = M$),
+the total interval contribution is
+\begin{equation}
+  \Lambda_{\mathrm{iv}}(t) = \sum_{j=1}^{M} w_j\, F_K(t - t_j).
+  \label{eq:ivTotal}
+\end{equation}
+
+\subsection{Three-Phase Lifecycle}
+
+As $t$ sweeps rightward, step event $j$ passes through three phases:
+\begin{center}
+\begin{tabular}{lll}
+\hline
+Phase & Condition & Contribution \\
+\hline
+Inactive    & $t < t_j - \h$ & $0$ \\
+Transitioning & $|t - t_j| \le \h$ & $w_j F_K(t-t_j)$ \quad (cubic in $t$) \\
+Completed   & $t > t_j + \h$ & $w_j \cdot 1$ \quad (constant) \\
+\hline
+\end{tabular}
+\end{center}
+The \emph{completed} events contribute only their weights summed into a scalar
+$\Sigma_{\mathrm{done}}$, maintained by adding $w_j$ when event $j$ exits the
+transitioning window.
+
+\subsection{Transitioning Accumulator Expansion}
+\label{sec:tkAccum}
+
+For transitioning events, introduce $\tau_j = t_j - t_{\mathrm{start}}$ and
+$\tau = t - t_{\mathrm{start}}$.  Substituting \eqref{eq:Fk} and expanding
+$(t - t_j)^3 = (\tau - \tau_j)^3$:
+\begin{equation}
+  w_j\,F_K(t-t_j)
+  = \frac{3}{4}\, w_j \!\left(\frac{\tau - \tau_j}{\h}
+      - \frac{(\tau-\tau_j)^3}{3\h^3} + \frac{2}{3}\right).
+\end{equation}
+Collecting by powers of $\tau_j$ and defining moment accumulators
+\begin{equation}
+  \tilde T_k = \sum_{\text{transitioning}\,j} w_j\,\tau_j^k,
+  \quad k = 0,1,2,3,
+  \label{eq:Tk}
+\end{equation}
+the sum over all transitioning events evaluates to
+\begin{equation}
+  \Lambda_{\mathrm{trans}}(\tau)
+  = \frac{3}{4}\!\left[
+      \tilde T_0\!\left(\frac{\tau}{\h} - \frac{\tau^3}{3\h^3} + \frac{2}{3}\right)
+    + \tilde T_1\!\left(\frac{\tau^2}{\h^3} - \frac{1}{\h}\right)
+    - \tilde T_2\,\frac{\tau}{\h^3}
+    + \tilde T_3\,\frac{1}{3\h^3}
+  \right].
+  \label{eq:transTerm}
+\end{equation}
+The accumulators $\tilde T_0,\ldots,\tilde T_3$ are updated in $O(1)$ per
+admitted or evicted step event, exactly mirroring the $S_0,S_1,S_2$ treatment
+of point events.  The total interval contribution is then
+\begin{equation}
+  \Lambda_{\mathrm{iv}}(t) = \Sigma_{\mathrm{done}} + \Lambda_{\mathrm{trans}}(\tau).
+\end{equation}
+
+The sliding window for step events admits event $j$ when
+$t_j - \h \le t$ and evicts it (to $\Sigma_{\mathrm{done}}$) when
+$t_j + \h \le t$.  Admission is processed before eviction so that a step
+event whose entire kernel support has already passed is immediately routed to
+$\Sigma_{\mathrm{done}}$ without corrupting the $\tilde T_k$ accumulators.
+
+Overall complexity with $L$ intervals (i.e.\ $M = 2L$ step events) is
+$O(N + M + Q)$.
+
+% ---------------------------------------------------------------------------
+\section{Boundary Correction}
+\label{sec:boundary}
+
+\noindent\textit{Implemented in \texttt{estimateDoseRateHelper} and
+\texttt{getConfidenceIntervals}.}
+
+\medskip\noindent
+Near the endpoints of the data, the kernel window $[t-\h, t+\h]$ extends
+beyond the data range $[t_{\mathrm{start}}, t_{\mathrm{end}}]$.  The
+\emph{renormalisation} (boundary) correction divides the KDE numerator by
+the fraction of the kernel that lies within the data range.
+
+Using the substitution $u = (t - \tau)/\h$ (so $\tau = t_{\mathrm{start}}$
+maps to $u_r = (t - t_{\mathrm{start}})/\h$ and $\tau = t_{\mathrm{end}}$
+maps to $u_\ell = (t - t_{\mathrm{end}})/\h$), the boundary-correction kernel
+mass is
+\begin{equation}
+  \km(t) = \int_{t_{\mathrm{start}}}^{t_{\mathrm{end}}} K_\h(t-\tau)\,d\tau
+          = \texttt{epanechnikovIntegral}(u_\ell,\, u_r),
+  \label{eq:km}
+\end{equation}
+where
+\begin{equation}
+  u_\ell = \max\!\left(-1,\;\frac{t - t_{\mathrm{end}}}{\h}\right),\qquad
+  u_r    = \min\!\left(+1,\;\frac{t - t_{\mathrm{start}}}{\h}\right).
+  \label{eq:ulu}
+\end{equation}
+For $t$ in the interior (both kernel edges inside the data range),
+$u_\ell = -1$, $u_r = +1$, and $\km = 1$.
+
+It is essential that $t_{\mathrm{start}}$ and $t_{\mathrm{end}}$ span
+\emph{interval endpoints} as well as point-event timestamps; otherwise the
+correction overestimates the boundary effect at the edges of long intervals.
+
+% ---------------------------------------------------------------------------
+\section{Confidence Intervals}
+\label{sec:ci}
+
+\noindent\textit{Implemented in \texttt{getConfidenceIntervals}.}
+
+\subsection{Effective Observation Time}
+
+Locally, the KDE behaves as if $\neff$ counts were observed over an
+equivalent observation window of duration $\teff$.  By matching the
+asymptotic Poisson variance of the KDE to that of a direct observation,
+\begin{equation}
+  \teff = \frac{\km(t)^2}{\displaystyle\int_{t_{\mathrm{start}}}^{t_{\mathrm{end}}}
+             K_\h^2(t-\tau)\,d\tau}.
+  \label{eq:teff}
+\end{equation}
+The denominator is computed by substituting $u=(t-\tau)/\h$, giving
+$d\tau = -\h\,du$:
+\begin{equation}
+  \int_{t_{\mathrm{start}}}^{t_{\mathrm{end}}} K_\h^2(t-\tau)\,d\tau
+  = \frac{1}{\h}\;\texttt{epanechnikovSquaredIntegral}(u_\ell, u_r),
+\end{equation}
+so that
+\begin{equation}
+  \teff = \frac{\h\;\km(t)^2}{\texttt{epanechnikovSquaredIntegral}(u_\ell, u_r)}.
+  \label{eq:teffCode}
+\end{equation}
+For an interior point with full kernel support, this reduces to
+$\teff = \h \cdot 1^2 / (3/5) = 5\h/3$.
+
+\subsection{Effective Count and Garwood Interval}
+
+The effective count is
+\begin{equation}
+  \neff = \hat\lambda(t)\;\teff,
+  \label{eq:neff}
+\end{equation}
+where $\hat\lambda(t)$ is the cps estimate from \eqref{eq:kde}.
+
+The \emph{Garwood} exact Poisson confidence interval at confidence level
+$1-\alpha$ for an observed integer count $n$ is
+\begin{equation}
+  \left(\frac{\chi^2_{2n,\,\alpha/2}}{2},\quad
+        \frac{\chi^2_{2(n+1),\,1-\alpha/2}}{2}\right),
+\end{equation}
+expressed here as bounds on the true count.  Dividing by $\teff$ and
+multiplying by the calibration factor $\alpha$ converts to $\mu\mathrm{Sv/h}$.
+
+Because $\neff$ is in general non-integer, the bounds are linearly
+interpolated between the two bracketing integers
+$n_F = \lfloor\neff\rfloor$ and $n_C = n_F + 1$ using weight
+$\xi = \neff - n_F$:
+\begin{align}
+  \chi_L &= \chi^2_{2n_F,\,0.025}
+           + \xi\!\left(\chi^2_{2n_C,\,0.025}
+                        - \chi^2_{2n_F,\,0.025}\right), \\[4pt]
+  \chi_R &= \chi^2_{2(n_F+1),\,0.975}
+           + \xi\!\left(\chi^2_{2(n_C+1),\,0.975}
+                        - \chi^2_{2(n_F+1),\,0.975}\right).
+  \label{eq:chiInterp}
+\end{align}
+The dose-rate confidence bounds are
+\begin{equation}
+  \lambda^{\pm}\usvh
+  = \frac{\chi_{L,R}}{2\,\teff}\cdot\alpha.
+  \label{eq:ciBounds}
+\end{equation}
+
+% ---------------------------------------------------------------------------
+\section{Summary of Complexity}
+
+\begin{center}
+\begin{tabular}{lll}
+\hline
+Operation & Per-call cost & Amortised total \\
+\hline
+\texttt{addPoint} & $O(1)$ & $O(N)$ \\
+\texttt{addSampleInterval} & $O(1)$ & $O(L)$ \\
+\texttt{estimateDoseRateHelper} & $O(N + M + Q)$ & --- \\
+\texttt{getConfidenceIntervals} & $O(N + M + Q)$ & --- \\
+\hline
+\end{tabular}
+\end{center}
+$N$ = number of point events, $L$ = number of intervals,
+$M = 2L$ = number of step events, $Q$ = number of query points.
+
+\end{document}
