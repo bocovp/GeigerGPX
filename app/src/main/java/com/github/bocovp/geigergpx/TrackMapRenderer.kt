@@ -253,8 +253,12 @@ class TrackMapRenderer(
         pois.forEach { poi ->
             if (poi.doseRateForColor > currentMax) currentMax = poi.doseRateForColor
         }
-        if (!currentMax.isFinite() || currentMax > 0.5 || currentMax < 1e-9) {
-            currentMax = 0.5
+        if (
+            !currentMax.isFinite() ||
+            currentMax > DoseColorScale.DEFAULT_MAX_DOSE ||
+            currentMax < DoseColorScale.MIN_NONZERO_MAX_DOSE
+        ) {
+            currentMax = DoseColorScale.DEFAULT_MAX_DOSE
         }
         return currentMax
     }

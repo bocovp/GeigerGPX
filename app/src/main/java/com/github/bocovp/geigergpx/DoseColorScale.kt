@@ -6,6 +6,8 @@ import kotlin.math.abs
 object DoseColorScale {
     private const val ZERO_DOSE_EPSILON = 1e-5
     private const val GREEN_RED_SPLIT = 0.5
+    const val DEFAULT_MAX_DOSE = 0.5
+    const val MIN_NONZERO_MAX_DOSE = 1e-9
 
     private const val R1 = 0x00
     private const val G1 = 0xC8

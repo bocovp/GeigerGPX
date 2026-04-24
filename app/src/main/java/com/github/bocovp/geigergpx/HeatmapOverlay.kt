@@ -87,7 +87,9 @@ class HeatmapOverlay(
 
         val cols = ceil((viewWidth + offsetX).toFloat() / gridSizePixels).toInt() + 1
         val rows = ceil((viewHeight + offsetY).toFloat() / gridSizePixels).toInt() + 1
-        val key = "$tracksVersion|$doseCoefficient|${worldTopLeft.x}|${worldTopLeft.y}|$viewWidth|$viewHeight|$cols|$rows"
+        val gridX = Math.floorDiv(worldTopLeft.x, gridSizePixels.toLong())
+        val gridY = Math.floorDiv(worldTopLeft.y, gridSizePixels.toLong())
+        val key = "$tracksVersion|$doseCoefficient|$gridX|$gridY|$viewWidth|$viewHeight|$cols|$rows"
         if (cachedKey == key) {
             return cachedRaster
         }
@@ -133,7 +135,14 @@ class HeatmapOverlay(
         if (!maxBinnedDose.isFinite()) return null
 
         val pixels = IntArray(cellCount)
-        val colorMaxDose = if (maxBinnedDose < 1e-9 || maxBinnedDose > 0.5) 0.5 else maxBinnedDose
+        val colorMaxDose = if (
+            maxBinnedDose < DoseColorScale.MIN_NONZERO_MAX_DOSE ||
+            maxBinnedDose > DoseColorScale.DEFAULT_MAX_DOSE
+        ) {
+            DoseColorScale.DEFAULT_MAX_DOSE
+        } else {
+            maxBinnedDose
+        }
         minDose = 0.0
         maxDose = colorMaxDose
 
