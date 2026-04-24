@@ -33,6 +33,8 @@ class TrackMapRenderer(
     private var lastUseKernelEstimator: Boolean = false
     private var lastKdeScaleSeconds: Double? = null
     private var lastGeneralizationTrackFingerprint: String = ""
+    private var lastColorbarMaxFingerprint: String = ""
+    private var lastColorbarMaxValue: Double = DoseColorScale.DEFAULT_MAX_DOSE
     private var cachedShowCpsUnit: Boolean = false
     private var highlightOverlay: DoseRateHighlightOverlay? = null
     private var highlightedPoint: DoseRateHighlightOverlay.HighlightPoint? = null
@@ -72,7 +74,19 @@ class TrackMapRenderer(
             lastGeneralizationTrackFingerprint = currentTrackFingerprint
         }
 
-        val fallbackColorbarMax = computeTrackAndPoiColorbarMax(tracks, pois, useKernelEstimator)
+        val colorbarMaxFingerprint = buildColorbarMaxFingerprint(
+            trackFingerprint = currentTrackFingerprint,
+            pois = pois,
+            useKernelEstimator = useKernelEstimator,
+            currentZoomLevel = currentZoomLevel,
+            kdeScaleSeconds = kdeScaleSeconds
+        )
+        val fallbackColorbarMax = getCachedTrackAndPoiColorbarMax(
+            tracks = tracks,
+            pois = pois,
+            useKernelEstimator = useKernelEstimator,
+            fingerprint = colorbarMaxFingerprint
+        )
         var currentMax = Double.NEGATIVE_INFINITY
         var currentMin = 0.0
         var scaleChanged = false
@@ -261,6 +275,43 @@ class TrackMapRenderer(
             currentMax = DoseColorScale.DEFAULT_MAX_DOSE
         }
         return currentMax
+    }
+
+    private fun getCachedTrackAndPoiColorbarMax(
+        tracks: List<MapTrack>,
+        pois: List<PoiMapItem>,
+        useKernelEstimator: Boolean,
+        fingerprint: String
+    ): Double {
+        if (fingerprint == lastColorbarMaxFingerprint) {
+            return lastColorbarMaxValue
+        }
+
+        val computed = computeTrackAndPoiColorbarMax(tracks, pois, useKernelEstimator)
+        lastColorbarMaxFingerprint = fingerprint
+        lastColorbarMaxValue = computed
+        return computed
+    }
+
+    private fun buildColorbarMaxFingerprint(
+        trackFingerprint: String,
+        pois: List<PoiMapItem>,
+        useKernelEstimator: Boolean,
+        currentZoomLevel: Double,
+        kdeScaleSeconds: Double?
+    ): String {
+        val poiFingerprint = pois.joinToString("|") { "${it.id}:${it.doseRateForColor}" }
+        return buildString {
+            append(trackFingerprint)
+            append('|')
+            append(poiFingerprint)
+            append('|')
+            append(useKernelEstimator)
+            append('|')
+            append(currentZoomLevel)
+            append('|')
+            append(kdeScaleSeconds ?: -1.0)
+        }
     }
 
     fun autoZoomToSelection(animate: Boolean): Boolean {
