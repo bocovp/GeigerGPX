@@ -71,8 +71,8 @@ class KernelDensityEstimator(private val coeff: Double) {
     /** Clears all recorded events. Call at the start of every new track. */
     @Synchronized
     fun clear() {
-        ts        = DoubleArray(0);  ns        = IntArray(0);    size      = 0
-        stepTs    = DoubleArray(0);  stepWs    = DoubleArray(0); stepCount = 0
+        size      = 0
+        stepCount = 0
         dataTStart = Double.MAX_VALUE
         dataTEnd   = Double.NEGATIVE_INFINITY
     }
@@ -210,7 +210,7 @@ class KernelDensityEstimator(private val coeff: Double) {
 
     // -------------------------------------------------------------------------
     // Core convolution — O(|t2s| + N + M) sliding window
-    // N = point events, M = step events (= 2 × intervals), Q = query points.
+    // N = point events, M <= step events (= 2 × intervals), Q = query points.
     // -------------------------------------------------------------------------
 
     /**
@@ -390,10 +390,8 @@ class KernelDensityEstimator(private val coeff: Double) {
      * O(stepCount − index); O(1) for the common case where [index] is near the end.
      */
     private fun removeStepAt(index: Int) {
-        for (k in index until stepCount - 1) {
-            stepTs[k] = stepTs[k + 1]
-            stepWs[k] = stepWs[k + 1]
-        }
+        System.arraycopy(stepTs, index + 1, stepTs, index, stepCount - index - 1)
+        System.arraycopy(stepWs, index + 1, stepWs, index, stepCount - index - 1)
         stepCount--
     }
 
