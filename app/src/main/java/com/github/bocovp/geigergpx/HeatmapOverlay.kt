@@ -13,11 +13,29 @@ class HeatmapOverlay(
 
     // Data source
     var tracks: List<MapTrack> = emptyList()
+        set(value) {
+            field = value
+            tracksVersion++
+            cachedRaster = null
+        }
     var minDose: Double = 0.0
     var maxDose: Double = 1.0
 
     // Grid configuration
     private val gridSizePixels = 64 // Size of grid squares in pixels
+
+    data class RasterResult(
+        val bitmap: Bitmap,
+        val offsetX: Int,
+        val offsetY: Int,
+        val cols: Int,
+        val rows: Int,
+        val maxDose: Double
+    )
+
+    private var tracksVersion: Long = 0
+    private var cachedRaster: RasterResult? = null
+    private var cachedKey: String? = null
 
     private val paint = Paint().apply {
         isFilterBitmap = true // Enables Bilinear Interpolation
@@ -27,113 +45,122 @@ class HeatmapOverlay(
     override fun draw(canvas: Canvas, projection: Projection) {
         if (tracks.isEmpty()) return
 
-        // 1. Calculate Grid Dimensions based on current view
         val viewWidth = canvas.width
         val viewHeight = canvas.height
 
         if (viewWidth <= 0 || viewHeight <= 0) return
 
+        val raster = ensureRaster(projection, viewWidth, viewHeight) ?: return
+        val drawLeft = -raster.offsetX.toFloat()
+        val drawTop = -raster.offsetY.toFloat()
+        val drawRight = drawLeft + (raster.cols * gridSizePixels)
+        val drawBottom = drawTop + (raster.rows * gridSizePixels)
+
+        val destRect = RectF(drawLeft, drawTop, drawRight, drawBottom)
+        canvas.drawBitmap(raster.bitmap, null, destRect, paint)
+    }
+
+    fun refreshRaster(
+        projection: Projection,
+        viewWidth: Int,
+        viewHeight: Int
+    ): Double? {
+        val raster = ensureRaster(projection, viewWidth, viewHeight) ?: return null
+        minDose = 0.0
+        maxDose = raster.maxDose
+        return raster.maxDose
+    }
+
+    private fun ensureRaster(
+        projection: Projection,
+        viewWidth: Int,
+        viewHeight: Int
+    ): RasterResult? {
+        if (tracks.isEmpty() || viewWidth <= 0 || viewHeight <= 0) return null
+
         val screenRect = projection.intrinsicScreenRect
         val worldTopLeft = PointL()
         projection.toMercatorPixels(screenRect.left, screenRect.top, worldTopLeft)
 
-        // 2. Calculate the "Sub-grid" offset (the phase of the grid)
-        // This tells us how many pixels the grid is shifted within the first cell
         val offsetX = Math.floorMod(worldTopLeft.x, gridSizePixels.toLong()).toInt()
         val offsetY = Math.floorMod(worldTopLeft.y, gridSizePixels.toLong()).toInt()
 
-        // 3. Determine grid dimensions (add extra cells to cover edges during shifts)
         val cols = ceil((viewWidth + offsetX).toFloat() / gridSizePixels).toInt() + 1
         val rows = ceil((viewHeight + offsetY).toFloat() / gridSizePixels).toInt() + 1
+        val key = "$tracksVersion|$doseCoefficient|${worldTopLeft.x}|${worldTopLeft.y}|$viewWidth|$viewHeight|$cols|$rows"
+        if (cachedKey == key) {
+            return cachedRaster
+        }
 
-        // 4. Generate the Bitmap (passing the world offset for consistent binning)
-        val gridBitmap = generateHeatmapBitmap(cols, rows, projection, offsetX, offsetY)
+        val cellCount = cols * rows
 
-        // 5. Draw the bitmap shifted by the offset to "anchor" it to the map surface
-        val drawLeft = -offsetX.toFloat()
-        val drawTop = -offsetY.toFloat()
-        val drawRight = drawLeft + (cols * gridSizePixels)
-        val drawBottom = drawTop + (rows * gridSizePixels)
-
-        val destRect = RectF(drawLeft, drawTop, drawRight, drawBottom)
-        canvas.drawBitmap(gridBitmap, null, destRect, paint)
-    }
-
-    private fun generateHeatmapBitmap(
-        cols: Int,
-        rows: Int,
-        projection: Projection,
-        offsetX: Int,
-        offsetY: Int
-    ): Bitmap {
-        // Arrays to hold grid sums
-        val sumCounts = IntArray(cols * rows)
-        val sumSeconds = DoubleArray(cols * rows)
+        val sumCounts = IntArray(cellCount)
+        val sumSeconds = DoubleArray(cellCount)
 
         val pPixels = Point()
         val geoPoint = org.osmdroid.util.GeoPoint(0.0, 0.0)
 
-        // A. Binning Phase
-        // Transform and bucket every point from every track
         for (track in tracks) {
             for (pt in track.points) {
-                // Skip if count is 0 (as per requirements)
-                if (pt.counts == 0) continue
-                if (pt.badCoordinates) continue
+                if (pt.counts == 0 || pt.badCoordinates) continue
 
-                // Project Lat/Lon to Screen Pixels
-                // Note: reuse GeoPoint to reduce allocation in tight loops if possible
                 geoPoint.setCoords(pt.latitude, pt.longitude)
                 projection.toPixels(geoPoint, pPixels)
 
                 val col = (pPixels.x + offsetX) / gridSizePixels
                 val row = (pPixels.y + offsetY) / gridSizePixels
+                if (col !in 0 until cols || row !in 0 until rows) continue
 
-                // Check bounds
-                if (col in 0 until cols && row in 0 until rows) {
-                    val index = row * cols + col
-                    sumCounts[index] += pt.counts
-                    sumSeconds[index] += pt.seconds
-                }
+                val index = row * cols + col
+                sumCounts[index] += pt.counts
+                sumSeconds[index] += pt.seconds
             }
         }
 
-        // B. Bitmap Generation Phase
-        val pixels = IntArray(cols * rows)
+        var maxBinnedDose = Double.NEGATIVE_INFINITY
 
-        for (i in 0 until cols * rows) {
+        for (i in 0 until cellCount) {
             val totalCounts = sumCounts[i]
-            val totalSeconds = sumSeconds[i]
+            if (totalCounts == 0) continue
 
+            val totalSeconds = sumSeconds[i]
+            val squareCps = if (totalSeconds > 0.0001) totalCounts / totalSeconds else 0.0
+            val squareDoseRate = squareCps * doseCoefficient
+
+            if (squareDoseRate > maxBinnedDose) maxBinnedDose = squareDoseRate
+        }
+
+        if (!maxBinnedDose.isFinite()) return null
+
+        val pixels = IntArray(cellCount)
+        val colorMaxDose = if (maxBinnedDose < 1e-9 || maxBinnedDose > 0.5) 0.5 else maxBinnedDose
+        minDose = 0.0
+        maxDose = colorMaxDose
+
+        for (i in 0 until cellCount) {
+            val totalCounts = sumCounts[i]
             if (totalCounts == 0) {
-                // Empty grid cell -> Transparent
                 pixels[i] = 0
                 continue
             }
-
-            // Formula 1: Calculate CPS
-            // Avoid division by zero
+            val totalSeconds = sumSeconds[i]
             val squareCps = if (totalSeconds > 0.0001) totalCounts / totalSeconds else 0.0
-
-            // Formula 2: Calculate Dose Rate
             val squareDoseRate = squareCps * doseCoefficient
-
-            // Formula 3: Calculate Alpha
-            val squareAlpha = min(255, 255*totalCounts / 20)
-
-            // Determine color
+            val squareAlpha = min(255, 255 * totalCounts / 20)
             val colorInt = DoseColorScale.colorForDose(squareDoseRate, minDose, maxDose)
-
-            // Combine color with calculated alpha
-            // (Remove original alpha from colorInt and apply our calculated alpha)
-            val r = Color.red(colorInt)
-            val g = Color.green(colorInt)
-            val b = Color.blue(colorInt)
-
-            pixels[i] = Color.argb(squareAlpha, r, g, b)
+            pixels[i] = Color.argb(squareAlpha, Color.red(colorInt), Color.green(colorInt), Color.blue(colorInt))
         }
 
-        // Create immutable bitmap from pixels
-        return Bitmap.createBitmap(pixels, cols, rows, Bitmap.Config.ARGB_8888)
+        val raster = RasterResult(
+            bitmap = Bitmap.createBitmap(pixels, cols, rows, Bitmap.Config.ARGB_8888),
+            offsetX = offsetX,
+            offsetY = offsetY,
+            cols = cols,
+            rows = rows,
+            maxDose = colorMaxDose
+        )
+        cachedRaster = raster
+        cachedKey = key
+        return raster
     }
 }
