@@ -73,32 +73,16 @@ class TrackMapRenderer(
         }
 
         var currentMax = Double.NEGATIVE_INFINITY
-        tracks.forEach { track ->
-            val pointsForColorScale = if (useKernelEstimator) {
-                generalizedTracksById[track.id] ?: track.points
-            } else {
-                track.points
+        var currentMin = 0.0
+        var scaleChanged = false
+        if (!isHeatmapMode) {
+            currentMax = computeTrackAndPoiColorbarMax(tracks, pois, useKernelEstimator)
+            scaleChanged = currentMax != lastMaxDose
+            lastMaxDose = currentMax
+            if (scaleChanged) {
+                tvHalf?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax / 2)
+                tvMax?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax)
             }
-            pointsForColorScale.forEach { p ->
-                if (p.badCoordinates) return@forEach
-                if (p.doseRate > currentMax) currentMax = p.doseRate
-            }
-        }
-        pois.forEach { poi ->
-            if (poi.doseRateForColor > currentMax) currentMax = poi.doseRateForColor
-        }
-
-        val currentMin = 0.0
-        if (!currentMax.isFinite() || currentMax > 0.5 || currentMax < 1e-9) {
-            currentMax = 0.5
-        }
-
-        val scaleChanged = currentMax != lastMaxDose
-        lastMaxDose = currentMax
-
-        if (scaleChanged) {
-            tvHalf?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax / 2)
-            tvMax?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax)
         }
         var latestPoint: GeoPoint? = null
         var shouldInvalidate = false
@@ -141,6 +125,26 @@ class TrackMapRenderer(
                 track.copy(points = track.points.filterNot { it.badCoordinates })
             }
             overlay.tracks = if (pois.isEmpty()) filteredTracks else filteredTracks + poiTrack
+
+            val binnedMax = overlay.refreshRaster(
+                projection = mapView.projection,
+                viewWidth = mapView.width,
+                viewHeight = mapView.height
+            )
+            currentMin = 0.0
+            if (tracks.isEmpty() || binnedMax == null) {
+                currentMax = computeTrackAndPoiColorbarMax(tracks, pois, useKernelEstimator)
+            } else {
+                currentMax = binnedMax
+            }
+
+            scaleChanged = currentMax != lastMaxDose
+            lastMaxDose = currentMax
+            if (scaleChanged) {
+                tvHalf?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax / 2)
+                tvMax?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax)
+            }
+
             overlay.minDose = currentMin
             overlay.maxDose = currentMax
 
@@ -226,6 +230,36 @@ class TrackMapRenderer(
             mapView.invalidate()
         }
         return autoFitApplied
+    }
+
+    private fun computeTrackAndPoiColorbarMax(
+        tracks: List<MapTrack>,
+        pois: List<PoiMapItem>,
+        useKernelEstimator: Boolean
+    ): Double {
+        var currentMax = Double.NEGATIVE_INFINITY
+        tracks.forEach { track ->
+            val pointsForColorScale = if (useKernelEstimator) {
+                generalizedTracksById[track.id] ?: track.points
+            } else {
+                track.points
+            }
+            pointsForColorScale.forEach { p ->
+                if (p.badCoordinates) return@forEach
+                if (p.doseRate > currentMax) currentMax = p.doseRate
+            }
+        }
+        pois.forEach { poi ->
+            if (poi.doseRateForColor > currentMax) currentMax = poi.doseRateForColor
+        }
+        if (
+            !currentMax.isFinite() ||
+            currentMax > DoseColorScale.DEFAULT_MAX_DOSE ||
+            currentMax < DoseColorScale.MIN_NONZERO_MAX_DOSE
+        ) {
+            currentMax = DoseColorScale.DEFAULT_MAX_DOSE
+        }
+        return currentMax
     }
 
     fun autoZoomToSelection(animate: Boolean): Boolean {
