@@ -256,8 +256,9 @@ class TrackMapRenderer(
         val scaleChanged = currentMax != lastMaxDose
         lastMaxDose = currentMax
         if (scaleChanged) {
-            tvHalf?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax / 2)
-            tvMax?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax)
+            val doseRateUnit = if (showCpsUnit()) "cps" else "µSv/h"
+            tvHalf?.text = String.format(java.util.Locale.US, "%.2f", currentMax / 2)
+            tvMax?.text = String.format(java.util.Locale.US, "%.2f %s", currentMax, doseRateUnit)
         }
         return scaleChanged
     }
