@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -45,6 +46,7 @@ class MapActivity : AppCompatActivity() {
     private var hasLoadedMapTracks = false
     private var hasVisibleMapContent = false
     private var ignoreMapMoveEventsUntilMillis: Long = 0L
+    private var heatmapRefreshPendingFromScroll = false
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
 
     private val KDE_SLIDER_ENABLED = false
@@ -93,6 +95,7 @@ class MapActivity : AppCompatActivity() {
         binding.mapView.addMapListener(object : MapListener {
             override fun onScroll(event: ScrollEvent?): Boolean {
                 onUserMapMoved()
+                requestHeatmapRefreshAfterMapMove()
                 return false
             }
 
@@ -102,6 +105,12 @@ class MapActivity : AppCompatActivity() {
                 return false
             }
         })
+        binding.mapView.setOnTouchListener { _, event ->
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                triggerHeatmapRefreshAfterMapMove()
+            }
+            false
+        }
 
         val tvHalf = findViewById<TextView>(R.id.tvHalfDose)
         val tvMax = findViewById<TextView>(R.id.tvMaxDose)
@@ -354,6 +363,17 @@ class MapActivity : AppCompatActivity() {
 
     private fun suppressMapMoveEventsTemporarily() {
         ignoreMapMoveEventsUntilMillis = System.currentTimeMillis() + 1500L
+    }
+
+    private fun requestHeatmapRefreshAfterMapMove() {
+        if (!isHeatmapMode) return
+        heatmapRefreshPendingFromScroll = true
+    }
+
+    private fun triggerHeatmapRefreshAfterMapMove() {
+        if (!isHeatmapMode || !heatmapRefreshPendingFromScroll) return
+        heatmapRefreshPendingFromScroll = false
+        refreshMapTracks(latestActivePoints)
     }
 
     private fun ensurePoiSelectionInitialized(allPoiIds: Set<String>): Set<String> {

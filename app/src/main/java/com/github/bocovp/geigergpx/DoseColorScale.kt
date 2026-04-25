@@ -7,7 +7,7 @@ object DoseColorScale {
     private const val ZERO_DOSE_EPSILON = 1e-5
     private const val GREEN_RED_SPLIT = 0.5
     const val DEFAULT_MAX_DOSE = 0.5
-    const val MIN_NONZERO_MAX_DOSE = 1e-9
+    const val MIN_MAX_DOSE = 0.2
 
     private const val R1 = 0x00
     private const val G1 = 0xC8
@@ -50,5 +50,12 @@ object DoseColorScale {
         }
 
         return Color.rgb(r, g, b)
+    }
+
+    fun clampColorbarMax(value: Double): Double {
+        if (!value.isFinite()) {
+            return DEFAULT_MAX_DOSE
+        }
+        return value.coerceIn(MIN_MAX_DOSE, DEFAULT_MAX_DOSE)
     }
 }
