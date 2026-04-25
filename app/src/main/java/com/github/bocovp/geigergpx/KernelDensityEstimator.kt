@@ -45,23 +45,24 @@ class KernelDensityEstimator(private val coeff: Double) {
     // Reused to access chi2L / chi2R without duplicating that logic.
     private val ci = ConfidenceInterval(0.0, 0.0, 0.0, 0.0, 0)
 
-    // -------------------------------------------------------------------------
-    // Reusable output buffers — resized lazily, never shrunk.
-    // -------------------------------------------------------------------------
-    private var bufCps          = DoubleArray(0)
-    private var bufKernelMasses = DoubleArray(0)
-    private var bufMean         = DoubleArray(0)
-    private var bufLow          = DoubleArray(0)
-    private var bufHigh         = DoubleArray(0)
-
-    private fun ensureBuffers(n: Int) {
-        if (bufCps.size < n) {
-            bufCps          = DoubleArray(n)
-            bufKernelMasses = DoubleArray(n)
-            bufMean         = DoubleArray(n)
-            bufLow          = DoubleArray(n)
-            bufHigh         = DoubleArray(n)
-        }
+    /**
+     * Creates a deep copy of the estimator's current state.
+     * This is used to take a fast snapshot of the data so that long-running
+     * calculations (like getConfidenceIntervals) can be performed on a background
+     * thread without blocking the ingestion of new points on the audio thread.
+     */
+    @Synchronized
+    fun copy(): KernelDensityEstimator {
+        val other = KernelDensityEstimator(coeff)
+        other.ts = ts.copyOf(size)
+        other.ns = ns.copyOf(size)
+        other.size = size
+        other.stepTs = stepTs.copyOf(stepCount)
+        other.stepWs = stepWs.copyOf(stepCount)
+        other.stepCount = stepCount
+        other.dataTStart = dataTStart
+        other.dataTEnd = dataTEnd
+        return other
     }
 
     // -------------------------------------------------------------------------
@@ -156,9 +157,9 @@ class KernelDensityEstimator(private val coeff: Double) {
      * Delegates to [estimateDoseRateHelper] for the cps estimate, then multiplies
      * by [coeff].
      */
-    @Synchronized
     fun estimateDoseRate(t2s: DoubleArray, scale: Double): DoubleArray {
-        ensureBuffers(t2s.size)
+        val bufCps = DoubleArray(t2s.size)
+        val bufKernelMasses = DoubleArray(t2s.size)
         estimateDoseRateHelper(t2s, scale, bufCps, bufKernelMasses)
         val result = DoubleArray(t2s.size)
         for (j in t2s.indices) result[j] = bufCps[j] * coeff
@@ -172,12 +173,16 @@ class KernelDensityEstimator(private val coeff: Double) {
      *
      * @return Triple(doseRate [µSv/h], lowerBound [µSv/h], upperBound [µSv/h])
      */
-    @Synchronized
     fun getConfidenceIntervals(t2s: DoubleArray, scale: Double): Triple<DoubleArray, DoubleArray, DoubleArray> {
         if (size == 0 && stepCount == 0)
             return Triple(DoubleArray(t2s.size), DoubleArray(t2s.size), DoubleArray(t2s.size))
 
-        ensureBuffers(t2s.size)
+        val bufCps = DoubleArray(t2s.size)
+        val bufKernelMasses = DoubleArray(t2s.size)
+        val bufMean = DoubleArray(t2s.size)
+        val bufLow = DoubleArray(t2s.size)
+        val bufHigh = DoubleArray(t2s.size)
+
         estimateDoseRateHelper(t2s, scale, bufCps, bufKernelMasses)
 
         val invScale = 1.0 / scale
@@ -205,7 +210,7 @@ class KernelDensityEstimator(private val coeff: Double) {
             bufHigh[i] = chiR * scale2usvh
         }
 
-        return Triple(bufMean.copyOf(t2s.size), bufLow.copyOf(t2s.size), bufHigh.copyOf(t2s.size))
+        return Triple(bufMean, bufLow, bufHigh)
     }
 
     // -------------------------------------------------------------------------
