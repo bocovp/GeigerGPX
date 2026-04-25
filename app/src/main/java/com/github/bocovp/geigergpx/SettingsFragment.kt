@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
@@ -283,7 +284,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun launchUi(block: suspend () -> Unit) {
-        viewLifecycleOwnerLiveData.value?.lifecycleScope?.launch { block() }
+        lifecycleScope.launch { block() }
     }
 
     private fun showManualThresholdDialog(thresholdPref: LongPressPreference, bluetooth: Boolean) {
