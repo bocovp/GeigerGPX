@@ -20,6 +20,7 @@ class HeatmapOverlay(
         }
     var minDose: Double = 0.0
     var maxDose: Double = 1.0
+    var lockedColorbarMaxDose: Double? = null
 
     // Grid configuration
     private val gridSizePixels = 64 // Size of grid squares in pixels
@@ -89,7 +90,8 @@ class HeatmapOverlay(
         val rows = ceil((viewHeight + offsetY).toFloat() / gridSizePixels).toInt() + 1
         val gridX = Math.floorDiv(worldTopLeft.x, gridSizePixels.toLong())
         val gridY = Math.floorDiv(worldTopLeft.y, gridSizePixels.toLong())
-        val key = "$tracksVersion|$doseCoefficient|$gridX|$gridY|$viewWidth|$viewHeight|$cols|$rows"
+        val lockPart = lockedColorbarMaxDose?.toString() ?: "auto"
+        val key = "$tracksVersion|$doseCoefficient|$lockPart|$gridX|$gridY|$viewWidth|$viewHeight|$cols|$rows"
         if (cachedKey == key) {
             return cachedRaster?.copy(offsetX = offsetX, offsetY = offsetY)
         }
@@ -135,14 +137,8 @@ class HeatmapOverlay(
         if (!maxBinnedDose.isFinite()) return null
 
         val pixels = IntArray(cellCount)
-        val colorMaxDose = if (
-            maxBinnedDose < DoseColorScale.MIN_NONZERO_MAX_DOSE ||
-            maxBinnedDose > DoseColorScale.DEFAULT_MAX_DOSE
-        ) {
-            DoseColorScale.DEFAULT_MAX_DOSE
-        } else {
-            maxBinnedDose
-        }
+        val computedColorMaxDose = DoseColorScale.clampColorbarMax(maxBinnedDose)
+        val colorMaxDose = lockedColorbarMaxDose ?: computedColorMaxDose
         minDose = 0.0
         maxDose = colorMaxDose
 
@@ -168,7 +164,7 @@ class HeatmapOverlay(
             offsetY = offsetY,
             cols = cols,
             rows = rows,
-            maxDose = colorMaxDose
+            maxDose = computedColorMaxDose
         )
         cachedRaster = raster
         cachedKey = key

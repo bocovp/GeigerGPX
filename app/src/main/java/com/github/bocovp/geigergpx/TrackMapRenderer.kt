@@ -137,6 +137,7 @@ class TrackMapRenderer(
 
             overlay.minDose = currentMin
             overlay.maxDose = currentMax
+            overlay.lockedColorbarMaxDose = currentMax
 
             shouldInvalidate = true
 
@@ -244,14 +245,7 @@ class TrackMapRenderer(
         pois.forEach { poi ->
             if (poi.doseRateForColor > currentMax) currentMax = poi.doseRateForColor
         }
-        if (
-            !currentMax.isFinite() ||
-            currentMax > DoseColorScale.DEFAULT_MAX_DOSE ||
-            currentMax < DoseColorScale.MIN_NONZERO_MAX_DOSE
-        ) {
-            currentMax = DoseColorScale.DEFAULT_MAX_DOSE
-        }
-        return currentMax
+        return DoseColorScale.clampColorbarMax(currentMax)
     }
 
     private fun updateColorbarScale(currentMax: Double): Boolean {
