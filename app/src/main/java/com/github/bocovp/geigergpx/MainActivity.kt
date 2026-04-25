@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.view.menu.MenuBuilder
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityMainBinding
@@ -30,6 +31,9 @@ import android.os.Build
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -237,19 +241,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun restoreStartupBackupIfNeeded() {
-        Thread {
-            val restoredName = (application as GeigerGpxApp).restoreBackupIfNeeded()
-            if (restoredName != null) {
-                runOnUiThread {
-                    if (isFinishing || isDestroyed) return@runOnUiThread
-                    Toast.makeText(
-                        this,
-                        "Backup file was restored and saved as $restoredName",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+        lifecycleScope.launch {
+            val restoredName = withContext(Dispatchers.IO) {
+                (application as GeigerGpxApp).restoreBackupIfNeeded()
             }
-        }.start()
+            if (restoredName != null && !isFinishing && !isDestroyed) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Backup file was restored and saved as $restoredName",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
     }
 
 

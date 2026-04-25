@@ -10,12 +10,17 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.bocovp.geigergpx.databinding.ActivityPoiBinding
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PoiActivity : AppCompatActivity() {
 
@@ -84,17 +89,20 @@ class PoiActivity : AppCompatActivity() {
         binding.loadingLabel.visibility = View.VISIBLE
         binding.poiRecyclerView.visibility = View.GONE
 
-        Thread {
-            val result = PoiLibrary.loadPoiLibrary(this)
-            val items = result.entries.map { poi ->
-                PoiUiItem(
-                    poi = poi,
-                    title = poi.description,
-                    subtitle = formatSubtitle(poi)
-                )
-            }
-            val selectedPoiIds = ensurePoiSelectionInitialized(result.entries.map { it.id }.toSet())
-            runOnUiThread {
+        lifecycleScope.launch {
+            try {
+                val (result, items) = withContext(Dispatchers.IO) {
+                    val loadedResult = PoiLibrary.loadPoiLibrary(this@PoiActivity)
+                    val mappedItems = loadedResult.entries.map { poi ->
+                        PoiUiItem(
+                            poi = poi,
+                            title = poi.description,
+                            subtitle = formatSubtitle(poi)
+                        )
+                    }
+                    loadedResult to mappedItems
+                }
+                val selectedPoiIds = ensurePoiSelectionInitialized(result.entries.map { it.id }.toSet())
                 adapter.submit(items, selectedPoiIds)
                 val emptyMessageRes = when (result.state) {
                     PoiLibrary.LoadState.MISSING_FILE -> R.string.no_poi_file_found
@@ -104,8 +112,14 @@ class PoiActivity : AppCompatActivity() {
                 binding.loadingLabel.visibility = if (emptyMessageRes == null) View.GONE else View.VISIBLE
                 binding.poiRecyclerView.visibility = if (emptyMessageRes == null) View.VISIBLE else View.GONE
                 emptyMessageRes?.let(binding.loadingLabel::setText)
+            } catch (_: CancellationException) {
+                throw
+            } catch (_: Exception) {
+                binding.loadingLabel.setText(R.string.no_poi_file_found)
+                binding.loadingLabel.visibility = View.VISIBLE
+                binding.poiRecyclerView.visibility = View.GONE
             }
-        }.start()
+        }
     }
 
     private fun formatSubtitle(poi: PoiEntry): String {

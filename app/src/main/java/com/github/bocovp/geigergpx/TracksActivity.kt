@@ -16,11 +16,17 @@ import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.FileProvider
 import androidx.core.view.MenuCompat
 import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.bocovp.geigergpx.databinding.ActivityTracksBinding
 import java.io.File
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class TracksActivity : AppCompatActivity() {
 
@@ -41,6 +47,7 @@ class TracksActivity : AppCompatActivity() {
     private var refreshPollScheduled = false
     private var pendingManualRefresh = false
     private var loadingStateActive = false
+    private var refreshJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -172,36 +179,54 @@ class TracksActivity : AppCompatActivity() {
             return
         }
 
-        Thread {
-            val points = viewModel.activeTrackPoints.value.orEmpty()
-            val includeCurrentTrack = currentFolderName == null && viewModel.isTracking.value == true
-            val items = TrackCatalog.loadTrackListItems(
-                context = this,
-                activePoints = points,
-                includeCurrentTrack = includeCurrentTrack,
-                includeMapTracks = false,
-                browseFolderName = currentFolderName,
-                includeFolderEntries = currentFolderName == null
-            )
-            val selectedTracks = selectedTrackIds().ifEmpty {
-                if (currentFolderName == null) setOf(TrackCatalog.currentTrackId()) else emptySet()
-            }
-            val selectedFolders = selectedFolderIds()
-            runOnUiThread {
+        refreshJob?.cancel()
+        refreshJob = lifecycleScope.launch {
+            try {
+                val points = viewModel.activeTrackPoints.value.orEmpty()
+                val includeCurrentTrack = currentFolderName == null && viewModel.isTracking.value == true
+                val (items, selectedTracks, selectedFolders) = withContext(Dispatchers.IO) {
+                    val loadedItems = TrackCatalog.loadTrackListItems(
+                        context = this@TracksActivity,
+                        activePoints = points,
+                        includeCurrentTrack = includeCurrentTrack,
+                        includeMapTracks = false,
+                        browseFolderName = currentFolderName,
+                        includeFolderEntries = currentFolderName == null
+                    )
+                    val loadedSelectedTracks = selectedTrackIds().ifEmpty {
+                        if (currentFolderName == null) setOf(TrackCatalog.currentTrackId()) else emptySet()
+                    }
+                    val loadedSelectedFolders = selectedFolderIds()
+                    Triple(loadedItems, loadedSelectedTracks, loadedSelectedFolders)
+                }
+
                 hasLoadedTrackList = true
                 adapter.submit(items, selectedTracks, selectedFolders)
                 val hasTracks = items.isNotEmpty()
-                
-                loadingStateActive = false
+
                 // Only hide loading UI if a rebuild isn't currently happening
                 if (!TrackCatalog.isTrackCacheRebuildInProgress()) {
                     updateLoadingUi(null)
                 }
-                
+
                 binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
-                binding.emptyStateLabel.visibility = if (!hasTracks && !loadingStateActive) View.VISIBLE else View.GONE
+                binding.emptyStateLabel.visibility =
+                    if (!hasTracks && !TrackCatalog.isTrackCacheRebuildInProgress()) View.VISIBLE else View.GONE
+            } catch (_: CancellationException) {
+                throw
+            } catch (_: Exception) {
+                val rebuildActive = TrackCatalog.isTrackCacheRebuildInProgress()
+                if (!rebuildActive) {
+                    updateLoadingUi(null)
+                }
+                binding.tracksRecyclerView.visibility = View.GONE
+                binding.emptyStateLabel.visibility = if (rebuildActive) View.GONE else View.VISIBLE
+            } finally {
+                if (refreshJob == this.coroutineContext[Job]) {
+                    loadingStateActive = false
+                }
             }
-        }.start()
+        }
     }
 
     private fun scheduleRefreshPoll() {
