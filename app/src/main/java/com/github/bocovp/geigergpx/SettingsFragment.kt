@@ -8,12 +8,16 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
 import androidx.preference.SwitchPreferenceCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.text.format
@@ -147,9 +151,14 @@ class SettingsFragment : PreferenceFragmentCompat() {
             chooseFolder.summary = "Not set (uses app folder)"
             return
         }
-        val uri = android.net.Uri.parse(uriStr)
-        val doc = DocumentFile.fromTreeUri(requireContext(), uri)
-        chooseFolder.summary = doc?.name ?: uriStr
+        launchUi {
+            val summary = withContext(Dispatchers.IO) {
+                val uri = android.net.Uri.parse(uriStr)
+                val doc = DocumentFile.fromTreeUri(requireContext(), uri)
+                doc?.name ?: uriStr
+            }
+            chooseFolder.summary = summary
+        }
     }
 
     private fun updateAlertDoseRateSummary() {
@@ -225,9 +234,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun startCalibrationDialog(thresholdPref: LongPressPreference, bluetooth: Boolean) {
-        val activity = requireActivity()
-
-        val dialog = AlertDialog.Builder(activity)
+        val dialog = AlertDialog.Builder(requireActivity())
             .setTitle(if (bluetooth) "Calibration (bluetooth)" else "Calibration")
             .setMessage("Estimating signal level...")
             .setNegativeButton("Cancel") { d, _ ->
@@ -246,21 +253,21 @@ class SettingsFragment : PreferenceFragmentCompat() {
             thresholdPreferenceKey = thresholdKey(bluetooth),
             fallbackThreshold = defaultThreshold(bluetooth),
             onAudioStatus = { status, errorCode ->
-                activity.runOnUiThread {
+                launchUi {
                     if (errorCode != AudioInputManager.AUDIO_STATUS_WORKING) {
                         dialog.setMessage(status)
                     }
                 }
             },
             onProgress = { phase, current, totalCount ->
-                activity.runOnUiThread {
+                launchUi {
                     if (phase == 2) {
                         dialog.setMessage("Calibrating... $current/$totalCount")
                     }
                 }
             },
             onFinished = { _ ->
-                activity.runOnUiThread {
+                launchUi {
                     calibrationDetector = null
                     dialog.dismiss()
                     thresholdPref.summary = buildThresholdSummary(bluetooth)
@@ -273,6 +280,15 @@ class SettingsFragment : PreferenceFragmentCompat() {
             }
         )
         calibrationDetector?.start()
+    }
+
+    private fun launchUi(block: suspend () -> Unit) {
+        val owner = viewLifecycleOwnerLiveData.value
+        if (owner != null) {
+            owner.lifecycleScope.launch { block() }
+        } else {
+            lifecycleScope.launch { block() }
+        }
     }
 
     private fun showManualThresholdDialog(thresholdPref: LongPressPreference, bluetooth: Boolean) {
