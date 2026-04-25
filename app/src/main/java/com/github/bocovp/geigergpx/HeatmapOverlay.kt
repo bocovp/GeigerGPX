@@ -157,7 +157,9 @@ class HeatmapOverlay(
             val squareDoseRate = squareCps * doseCoefficient
             val squareAlpha = min(255, 255 * totalCounts / 20)
             val colorInt = DoseColorScale.colorForDose(squareDoseRate, minDose, maxDose)
-            pixels[i] = Color.argb(squareAlpha, Color.red(colorInt), Color.green(colorInt), Color.blue(colorInt))
+            // Clearer (older) version:
+            // pixels[i] = Color.argb(squareAlpha, Color.red(colorInt), Color.green(colorInt), Color.blue(colorInt))
+            pixels[i] = (squareAlpha shl 24) or (colorInt and 0x00FFFFFF)
         }
 
         val raster = RasterResult(
