@@ -62,10 +62,10 @@ class TrackingService : Service() {
             scaleSeconds: Double
         ): Triple<DoubleArray, DoubleArray, DoubleArray>? {
             val service = runningInstance ?: return null
-            synchronized(service.kdeLock) {
-                val estimator = service.kde ?: return null
-                return estimator.getConfidenceIntervals(t2s, scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble()))
-            }
+            val snapshot = synchronized(service.kdeLock) {
+                service.kde?.copy()
+            } ?: return null
+            return snapshot.getConfidenceIntervals(t2s, scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble()))
         }
     }
 

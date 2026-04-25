@@ -495,26 +495,33 @@ class TimePlotActivity : AppCompatActivity() {
             val step = (lastTimestamp - firstTimestamp) / (sampleCount - 1).toDouble()
             DoubleArray(sampleCount) { idx -> firstTimestamp + idx * step }
         }
-        val ci = getConfidenceIntervals(ts2)
-        if (ci == null) {
-            binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
-            showPlotMessage(R.string.time_plot_no_track_data)
-            return
-        }
-        val (mean, low, high) = ci
-        val relativeSeconds = DoubleArray(ts2.size) { idx -> ts2[idx] - firstTimestamp }
-        binding.timePlotView.setKernelSeries(
-            relativeSeconds = relativeSeconds,
-            mean = mean,
-            low = low,
-            high = high,
-            cpsToUSvh = cpsToUSvhCoeff,
-            recalculateVerticalAxis = recalculateVerticalAxis
-        )
-        if (relativeSeconds.isEmpty()) {
-            showPlotMessage(R.string.time_plot_no_track_data)
-        } else {
-            showPlotMessage(null)
+
+        showLoading(true)
+        lifecycleScope.launch {
+            val ci = withContext(Dispatchers.Default) {
+                getConfidenceIntervals(ts2)
+            }
+            showLoading(false)
+            if (ci == null) {
+                binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
+                showPlotMessage(R.string.time_plot_no_track_data)
+                return@launch
+            }
+            val (mean, low, high) = ci
+            val relativeSeconds = DoubleArray(ts2.size) { idx -> ts2[idx] - firstTimestamp }
+            binding.timePlotView.setKernelSeries(
+                relativeSeconds = relativeSeconds,
+                mean = mean,
+                low = low,
+                high = high,
+                cpsToUSvh = cpsToUSvhCoeff,
+                recalculateVerticalAxis = recalculateVerticalAxis
+            )
+            if (relativeSeconds.isEmpty()) {
+                showPlotMessage(R.string.time_plot_no_track_data)
+            } else {
+                showPlotMessage(null)
+            }
         }
     }
 
