@@ -528,31 +528,36 @@ class MainActivity : AppCompatActivity() {
                 val (latitude, longitude) = TrackingService.consumeMeasurementAverageCoordinates()
 
                 lifecycleScope.launch {
-                    val saveResult = withContext(Dispatchers.IO) {
-                        PoiLibrary.addPoiWithResult(
-                            context = this@MainActivity,
-                            description = description,
-                            timestampMillis = System.currentTimeMillis(),
-                            latitude = latitude,
-                            longitude = longitude,
-                            doseRate = doseRate,
-                            counts = counts,
-                            seconds = seconds
-                        )
-                    }
-                    if (saveResult.success) {
-                        Toast.makeText(this@MainActivity, "POI saved", Toast.LENGTH_SHORT).show()
-                        saveResult.warning?.let { warning ->
-                            Toast.makeText(this@MainActivity, warning, Toast.LENGTH_LONG).show()
+                    try {
+                        val saveResult = withContext(Dispatchers.IO) {
+                            PoiLibrary.addPoiWithResult(
+                                context = this@MainActivity,
+                                description = description,
+                                timestampMillis = System.currentTimeMillis(),
+                                latitude = latitude,
+                                longitude = longitude,
+                                doseRate = doseRate,
+                                counts = counts,
+                                seconds = seconds
+                            )
                         }
-                    } else {
-                        val message = saveResult.error?.let { "Unable to save POI: $it" } ?: "Unable to save POI"
-                        Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+                        if (saveResult.success) {
+                            Toast.makeText(this@MainActivity, "POI saved", Toast.LENGTH_SHORT).show()
+                            saveResult.warning?.let { warning ->
+                                Toast.makeText(this@MainActivity, warning, Toast.LENGTH_LONG).show()
+                            }
+                        } else {
+                            val message = saveResult.error?.let { "Unable to save POI: $it" } ?: "Unable to save POI"
+                            Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error saving POI", e)
+                    } finally {
+                        if (isMeasurementModeEnabled) {
+                            dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE)
+                        }
                     }
 
-                    if (isMeasurementModeEnabled) {
-                        dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE)
-                    }
                 }
             }
             .setNegativeButton("Cancel", null)
