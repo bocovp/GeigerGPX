@@ -211,7 +211,9 @@ class TracksActivity : AppCompatActivity() {
                 binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
                 binding.emptyStateLabel.visibility = if (hasTracks) View.GONE else View.VISIBLE
             } finally {
-                loadingStateActive = false
+                if (refreshJob == this.coroutineContext[Job]) {
+                    loadingStateActive = false
+                }
             }
         }
     }

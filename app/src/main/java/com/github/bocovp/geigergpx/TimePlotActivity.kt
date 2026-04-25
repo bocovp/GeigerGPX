@@ -203,10 +203,8 @@ class TimePlotActivity : AppCompatActivity() {
         isRefreshing = true
         showLoading(true)
         lifecycleScope.launch {
-            val result = runCatching {
-                withContext(Dispatchers.IO) { loadPlotCandidates() }
-            }
-            result.onSuccess { candidates ->
+            try {
+                val candidates = withContext(Dispatchers.IO) { loadPlotCandidates() }
                 plotCandidates = candidates
                 val resolvedTrackId = resolveSelectedTrackId(candidates, preferredTrackId)
                 updateTrackSelectorUi()
@@ -225,7 +223,9 @@ class TimePlotActivity : AppCompatActivity() {
                     showLoading(false)
                     isRefreshing = false
                 }
-            }.onFailure {
+            } catch (_: CancellationException) {
+                throw
+            } catch (_: Throwable) {
                 showPlotMessage(R.string.time_plot_no_track_data)
                 isRefreshing = false
             }
@@ -302,9 +302,11 @@ class TimePlotActivity : AppCompatActivity() {
                     showPlotMessage(R.string.time_plot_no_track_data)
                 }
             } finally {
-                isRefreshing = false
-                if (shouldRefreshTrackCandidates) {
-                    refreshTrackCandidatesAndPlotAsync()
+                if (plotLoadJob == this.coroutineContext[Job]) {
+                    isRefreshing = false
+                    if (shouldRefreshTrackCandidates) {
+                        refreshTrackCandidatesAndPlotAsync()
+                    }
                 }
             }
         }
