@@ -77,12 +77,7 @@ class TrackMapRenderer(
         var scaleChanged = false
         if (!isHeatmapMode) {
             currentMax = computeTrackAndPoiColorbarMax(tracks, pois, useKernelEstimator)
-            scaleChanged = currentMax != lastMaxDose
-            lastMaxDose = currentMax
-            if (scaleChanged) {
-                tvHalf?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax / 2)
-                tvMax?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax)
-            }
+            scaleChanged = updateColorbarScale(currentMax)
         }
         var latestPoint: GeoPoint? = null
         var shouldInvalidate = false
@@ -138,12 +133,7 @@ class TrackMapRenderer(
                 currentMax = binnedMax
             }
 
-            scaleChanged = currentMax != lastMaxDose
-            lastMaxDose = currentMax
-            if (scaleChanged) {
-                tvHalf?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax / 2)
-                tvMax?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax)
-            }
+            scaleChanged = updateColorbarScale(currentMax)
 
             overlay.minDose = currentMin
             overlay.maxDose = currentMax
@@ -260,6 +250,16 @@ class TrackMapRenderer(
             currentMax = DoseColorScale.DEFAULT_MAX_DOSE
         }
         return currentMax
+    }
+
+    private fun updateColorbarScale(currentMax: Double): Boolean {
+        val scaleChanged = currentMax != lastMaxDose
+        lastMaxDose = currentMax
+        if (scaleChanged) {
+            tvHalf?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax / 2)
+            tvMax?.text = String.format(java.util.Locale.US, "%.2f µSv/h", currentMax)
+        }
+        return scaleChanged
     }
 
     fun autoZoomToSelection(animate: Boolean): Boolean {
