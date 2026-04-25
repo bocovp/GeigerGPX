@@ -41,6 +41,7 @@ class TimePlotActivity : AppCompatActivity() {
     private var selectedTrackIdForPlot: String? = null
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var plotLoadJob: Job? = null
+    private var kdeRenderJob: Job? = null
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
     private var isRefreshing = false
 
@@ -212,6 +213,7 @@ class TimePlotActivity : AppCompatActivity() {
                 updateTrackSelectorUi()
                 if (resolvedTrackId == null) {
                     plotLoadJob?.cancel()
+                    kdeRenderJob?.cancel()
                     selectedTrackIdForPlot = null
                     currentPoints = emptyList()
                     updateTrackTitle(null)
@@ -464,11 +466,9 @@ class TimePlotActivity : AppCompatActivity() {
         scaleSeconds: Double,
         recalculateVerticalAxis: Boolean
     ) {
+        // activeKdeTimestampBounds() is a cheap two-double read under a lock — fine on Main.
         val bounds = TrackingService.activeKdeTimestampBounds()
-        renderKernelEstimatorPlot(
-            bounds = bounds,
-            recalculateVerticalAxis = recalculateVerticalAxis
-        ) { t2s ->
+        renderKernelEstimatorPlot(bounds, recalculateVerticalAxis) { t2s ->
             TrackingService.activeKdeConfidenceIntervals(
                 t2s = t2s,
                 scaleSeconds = scaleSeconds
@@ -482,26 +482,24 @@ class TimePlotActivity : AppCompatActivity() {
         getConfidenceIntervals: (DoubleArray) -> Triple<DoubleArray, DoubleArray, DoubleArray>?
     ) {
         if (bounds == null || bounds.second < bounds.first) {
+            kdeRenderJob?.cancel()
             binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
             showPlotMessage(R.string.time_plot_no_track_data)
             return
         }
         val firstTimestamp = bounds.first
         val lastTimestamp = bounds.second
-        val sampleCount = KDE_PLOT_SAMPLE_COUNT
         val ts2 = if (kotlin.math.abs(lastTimestamp - firstTimestamp) < 1e-9) {
             doubleArrayOf(firstTimestamp)
         } else {
-            val step = (lastTimestamp - firstTimestamp) / (sampleCount - 1).toDouble()
-            DoubleArray(sampleCount) { idx -> firstTimestamp + idx * step }
+            val step = (lastTimestamp - firstTimestamp) / (KDE_PLOT_SAMPLE_COUNT - 1).toDouble()
+            DoubleArray(KDE_PLOT_SAMPLE_COUNT) { idx -> firstTimestamp + idx * step }
         }
 
-        showLoading(true)
-        lifecycleScope.launch {
-            val ci = withContext(Dispatchers.Default) {
-                getConfidenceIntervals(ts2)
-            }
-            showLoading(false)
+        kdeRenderJob?.cancel()
+        kdeRenderJob = lifecycleScope.launch {
+            showLoading(true)
+            val ci = withContext(Dispatchers.Default) { getConfidenceIntervals(ts2) }
             if (ci == null) {
                 binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
                 showPlotMessage(R.string.time_plot_no_track_data)
@@ -517,11 +515,7 @@ class TimePlotActivity : AppCompatActivity() {
                 cpsToUSvh = cpsToUSvhCoeff,
                 recalculateVerticalAxis = recalculateVerticalAxis
             )
-            if (relativeSeconds.isEmpty()) {
-                showPlotMessage(R.string.time_plot_no_track_data)
-            } else {
-                showPlotMessage(null)
-            }
+            showPlotMessage(if (relativeSeconds.isEmpty()) R.string.time_plot_no_track_data else null)
         }
     }
 
@@ -536,25 +530,35 @@ class TimePlotActivity : AppCompatActivity() {
             return
         }
 
-        val estimator = KernelDensityEstimator(cpsToUSvhCoeff)
-        var accumulatedSeconds = 0.0
+        // Bounds are cheap to derive on Main: the estimator always accumulates from 0.0,
+        // so bounds = (0.0, totalDuration). This is O(N) additions with no sorting,
+        // sub-millisecond even for very long tracks.
+        var totalDuration = 0.0
+        var hasData = false
         for (p in points) {
-            val durationSeconds = p.seconds.coerceAtLeast(0.0)
-            estimator.addSampleInterval(
-                intervalStartSeconds = accumulatedSeconds,
-                durationSeconds = durationSeconds,
-                counts = p.counts.coerceAtLeast(0)
-            )
-            accumulatedSeconds += durationSeconds
+            totalDuration += p.seconds.coerceAtLeast(0.0)
+            if (p.counts > 0) hasData = true
         }
-        renderKernelEstimatorPlot(
-            bounds = estimator.timestampBounds(),
-            recalculateVerticalAxis = recalculateVerticalAxis
-        ) { t2s ->
-            estimator.getConfidenceIntervals(
-                t2s = t2s,
-                scale = scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble())
-            )
+        val bounds = if (hasData && totalDuration > 0.0) Pair(0.0, totalDuration) else null
+
+        // Capture on Main before the lambda crosses to Dispatchers.Default.
+        val coeff = cpsToUSvhCoeff
+        val minScale = scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble())
+
+        renderKernelEstimatorPlot(bounds, recalculateVerticalAxis) { t2s ->
+            // Estimator construction (O(N) bubble-back insertions) runs on Dispatchers.Default.
+            val estimator = KernelDensityEstimator(coeff)
+            var accumulatedSeconds = 0.0
+            for (p in points) {
+                val durationSeconds = p.seconds.coerceAtLeast(0.0)
+                estimator.addSampleInterval(
+                    intervalStartSeconds = accumulatedSeconds,
+                    durationSeconds = durationSeconds,
+                    counts = p.counts.coerceAtLeast(0)
+                )
+                accumulatedSeconds += durationSeconds
+            }
+            estimator.getConfidenceIntervals(t2s = t2s, scale = minScale)
         }
     }
 

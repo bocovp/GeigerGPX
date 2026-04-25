@@ -52,9 +52,7 @@ class TrackingService : Service() {
 
         fun activeKdeTimestampBounds(): Pair<Double, Double>? {
             val service = runningInstance ?: return null
-            synchronized(service.kdeLock) {
-                return service.kde?.timestampBounds()
-            }
+            return service.kde?.timestampBounds()
         }
 
         fun activeKdeConfidenceIntervals(
@@ -62,9 +60,7 @@ class TrackingService : Service() {
             scaleSeconds: Double
         ): Triple<DoubleArray, DoubleArray, DoubleArray>? {
             val service = runningInstance ?: return null
-            val snapshot = synchronized(service.kdeLock) {
-                service.kde?.copy()
-            } ?: return null
+            val snapshot = service.kde?.copy() ?: return null
             return snapshot.getConfidenceIntervals(t2s, scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble()))
         }
     }
@@ -96,8 +92,7 @@ class TrackingService : Service() {
     private var toneGenerator: ToneGenerator? = null
     private var lastAlertAtMillis: Long = 0L
     private val doseRateMeasurement = DoseRateMeasurement()
-    private var kde: KernelDensityEstimator? = null
-    private val kdeLock = Any()
+    @Volatile private var kde: KernelDensityEstimator? = null
 
     private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     private val notificationManager by lazy { TrackingNotificationManager(this) }
@@ -267,10 +262,8 @@ class TrackingService : Service() {
         trackWriter.start(now, currentTotal)
         gpsManager.reset()
 
-        synchronized(kdeLock) {
-            kde = KernelDensityEstimator(cpsToUsvhCoefficient)
-            kde?.clear()
-        }
+        kde = KernelDensityEstimator(cpsToUsvhCoefficient)
+        kde?.clear()
 
         if (isMonitoring) {
             // Already monitoring: GPS and audio are already running.
@@ -489,9 +482,7 @@ class TrackingService : Service() {
                     alertEvent?.let { dispatchDoseRateAlert(it) }
 
                     if (trackWriter.isTracking()) {
-                        synchronized(kdeLock) {
-                            kde?.addPoint(System.currentTimeMillis() / 1000.0, count)
-                        }
+                        kde?.addPoint(System.currentTimeMillis() / 1000.0, count)
                     }
                 }
             },
