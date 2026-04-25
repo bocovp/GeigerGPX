@@ -89,13 +89,16 @@ class PoiActivity : AppCompatActivity() {
         binding.poiRecyclerView.visibility = View.GONE
 
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { PoiLibrary.loadPoiLibrary(this@PoiActivity) }
-            val items = result.entries.map { poi ->
-                PoiUiItem(
-                    poi = poi,
-                    title = poi.description,
-                    subtitle = formatSubtitle(poi)
-                )
+            val (result, items) = withContext(Dispatchers.IO) {
+                val loadedResult = PoiLibrary.loadPoiLibrary(this@PoiActivity)
+                val mappedItems = loadedResult.entries.map { poi ->
+                    PoiUiItem(
+                        poi = poi,
+                        title = poi.description,
+                        subtitle = formatSubtitle(poi)
+                    )
+                }
+                loadedResult to mappedItems
             }
             val selectedPoiIds = ensurePoiSelectionInitialized(result.entries.map { it.id }.toSet())
             adapter.submit(items, selectedPoiIds)

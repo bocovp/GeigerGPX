@@ -8,7 +8,6 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.documentfile.provider.DocumentFile
-import androidx.lifecycle.lifecycleScope
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
@@ -154,7 +153,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
         launchUi {
             val summary = withContext(Dispatchers.IO) {
                 val uri = android.net.Uri.parse(uriStr)
-                val doc = DocumentFile.fromTreeUri(requireContext(), uri)
+                val context = context ?: return@withContext uriStr
+                val doc = DocumentFile.fromTreeUri(context, uri)
                 doc?.name ?: uriStr
             }
             chooseFolder.summary = summary
@@ -283,12 +283,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun launchUi(block: suspend () -> Unit) {
-        val owner = viewLifecycleOwnerLiveData.value
-        if (owner != null) {
-            owner.lifecycleScope.launch { block() }
-        } else {
-            lifecycleScope.launch { block() }
-        }
+        viewLifecycleOwnerLiveData.value?.lifecycleScope?.launch { block() }
     }
 
     private fun showManualThresholdDialog(thresholdPref: LongPressPreference, bluetooth: Boolean) {
