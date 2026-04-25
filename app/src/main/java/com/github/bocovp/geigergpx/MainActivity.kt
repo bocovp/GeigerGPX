@@ -247,7 +247,7 @@ class MainActivity : AppCompatActivity() {
             }
             if (restoredName != null && !isFinishing && !isDestroyed) {
                 Toast.makeText(
-                    this@MainActivity,
+                    applicationContext,
                     "Backup file was restored and saved as $restoredName",
                     Toast.LENGTH_SHORT
                 ).show()

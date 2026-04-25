@@ -288,7 +288,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun launchUi(block: suspend () -> Unit) {
-        lifecycleScope.launch { block() }
+        viewLifecycleOwner.lifecycleScope.launch { block() }
     }
 
     private fun showManualThresholdDialog(thresholdPref: LongPressPreference, bluetooth: Boolean) {
@@ -326,6 +326,12 @@ class SettingsFragment : PreferenceFragmentCompat() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    override fun onDestroyView() {
+        calibrationDetector?.stop()
+        calibrationDetector = null
+        super.onDestroyView()
     }
 
     companion object {

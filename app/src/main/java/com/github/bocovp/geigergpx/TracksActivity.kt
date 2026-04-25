@@ -212,8 +212,8 @@ class TracksActivity : AppCompatActivity() {
                 binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
                 binding.emptyStateLabel.visibility =
                     if (!hasTracks && !TrackCatalog.isTrackCacheRebuildInProgress()) View.VISIBLE else View.GONE
-            } catch (_: CancellationException) {
-                throw
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 val rebuildActive = TrackCatalog.isTrackCacheRebuildInProgress()
                 if (!rebuildActive) {

@@ -112,8 +112,8 @@ class PoiActivity : AppCompatActivity() {
                 binding.loadingLabel.visibility = if (emptyMessageRes == null) View.GONE else View.VISIBLE
                 binding.poiRecyclerView.visibility = if (emptyMessageRes == null) View.VISIBLE else View.GONE
                 emptyMessageRes?.let(binding.loadingLabel::setText)
-            } catch (_: CancellationException) {
-                throw
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 binding.loadingLabel.setText(R.string.no_poi_file_found)
                 binding.loadingLabel.visibility = View.VISIBLE

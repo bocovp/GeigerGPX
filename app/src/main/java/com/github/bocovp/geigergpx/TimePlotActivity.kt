@@ -42,7 +42,7 @@ class TimePlotActivity : AppCompatActivity() {
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var plotLoadJob: Job? = null
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
-    @Volatile private var isRefreshing = false
+    private var isRefreshing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -204,7 +204,9 @@ class TimePlotActivity : AppCompatActivity() {
         showLoading(true)
         lifecycleScope.launch {
             try {
-                val candidates = withContext(Dispatchers.IO) { loadPlotCandidates() }
+                val activePoints = viewModel.activeTrackPoints.value.orEmpty()
+                val isTracking = viewModel.isTracking.value == true
+                val candidates = withContext(Dispatchers.IO) { loadPlotCandidates(activePoints, isTracking) }
                 plotCandidates = candidates
                 val resolvedTrackId = resolveSelectedTrackId(candidates, preferredTrackId)
                 updateTrackSelectorUi()
@@ -223,8 +225,8 @@ class TimePlotActivity : AppCompatActivity() {
                     showLoading(false)
                     isRefreshing = false
                 }
-            } catch (_: CancellationException) {
-                throw
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Throwable) {
                 showPlotMessage(R.string.time_plot_no_track_data)
                 isRefreshing = false
@@ -232,9 +234,8 @@ class TimePlotActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadPlotCandidates(): List<PlotCandidate> {
-        val activePoints = viewModel.activeTrackPoints.value.orEmpty()
-        val includeCurrentTrack = viewModel.isTracking.value == true
+    private fun loadPlotCandidates(activePoints: List<TrackPoint>, isTracking: Boolean): List<PlotCandidate> {
+        val includeCurrentTrack = isTracking
         val selectedTrackIds = TrackSelectionPrefs.selectedTrackIds(this)
         val selectedFolders = TrackSelectionPrefs.selectedFolderIds(this)
         val mapTrackIds = selectedTrackIds.ifEmpty { setOf(TrackCatalog.currentTrackId()) }
