@@ -17,6 +17,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withContext
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 class TrackingService : Service() {
@@ -80,6 +81,7 @@ class TrackingService : Service() {
     private var backupJob: kotlinx.coroutines.Job? = null
     private var gpsFallbackJob: kotlinx.coroutines.Job? = null
     private var uiTickJob: kotlinx.coroutines.Job? = null
+    @Volatile private var stopInProgress = false
 
     private lateinit var prefs: SharedPreferences
     @Volatile private var maxSpeedKmh: Double = 30.0
@@ -346,7 +348,8 @@ class TrackingService : Service() {
     }
 
     private fun stopTracking() {
-        if (!trackWriter.isTracking()) return
+        if (!trackWriter.isTracking() || stopInProgress) return
+        stopInProgress = true
 
         val finalTrackDurationSeconds = trackWriter.elapsedSeconds(System.currentTimeMillis())
         val finalDistance = trackWriter.totalDistance
@@ -356,32 +359,42 @@ class TrackingService : Service() {
         val copy = trackWriter.activeTrackPointsSnapshot()
         val finalPointCount = copy.size
         repo.setActiveTrackPoints(copy)
-        if (copy.isNotEmpty()) {
-            val saveResult = GpxWriter.saveTrackWithResult(this, copy)
-            if (saveResult != null) {
-                // Final save succeeded: remove any leftover backup file
-                GpxWriter.deleteBackupIfExists(this)
-                sendBroadcast(
-                    Intent(ACTION_TRACK_SAVED).putExtra(EXTRA_TRACK_ID, saveResult.sourceId)
-                )
-                notificationManager.showSaveToast(saveResult.displayPath)
-                saveResult.warning?.let { warning ->
-                    notificationManager.showSaveToast(warning)
+        serviceScope.launch {
+            try {
+                if (copy.isNotEmpty()) {
+                    val saveResult = withContext(Dispatchers.IO) {
+                        GpxWriter.saveTrackWithResult(this@TrackingService, copy)
+                    }
+                    if (saveResult != null) {
+                        // Final save succeeded: remove any leftover backup file
+                        withContext(Dispatchers.IO) {
+                            GpxWriter.deleteBackupIfExists(this@TrackingService)
+                        }
+                        sendBroadcast(
+                            Intent(ACTION_TRACK_SAVED).putExtra(EXTRA_TRACK_ID, saveResult.sourceId)
+                        )
+                        notificationManager.showSaveToast(saveResult.displayPath)
+                        saveResult.warning?.let { warning ->
+                            notificationManager.showSaveToast(warning)
+                        }
+                    } else {
+                        notificationManager.showSaveToast("File not saved (primary and fallback attempts failed)")
+                    }
+                } else {
+                    notificationManager.showSaveToast("Nothing to save")
                 }
-            } else {
-                notificationManager.showSaveToast("File not saved (primary and fallback attempts failed)")
+                repo.finalizeTrackCounts()
+                stopTrackingSession(
+                    TrackStopStats(
+                        trackDurationSeconds = finalTrackDurationSeconds,
+                        distance = finalDistance,
+                        points = finalPointCount
+                    )
+                )
+            } finally {
+                stopInProgress = false
             }
-        } else {
-            notificationManager.showSaveToast("Nothing to save")
         }
-        repo.finalizeTrackCounts()
-        stopTrackingSession(
-            TrackStopStats(
-                trackDurationSeconds = finalTrackDurationSeconds,
-                distance = finalDistance,
-                points = finalPointCount
-            )
-        )
     }
 
     // -------------------------------------------------------------------------
