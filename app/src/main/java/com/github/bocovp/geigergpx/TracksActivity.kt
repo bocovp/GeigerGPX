@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.bocovp.geigergpx.databinding.ActivityTracksBinding
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -45,6 +46,7 @@ class TracksActivity : AppCompatActivity() {
     private var refreshPollScheduled = false
     private var pendingManualRefresh = false
     private var loadingStateActive = false
+    private var refreshJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -176,37 +178,41 @@ class TracksActivity : AppCompatActivity() {
             return
         }
 
-        lifecycleScope.launch {
-            val points = viewModel.activeTrackPoints.value.orEmpty()
-            val includeCurrentTrack = currentFolderName == null && viewModel.isTracking.value == true
-            val (items, selectedTracks, selectedFolders) = withContext(Dispatchers.IO) {
-                val loadedItems = TrackCatalog.loadTrackListItems(
-                    context = this@TracksActivity,
-                    activePoints = points,
-                    includeCurrentTrack = includeCurrentTrack,
-                    includeMapTracks = false,
-                    browseFolderName = currentFolderName,
-                    includeFolderEntries = currentFolderName == null
-                )
-                val loadedSelectedTracks = selectedTrackIds().ifEmpty {
-                    if (currentFolderName == null) setOf(TrackCatalog.currentTrackId()) else emptySet()
+        refreshJob?.cancel()
+        refreshJob = lifecycleScope.launch {
+            try {
+                val points = viewModel.activeTrackPoints.value.orEmpty()
+                val includeCurrentTrack = currentFolderName == null && viewModel.isTracking.value == true
+                val (items, selectedTracks, selectedFolders) = withContext(Dispatchers.IO) {
+                    val loadedItems = TrackCatalog.loadTrackListItems(
+                        context = this@TracksActivity,
+                        activePoints = points,
+                        includeCurrentTrack = includeCurrentTrack,
+                        includeMapTracks = false,
+                        browseFolderName = currentFolderName,
+                        includeFolderEntries = currentFolderName == null
+                    )
+                    val loadedSelectedTracks = selectedTrackIds().ifEmpty {
+                        if (currentFolderName == null) setOf(TrackCatalog.currentTrackId()) else emptySet()
+                    }
+                    val loadedSelectedFolders = selectedFolderIds()
+                    Triple(loadedItems, loadedSelectedTracks, loadedSelectedFolders)
                 }
-                val loadedSelectedFolders = selectedFolderIds()
-                Triple(loadedItems, loadedSelectedTracks, loadedSelectedFolders)
+
+                hasLoadedTrackList = true
+                adapter.submit(items, selectedTracks, selectedFolders)
+                val hasTracks = items.isNotEmpty()
+
+                // Only hide loading UI if a rebuild isn't currently happening
+                if (!TrackCatalog.isTrackCacheRebuildInProgress()) {
+                    updateLoadingUi(null)
+                }
+
+                binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
+                binding.emptyStateLabel.visibility = if (hasTracks) View.GONE else View.VISIBLE
+            } finally {
+                loadingStateActive = false
             }
-
-            hasLoadedTrackList = true
-            adapter.submit(items, selectedTracks, selectedFolders)
-            val hasTracks = items.isNotEmpty()
-
-            loadingStateActive = false
-            // Only hide loading UI if a rebuild isn't currently happening
-            if (!TrackCatalog.isTrackCacheRebuildInProgress()) {
-                updateLoadingUi(null)
-            }
-
-            binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
-            binding.emptyStateLabel.visibility = if (!hasTracks && !loadingStateActive) View.VISIBLE else View.GONE
         }
     }
 

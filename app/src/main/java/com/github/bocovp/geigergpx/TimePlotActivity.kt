@@ -13,6 +13,7 @@ import com.github.bocovp.geigergpx.databinding.ActivityTimePlotBinding
 import com.github.bocovp.geigergpx.R
 import com.google.android.material.slider.Slider
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -272,29 +273,39 @@ class TimePlotActivity : AppCompatActivity() {
         selectedTrackIdForPlot = normalizedTrackId
         plotLoadJob?.cancel()
         plotLoadJob = lifecycleScope.launch {
-            val result = runCatching {
-                withContext(Dispatchers.IO) {
-                    TrackCatalog.loadTrackSamplesById(this@TimePlotActivity, normalizedTrackId)
+            var shouldRefreshTrackCandidates = false
+            try {
+                val result = runCatching {
+                    withContext(Dispatchers.IO) {
+                        TrackCatalog.loadTrackSamplesById(this@TimePlotActivity, normalizedTrackId)
+                    }
                 }
-            }
+                result.onFailure { error ->
+                    if (error is CancellationException) {
+                        throw error
+                    }
+                }
 
-            if (selectedTrackIdForPlot != normalizedTrackId) {
-                return@launch
-            }
+                if (selectedTrackIdForPlot != normalizedTrackId) {
+                    return@launch
+                }
 
-            result.onSuccess { selected ->
-                if (selected != null) {
-                    applyLoadedTrack(normalizedTrackId, selected)
-                    isRefreshing = false
-                } else {
+                result.onSuccess { selected ->
+                    if (selected != null) {
+                        applyLoadedTrack(normalizedTrackId, selected)
+                    } else {
+                        failedTrackIdsForPlot.add(normalizedTrackId)
+                        shouldRefreshTrackCandidates = true
+                    }
+                }.onFailure {
                     failedTrackIdsForPlot.add(normalizedTrackId)
-                    isRefreshing = false
+                    showPlotMessage(R.string.time_plot_no_track_data)
+                }
+            } finally {
+                isRefreshing = false
+                if (shouldRefreshTrackCandidates) {
                     refreshTrackCandidatesAndPlotAsync()
                 }
-            }.onFailure {
-                failedTrackIdsForPlot.add(normalizedTrackId)
-                showPlotMessage(R.string.time_plot_no_track_data)
-                isRefreshing = false
             }
         }
     }
