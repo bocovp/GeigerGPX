@@ -180,13 +180,15 @@ class TrackMapRenderer(
                 }
             }
 
-            val overlay = poiOverlay ?: PoiOverlay(mapView.context).also {
+            val existingPoiOverlay = poiOverlay
+            val overlay = existingPoiOverlay ?: PoiOverlay(mapView.context).also {
                 mapView.overlays.add(it)
                 poiOverlay = it
                 shouldInvalidate = true
             }
+            val poiOverlayCreated = existingPoiOverlay == null
             val poisChanged = pois != lastRenderedPois
-            if (poisChanged || scaleChanged) {
+            if (poiOverlayCreated || poisChanged || scaleChanged) {
                 overlay.points = pois
                 overlay.minDose = currentMin
                 overlay.maxDose = currentMax
