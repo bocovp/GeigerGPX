@@ -91,7 +91,7 @@ class HeatmapOverlay(
         val gridY = Math.floorDiv(worldTopLeft.y, gridSizePixels.toLong())
         val key = "$tracksVersion|$doseCoefficient|$gridX|$gridY|$viewWidth|$viewHeight|$cols|$rows"
         if (cachedKey == key) {
-            return cachedRaster
+            return cachedRaster?.copy(offsetX = offsetX, offsetY = offsetY)
         }
 
         val cellCount = cols * rows
