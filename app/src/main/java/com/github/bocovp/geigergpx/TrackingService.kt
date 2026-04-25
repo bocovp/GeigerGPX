@@ -383,6 +383,9 @@ class TrackingService : Service() {
                 } else {
                     notificationManager.showSaveToast("Nothing to save")
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("TrackingService", "Error during final save", e)
+            } finally {
                 repo.finalizeTrackCounts()
                 stopTrackingSession(
                     TrackStopStats(
@@ -391,7 +394,6 @@ class TrackingService : Service() {
                         points = finalPointCount
                     )
                 )
-            } finally {
                 stopInProgress = false
             }
         }
