@@ -17,6 +17,7 @@ import com.github.bocovp.geigergpx.databinding.ActivityPoiBinding
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -89,27 +90,35 @@ class PoiActivity : AppCompatActivity() {
         binding.poiRecyclerView.visibility = View.GONE
 
         lifecycleScope.launch {
-            val (result, items) = withContext(Dispatchers.IO) {
-                val loadedResult = PoiLibrary.loadPoiLibrary(this@PoiActivity)
-                val mappedItems = loadedResult.entries.map { poi ->
-                    PoiUiItem(
-                        poi = poi,
-                        title = poi.description,
-                        subtitle = formatSubtitle(poi)
-                    )
+            try {
+                val (result, items) = withContext(Dispatchers.IO) {
+                    val loadedResult = PoiLibrary.loadPoiLibrary(this@PoiActivity)
+                    val mappedItems = loadedResult.entries.map { poi ->
+                        PoiUiItem(
+                            poi = poi,
+                            title = poi.description,
+                            subtitle = formatSubtitle(poi)
+                        )
+                    }
+                    loadedResult to mappedItems
                 }
-                loadedResult to mappedItems
+                val selectedPoiIds = ensurePoiSelectionInitialized(result.entries.map { it.id }.toSet())
+                adapter.submit(items, selectedPoiIds)
+                val emptyMessageRes = when (result.state) {
+                    PoiLibrary.LoadState.MISSING_FILE -> R.string.no_poi_file_found
+                    PoiLibrary.LoadState.EMPTY_LIBRARY -> R.string.no_poi_in_library
+                    PoiLibrary.LoadState.HAS_POIS -> null
+                }
+                binding.loadingLabel.visibility = if (emptyMessageRes == null) View.GONE else View.VISIBLE
+                binding.poiRecyclerView.visibility = if (emptyMessageRes == null) View.VISIBLE else View.GONE
+                emptyMessageRes?.let(binding.loadingLabel::setText)
+            } catch (_: CancellationException) {
+                throw
+            } catch (_: Exception) {
+                binding.loadingLabel.setText(R.string.no_poi_file_found)
+                binding.loadingLabel.visibility = View.VISIBLE
+                binding.poiRecyclerView.visibility = View.GONE
             }
-            val selectedPoiIds = ensurePoiSelectionInitialized(result.entries.map { it.id }.toSet())
-            adapter.submit(items, selectedPoiIds)
-            val emptyMessageRes = when (result.state) {
-                PoiLibrary.LoadState.MISSING_FILE -> R.string.no_poi_file_found
-                PoiLibrary.LoadState.EMPTY_LIBRARY -> R.string.no_poi_in_library
-                PoiLibrary.LoadState.HAS_POIS -> null
-            }
-            binding.loadingLabel.visibility = if (emptyMessageRes == null) View.GONE else View.VISIBLE
-            binding.poiRecyclerView.visibility = if (emptyMessageRes == null) View.VISIBLE else View.GONE
-            emptyMessageRes?.let(binding.loadingLabel::setText)
         }
     }
 

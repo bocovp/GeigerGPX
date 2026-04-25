@@ -22,6 +22,7 @@ import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.bocovp.geigergpx.databinding.ActivityTracksBinding
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -209,7 +210,17 @@ class TracksActivity : AppCompatActivity() {
                 }
 
                 binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
-                binding.emptyStateLabel.visibility = if (hasTracks) View.GONE else View.VISIBLE
+                binding.emptyStateLabel.visibility =
+                    if (!hasTracks && !TrackCatalog.isTrackCacheRebuildInProgress()) View.VISIBLE else View.GONE
+            } catch (_: CancellationException) {
+                throw
+            } catch (_: Exception) {
+                val rebuildActive = TrackCatalog.isTrackCacheRebuildInProgress()
+                if (!rebuildActive) {
+                    updateLoadingUi(null)
+                }
+                binding.tracksRecyclerView.visibility = View.GONE
+                binding.emptyStateLabel.visibility = if (rebuildActive) View.GONE else View.VISIBLE
             } finally {
                 if (refreshJob == this.coroutineContext[Job]) {
                     loadingStateActive = false

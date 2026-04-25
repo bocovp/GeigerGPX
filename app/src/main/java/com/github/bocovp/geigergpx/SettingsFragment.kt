@@ -152,13 +152,17 @@ class SettingsFragment : PreferenceFragmentCompat() {
             return
         }
         launchUi {
-            val summary = withContext(Dispatchers.IO) {
-                val uri = android.net.Uri.parse(uriStr)
-                val context = context ?: return@withContext uriStr
-                val doc = DocumentFile.fromTreeUri(context, uri)
-                doc?.name ?: uriStr
+            try {
+                val summary = withContext(Dispatchers.IO) {
+                    val uri = android.net.Uri.parse(uriStr)
+                    val context = context ?: return@withContext uriStr
+                    val doc = DocumentFile.fromTreeUri(context, uri)
+                    doc?.name ?: uriStr
+                }
+                chooseFolder.summary = summary
+            } catch (_: Exception) {
+                chooseFolder.summary = uriStr
             }
-            chooseFolder.summary = summary
         }
     }
 
