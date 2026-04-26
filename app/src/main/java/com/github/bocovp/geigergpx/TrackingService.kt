@@ -12,6 +12,7 @@ import android.media.ToneGenerator
 import androidx.preference.PreferenceManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -362,12 +363,12 @@ class TrackingService : Service() {
         serviceScope.launch {
             try {
                 if (copy.isNotEmpty()) {
-                    val saveResult = withContext(Dispatchers.IO) {
+                    val saveResult = withContext(NonCancellable + Dispatchers.IO) {
                         GpxWriter.saveTrackWithResult(this@TrackingService, copy)
                     }
                     if (saveResult != null) {
                         // Final save succeeded: remove any leftover backup file
-                        withContext(Dispatchers.IO) {
+                        withContext(NonCancellable + Dispatchers.IO) {
                             GpxWriter.deleteBackupIfExists(this@TrackingService)
                         }
                         sendBroadcast(

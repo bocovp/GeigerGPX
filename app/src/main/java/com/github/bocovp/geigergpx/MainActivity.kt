@@ -32,6 +32,7 @@ import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -529,7 +530,7 @@ class MainActivity : AppCompatActivity() {
 
                 lifecycleScope.launch {
                     try {
-                        val saveResult = withContext(Dispatchers.IO) {
+                        val saveResult = withContext(NonCancellable + Dispatchers.IO) {
                             PoiLibrary.addPoiWithResult(
                                 context = this@MainActivity,
                                 description = description,
