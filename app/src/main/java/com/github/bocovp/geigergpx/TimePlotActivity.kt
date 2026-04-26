@@ -168,8 +168,7 @@ class TimePlotActivity : AppCompatActivity() {
             updateSliderDescription(durationMinutes)
             if (fromUser) {
                 appState.sharedKdeSliderInternalValue = value
-                val shouldRecalculateVerticalAxis = plotMode == PlotMode.KERNEL_ESTIMATOR
-                updatePlot(recalculateVerticalAxis = shouldRecalculateVerticalAxis)
+                updatePlot(recalculateVerticalAxis = false)
             }
         }
         binding.placeholderSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
