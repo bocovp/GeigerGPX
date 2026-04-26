@@ -17,7 +17,9 @@ import androidx.core.content.FileProvider
 import androidx.core.view.MenuCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.Lifecycle
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.bocovp.geigergpx.databinding.ActivityTracksBinding
@@ -27,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collectLatest
 
 class TracksActivity : AppCompatActivity() {
 
@@ -103,10 +106,14 @@ class TracksActivity : AppCompatActivity() {
             refreshTrackList()
         }
 
-        TrackCatalog.rebuildProgress.observe(this) { progress ->
-            updateLoadingUi(progress)
-            if (progress == null) {
-                refreshTrackList()
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                TrackCatalog.rebuildProgress.collectLatest { progress ->
+                    updateLoadingUi(progress)
+                    if (progress == null) {
+                        refreshTrackList()
+                    }
+                }
             }
         }
     }

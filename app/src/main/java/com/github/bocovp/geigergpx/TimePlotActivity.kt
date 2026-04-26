@@ -237,7 +237,7 @@ class TimePlotActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadPlotCandidates(activePoints: List<TrackPoint>, isTracking: Boolean): List<PlotCandidate> {
+    private suspend fun loadPlotCandidates(activePoints: List<TrackPoint>, isTracking: Boolean): List<PlotCandidate> {
         val includeCurrentTrack = isTracking
         val selectedTrackIds = TrackSelectionPrefs.selectedTrackIds(this)
         val selectedFolders = TrackSelectionPrefs.selectedFolderIds(this)
@@ -347,10 +347,7 @@ class TimePlotActivity : AppCompatActivity() {
             observeActiveTrack()
             return true
         }
-
-        val selected = TrackCatalog.loadTrackSamplesById(this, normalizedTrackId) ?: return false
-        applyLoadedTrack(normalizedTrackId, selected)
-        return true
+        return false
     }
 
     private fun applyLoadedTrack(trackId: String, selectedTrack: TrackCatalog.TrackPlotData) {

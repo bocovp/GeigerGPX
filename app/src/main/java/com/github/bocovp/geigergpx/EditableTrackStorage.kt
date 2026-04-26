@@ -32,7 +32,7 @@ object EditableTrackStorage {
         }
     }
 
-    fun createSplitTrack(
+    suspend fun createSplitTrack(
         context: Context,
         sourceTrackId: String,
         sourceTitle: String,
@@ -74,7 +74,7 @@ object EditableTrackStorage {
         return SplitResult(trackId, nextName)
     }
 
-    private fun uniqueSplitFileName(context: Context, sourceTitle: String, folderName: String?): String {
+    private suspend fun uniqueSplitFileName(context: Context, sourceTitle: String, folderName: String?): String {
         val baseName = sourceTitle.removeSuffix(".gpx")
         val existingTitles = TrackCatalog.loadTrackListItems(
             context = context,
