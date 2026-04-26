@@ -21,6 +21,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import java.util.concurrent.atomic.AtomicLong
 class TrackingService : Service() {
 
     companion object {
@@ -93,7 +94,7 @@ class TrackingService : Service() {
     @Volatile private var alertDoseRate: Double = 0.0
     @Volatile private var cpsToUsvhCoefficient: Double = 1.0
     private var toneGenerator: ToneGenerator? = null
-    private var lastAlertAtMillis: Long = 0L
+    private val lastAlertAtMillis = AtomicLong(0L)
     private val doseRateMeasurement = DoseRateMeasurement()
     @Volatile private var kde: KernelDensityEstimator? = null
 
@@ -524,8 +525,11 @@ class TrackingService : Service() {
 
     private fun dispatchDoseRateAlert(alertEvent: DoseRateMeasurement.AlertEvent) {
         val now = System.currentTimeMillis()
-        if (now - lastAlertAtMillis < 500L) return
-        lastAlertAtMillis = now
+        while (true) {
+            val last = lastAlertAtMillis.get()
+            if (now - last < 500L) return
+            if (lastAlertAtMillis.compareAndSet(last, now)) break
+        }
 
         playAlertSound(alertEvent.soundCount)
         showDoseRateAlertNotification(alertEvent.meanDoseRate)

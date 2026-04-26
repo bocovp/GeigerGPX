@@ -34,7 +34,7 @@ class AudioInputManager(
     private val onRawAudio: ((ShortArray) -> Unit)? = null
 ) {
 
-    @Volatile private var running = false
+    private val running = AtomicBoolean(false)
     @Volatile private var audioRecord: AudioRecord? = null
     private var workerThread: Thread? = null
     private var previousAudioMode: Int? = null
@@ -45,12 +45,12 @@ class AudioInputManager(
     @Volatile private var lastPublishedAudioStatus: String? = null
     private var audioFocusRequest: Any? = null // Holds the API 26+ AudioFocusRequest
 
+    @Synchronized
     fun start() {
-        if (running) {
+        if (!running.compareAndSet(false, true)) {
             Log.d(TAG, "start() called but detector is already running")
             return
         }
-        running = true
         Log.i(TAG, "Starting AudioBeepDetector worker thread...")
 
         workerThread = thread(start = true, name = "BeepDetector") {
@@ -58,7 +58,7 @@ class AudioInputManager(
 
             var audioBuf: ShortArray? = null
 
-            while (running) {
+            while (running.get()) {
                 try {
                     Log.i(TAG, "--- Outer Loop: Initializing Audio Hardware ---")
 
@@ -175,7 +175,7 @@ class AudioInputManager(
                     var zeroBufferCount = 0
                     var audioHealthy = true
 
-                    while (running && !innerLoopBreak.get()) {
+                    while (running.get() && !innerLoopBreak.get()) {
                         val currentAr = audioRecord ?: break
                         val read = currentAr.read(audioBuf!!, 0, audioBuf!!.size)
 
@@ -406,9 +406,9 @@ class AudioInputManager(
         return Triple(ar, bufferSize, rate)
     }
 
+    @Synchronized
     fun stop() {
-        if (!running) return
-        running = false
+        if (!running.compareAndSet(true, false)) return
         workerThread?.interrupt()
         val ar = swapAudioRecord(null)
         try { workerThread?.join(4000) } catch (e: Exception) {}
