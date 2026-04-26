@@ -119,7 +119,6 @@ object TrackCatalog {
     }
 
     private suspend fun rebuildTrackCacheIfNeeded(context: Context) {
-        ensureDiskCacheLoaded(context)
         if (!isTrackCacheEmpty()) return
         rebuildMutex.withLock {
             if (!isTrackCacheEmpty()) return
@@ -758,6 +757,7 @@ object TrackCatalog {
                         Log.w("GPX", "Unable to load track cache ${cacheFile.absolutePath}", it)
                         parsedTrackCache.clear()
                     }
+                    hasScannedStorage = true
                 }
             }
             _tracks.value = parsedTrackCache.toMap()
