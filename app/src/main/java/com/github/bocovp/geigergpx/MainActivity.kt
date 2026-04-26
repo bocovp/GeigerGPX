@@ -532,7 +532,7 @@ class MainActivity : AppCompatActivity() {
                     try {
                         val saveResult = withContext(NonCancellable + Dispatchers.IO) {
                             PoiLibrary.addPoiWithResult(
-                                context = this@MainActivity,
+                                context = applicationContext,
                                 description = description,
                                 timestampMillis = System.currentTimeMillis(),
                                 latitude = latitude,
