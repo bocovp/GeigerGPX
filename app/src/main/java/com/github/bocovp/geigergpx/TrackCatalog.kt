@@ -111,6 +111,21 @@ object TrackCatalog {
 
     suspend fun rebuildTrackCache(context: Context) {
         ensureDiskCacheLoaded(context)
+        rebuildMutex.withLock {
+            rebuildTrackCacheLocked(context)
+        }
+    }
+
+    private suspend fun rebuildTrackCacheIfNeeded(context: Context) {
+        ensureDiskCacheLoaded(context)
+        if (!isTrackCacheEmpty()) return
+        rebuildMutex.withLock {
+            if (!isTrackCacheEmpty()) return
+            rebuildTrackCacheLocked(context)
+        }
+    }
+
+    private suspend fun rebuildTrackCacheLocked(context: Context) {
         _rebuildProgress.value = 0
 
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
@@ -175,12 +190,7 @@ object TrackCatalog {
         if (rebuildMutex.isLocked) return
         val appContext = context.applicationContext
         catalogScope.launch {
-            if (!rebuildMutex.tryLock()) return@launch
-            try {
-                rebuildTrackCache(appContext)
-            } finally {
-                rebuildMutex.unlock()
-            }
+            rebuildTrackCache(appContext)
         }
     }
 
@@ -195,9 +205,7 @@ object TrackCatalog {
         includeFolderEntries: Boolean = false
     ): List<TrackListItem> {
         ensureDiskCacheLoaded(context)
-        if (isTrackCacheEmpty()) {
-            rebuildTrackCache(context)
-        }
+        rebuildTrackCacheIfNeeded(context)
 
         val items = mutableListOf<TrackListItem>()
 
@@ -277,7 +285,7 @@ object TrackCatalog {
         }
 
         if (browseFolderName == null && includeFolderEntries) {
-            val subfoldersSnapshot = allSubfolders.value
+            val subfoldersSnapshot = cachedTracksSnapshot.mapNotNull { it.folderName }.distinct()
             subfoldersSnapshot
                 .sortedBy { it.lowercase() }
                 .forEach { subfolder ->
@@ -470,9 +478,7 @@ object TrackCatalog {
 
     suspend fun loadTrackSamplesById(context: Context, trackId: String): TrackPlotData? {
         ensureDiskCacheLoaded(context)
-        if (isTrackCacheEmpty()) {
-            rebuildTrackCache(context)
-        }
+        rebuildTrackCacheIfNeeded(context)
 
         val (points, displayName) = cacheMutex.withLock {
             val cached = parsedTrackCache[trackId] ?: return@withLock null to null
@@ -754,7 +760,9 @@ object TrackCatalog {
                             .sortedBy { it.displayName.lowercase() }
                             .forEach { tracks.put(it.toJson()) }
                         val subfolders = JSONArray()
-                        allSubfolders.value
+                        parsedTrackCache.values
+                            .mapNotNull { it.folderName }
+                            .distinct()
                             .sortedBy { it.lowercase() }
                             .forEach { subfolders.put(it) }
                         writer.write(
