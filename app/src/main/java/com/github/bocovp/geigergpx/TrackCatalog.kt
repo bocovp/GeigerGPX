@@ -187,10 +187,15 @@ object TrackCatalog {
     fun isTrackCacheRebuildInProgress(): Boolean = isRebuilding.value
 
     fun rebuildTrackCacheAsync(context: Context) {
-        if (rebuildMutex.isLocked) return
         val appContext = context.applicationContext
         catalogScope.launch {
-            rebuildTrackCache(appContext)
+            if (!rebuildMutex.tryLock()) return@launch
+            try {
+                ensureDiskCacheLoaded(appContext)
+                rebuildTrackCacheLocked(appContext)
+            } finally {
+                rebuildMutex.unlock()
+            }
         }
     }
 
