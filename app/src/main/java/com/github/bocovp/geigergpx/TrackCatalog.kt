@@ -112,15 +112,15 @@ object TrackCatalog {
     }
 
     suspend fun rebuildTrackCache(context: Context) {
-        ensureDiskCacheLoaded(context)
         rebuildMutex.withLock {
+            ensureDiskCacheLoaded(context)
             rebuildTrackCacheLocked(context)
         }
     }
 
     private suspend fun rebuildTrackCacheIfNeeded(context: Context) {
-        if (!isTrackCacheEmpty()) return
         rebuildMutex.withLock {
+            ensureDiskCacheLoaded(context)
             if (!isTrackCacheEmpty()) return
             rebuildTrackCacheLocked(context)
         }
@@ -210,7 +210,6 @@ object TrackCatalog {
         includeSubfolderTracks: Boolean = false,
         includeFolderEntries: Boolean = false
     ): List<TrackListItem> {
-        ensureDiskCacheLoaded(context)
         rebuildTrackCacheIfNeeded(context)
 
         val items = mutableListOf<TrackListItem>()
@@ -493,7 +492,6 @@ object TrackCatalog {
     )
 
     suspend fun loadTrackSamplesById(context: Context, trackId: String): TrackPlotData? {
-        ensureDiskCacheLoaded(context)
         rebuildTrackCacheIfNeeded(context)
 
         val (points, displayName) = cacheMutex.withLock {
