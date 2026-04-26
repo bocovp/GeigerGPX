@@ -32,6 +32,7 @@ import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -199,45 +200,51 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun validateConfiguredSaveFolderAtStartup(onValidationComplete: () -> Unit) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val treeUriString = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
-        val defaultFolderError = FileStorageManager.getDefaultFolderWriteProbeError(this)
-        if (defaultFolderError != null) {
-            Toast.makeText(
-                this,
-                "Warning: app default save folder is not writable: ${defaultFolderError.localizedMessage}",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-        if (treeUriString.isNullOrBlank()) {
-            onValidationComplete()
-            return
-        }
-
-        val treeUri = runCatching { Uri.parse(treeUriString) }.getOrNull()
-        val treeRoot = treeUri?.let { DocumentFile.fromTreeUri(this, it) }
-        val isValidFolder = treeRoot?.isDirectory == true
-        val canWrite = isValidFolder && FileStorageManager.isConfiguredFolderWritable(this)
-        if (isValidFolder && canWrite) {
-            onValidationComplete()
-            return
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Save folder unavailable")
-            .setMessage(
-                "Configured save folder is invalid or not writable. Choose another folder or app will fall back to default folder."
-            )
-            .setPositiveButton("Choose folder") { _, _ ->
-                pendingRestoreAfterStartupFolderValidation = true
-                folderPickerForStartupValidation.launch(null)
+        lifecycleScope.launch {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(this@MainActivity)
+            val treeUriString = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+            val (defaultFolderError, isValidFolder, canWrite) = withContext(Dispatchers.IO) {
+                val probeError = FileStorageManager.getDefaultFolderWriteProbeError(this@MainActivity)
+                if (treeUriString.isNullOrBlank()) {
+                    Triple(probeError, true, false)
+                } else {
+                    val treeUri = runCatching { Uri.parse(treeUriString) }.getOrNull()
+                    val treeRoot = treeUri?.let { DocumentFile.fromTreeUri(this@MainActivity, it) }
+                    val validFolder = treeRoot?.isDirectory == true
+                    val writable = validFolder && FileStorageManager.isConfiguredFolderWritable(this@MainActivity)
+                    Triple(probeError, validFolder, writable)
+                }
             }
-            .setNegativeButton("Use default folder") { _, _ ->
-                FileStorageManager.clearConfiguredTreeUri(this)
+
+            if (defaultFolderError != null) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Warning: app default save folder is not writable: ${defaultFolderError.localizedMessage}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            if (treeUriString.isNullOrBlank() || (isValidFolder && canWrite)) {
                 onValidationComplete()
+                return@launch
             }
-            .setCancelable(false)
-            .show()
+
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("Save folder unavailable")
+                .setMessage(
+                    "Configured save folder is invalid or not writable. Choose another folder or app will fall back to default folder."
+                )
+                .setPositiveButton("Choose folder") { _, _ ->
+                    pendingRestoreAfterStartupFolderValidation = true
+                    folderPickerForStartupValidation.launch(null)
+                }
+                .setNegativeButton("Use default folder") { _, _ ->
+                    FileStorageManager.clearConfiguredTreeUri(this@MainActivity)
+                    onValidationComplete()
+                }
+                .setCancelable(false)
+                .show()
+        }
     }
 
     private fun restoreStartupBackupIfNeeded() {
@@ -521,28 +528,37 @@ class MainActivity : AppCompatActivity() {
 //                  val doseRate = ConfidenceInterval(0.0, seconds, counts + 1).scale(coeff).mean
                 val (latitude, longitude) = TrackingService.consumeMeasurementAverageCoordinates()
 
-                val saveResult = PoiLibrary.addPoiWithResult(
-                    context = this,
-                    description = description,
-                    timestampMillis = System.currentTimeMillis(),
-                    latitude = latitude,
-                    longitude = longitude,
-                    doseRate = doseRate,
-                    counts = counts,
-                    seconds = seconds
-                )
-                if (saveResult.success) {
-                    Toast.makeText(this, "POI saved", Toast.LENGTH_SHORT).show()
-                    saveResult.warning?.let { warning ->
-                        Toast.makeText(this, warning, Toast.LENGTH_LONG).show()
+                lifecycleScope.launch {
+                    try {
+                        val saveResult = withContext(NonCancellable + Dispatchers.IO) {
+                            PoiLibrary.addPoiWithResult(
+                                context = this@MainActivity,
+                                description = description,
+                                timestampMillis = System.currentTimeMillis(),
+                                latitude = latitude,
+                                longitude = longitude,
+                                doseRate = doseRate,
+                                counts = counts,
+                                seconds = seconds
+                            )
+                        }
+                        if (saveResult.success) {
+                            Toast.makeText(this@MainActivity, "POI saved", Toast.LENGTH_SHORT).show()
+                            saveResult.warning?.let { warning ->
+                                Toast.makeText(this@MainActivity, warning, Toast.LENGTH_LONG).show()
+                            }
+                        } else {
+                            val message = saveResult.error?.let { "Unable to save POI: $it" } ?: "Unable to save POI"
+                            Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error saving POI", e)
+                    } finally {
+                        if (isMeasurementModeEnabled) {
+                            dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE)
+                        }
                     }
-                } else {
-                    val message = saveResult.error?.let { "Unable to save POI: $it" } ?: "Unable to save POI"
-                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-                }
 
-                if (isMeasurementModeEnabled) {
-                    dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE)
                 }
             }
             .setNegativeButton("Cancel", null)
