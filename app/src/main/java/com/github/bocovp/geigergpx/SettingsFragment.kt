@@ -20,7 +20,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.log10
 import kotlin.math.pow
-import kotlin.text.format
 
 class SettingsFragment : PreferenceFragmentCompat() {
     private val settingsPrefListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -288,7 +287,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun launchUi(block: suspend () -> Unit) {
-        viewLifecycleOwner.lifecycleScope.launch { block() }
+        lifecycleScope.launch { block() }
     }
 
     private fun showManualThresholdDialog(thresholdPref: LongPressPreference, bluetooth: Boolean) {

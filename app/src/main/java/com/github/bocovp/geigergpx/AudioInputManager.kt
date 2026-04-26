@@ -406,7 +406,6 @@ class AudioInputManager(
         return Triple(ar, bufferSize, rate)
     }
 
-    @Synchronized
     fun stop() {
         if (!running.compareAndSet(true, false)) return
         workerThread?.interrupt()
