@@ -132,8 +132,7 @@ class PoiActivity : AppCompatActivity() {
     }
 
     private fun formatDoseRateText(poi: PoiEntry): String {
-        val coeff = PreferenceManager.getDefaultSharedPreferences(this)
-            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val coeff = AppSettings.from(this).getCpsToUsvhCoefficient()
 
         val ci = ConfidenceInterval(0.0, poi.seconds, poi.counts, false).scale(coeff)
         return ci.toText(decimalDigits = 4)

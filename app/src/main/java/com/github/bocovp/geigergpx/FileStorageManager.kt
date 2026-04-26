@@ -6,7 +6,6 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
-import androidx.preference.PreferenceManager
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -23,7 +22,6 @@ import java.io.OutputStream
  */
 object FileStorageManager {
 
-    private const val PREFS_KEY_GPX_TREE_URI = SettingsFragment.KEY_GPX_TREE_URI
     private const val DEFAULT_GPX_MIME = "application/gpx+xml"
     private const val DEFAULT_TEXT_MIME = "text/plain"
     private const val PERMISSION_PROBE_FILE_NAME = ".geigergpx-write-test.tmp"
@@ -291,13 +289,11 @@ object FileStorageManager {
     }
 
     fun clearConfiguredTreeUri(context: Context) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        prefs.edit().putString(PREFS_KEY_GPX_TREE_URI, null).apply()
+        AppSettings.from(context).setGpxTreeUri(null)
     }
 
     fun configuredTreeUri(context: Context): Uri? {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val treeUri = prefs.getString(PREFS_KEY_GPX_TREE_URI, null)
+        val treeUri = AppSettings.from(context).getGpxTreeUriString()
         return if (treeUri.isNullOrBlank()) null else Uri.parse(treeUri)
     }
 

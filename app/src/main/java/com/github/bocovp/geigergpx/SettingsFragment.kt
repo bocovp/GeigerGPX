@@ -23,7 +23,7 @@ import kotlin.math.pow
 
 class SettingsFragment : PreferenceFragmentCompat() {
     private val settingsPrefListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == "cps_to_usvh" || key == "dose_rate_avg_timestamps_n" || key == "alert_dose_rate") {
+        if (key == AppSettings.KEY_CPS_TO_USVH || key == AppSettings.KEY_DOSE_RATE_AVG_TIMESTAMPS_N || key == AppSettings.KEY_ALERT_DOSE_RATE) {
             updateAlertDoseRateSummary()
         }
     }
@@ -33,10 +33,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             requireContext().contentResolver.takePersistableUriPermission(uri, flags)
 
-            PreferenceManager.getDefaultSharedPreferences(requireContext())
-                .edit()
-                .putString(KEY_GPX_TREE_URI, uri.toString())
-                .apply()
+            AppSettings.from(requireContext()).setGpxTreeUri(uri)
 
             updateFolderSummary()
         }
@@ -114,7 +111,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         val thresholdPref = findPreference<LongPressPreference>("threshold_calibration")
         val bluetoothThresholdPref = findPreference<LongPressPreference>("bluetooth_threshold_calibration")
-        val useBluetoothMic = findPreference<SwitchPreferenceCompat>(KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE)
+        val useBluetoothMic = findPreference<SwitchPreferenceCompat>(AppSettings.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE)
 
         thresholdPref?.let { setupThresholdPreference(it, false) }
         bluetoothThresholdPref?.let { setupThresholdPreference(it, true) }
@@ -144,8 +141,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
     private fun updateFolderSummary() {
         val chooseFolder = findPreference<Preference>("gpx_folder_picker") ?: return
-        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
-        val uriStr = prefs.getString(KEY_GPX_TREE_URI, null)
+        val uriStr = AppSettings.from(requireContext()).getGpxTreeUriString()
         if (uriStr.isNullOrBlank()) {
             chooseFolder.summary = "Not set (uses app folder)"
             return
@@ -170,15 +166,15 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun buildAlertDoseRateSummary(): String {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
-        val alertValue = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
+        val appSettings = AppSettings.from(requireContext())
+        val alertValue = appSettings.getAlertDoseRate()
         val normalizedAlert = if (alertValue == 0.0) 0.0 else alertValue
         if (normalizedAlert <= 0.0) {
             return "Not set"
         }
 
-        val avgTimestamps = prefs.getString("dose_rate_avg_timestamps_n", "10")?.toIntOrNull() ?: 10
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val avgTimestamps = appSettings.getDoseRateAvgWindowSize()
+        val coeff = appSettings.getCpsToUsvhCoefficient()
         val falseAlarmRate = ConfidenceInterval.getFalseAlarmRate(normalizedAlert, avgTimestamps, coeff)
         val unit = if (coeff == 1.0) "cps" else "μSv/h"
         return String.format(
@@ -199,7 +195,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun thresholdKey(bluetooth: Boolean): String {
-        return if (bluetooth) KEY_BLUETOOTH_AUDIO_THRESHOLD else KEY_AUDIO_THRESHOLD
+        return if (bluetooth) AppSettings.KEY_BLUETOOTH_AUDIO_THRESHOLD else AppSettings.KEY_AUDIO_THRESHOLD
     }
 
     private fun defaultThreshold(bluetooth: Boolean): Float {
@@ -333,10 +329,4 @@ class SettingsFragment : PreferenceFragmentCompat() {
         super.onDestroyView()
     }
 
-    companion object {
-        const val KEY_GPX_TREE_URI = "gpx_tree_uri"
-        const val KEY_AUDIO_THRESHOLD = "audio_threshold"
-        const val KEY_BLUETOOTH_AUDIO_THRESHOLD = "bluetooth_audio_threshold"
-        const val KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE = "use_bluetooth_mic_if_available"
-    }
 }

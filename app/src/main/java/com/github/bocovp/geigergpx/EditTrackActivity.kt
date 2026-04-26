@@ -4,7 +4,6 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityEditTrackBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -227,8 +226,7 @@ class EditTrackActivity : AppCompatActivity() {
     }
 
     private fun applyChanges() {
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val coeff = AppSettings.from(this).getCpsToUsvhCoefficient()
         val updatedPoints = points.toMutableList()
         var splitPoints: List<TrackPoint>? = null
 

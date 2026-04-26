@@ -20,7 +20,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.Lifecycle
-import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.bocovp.geigergpx.databinding.ActivityTracksBinding
 import java.io.File
@@ -538,8 +537,7 @@ class TracksActivity : AppCompatActivity() {
     }
 
     private fun currentTrackDirectoryUri(): Uri? {
-        val treeUri = PreferenceManager.getDefaultSharedPreferences(this)
-            .getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+        val treeUri = AppSettings.from(this).getGpxTreeUriString()
             ?.takeIf { it.isNotBlank() }
             ?: return null
         return Uri.parse(treeUri)

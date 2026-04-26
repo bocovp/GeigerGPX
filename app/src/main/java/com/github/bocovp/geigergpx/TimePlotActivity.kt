@@ -10,7 +10,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityTimePlotBinding
 import com.github.bocovp.geigergpx.R
 import com.google.android.material.slider.Slider
@@ -207,8 +206,7 @@ class TimePlotActivity : AppCompatActivity() {
         refreshCandidatesJob = lifecycleScope.launch {
             try {
                 showLoading(true)
-                cpsToUSvhCoeff = PreferenceManager.getDefaultSharedPreferences(this@TimePlotActivity)
-                    .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+                cpsToUSvhCoeff = AppSettings.from(this@TimePlotActivity).getCpsToUsvhCoefficient()
 
                 val activePoints = viewModel.activeTrackPoints.value.orEmpty()
                 val isTracking = viewModel.isTracking.value == true

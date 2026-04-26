@@ -3,7 +3,6 @@ package com.github.bocovp.geigergpx
 import android.content.Context
 import android.location.Location
 import android.net.Uri
-import androidx.preference.PreferenceManager
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.format.DateTimeFormatter
@@ -210,9 +209,9 @@ object GpxWriter {
         fileName: String,
         forceDefaultFolder: Boolean = false
     ): SaveTrackResult? {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val appSettings = AppSettings.from(context)
+        val saveDoseRateInEle = appSettings.shouldSaveDoseRateInEle()
+        val calibrationCoefficient = appSettings.getCpsToUsvhCoefficient()
 
         val primaryResult = FileStorageManager.writeStreamDetailed(
             context = context,

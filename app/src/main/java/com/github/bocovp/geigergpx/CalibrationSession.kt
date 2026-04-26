@@ -3,7 +3,6 @@ package com.github.bocovp.geigergpx
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import androidx.preference.PreferenceManager
 import kotlin.concurrent.thread
 
 /**
@@ -29,9 +28,9 @@ class CalibrationSession(
     private val onProgress: (phase: Int, current: Int, total: Int) -> Unit,
     private val onFinished: (threshold: Float?) -> Unit,
     private val onAudioStatus: (status: String, errorCode: Int) -> Unit = { _, _ -> },
-    private val useBluetoothMicIfAvailable: Boolean = PreferenceManager.getDefaultSharedPreferences(context)
-        .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true),
-    private val thresholdPreferenceKey: String = SettingsFragment.KEY_AUDIO_THRESHOLD,
+    private val useBluetoothMicIfAvailable: Boolean = AppSettings.from(context)
+        .shouldUseBluetoothMicIfAvailable(defaultValue = true),
+    private val thresholdPreferenceKey: String = AppSettings.KEY_AUDIO_THRESHOLD,
     private val fallbackThreshold: Float = AudioInputManager.DEFAULT_MAG_THRESHOLD,
     private val stageOneDurationSeconds: Int = 5,
     private val totalBeepCount: Int = 10
@@ -156,7 +155,7 @@ class CalibrationSession(
         val raw            = minOf(median / 2.5f, 1e10f)
         val finalThreshold = if (raw > 0f) raw else fallbackThreshold
 
-        PreferenceManager.getDefaultSharedPreferences(context)
+        androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
             .edit()
             .putFloat(thresholdPreferenceKey, finalThreshold)
             .apply()

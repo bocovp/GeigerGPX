@@ -12,7 +12,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.ViewModelProvider
-import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityMainBinding
 import android.widget.Toast
 import android.os.PowerManager
@@ -76,10 +75,7 @@ class MainActivity : AppCompatActivity() {
         if (uri != null) {
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             contentResolver.takePersistableUriPermission(uri, flags)
-            PreferenceManager.getDefaultSharedPreferences(this)
-                .edit()
-                .putString(SettingsFragment.KEY_GPX_TREE_URI, uri.toString())
-                .apply()
+            AppSettings.from(this).setGpxTreeUri(uri)
         }
         // Stop tracking regardless of whether a folder was chosen or cancelled
         stopTracking()
@@ -91,10 +87,7 @@ class MainActivity : AppCompatActivity() {
         if (uri != null) {
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             contentResolver.takePersistableUriPermission(uri, flags)
-            PreferenceManager.getDefaultSharedPreferences(this)
-                .edit()
-                .putString(SettingsFragment.KEY_GPX_TREE_URI, uri.toString())
-                .apply()
+            AppSettings.from(this).setGpxTreeUri(uri)
         } else {
             FileStorageManager.clearConfiguredTreeUri(this)
         }
@@ -131,8 +124,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.buttonStop.setOnClickListener {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-            val treeUri = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+            val treeUri = AppSettings.from(this).getGpxTreeUriString()
             if (treeUri.isNullOrBlank()) {
                 AlertDialog.Builder(this)
                     .setTitle("Choose save folder")
@@ -201,8 +193,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun validateConfiguredSaveFolderAtStartup(onValidationComplete: () -> Unit) {
         lifecycleScope.launch {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(this@MainActivity)
-            val treeUriString = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+            val treeUriString = AppSettings.from(this@MainActivity).getGpxTreeUriString()
             val (defaultFolderError, isValidFolder, canWrite) = withContext(Dispatchers.IO) {
                 val probeError = FileStorageManager.getDefaultFolderWriteProbeError(this@MainActivity)
                 if (treeUriString.isNullOrBlank()) {
@@ -522,8 +513,7 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Save POI") { _, _ ->
                 val description = input.text?.toString()?.trim().orEmpty()
                 val (counts, seconds) = getCurrentMeasurementCountsAndSeconds()
-                val coeff = PreferenceManager.getDefaultSharedPreferences(this)
-                    .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+                val coeff = AppSettings.from(this).getCpsToUsvhCoefficient()
                 val doseRate = ConfidenceInterval(0.0, seconds, counts, false).scale(coeff).mean
 //                  val doseRate = ConfidenceInterval(0.0, seconds, counts + 1).scale(coeff).mean
                 val (latitude, longitude) = TrackingService.consumeMeasurementAverageCoordinates()
@@ -577,8 +567,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateCpsOrDoseLine(onBeep: Boolean) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val coeff = AppSettings.from(this).getCpsToUsvhCoefficient()
 
         var t1: Double
         var ignoredFirst : Int
@@ -731,8 +720,7 @@ class MainActivity : AppCompatActivity() {
         ) {
             needed += Manifest.permission.RECORD_AUDIO
         }
-        val bluetoothMicPreferred = PreferenceManager.getDefaultSharedPreferences(this)
-            .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)
+        val bluetoothMicPreferred = AppSettings.from(this).shouldUseBluetoothMicIfAvailable()
         if (bluetoothMicPreferred &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)

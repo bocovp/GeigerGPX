@@ -1,7 +1,6 @@
 package com.github.bocovp.geigergpx
 
 import android.widget.TextView
-import androidx.preference.PreferenceManager
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.TileSystem
@@ -47,8 +46,7 @@ class TrackMapRenderer(
         useKernelEstimator: Boolean = false,
         kdeScaleSeconds: Double? = null
     ): Boolean {
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
-        val doseCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val doseCoefficient = AppSettings.from(mapView.context).getCpsToUsvhCoefficient()
         cachedShowCpsUnit = kotlin.math.abs(doseCoefficient - 1.0) < 1e-9
 
         val activeTrackIds = tracks.map { it.id }.toSet()
@@ -448,8 +446,7 @@ class TrackMapRenderer(
         val metersPerPixel = TileSystem.GroundResolution(mapLatitude, zoomLevel)
         val minDistanceMeters = metersPerPixel * 10.0
 
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val coeff = AppSettings.from(mapView.context).getCpsToUsvhCoefficient()
 
 
         val generalizer = TrackGeneralizer(minDistanceMeters, coeff)

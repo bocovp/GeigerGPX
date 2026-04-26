@@ -296,8 +296,7 @@ class MapActivity : AppCompatActivity() {
                     val selectedPoiIds = ensurePoiSelectionInitialized(allPois.map { it.id }.toSet())
                     val visiblePois = allPois.filter { it.id in selectedPoiIds }
 
-                    val coeff = PreferenceManager.getDefaultSharedPreferences(this@MapActivity)
-                        .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+                    val coeff = AppSettings.from(this@MapActivity).getCpsToUsvhCoefficient()
                     val showCpsUnit = kotlin.math.abs(coeff - 1.0) < 1e-9
 
                     val poiMapItems = visiblePois.map { poi ->

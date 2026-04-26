@@ -12,6 +12,7 @@ class GeigerGpxApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        AppSettings.migrateLegacyKeys(this)
         GpxWriter.initVersion(this)
     }
 

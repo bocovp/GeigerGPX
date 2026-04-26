@@ -16,7 +16,6 @@ import android.os.Build
 import android.media.MediaRecorder
 import android.util.Log
 import androidx.core.content.ContextCompat
-import androidx.preference.PreferenceManager
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -620,10 +619,8 @@ class AudioInputManager(
         }
 
         fun storedThreshold(context: Context, bluetooth: Boolean): Float {
-            val key = if (bluetooth) SettingsFragment.KEY_BLUETOOTH_AUDIO_THRESHOLD else SettingsFragment.KEY_AUDIO_THRESHOLD
-            val stored = PreferenceManager.getDefaultSharedPreferences(context).getFloat(key, Float.NaN)
-            return if (!stored.isNaN() && stored > 0f) stored
-            else if (bluetooth) DEFAULT_BLUETOOTH_MAG_THRESHOLD else DEFAULT_MAG_THRESHOLD
+            val defaultValue = if (bluetooth) DEFAULT_BLUETOOTH_MAG_THRESHOLD else DEFAULT_MAG_THRESHOLD
+            return AppSettings.from(context).getAudioThreshold(bluetooth, defaultValue)
         }
 
         /**
@@ -632,8 +629,7 @@ class AudioInputManager(
          * and never silently fall back to the built-in mic if BT drops temporarily.
          */
         private fun useBluetoothMicIfAvailable(context: Context): Boolean {
-            return PreferenceManager.getDefaultSharedPreferences(context)
-                .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)
+            return AppSettings.from(context).shouldUseBluetoothMicIfAvailable()
         }
     }
 }

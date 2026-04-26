@@ -6,7 +6,6 @@ import android.net.Uri
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
-import androidx.preference.PreferenceManager
 import java.io.File
 import java.io.BufferedReader
 import java.io.BufferedWriter
@@ -112,8 +111,7 @@ object TrackCatalog {
         ensureDiskCacheLoaded(context)
         _rebuildProgress.value = 0
 
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val coeff = AppSettings.from(context).getCpsToUsvhCoefficient()
 
         val sourceListing = listTrackFiles(context)
         if (sourceListing is TrackSourceListing.Failure) {
@@ -240,8 +238,7 @@ object TrackCatalog {
             val cached = if (shouldIncludeMapTrack && !source.hasPoints()) {
                 try {
                     val parsed = withContext(Dispatchers.IO) {
-                        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
-                            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+                        val coeff = AppSettings.from(context).getCpsToUsvhCoefficient()
                         openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(it, coeff) }
                     }
                     if (parsed != null) {
@@ -445,8 +442,7 @@ object TrackCatalog {
             }
         } ?: return null
 
-        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
-            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val coeff = AppSettings.from(context).getCpsToUsvhCoefficient()
         val stats = runCatching { source.openStream().use { parseGpxTrackStats(it, coeff) } }.getOrNull() ?: return null
         return CachedParsedTrack.from(source.copy(folderName = folderName), stats)
     }
@@ -495,8 +491,7 @@ object TrackCatalog {
 
         if (displayName == null) return null
 
-        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
-            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val coeff = AppSettings.from(context).getCpsToUsvhCoefficient()
 
         // Need to parse outside the lock to avoid blocking other readers
         val parsed = withContext(Dispatchers.IO) {

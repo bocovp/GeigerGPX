@@ -103,14 +103,14 @@ class TrackingService : Service() {
 
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
-            "max_speed_kmh",
-            "point_spacing_m",
-            "min_counts_per_point",
-            "max_time_without_counts_s",
-            "max_time_without_gps_s",
-            "dose_rate_avg_timestamps_n",
-            "alert_dose_rate",
-            "cps_to_usvh" -> loadTrackingPrefs()
+            AppSettings.KEY_MAX_SPEED_KMH,
+            AppSettings.KEY_POINT_SPACING_M,
+            AppSettings.KEY_MIN_COUNTS_PER_POINT,
+            AppSettings.KEY_MAX_TIME_WITHOUT_COUNTS_S,
+            AppSettings.KEY_MAX_TIME_WITHOUT_GPS_S,
+            AppSettings.KEY_DOSE_RATE_AVG_TIMESTAMPS_N,
+            AppSettings.KEY_ALERT_DOSE_RATE,
+            AppSettings.KEY_CPS_TO_USVH -> loadTrackingPrefs()
         }
     }
 
@@ -148,20 +148,17 @@ class TrackingService : Service() {
     }
 
     private fun loadTrackingPrefs() {
-        maxSpeedKmh = prefs.getString("max_speed_kmh", "30.0")?.toDoubleOrNull() ?: 30.0
-        spacingM = prefs.getString("point_spacing_m", "5.0")?.toDoubleOrNull() ?: 5.0
-        minCountsPerPoint = prefs.getString("min_counts_per_point", "0")?.toIntOrNull() ?: 0
-        maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")?.toDoubleOrNull() ?: 1.0
-        maxTimeWithoutGpsS = prefs.getString("max_time_without_gps_s", "60")?.toDoubleOrNull() ?: 60.0
-        cpsToUsvhCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        val configuredAlertDoseRate = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
+        val appSettings = AppSettings.from(this)
+        maxSpeedKmh = appSettings.getMaxSpeedKmh()
+        spacingM = appSettings.getPointSpacingMeters()
+        minCountsPerPoint = appSettings.getMinCountsPerPoint()
+        maxTimeWithoutCountsS = appSettings.getMaxTimeWithoutCountsSeconds()
+        maxTimeWithoutGpsS = appSettings.getMaxTimeWithoutGpsSeconds()
+        cpsToUsvhCoefficient = appSettings.getCpsToUsvhCoefficient()
+        val configuredAlertDoseRate = appSettings.getAlertDoseRate()
         alertDoseRate = if (configuredAlertDoseRate > 0.0) configuredAlertDoseRate else 0.0
 
-        val allowedSizes = setOf(5, 10, 20, 50, 100)
-        val requestedWindowSize = prefs.getString("dose_rate_avg_timestamps_n", "10")
-            ?.toIntOrNull()
-            ?.takeIf { it in allowedSizes }
-            ?: 10
+        val requestedWindowSize = appSettings.getDoseRateAvgWindowSize()
         doseRateMeasurement.updateMainCpsWindowSize(requestedWindowSize)
         doseRateMeasurement.updateAlertConfig(
             alertDoseRate = alertDoseRate,

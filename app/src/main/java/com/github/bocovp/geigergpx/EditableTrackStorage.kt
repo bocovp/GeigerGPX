@@ -2,7 +2,6 @@ package com.github.bocovp.geigergpx
 
 import android.content.Context
 import android.net.Uri
-import androidx.preference.PreferenceManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -14,17 +13,16 @@ object EditableTrackStorage {
     data class SplitResult(val newTrackId: String, val newTrackTitle: String)
 
     suspend fun loadTrack(context: Context, trackId: String): LoadResult? = withContext(Dispatchers.IO) {
-        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
-            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val coeff = AppSettings.from(context).getCpsToUsvhCoefficient()
         val input = openInputStream(context, trackId) ?: return@withContext null
         val points = GpxReader.readTrack(input, cpsCoefficient = coeff) ?: return@withContext null
         LoadResult(points)
     }
 
     suspend fun overwriteTrack(context: Context, trackId: String, points: List<TrackPoint>) = withContext(Dispatchers.IO) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val appSettings = AppSettings.from(context)
+        val saveDoseRateInEle = appSettings.shouldSaveDoseRateInEle()
+        val calibrationCoefficient = appSettings.getCpsToUsvhCoefficient()
 
         val output = openOutputStream(context, trackId) ?: return@withContext
         output.use { out ->
@@ -41,9 +39,9 @@ object EditableTrackStorage {
         folderName: String?,
         points: List<TrackPoint>
     ): SplitResult? = withContext(Dispatchers.IO) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val appSettings = AppSettings.from(context)
+        val saveDoseRateInEle = appSettings.shouldSaveDoseRateInEle()
+        val calibrationCoefficient = appSettings.getCpsToUsvhCoefficient()
 
         val nextName = uniqueSplitFileName(context, sourceTitle, folderName)
         val uri = when {
