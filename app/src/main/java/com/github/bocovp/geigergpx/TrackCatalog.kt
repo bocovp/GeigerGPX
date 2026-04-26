@@ -53,7 +53,6 @@ enum class TrackListItemType {
 object TrackCatalog {
 
     private val parsedTrackCache = ConcurrentHashMap<String, CachedParsedTrack>()
-    private val cachedSubfolders = linkedSetOf<String>()
     private val cacheMutex = Mutex()
     private val rebuildMutex = Mutex()
     private val catalogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -84,32 +83,50 @@ object TrackCatalog {
         .stateIn(catalogScope, SharingStarted.Eagerly, emptyList())
     @Volatile
     private var diskCacheLoaded = false
+    @Volatile
+    private var hasScannedStorage = false
 
     fun currentTrackId(): String = CURRENT_TRACK_ID
 
     fun clearTrackCache(context: Context) {
         val appContext = context.applicationContext
         catalogScope.launch {
-            cacheMutex.withLock {
-                parsedTrackCache.clear()
-                cachedSubfolders.clear()
-                _tracks.value = emptyMap()
-                _rebuildProgress.value = null
-                diskCacheLoaded = true
-                val cacheFile = trackCacheFile(appContext)
-                if (cacheFile.exists() && !cacheFile.delete()) {
-                    Log.w("GPX", "Unable to delete persisted track cache ${cacheFile.absolutePath}")
+            rebuildMutex.withLock {
+                cacheMutex.withLock {
+                    parsedTrackCache.clear()
+                    _tracks.value = emptyMap()
+                    _rebuildProgress.value = null
+                    diskCacheLoaded = false
+                    hasScannedStorage = false
+                    val cacheFile = trackCacheFile(appContext)
+                    if (cacheFile.exists() && !cacheFile.delete()) {
+                        Log.w("GPX", "Unable to delete persisted track cache ${cacheFile.absolutePath}")
+                    }
                 }
             }
         }
     }
 
     fun isTrackCacheEmpty(): Boolean {
-        return _tracks.value.isEmpty()
+        return !diskCacheLoaded || (!hasScannedStorage && _tracks.value.isEmpty())
     }
 
     suspend fun rebuildTrackCache(context: Context) {
-        ensureDiskCacheLoaded(context)
+        rebuildMutex.withLock {
+            ensureDiskCacheLoaded(context)
+            rebuildTrackCacheLocked(context)
+        }
+    }
+
+    private suspend fun rebuildTrackCacheIfNeeded(context: Context) {
+        rebuildMutex.withLock {
+            ensureDiskCacheLoaded(context)
+            if (!isTrackCacheEmpty()) return
+            rebuildTrackCacheLocked(context)
+        }
+    }
+
+    private suspend fun rebuildTrackCacheLocked(context: Context) {
         _rebuildProgress.value = 0
 
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
@@ -118,6 +135,7 @@ object TrackCatalog {
         val sourceListing = listTrackFiles(context)
         if (sourceListing is TrackSourceListing.Failure) {
             Log.w("GPX", "Unable to rebuild track cache", sourceListing.error)
+            hasScannedStorage = true
             _rebuildProgress.value = null
             return
         }
@@ -160,30 +178,22 @@ object TrackCatalog {
         cacheMutex.withLock {
             parsedTrackCache.clear()
             parsedTrackCache.putAll(updatedTracks)
-            refreshCachedSubfolders()
             _tracks.value = parsedTrackCache.toMap()
+            hasScannedStorage = true
         }
         persistTrackCache(context)
         _rebuildProgress.value = null
     }
 
-    private fun refreshCachedSubfolders() {
-        cachedSubfolders.clear()
-        parsedTrackCache.values
-            .mapNotNull { it.folderName }
-            .distinct()
-            .forEach { cachedSubfolders.add(it) }
-    }
-
     fun isTrackCacheRebuildInProgress(): Boolean = isRebuilding.value
 
     fun rebuildTrackCacheAsync(context: Context) {
-        if (rebuildMutex.isLocked) return
         val appContext = context.applicationContext
         catalogScope.launch {
             if (!rebuildMutex.tryLock()) return@launch
             try {
-                rebuildTrackCache(appContext)
+                ensureDiskCacheLoaded(appContext)
+                rebuildTrackCacheLocked(appContext)
             } finally {
                 rebuildMutex.unlock()
             }
@@ -200,10 +210,7 @@ object TrackCatalog {
         includeSubfolderTracks: Boolean = false,
         includeFolderEntries: Boolean = false
     ): List<TrackListItem> {
-        ensureDiskCacheLoaded(context)
-        if (isTrackCacheEmpty()) {
-            rebuildTrackCache(context)
-        }
+        rebuildTrackCacheIfNeeded(context)
 
         val items = mutableListOf<TrackListItem>()
 
@@ -283,7 +290,7 @@ object TrackCatalog {
         }
 
         if (browseFolderName == null && includeFolderEntries) {
-            val subfoldersSnapshot = cacheMutex.withLock { cachedSubfolders.toList() }
+            val subfoldersSnapshot = cachedTracksSnapshot.mapNotNull { it.folderName }.distinct()
             subfoldersSnapshot
                 .sortedBy { it.lowercase() }
                 .forEach { subfolder ->
@@ -320,21 +327,23 @@ object TrackCatalog {
     fun onTrackSaved(context: Context, relativePath: String, points: List<TrackPoint>) {
         val appContext = context.applicationContext
         catalogScope.launch {
-            ensureDiskCacheLoaded(appContext)
-            val source = sourceFromRelativePath(appContext, relativePath) ?: return@launch
-            val stats = statsFromTrackPoints(points)
-            cacheMutex.withLock {
-                parsedTrackCache[source.id] = CachedParsedTrack(
-                    sourceId = source.id,
-                    displayName = source.displayName,
-                    folderName = source.folderName,
-                    stats = stats,
-                    pointCache = points
-                )
-                refreshCachedSubfolders()
-                _tracks.value = parsedTrackCache.toMap()
+            rebuildMutex.withLock {
+                ensureDiskCacheLoaded(appContext)
+                val source = sourceFromRelativePath(appContext, relativePath) ?: return@launch
+                val stats = statsFromTrackPoints(points)
+                cacheMutex.withLock {
+                    parsedTrackCache[source.id] = CachedParsedTrack(
+                        sourceId = source.id,
+                        displayName = source.displayName,
+                        folderName = source.folderName,
+                        stats = stats,
+                        pointCache = points
+                    )
+                    _tracks.value = parsedTrackCache.toMap()
+                    hasScannedStorage = true
+                }
+                persistTrackCache(appContext)
             }
-            persistTrackCache(appContext)
         }
     }
 
@@ -347,72 +356,78 @@ object TrackCatalog {
     ) {
         val appContext = context.applicationContext
         catalogScope.launch {
-            ensureDiskCacheLoaded(appContext)
-            val stats = statsFromTrackPoints(points)
-            cacheMutex.withLock {
-                parsedTrackCache[trackId] = CachedParsedTrack(
-                    sourceId = trackId,
-                    displayName = displayName,
-                    folderName = folderName,
-                    stats = stats,
-                    pointCache = points
-                )
-                refreshCachedSubfolders()
-                _tracks.value = parsedTrackCache.toMap()
+            rebuildMutex.withLock {
+                ensureDiskCacheLoaded(appContext)
+                val stats = statsFromTrackPoints(points)
+                cacheMutex.withLock {
+                    parsedTrackCache[trackId] = CachedParsedTrack(
+                        sourceId = trackId,
+                        displayName = displayName,
+                        folderName = folderName,
+                        stats = stats,
+                        pointCache = points
+                    )
+                    _tracks.value = parsedTrackCache.toMap()
+                    hasScannedStorage = true
+                }
+                persistTrackCache(appContext)
             }
-            persistTrackCache(appContext)
         }
     }
 
     fun onTrackRenamed(context: Context, oldTrackId: String, newTrackId: String, newDisplayName: String) {
         val appContext = context.applicationContext
         catalogScope.launch {
-            ensureDiskCacheLoaded(appContext)
-            var renamed = false
-            cacheMutex.withLock {
-                val existing = parsedTrackCache.remove(oldTrackId)
-                if (existing != null) {
-                    parsedTrackCache[newTrackId] = existing.copy(sourceId = newTrackId, displayName = newDisplayName)
-                    refreshCachedSubfolders()
-                    _tracks.value = parsedTrackCache.toMap()
-                    renamed = true
+            rebuildMutex.withLock {
+                ensureDiskCacheLoaded(appContext)
+                var renamed = false
+                cacheMutex.withLock {
+                    val existing = parsedTrackCache.remove(oldTrackId)
+                    if (existing != null) {
+                        parsedTrackCache[newTrackId] = existing.copy(sourceId = newTrackId, displayName = newDisplayName)
+                        _tracks.value = parsedTrackCache.toMap()
+                        hasScannedStorage = true
+                        renamed = true
+                    }
                 }
+                if (renamed) persistTrackCache(appContext)
             }
-            if (renamed) persistTrackCache(appContext)
         }
     }
 
     fun onTrackMoved(context: Context, oldTrackId: String, newTrackId: String, destinationFolder: String?) {
         val appContext = context.applicationContext
         catalogScope.launch {
-            ensureDiskCacheLoaded(appContext)
-            var shouldPersist = false
-            var needsFallbackLoad = false
-            cacheMutex.withLock {
-                val existing = parsedTrackCache.remove(oldTrackId)
-                if (existing != null) {
-                    parsedTrackCache[newTrackId] = existing.copy(sourceId = newTrackId, folderName = destinationFolder)
-                    refreshCachedSubfolders()
-                    _tracks.value = parsedTrackCache.toMap()
-                    shouldPersist = true
-                } else {
-                    needsFallbackLoad = true
+            rebuildMutex.withLock {
+                ensureDiskCacheLoaded(appContext)
+                var shouldPersist = false
+                var needsFallbackLoad = false
+                cacheMutex.withLock {
+                    val existing = parsedTrackCache.remove(oldTrackId)
+                    if (existing != null) {
+                        parsedTrackCache[newTrackId] = existing.copy(sourceId = newTrackId, folderName = destinationFolder)
+                        _tracks.value = parsedTrackCache.toMap()
+                        hasScannedStorage = true
+                        shouldPersist = true
+                    } else {
+                        needsFallbackLoad = true
+                    }
                 }
-            }
-            if (needsFallbackLoad) {
-                val loaded = loadTrackForCacheById(appContext, newTrackId, destinationFolder)
-                if (loaded != null) {
-                    cacheMutex.withLock {
-                        if (!parsedTrackCache.containsKey(newTrackId)) {
-                            parsedTrackCache[newTrackId] = loaded
-                            refreshCachedSubfolders()
-                            _tracks.value = parsedTrackCache.toMap()
-                            shouldPersist = true
+                if (needsFallbackLoad) {
+                    val loaded = loadTrackForCacheById(appContext, newTrackId, destinationFolder)
+                    if (loaded != null) {
+                        cacheMutex.withLock {
+                            if (!parsedTrackCache.containsKey(newTrackId)) {
+                                parsedTrackCache[newTrackId] = loaded
+                                _tracks.value = parsedTrackCache.toMap()
+                                hasScannedStorage = true
+                                shouldPersist = true
+                            }
                         }
                     }
                 }
+                if (shouldPersist) persistTrackCache(appContext)
             }
-            if (shouldPersist) persistTrackCache(appContext)
         }
     }
 
@@ -455,16 +470,18 @@ object TrackCatalog {
     fun onTrackDeleted(context: Context, trackId: String) {
         val appContext = context.applicationContext
         catalogScope.launch {
-            ensureDiskCacheLoaded(appContext)
-            var deleted = false
-            cacheMutex.withLock {
-                if (parsedTrackCache.remove(trackId) != null) {
-                    refreshCachedSubfolders()
-                    _tracks.value = parsedTrackCache.toMap()
-                    deleted = true
+            rebuildMutex.withLock {
+                ensureDiskCacheLoaded(appContext)
+                var deleted = false
+                cacheMutex.withLock {
+                    if (parsedTrackCache.remove(trackId) != null) {
+                        _tracks.value = parsedTrackCache.toMap()
+                        hasScannedStorage = true
+                        deleted = true
+                    }
                 }
+                if (deleted) persistTrackCache(appContext)
             }
-            if (deleted) persistTrackCache(appContext)
         }
     }
 
@@ -475,10 +492,7 @@ object TrackCatalog {
     )
 
     suspend fun loadTrackSamplesById(context: Context, trackId: String): TrackPlotData? {
-        ensureDiskCacheLoaded(context)
-        if (isTrackCacheEmpty()) {
-            rebuildTrackCache(context)
-        }
+        rebuildTrackCacheIfNeeded(context)
 
         val (points, displayName) = cacheMutex.withLock {
             val cached = parsedTrackCache[trackId] ?: return@withLock null to null
@@ -509,8 +523,6 @@ object TrackCatalog {
             parsedTrackCache[trackId] = updated
             _tracks.value = parsedTrackCache.toMap()
         }
-
-        persistTrackCache(context)
 
         return TrackPlotData(id = trackId, title = displayName, points = parsed.points)
     }
@@ -729,12 +741,6 @@ object TrackCatalog {
                             } else {
                                 JSONObject(raw)
                             }
-                            val folders = root.optJSONArray("subfolders") ?: JSONArray()
-                            for (i in 0 until folders.length()) {
-                                folders.optString(i)
-                                    ?.takeIf { it.isNotBlank() }
-                                    ?.let { cachedSubfolders.add(it) }
-                            }
                             val tracks = root.optJSONArray("tracks") ?: JSONArray()
                             for (i in 0 until tracks.length()) {
                                 runCatching {
@@ -748,8 +754,8 @@ object TrackCatalog {
                     }.onFailure {
                         Log.w("GPX", "Unable to load track cache ${cacheFile.absolutePath}", it)
                         parsedTrackCache.clear()
-                        cachedSubfolders.clear()
                     }
+                    hasScannedStorage = true
                 }
             }
             _tracks.value = parsedTrackCache.toMap()
@@ -769,7 +775,9 @@ object TrackCatalog {
                             .sortedBy { it.displayName.lowercase() }
                             .forEach { tracks.put(it.toJson()) }
                         val subfolders = JSONArray()
-                        cachedSubfolders
+                        parsedTrackCache.values
+                            .mapNotNull { it.folderName }
+                            .distinct()
                             .sortedBy { it.lowercase() }
                             .forEach { subfolders.put(it) }
                         writer.write(
