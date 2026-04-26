@@ -93,9 +93,9 @@ object TrackCatalog {
 
         allSources.forEachIndexed { index, source ->
             try {
-                val parsed = parseGpxTrack(context, source.openStream())
-                if (parsed != null) {
-                    updatedTracks[source.id] = CachedParsedTrack.from(source, parsed)
+                val stats = parseGpxTrackStats(context, source.openStream())
+                if (stats != null) {
+                    updatedTracks[source.id] = CachedParsedTrack.from(source, stats)
                 }
             } catch (e: Exception) {
                 Log.e("GPX", "Unable to parse track ${source.displayName}", e)
@@ -385,8 +385,8 @@ object TrackCatalog {
             }
         } ?: return null
 
-        val parsed = runCatching { source.openStream().use { parseGpxTrack(context, it) } }.getOrNull() ?: return null
-        return CachedParsedTrack.from(source.copy(folderName = folderName), parsed)
+        val stats = runCatching { source.openStream().use { parseGpxTrackStats(context, it) } }.getOrNull() ?: return null
+        return CachedParsedTrack.from(source.copy(folderName = folderName), stats)
     }
 
     fun onTrackDeleted(context: Context, trackId: String) {
@@ -472,8 +472,14 @@ object TrackCatalog {
     private fun parseGpxTrack(context: Context, inputStream: InputStream): ParsedTrack? {
         val coeff = PreferenceManager.getDefaultSharedPreferences(context)
             .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        val parsed = GpxReader.readTrack(inputStream, cpsCoefficient = coeff) ?: return null
-        return ParsedTrack(parsed.points, parsed.stats)
+        val points = GpxReader.readTrack(inputStream, cpsCoefficient = coeff) ?: return null
+        return ParsedTrack(points, statsFromTrackPoints(points))
+    }
+
+    private fun parseGpxTrackStats(context: Context, inputStream: InputStream): TrackStats? {
+        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
+            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        return GpxReader.readTrackStats(inputStream, cpsCoefficient = coeff)
     }
 
     private fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
@@ -523,13 +529,13 @@ object TrackCatalog {
         }
 
         companion object {
-            fun from(source: TrackSource, parsedTrack: ParsedTrack): CachedParsedTrack {
+            fun from(source: TrackSource, stats: TrackStats): CachedParsedTrack {
                 return CachedParsedTrack(
                     sourceId = source.id,
                     displayName = source.displayName,
                     folderName = source.folderName,
-                    stats = parsedTrack.stats,
-                    pointCache = parsedTrack.points
+                    stats = stats,
+                    pointCache = null
                 )
             }
 

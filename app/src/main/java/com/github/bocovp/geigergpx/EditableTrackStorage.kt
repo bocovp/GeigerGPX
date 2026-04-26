@@ -15,18 +15,19 @@ object EditableTrackStorage {
         val coeff = PreferenceManager.getDefaultSharedPreferences(context)
             .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
         val input = openInputStream(context, trackId) ?: return null
-        val parsed = GpxReader.readTrack(input, cpsCoefficient = coeff) ?: return null
-        return LoadResult(parsed.points)
+        val points = GpxReader.readTrack(input, cpsCoefficient = coeff) ?: return null
+        return LoadResult(points)
     }
 
     fun overwriteTrack(context: Context, trackId: String, points: List<TrackPoint>) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
+        val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         val output = openOutputStream(context, trackId) ?: return
         output.use { out ->
             out.bufferedWriter().use { writer ->
-                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle)
+                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
             }
         }
     }
@@ -40,6 +41,7 @@ object EditableTrackStorage {
     ): SplitResult? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
+        val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         val nextName = uniqueSplitFileName(context, sourceTitle, folderName)
         val uri = when {
@@ -49,7 +51,7 @@ object EditableTrackStorage {
                 val target = File(parentDir, nextName)
                 target.outputStream().use { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
                     }
                 }
                 Uri.fromFile(target)
@@ -61,7 +63,7 @@ object EditableTrackStorage {
                     relativePath = relativePath
                 ) { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
                     }
                 }
                 result.uri ?: return null

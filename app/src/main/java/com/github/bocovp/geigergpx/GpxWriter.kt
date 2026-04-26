@@ -1,6 +1,7 @@
 package com.github.bocovp.geigergpx
 
 import android.content.Context
+import android.location.Location
 import android.net.Uri
 import androidx.preference.PreferenceManager
 import java.text.SimpleDateFormat
@@ -15,6 +16,14 @@ object GpxWriter {
     private const val GPX_NAMESPACE = "http://www.topografix.com/GPX/1/1"
     private const val RAD_NAMESPACE = "https://github.com/bocovp/GeigerGPX"
     private val ISO_INSTANT_FORMATTER: DateTimeFormatter = DateTimeFormatter.ISO_INSTANT
+
+    private data class TrackMetadata(
+        val distanceMeters: Double,
+        val counts: Long,
+        val seconds: Double,
+        val doseMuSv: Double?,
+        val cpsToUsvh: Double
+    )
 
     data class SaveTrackResult(
         val displayPath: String,
@@ -85,10 +94,23 @@ object GpxWriter {
     fun writeTrackXml(
         writer: java.io.BufferedWriter,
         points: List<TrackPoint>,
-        saveDoseRateInEle: Boolean
+        saveDoseRateInEle: Boolean,
+        calibrationCoefficient: Double = 1.0
     ) {
+        val metadata = computeTrackMetadata(points, calibrationCoefficient)
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
         writer.write("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
+        writer.write("\t<metadata>\n")
+        writer.write("\t\t<extensions>\n")
+        writer.write("\t\t\t<rad:distance>${"%.3f".format(Locale.US, metadata.distanceMeters)}</rad:distance>\n")
+        writer.write("\t\t\t<rad:counts>${metadata.counts}</rad:counts>\n")
+        writer.write("\t\t\t<rad:seconds>${"%.3f".format(Locale.US, metadata.seconds)}</rad:seconds>\n")
+        metadata.doseMuSv?.let {
+            writer.write("\t\t\t<rad:dose>${"%.3f".format(Locale.US, it)}</rad:dose>\n")
+        }
+        writer.write("\t\t\t<rad:cpsToUsvh>${formatCoefficient(metadata.cpsToUsvh)}</rad:cpsToUsvh>\n")
+        writer.write("\t\t</extensions>\n")
+        writer.write("\t</metadata>\n")
         writer.write("\t<trk>\n\t\t<trkseg>\n")
 
         val sb = StringBuilder(256)
@@ -172,6 +194,7 @@ object GpxWriter {
     ): SaveTrackResult? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
+        val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         val primaryResult = FileStorageManager.writeStreamDetailed(
             context = context,
@@ -179,7 +202,7 @@ object GpxWriter {
             forceDefaultFolder = forceDefaultFolder
         ) { out ->
             out.bufferedWriter().use { writer ->
-                writeTrackXml(writer, points, saveDoseRateInEle)
+                writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
             }
         }
         if (primaryResult.succeeded) {
@@ -197,7 +220,7 @@ object GpxWriter {
             forceDefaultFolder = true
         ) { out ->
             out.bufferedWriter().use { writer ->
-                writeTrackXml(writer, points, saveDoseRateInEle)
+                writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
             }
         }
         val fallbackUri = fallbackResult.uri ?: return null
@@ -216,5 +239,54 @@ object GpxWriter {
             .replace(">", "&gt;")
             .replace("\"", "&quot;")
             .replace("'", "&apos;")
+    }
+
+    private fun formatCoefficient(value: Double): String {
+        val rounded = kotlin.math.round(value * 1_000_000.0) / 1_000_000.0
+        return if (rounded % 1.0 == 0.0) {
+            "%.1f".format(Locale.US, rounded)
+        } else {
+            "%s".format(Locale.US, rounded.toString())
+        }
+    }
+
+    private fun computeTrackMetadata(points: List<TrackPoint>, calibrationCoefficient: Double): TrackMetadata {
+        var distanceMeters = 0.0
+        var counts = 0L
+        var seconds = 0.0
+        var lastValid: TrackPoint? = null
+        val result = FloatArray(1)
+
+        for (point in points) {
+            counts += point.counts.toLong()
+            seconds += point.seconds
+            if (point.badCoordinates) continue
+            val previous = lastValid
+            if (previous != null) {
+                Location.distanceBetween(
+                    previous.latitude,
+                    previous.longitude,
+                    point.latitude,
+                    point.longitude,
+                    result
+                )
+                distanceMeters += result[0].toDouble()
+            }
+            lastValid = point
+        }
+
+        val doseMuSv = if (calibrationCoefficient != 1.0) {
+            3600.0 * counts.toDouble() * calibrationCoefficient
+        } else {
+            null
+        }
+
+        return TrackMetadata(
+            distanceMeters = distanceMeters,
+            counts = counts,
+            seconds = seconds,
+            doseMuSv = doseMuSv,
+            cpsToUsvh = calibrationCoefficient
+        )
     }
 }
