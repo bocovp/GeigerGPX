@@ -134,7 +134,7 @@ object TrackCatalog {
                 launch(parseDispatcher) {
                     yield()
                     val parsedStats = try {
-                        parseGpxTrackStats(source.openStream(), coeff)
+                        source.openStream().use { parseGpxTrackStats(it, coeff) }
                     } catch (e: Exception) {
                         Log.e("GPX", "Unable to parse track ${source.displayName}", e)
                         null
