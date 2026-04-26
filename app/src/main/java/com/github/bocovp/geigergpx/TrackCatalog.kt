@@ -28,6 +28,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import java.util.Locale
 
 private const val CURRENT_TRACK_ID = "active-track"
 private const val CURRENT_TRACK_TITLE = "Currently recording"
@@ -552,7 +553,7 @@ object TrackCatalog {
         val hh = durationSeconds / 3600
         val mm = (durationSeconds % 3600) / 60
         val ss = durationSeconds % 60
-        val durationText = String.format("%02d:%02d:%02d", hh, mm, ss)
+        val durationText = String.format(Locale.US, "%02d:%02d:%02d", hh, mm, ss)
         
         val distanceText = if (stats.distanceMeters < 1000.0) {
             "%.0f m".format(java.util.Locale.US, stats.distanceMeters)
