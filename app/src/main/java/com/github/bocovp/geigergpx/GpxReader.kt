@@ -17,6 +17,7 @@ object GpxReader {
     }
 
     data class TrackMetadata(
+        val pointCount: Int?,
         val distanceMeters: Double,
         val counts: Long,
         val seconds: Double,
@@ -86,6 +87,7 @@ object GpxReader {
             var insideTrkpt = false
 
             var metadataDistance: Double? = null
+            var metadataPointCount: Int? = null
             var metadataCounts: Long? = null
             var metadataSeconds: Double? = null
             var metadataDurationMillis: Long? = null
@@ -111,11 +113,12 @@ object GpxReader {
                                 val durationFromMetadata = metadataDurationMillis
                                     ?: ((metadataSeconds ?: 0.0) * 1000.0).roundToLong().coerceAtLeast(0L)
                                 val stats = TrackStats(
-                                    pointCount = 0,
+                                    pointCount = metadataPointCount ?: 0,
                                     durationMillis = durationFromMetadata,
                                     distanceMeters = metadataDistance ?: 0.0
                                 )
                                 return ParsedTrackData(emptyList(), stats, buildMetadata(
+                                    metadataPointCount,
                                     metadataDistance,
                                     metadataCounts,
                                     metadataSeconds,
@@ -159,6 +162,7 @@ object GpxReader {
                             }
                         } else if (insideMetadata && currentNamespace == RAD_NAMESPACE) {
                             when (currentTag) {
+                                "pointCount" -> metadataPointCount = value?.toIntOrNull()
                                 "distance" -> metadataDistance = value?.toDoubleOrNull()
                                 "counts" -> metadataCounts = value?.toLongOrNull()
                                 "seconds" -> metadataSeconds = value?.toDoubleOrNull()
@@ -220,6 +224,7 @@ object GpxReader {
             }
 
             val metadata = buildMetadata(
+                metadataPointCount,
                 metadataDistance,
                 metadataCounts,
                 metadataSeconds,
@@ -231,7 +236,7 @@ object GpxReader {
             val stats = when {
                 preferMetadataStats && metadataDistance != null && (metadataDurationMillis != null || metadataSeconds != null) -> {
                     TrackStats(
-                        pointCount = 0,
+                        pointCount = metadataPointCount ?: 0,
                         durationMillis = metadataDurationMillis
                             ?: ((metadataSeconds ?: 0.0) * 1000.0).roundToLong().coerceAtLeast(0L),
                         distanceMeters = metadataDistance ?: 0.0
@@ -248,16 +253,18 @@ object GpxReader {
     }
 
     private fun buildMetadata(
+        pointCount: Int?,
         distanceMeters: Double?,
         counts: Long?,
         seconds: Double?,
         dose: Double?,
         cpsToUsvh: Double?
     ): TrackMetadata? {
-        if (distanceMeters == null && counts == null && seconds == null && dose == null && cpsToUsvh == null) {
+        if (pointCount == null && distanceMeters == null && counts == null && seconds == null && dose == null && cpsToUsvh == null) {
             return null
         }
         return TrackMetadata(
+            pointCount = pointCount,
             distanceMeters = distanceMeters ?: 0.0,
             counts = counts ?: 0L,
             seconds = seconds ?: 0.0,

@@ -18,6 +18,7 @@ object GpxWriter {
     private val ISO_INSTANT_FORMATTER: DateTimeFormatter = DateTimeFormatter.ISO_INSTANT
 
     private data class TrackMetadata(
+        val pointCount: Int,
         val distanceMeters: Double,
         val counts: Long,
         val seconds: Double,
@@ -102,6 +103,7 @@ object GpxWriter {
         writer.write("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
         writer.write("\t<metadata>\n")
         writer.write("\t\t<extensions>\n")
+        writer.write("\t\t\t<rad:pointCount>${metadata.pointCount}</rad:pointCount>\n")
         writer.write("\t\t\t<rad:distance>${"%.3f".format(Locale.US, metadata.distanceMeters)}</rad:distance>\n")
         writer.write("\t\t\t<rad:counts>${metadata.counts}</rad:counts>\n")
         writer.write("\t\t\t<rad:seconds>${"%.3f".format(Locale.US, metadata.seconds)}</rad:seconds>\n")
@@ -276,12 +278,13 @@ object GpxWriter {
         }
 
         val doseMuSv = if (calibrationCoefficient != 1.0) {
-            3600.0 * counts.toDouble() * calibrationCoefficient
+            (counts.toDouble() * calibrationCoefficient) / 3600.0
         } else {
             null
         }
 
         return TrackMetadata(
+            pointCount = points.size,
             distanceMeters = distanceMeters,
             counts = counts,
             seconds = seconds,
