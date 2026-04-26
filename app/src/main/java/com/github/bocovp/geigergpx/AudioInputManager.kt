@@ -58,7 +58,7 @@ class AudioInputManager(
 
             var audioBuf: ShortArray? = null
 
-            while (running.get()) {
+            while (running.get() && !Thread.currentThread().isInterrupted) {
                 try {
                     Log.i(TAG, "--- Outer Loop: Initializing Audio Hardware ---")
 
@@ -175,7 +175,7 @@ class AudioInputManager(
                     var zeroBufferCount = 0
                     var audioHealthy = true
 
-                    while (running.get() && !innerLoopBreak.get()) {
+                    while (running.get() && !innerLoopBreak.get() && !Thread.currentThread().isInterrupted) {
                         val currentAr = audioRecord ?: break
                         val read = currentAr.read(audioBuf!!, 0, audioBuf!!.size)
 
@@ -487,6 +487,7 @@ class AudioInputManager(
         }
     }
 
+    @Synchronized
     private fun resetBluetoothAudioRouting() {
         val ctx = context ?: return
         val am = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
