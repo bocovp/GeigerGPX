@@ -469,11 +469,10 @@ object TrackCatalog {
         return TrackStats(points.size, duration, distance)
     }
 
-    private fun parseGpxTrack(context: Context, inputStream: InputStream): ParsedTrack? {
+    private fun parseGpxTrack(context: Context, inputStream: InputStream): GpxReader.TrackWithStats? {
         val coeff = PreferenceManager.getDefaultSharedPreferences(context)
             .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        val points = GpxReader.readTrack(inputStream, cpsCoefficient = coeff) ?: return null
-        return ParsedTrack(points, statsFromTrackPoints(points))
+        return GpxReader.readTrackWithStats(inputStream, cpsCoefficient = coeff)
     }
 
     private fun parseGpxTrackStats(context: Context, inputStream: InputStream): TrackStats? {
@@ -559,11 +558,6 @@ object TrackCatalog {
             }
         }
     }
-
-    private data class ParsedTrack(
-        val points: List<TrackPoint>,
-        val stats: TrackStats
-    )
 
     private data class TrackSource(
         val id: String,
