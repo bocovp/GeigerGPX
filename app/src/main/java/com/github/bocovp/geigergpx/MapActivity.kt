@@ -8,6 +8,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityMapBinding
@@ -20,8 +21,10 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import java.util.Locale
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -133,6 +136,13 @@ class MapActivity : AppCompatActivity() {
         mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
         binding.mapView.overlays.add(mapDoseLongPressOverlay)
 
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                TrackCatalog.allTracks.collectLatest {
+                    refreshMapTracks(latestActivePoints)
+                }
+            }
+        }
         observeTrack()
     }
 
@@ -206,7 +216,6 @@ class MapActivity : AppCompatActivity() {
         binding.mapView.onResume()
         rememberedViewportState?.let { trackMapRenderer.restoreViewport(it) }
         mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
-        refreshMapTracks(latestActivePoints)
     }
 
     override fun onPause() {
@@ -244,7 +253,7 @@ class MapActivity : AppCompatActivity() {
         // the old AtomicInteger sequence guard.
         refreshJob?.cancel()
 
-        val showLoading = !hasLoadedMapTracks || TrackCatalog.isTrackCacheEmpty(this)
+        val showLoading = !hasLoadedMapTracks || TrackCatalog.isTrackCacheEmpty()
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
 
         // Capture all main-thread state that the IO block needs.

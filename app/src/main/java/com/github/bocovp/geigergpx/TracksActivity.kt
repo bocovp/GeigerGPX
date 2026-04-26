@@ -46,11 +46,7 @@ class TracksActivity : AppCompatActivity() {
     private val currentFolderName: String? by lazy {
         intent.getStringExtra(EXTRA_SUBFOLDER_NAME)?.takeIf { it.isNotBlank() }
     }
-    private var hasLoadedTrackList = false
-    private var refreshPollScheduled = false
-    private var pendingManualRefresh = false
-    private var loadingStateActive = false
-    private var refreshJob: Job? = null
+    private var updateAdapterJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,25 +92,62 @@ class TracksActivity : AppCompatActivity() {
         binding.tracksRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.tracksRecyclerView.adapter = adapter
 
-        refreshTrackList()
-
-        viewModel.activeTrackPoints.observe(this) {
-            refreshTrackList()
-        }
-
-        viewModel.isTracking.observe(this) {
-            refreshTrackList()
-        }
-
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                TrackCatalog.rebuildProgress.collectLatest { progress ->
-                    updateLoadingUi(progress)
-                    if (progress == null) {
-                        refreshTrackList()
+                launch {
+                    TrackCatalog.rebuildProgress.collectLatest { progress ->
+                        updateLoadingUi(progress)
+                        if (progress == null) {
+                            updateAdapter()
+                        }
+                    }
+                }
+                launch {
+                    TrackCatalog.allTracks.collectLatest { _ ->
+                        updateAdapter()
                     }
                 }
             }
+        }
+
+        viewModel.activeTrackPoints.observe(this) {
+            updateAdapter()
+        }
+
+        viewModel.isTracking.observe(this) {
+            updateAdapter()
+        }
+    }
+
+    private fun updateAdapter() {
+        updateAdapterJob?.cancel()
+        updateAdapterJob = lifecycleScope.launch {
+            val points = viewModel.activeTrackPoints.value.orEmpty()
+            val includeCurrentTrack = currentFolderName == null && viewModel.isTracking.value == true
+            
+            // We still use loadTrackListItems for the complex filtering/item generation logic
+            // but we call it reactively whenever any of its inputs change.
+            val items = withContext(Dispatchers.IO) {
+                TrackCatalog.loadTrackListItems(
+                    context = this@TracksActivity,
+                    activePoints = points,
+                    includeCurrentTrack = includeCurrentTrack,
+                    includeMapTracks = false,
+                    browseFolderName = currentFolderName,
+                    includeFolderEntries = currentFolderName == null
+                )
+            }
+            
+            val selectedTracks = selectedTrackIds().ifEmpty {
+                if (currentFolderName == null) setOf(TrackCatalog.currentTrackId()) else emptySet()
+            }
+            val selectedFolders = selectedFolderIds()
+
+            adapter.submit(items, selectedTracks, selectedFolders)
+            
+            val hasTracks = items.isNotEmpty()
+            binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
+            binding.emptyStateLabel.visibility = if (!hasTracks && !TrackCatalog.isTrackCacheRebuildInProgress()) View.VISIBLE else View.GONE
         }
     }
 
@@ -143,106 +176,11 @@ class TracksActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         syncBottomNavigationSelection()
-        refreshTrackList()
     }
 
 
     private fun syncBottomNavigationSelection() {
         binding.bottomNavigation.menu.findItem(R.id.navigation_tracks)?.isChecked = true
-    }
-
-    private fun refreshTrackList(
-        forceLoading: Boolean = false,
-        clearTracksWhileLoading: Boolean = false,
-        rebuildCache: Boolean = false
-    ) {
-        var effectiveForceLoading = forceLoading
-        if (rebuildCache) {
-            pendingManualRefresh = true
-            TrackCatalog.rebuildTrackCacheAsync(applicationContext)
-        }
-
-        val rebuildInProgress = TrackCatalog.isTrackCacheRebuildInProgress()
-        if (!rebuildInProgress && pendingManualRefresh) {
-            effectiveForceLoading = true
-            pendingManualRefresh = false
-        }
-
-        val showLoading = effectiveForceLoading || rebuildInProgress || !hasLoadedTrackList || TrackCatalog.isTrackCacheEmpty(this)
-        if (showLoading && !loadingStateActive) {
-            if (clearTracksWhileLoading) {
-                adapter.submit(emptyList(), emptySet(), emptySet())
-            }
-        }
-        loadingStateActive = showLoading
-        
-        // If we are not rebuilding but still "loading" (e.g. initial disk scan), 
-        // show indeterminate progress.
-        if (showLoading && !rebuildInProgress) {
-            updateLoadingUi(0)
-        }
-
-        if (rebuildInProgress) {
-            return
-        }
-
-        refreshJob?.cancel()
-        refreshJob = lifecycleScope.launch {
-            try {
-                val points = viewModel.activeTrackPoints.value.orEmpty()
-                val includeCurrentTrack = currentFolderName == null && viewModel.isTracking.value == true
-                val (items, selectedTracks, selectedFolders) = withContext(Dispatchers.IO) {
-                    val loadedItems = TrackCatalog.loadTrackListItems(
-                        context = this@TracksActivity,
-                        activePoints = points,
-                        includeCurrentTrack = includeCurrentTrack,
-                        includeMapTracks = false,
-                        browseFolderName = currentFolderName,
-                        includeFolderEntries = currentFolderName == null
-                    )
-                    val loadedSelectedTracks = selectedTrackIds().ifEmpty {
-                        if (currentFolderName == null) setOf(TrackCatalog.currentTrackId()) else emptySet()
-                    }
-                    val loadedSelectedFolders = selectedFolderIds()
-                    Triple(loadedItems, loadedSelectedTracks, loadedSelectedFolders)
-                }
-
-                hasLoadedTrackList = true
-                adapter.submit(items, selectedTracks, selectedFolders)
-                val hasTracks = items.isNotEmpty()
-
-                // Only hide loading UI if a rebuild isn't currently happening
-                if (!TrackCatalog.isTrackCacheRebuildInProgress()) {
-                    updateLoadingUi(null)
-                }
-
-                binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
-                binding.emptyStateLabel.visibility =
-                    if (!hasTracks && !TrackCatalog.isTrackCacheRebuildInProgress()) View.VISIBLE else View.GONE
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                val rebuildActive = TrackCatalog.isTrackCacheRebuildInProgress()
-                if (!rebuildActive) {
-                    updateLoadingUi(null)
-                }
-                binding.tracksRecyclerView.visibility = View.GONE
-                binding.emptyStateLabel.visibility = if (rebuildActive) View.GONE else View.VISIBLE
-            } finally {
-                if (refreshJob == this.coroutineContext[Job]) {
-                    loadingStateActive = false
-                }
-            }
-        }
-    }
-
-    private fun scheduleRefreshPoll() {
-        if (refreshPollScheduled) return
-        refreshPollScheduled = true
-        binding.root.postDelayed({
-            refreshPollScheduled = false
-            refreshTrackList(forceLoading = pendingManualRefresh)
-        }, 500L)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -257,7 +195,7 @@ class TracksActivity : AppCompatActivity() {
                 true
             }
             R.id.action_refresh_tracks -> {
-                refreshTrackList(forceLoading = true, clearTracksWhileLoading = true, rebuildCache = true)
+                TrackCatalog.rebuildTrackCacheAsync(applicationContext)
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -356,14 +294,13 @@ class TracksActivity : AppCompatActivity() {
         if (movedTrackId != null) {
             Toast.makeText(this, "Track moved", Toast.LENGTH_SHORT).show()
             TrackSelectionPrefs.replaceSelectedTrackId(this, item.id, movedTrackId)
-            refreshTrackList()
         } else {
             Toast.makeText(this, "Unable to move file", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun availableMoveTargets(currentFolder: String?): List<String?> {
-        val subfolders = (TrackCatalog.listTrackSubfolderNames(this) + ARCHIVE_SUBFOLDER)
+        val subfolders = (TrackCatalog.listTrackSubfolderNames() + ARCHIVE_SUBFOLDER)
             .distinct()
             .sortedBy { it.lowercase() }
         val targets = mutableListOf<String?>()
@@ -390,19 +327,17 @@ class TracksActivity : AppCompatActivity() {
             .setView(input)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                val renamed = renameTrack(item, input.text?.toString().orEmpty())
-                if (renamed != null) {
+                val result = renameTrack(item, input.text?.toString().orEmpty())
+                if (result != null) {
+                    val (renamedId, renamedTitle) = result
                     Toast.makeText(this, "File renamed", Toast.LENGTH_SHORT).show()
                     TrackCatalog.onTrackRenamed(
                         context = this,
                         oldTrackId = item.id,
-                        newTrackId = renamed,
-                        newDisplayName = input.text?.toString().orEmpty().trim().let {
-                            if (it.endsWith(".gpx", ignoreCase = true)) it else "$it.gpx"
-                        }
+                        newTrackId = renamedId,
+                        newDisplayName = renamedTitle
                     )
-                    TrackSelectionPrefs.replaceSelectedTrackId(this, item.id, renamed)
-                    refreshTrackList()
+                    TrackSelectionPrefs.replaceSelectedTrackId(this, item.id, renamedId)
                 } else {
                     Toast.makeText(this, "Unable to rename file", Toast.LENGTH_SHORT).show()
                 }
@@ -421,7 +356,6 @@ class TracksActivity : AppCompatActivity() {
                     TrackSelectionPrefs.removeSelectedTrackId(this, item.id)
                     TrackCatalog.onTrackDeleted(this, item.id)
                     Toast.makeText(this, "Deleted", Toast.LENGTH_SHORT).show()
-                    refreshTrackList()
                 } else {
                     Toast.makeText(this, "Unable to delete file", Toast.LENGTH_SHORT).show()
                 }
@@ -429,7 +363,7 @@ class TracksActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun renameTrack(item: TrackListItem, requestedName: String): String? {
+    private fun renameTrack(item: TrackListItem, requestedName: String): Pair<String, String>? {
         if (item.isCurrentTrack) return null
 
         val sanitizedName = requestedName.trim()
@@ -442,10 +376,10 @@ class TracksActivity : AppCompatActivity() {
         } else {
             "$sanitizedName.gpx"
         }
-        if (targetName == item.title) return item.id
+        if (targetName == item.title) return item.id to targetName
 
         val documentUri = trackDocumentUri(item)
-        return when {
+        val newId = when {
             documentUri != null -> {
                 val parent = resolveDocumentDirectory(item.folderName, createIfMissing = false) ?: return null
                 parent.findFile(targetName)
@@ -459,12 +393,13 @@ class TracksActivity : AppCompatActivity() {
                 if (!source.exists()) return null
                 val parent = source.parentFile ?: return null
                 val destination = File(parent, targetName)
-                if (source.absolutePath == destination.absolutePath) return item.id
+                if (source.absolutePath == destination.absolutePath) return item.id to targetName
                 if (destination.exists() && !destination.delete()) return null
                 if (source.renameTo(destination)) "file:${destination.absolutePath}" else null
             }
             else -> null
         }
+        return newId?.let { it to targetName }
     }
 
     private fun deleteTrack(item: TrackListItem): Boolean {

@@ -272,13 +272,14 @@ class EditTrackActivity : AppCompatActivity() {
                         EditableTrackStorage.createSplitTrack(this@EditTrackActivity, trackId, trackTitle, trackFolder, it)
                             ?: return@withContext false
                     }
+
                     splitPoints?.let { second ->
                         splitResult?.let { result ->
-                            TrackCatalog.onTrackSavedById(this@EditTrackActivity, result.newTrackId, result.newTrackTitle, trackFolder, second, coeff)
+                            TrackCatalog.onTrackSavedById(this@EditTrackActivity, result.newTrackId, result.newTrackTitle, trackFolder, second)
                         }
                     }
                     EditableTrackStorage.overwriteTrack(this@EditTrackActivity, trackId, updatedPoints)
-                    TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints, coeff)
+                    TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints)
                     true
                 }
 
