@@ -232,7 +232,9 @@ object TrackCatalog {
             val shouldIncludeMapTrack = includeMapTracks && (mapTrackIds == null || source.sourceId in mapTrackIds)
             val cached = if (shouldIncludeMapTrack && !source.hasPoints()) {
                 try {
-                    val parsed = openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(context, it) }
+                    val parsed = withContext(Dispatchers.IO) {
+                        openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(context, it) }
+                    }
                     if (parsed != null) {
                         val updated = source.withPoints(parsed.points)
                         cacheMutex.withLock {
