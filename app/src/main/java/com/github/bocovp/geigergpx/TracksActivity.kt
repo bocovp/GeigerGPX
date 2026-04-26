@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collectLatest
 
 class TracksActivity : AppCompatActivity() {
 
@@ -103,10 +104,12 @@ class TracksActivity : AppCompatActivity() {
             refreshTrackList()
         }
 
-        TrackCatalog.rebuildProgress.observe(this) { progress ->
-            updateLoadingUi(progress)
-            if (progress == null) {
-                refreshTrackList()
+        lifecycleScope.launch {
+            TrackCatalog.rebuildProgress.collectLatest { progress ->
+                updateLoadingUi(progress)
+                if (progress == null) {
+                    refreshTrackList()
+                }
             }
         }
     }
