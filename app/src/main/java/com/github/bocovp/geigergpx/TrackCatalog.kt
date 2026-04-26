@@ -16,14 +16,14 @@ import kotlin.math.roundToLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -124,28 +124,33 @@ object TrackCatalog {
         val updatedTracks = linkedMapOf<String, CachedParsedTrack>()
         var processedCount = 0
 
-        val tasks = allSources.map { source ->
-            catalogScope.async(parseDispatcher) {
-                yield()
-                try {
-                    val stats = parseGpxTrackStats(context, source.openStream())
-                    source to stats
-                } catch (e: Exception) {
-                    Log.e("GPX", "Unable to parse track ${source.displayName}", e)
-                    source to null
+        coroutineScope {
+            val results = Channel<Pair<TrackSource, TrackStats?>>(Channel.UNLIMITED)
+            allSources.forEach { source ->
+                launch(parseDispatcher) {
+                    yield()
+                    val parsedStats = try {
+                        parseGpxTrackStats(context, source.openStream())
+                    } catch (e: Exception) {
+                        Log.e("GPX", "Unable to parse track ${source.displayName}", e)
+                        null
+                    }
+                    results.send(source to parsedStats)
                 }
             }
-        }
 
-        tasks.awaitAll().forEach { (source, stats) ->
-            if (stats != null) {
-                updatedTracks[source.id] = CachedParsedTrack.from(source, stats)
+            repeat(totalCount) {
+                val (source, stats) = results.receive()
+                if (stats != null) {
+                    updatedTracks[source.id] = CachedParsedTrack.from(source, stats)
+                }
+                processedCount += 1
+                if (totalCount > 0) {
+                    val progressPercent = (processedCount * 100) / totalCount
+                    _rebuildProgress.value = maxOf(1, progressPercent)
+                }
             }
-            processedCount += 1
-            if (totalCount > 0) {
-                val progressPercent = (processedCount * 100) / totalCount
-                _rebuildProgress.value = maxOf(1, progressPercent)
-            }
+            results.close()
         }
 
         cacheMutex.withLock {
