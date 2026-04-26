@@ -81,8 +81,7 @@ object GpxReader {
             val parser = parserFactory.newPullParser().apply { setInput(stream, null) }
 
             val points = mutableListOf<TrackPoint>()
-            var firstTimestamp = Long.MAX_VALUE
-            var lastTimestamp = Long.MIN_VALUE
+            var totalSeconds = 0.0
             var pointCount = 0
             var calculatedDistance = 0.0
             var lastValidLat: Double? = null
@@ -101,7 +100,6 @@ object GpxReader {
             var metadataPointCount: Int? = null
             var metadataCounts: Long? = null
             var metadataSeconds: Double? = null
-            var metadataDurationMillis: Long? = null
             var metadataDose: Double? = null
             var metadataCpsToUsvh: Double? = null
 
@@ -120,9 +118,8 @@ object GpxReader {
                         }
 
                         if (parser.name.equals("trkpt", ignoreCase = true)) {
-                            if (preferMetadataStats && metadataDistance != null && (metadataDurationMillis != null || metadataSeconds != null)) {
-                                val durationFromMetadata = metadataDurationMillis
-                                    ?: ((metadataSeconds ?: 0.0) * 1000.0).roundToLong().coerceAtLeast(0L)
+                            if (preferMetadataStats && metadataDistance != null && (metadataSeconds != null)) {
+                                val durationFromMetadata = ((metadataSeconds ?: 0.0) * 1000.0).roundToLong().coerceAtLeast(0L)
                                 val stats = TrackStats(
                                     pointCount = metadataPointCount ?: 0,
                                     durationMillis = durationFromMetadata,
@@ -177,7 +174,6 @@ object GpxReader {
                                 "distance" -> metadataDistance = value?.toDoubleOrNull()
                                 "counts" -> metadataCounts = value?.toLongOrNull()
                                 "seconds" -> metadataSeconds = value?.toDoubleOrNull()
-                                "duration" -> metadataDurationMillis = value?.toLongOrNull()
                                 "dose" -> metadataDose = value?.toDoubleOrNull()
                                 "cpsToUsvh" -> metadataCpsToUsvh = value?.toDoubleOrNull()
                             }
@@ -210,11 +206,6 @@ object GpxReader {
                                 )
                             }
 
-                            if (timeMs > 0L && !badCoordinates) {
-                                if (timeMs < firstTimestamp) firstTimestamp = timeMs
-                                if (timeMs > lastTimestamp) lastTimestamp = timeMs
-                            }
-
                             pointCount += 1
                             if (!badCoordinates) {
                                 val previousLat = lastValidLat
@@ -225,6 +216,8 @@ object GpxReader {
                                 lastValidLat = lat
                                 lastValidLon = lon
                             }
+
+                            totalSeconds += seconds
                             insideTrkpt = false
                         }
                         currentTag = null
@@ -245,17 +238,19 @@ object GpxReader {
 
             if (parsePoints && points.isEmpty()) return null
             val stats = when {
-                preferMetadataStats && metadataDistance != null && (metadataDurationMillis != null || metadataSeconds != null) -> {
+                preferMetadataStats && metadataDistance != null && (metadataSeconds != null) -> {
                     TrackStats(
                         pointCount = metadataPointCount ?: 0,
-                        durationMillis = metadataDurationMillis
-                            ?: ((metadataSeconds ?: 0.0) * 1000.0).roundToLong().coerceAtLeast(0L),
+                        durationMillis = ((metadataSeconds ?: 0.0) * 1000.0).roundToLong().coerceAtLeast(0L),
                         distanceMeters = metadataDistance ?: 0.0
                     )
                 }
                 else -> {
-                    val duration = if (lastTimestamp > firstTimestamp) lastTimestamp - firstTimestamp else 0L
-                    TrackStats(pointCount = pointCount, durationMillis = duration, distanceMeters = calculatedDistance)
+                    TrackStats(
+                        pointCount = pointCount,
+                        durationMillis = (totalSeconds * 1000.0).roundToLong().coerceAtLeast(0L),
+                        distanceMeters = calculatedDistance
+                    )
                 }
             }
 

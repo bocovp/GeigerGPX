@@ -9,3 +9,9 @@ data class TrackPoint(
     val seconds: Double,
     val badCoordinates: Boolean = false
 )
+
+data class TrackStats(
+    val pointCount: Int,
+    val durationMillis: Long,
+    val distanceMeters: Double
+)

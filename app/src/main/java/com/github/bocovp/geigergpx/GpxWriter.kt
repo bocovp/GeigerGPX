@@ -17,6 +17,24 @@ object GpxWriter {
     private const val RAD_NAMESPACE = "https://github.com/bocovp/GeigerGPX"
     private val ISO_INSTANT_FORMATTER: DateTimeFormatter = DateTimeFormatter.ISO_INSTANT
 
+    private var appVersion: String = ""
+
+    fun initVersion(context: Context) {
+        runCatching {
+            val packageInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+            appVersion = packageInfo.versionName ?: ""
+        }
+    }
+
+    private fun getCreator(): String {
+        return if (appVersion.isNotEmpty()) "GeigerGPX $appVersion" else "GeigerGPX"
+    }
+
     private data class TrackMetadata(
         val pointCount: Int,
         val distanceMeters: Double,
@@ -100,7 +118,7 @@ object GpxWriter {
     ) {
         val metadata = computeTrackMetadata(points, calibrationCoefficient)
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-        writer.write("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
+        writer.write("<gpx version=\"1.1\" creator=\"${getCreator()}\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
         writer.write("\t<metadata>\n")
         writer.write("\t\t<extensions>\n")
         writer.write("\t\t\t<rad:pointCount>${metadata.pointCount}</rad:pointCount>\n")
@@ -151,7 +169,7 @@ object GpxWriter {
     fun serializePoiEntries(entries: List<PoiEntry>): String {
         val builder = StringBuilder()
         builder.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-        builder.append("<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
+        builder.append("<gpx version=\"1.1\" creator=\"${getCreator()}\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
 
         entries.sortedBy { it.timestampMillis }.forEach { poi ->
             val timeValue = if (poi.timestampMillis > 0) ISO_INSTANT_FORMATTER.format(Instant.ofEpochMilli(poi.timestampMillis)) else ""
@@ -174,7 +192,7 @@ object GpxWriter {
 
     fun emptyPoiXml(): String {
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-            "<gpx version=\"1.1\" creator=\"GeigerGPX\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n" +
+            "<gpx version=\"1.1\" creator=\"${getCreator()}\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n" +
             "</gpx>\n"
     }
 

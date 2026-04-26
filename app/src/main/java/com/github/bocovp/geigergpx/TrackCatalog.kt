@@ -16,16 +16,11 @@ import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToLong
 
 private const val CURRENT_TRACK_ID = "active-track"
 private const val CURRENT_TRACK_TITLE = "Currently recording"
 private val EXCLUDED_GPX_FILE_SET = setOf("Backup.gpx", "POI.gpx", "POI-Backup.gpx")
-
-data class TrackStats(
-    val pointCount: Int,
-    val durationMillis: Long,
-    val distanceMeters: Double
-)
 
 data class TrackListItem(
     val id: String,
@@ -461,12 +456,8 @@ object TrackCatalog {
                 validPoints[i].longitude
             )
         }
-        val duration = if (validPoints.size >= 2) {
-            (validPoints.last().timeMillis - validPoints.first().timeMillis).coerceAtLeast(0L)
-        } else {
-            0L
-        }
-        return TrackStats(points.size, duration, distance)
+        val durationMillis = (points.sumOf { it.seconds } * 1000.0).roundToLong().coerceAtLeast(0L)
+        return TrackStats(points.size, durationMillis, distance)
     }
 
     private fun parseGpxTrack(context: Context, inputStream: InputStream): GpxReader.TrackWithStats? {
