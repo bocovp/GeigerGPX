@@ -16,6 +16,7 @@ import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -42,6 +43,7 @@ class TimePlotActivity : AppCompatActivity() {
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var plotLoadJob: Job? = null
     private var kdeRenderJob: Job? = null
+    private var kdeRenderGeneration: Long = 0L
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
     private var isRefreshing = false
 
@@ -497,9 +499,12 @@ class TimePlotActivity : AppCompatActivity() {
         }
 
         kdeRenderJob?.cancel()
+        val renderGeneration = ++kdeRenderGeneration
+        val shouldShowLoading = binding.timePlotView.visibility != View.VISIBLE
         kdeRenderJob = lifecycleScope.launch {
-            showLoading(true)
+            if (shouldShowLoading) showLoading(true)
             val ci = withContext(Dispatchers.Default) { getConfidenceIntervals(ts2) }
+            if (!isActive || renderGeneration != kdeRenderGeneration) return@launch
             if (ci == null) {
                 binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis)
                 showPlotMessage(R.string.time_plot_no_track_data)
