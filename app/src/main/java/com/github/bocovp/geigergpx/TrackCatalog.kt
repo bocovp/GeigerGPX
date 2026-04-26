@@ -82,7 +82,8 @@ object TrackCatalog {
                 }
         }
         .stateIn(catalogScope, SharingStarted.Eagerly, emptyList())
-    @Volatile private var diskCacheLoaded = false
+    @Volatile
+    private var diskCacheLoaded = false
 
     fun currentTrackId(): String = CURRENT_TRACK_ID
 
@@ -103,15 +104,17 @@ object TrackCatalog {
         }
     }
 
-    fun isTrackCacheEmpty(context: Context): Boolean {
-        if (_tracks.value.isNotEmpty()) return false
-        val cacheFile = trackCacheFile(context)
-        return !cacheFile.exists() || cacheFile.length() == 0L
+    fun isTrackCacheEmpty(): Boolean {
+        return _tracks.value.isEmpty()
     }
 
     suspend fun rebuildTrackCache(context: Context) {
         ensureDiskCacheLoaded(context)
         _rebuildProgress.value = 0
+
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+
         val sourceListing = listTrackFiles(context)
         if (sourceListing is TrackSourceListing.Failure) {
             Log.w("GPX", "Unable to rebuild track cache", sourceListing.error)
@@ -131,7 +134,7 @@ object TrackCatalog {
                 launch(parseDispatcher) {
                     yield()
                     val parsedStats = try {
-                        parseGpxTrackStats(context, source.openStream())
+                        source.openStream().use { parseGpxTrackStats(it, coeff) }
                     } catch (e: Exception) {
                         Log.e("GPX", "Unable to parse track ${source.displayName}", e)
                         null
@@ -198,16 +201,14 @@ object TrackCatalog {
         includeFolderEntries: Boolean = false
     ): List<TrackListItem> {
         ensureDiskCacheLoaded(context)
-        if (isTrackCacheEmpty(context)) {
+        if (isTrackCacheEmpty()) {
             rebuildTrackCache(context)
         }
 
         val items = mutableListOf<TrackListItem>()
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         if (includeCurrentTrack && browseFolderName == null) {
-            val currentTrack = currentTrackData(activePoints, coeff)
+            val currentTrack = currentTrackData(activePoints)
             val includeCurrentMapTrack = includeMapTracks && (mapTrackIds == null || CURRENT_TRACK_ID in mapTrackIds)
             items.add(
                 TrackListItem(
@@ -239,7 +240,9 @@ object TrackCatalog {
             val cached = if (shouldIncludeMapTrack && !source.hasPoints()) {
                 try {
                     val parsed = withContext(Dispatchers.IO) {
-                        openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(context, it) }
+                        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
+                            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+                        openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(it, coeff) }
                     }
                     if (parsed != null) {
                         val updated = source.withPoints(parsed.points)
@@ -303,14 +306,18 @@ object TrackCatalog {
         return items
     }
 
-    fun listTrackSubfolderNames(context: Context): List<String> {
-        return _tracks.value.values
-            .mapNotNull { it.folderName }
-            .distinct()
-            .sortedBy { it.lowercase() }
-    }
+    val allSubfolders: StateFlow<List<String>> = _tracks
+        .map { tracks ->
+            tracks.values
+                .mapNotNull { it.folderName }
+                .distinct()
+                .sortedBy { it.lowercase() }
+        }
+        .stateIn(catalogScope, SharingStarted.Eagerly, emptyList())
 
-    fun onTrackSaved(context: Context, relativePath: String, points: List<TrackPoint>, coefficient: Double) {
+    fun listTrackSubfolderNames(): List<String> = allSubfolders.value
+
+    fun onTrackSaved(context: Context, relativePath: String, points: List<TrackPoint>) {
         val appContext = context.applicationContext
         catalogScope.launch {
             ensureDiskCacheLoaded(appContext)
@@ -336,8 +343,7 @@ object TrackCatalog {
         trackId: String,
         displayName: String,
         folderName: String?,
-        points: List<TrackPoint>,
-        coefficient: Double
+        points: List<TrackPoint>
     ) {
         val appContext = context.applicationContext
         catalogScope.launch {
@@ -429,6 +435,7 @@ object TrackCatalog {
                     )
                 } else null
             }
+
             else -> {
                 // For tree: URIs or others, fall back to listing if we can't easily resolve.
                 // However, GpxWriter.restoreBackupIfPresent provides a normalized path/uri.
@@ -438,9 +445,12 @@ object TrackCatalog {
             }
         } ?: return null
 
-        val stats = runCatching { source.openStream().use { parseGpxTrackStats(context, it) } }.getOrNull() ?: return null
+        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
+            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val stats = runCatching { source.openStream().use { parseGpxTrackStats(it, coeff) } }.getOrNull() ?: return null
         return CachedParsedTrack.from(source.copy(folderName = folderName), stats)
     }
+
 
     fun onTrackDeleted(context: Context, trackId: String) {
         val appContext = context.applicationContext
@@ -466,26 +476,44 @@ object TrackCatalog {
 
     suspend fun loadTrackSamplesById(context: Context, trackId: String): TrackPlotData? {
         ensureDiskCacheLoaded(context)
-        if (isTrackCacheEmpty(context)) {
+        if (isTrackCacheEmpty()) {
             rebuildTrackCache(context)
         }
 
-        val cached = parsedTrackCache[trackId] ?: return null
-        val points = if (cached.hasPoints()) {
-            cached.pointsOrEmpty()
-        } else {
-            val parsed = openInputStreamForTrack(context, trackId)?.use { parseGpxTrack(context, it) } ?: return null
-            cacheMutex.withLock {
-                val updated = cached.withPoints(parsed.points)
-                parsedTrackCache[trackId] = updated
-                _tracks.value = parsedTrackCache.toMap()
+        val (points, displayName) = cacheMutex.withLock {
+            val cached = parsedTrackCache[trackId] ?: return@withLock null to null
+            if (cached.hasPoints()) {
+                cached.pointsOrEmpty() to cached.displayName
+            } else {
+                null to cached.displayName
             }
-            persistTrackCache(context)
-            parsed.points
         }
-        return TrackPlotData(id = trackId, title = cached.displayName, points = points)
-    }
 
+        if (points != null && displayName != null) {
+            return TrackPlotData(id = trackId, title = displayName, points = points)
+        }
+
+        if (displayName == null) return null
+
+        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
+            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+
+        // Need to parse outside the lock to avoid blocking other readers
+        val parsed = withContext(Dispatchers.IO) {
+            openInputStreamForTrack(context, trackId)?.use { parseGpxTrack(it, coeff) }
+        } ?: return null
+
+        cacheMutex.withLock {
+            val cached = parsedTrackCache[trackId] ?: return@withLock
+            val updated = cached.withPoints(parsed.points)
+            parsedTrackCache[trackId] = updated
+            _tracks.value = parsedTrackCache.toMap()
+        }
+
+        persistTrackCache(context)
+
+        return TrackPlotData(id = trackId, title = displayName, points = parsed.points)
+    }
     fun folderItemId(folderName: String): String = "folder:$folderName"
 
     private data class CurrentTrackData(
@@ -494,8 +522,7 @@ object TrackCatalog {
     )
 
     private fun currentTrackData(
-        activePoints: List<TrackPoint>,
-        coeff: Double
+        activePoints: List<TrackPoint>
     ): CurrentTrackData {
         val currentPoints = if (activePoints.isNotEmpty()) {
             activePoints
@@ -526,18 +553,14 @@ object TrackCatalog {
         return TrackStats(points.size, durationMillis, distance)
     }
 
-    private suspend fun parseGpxTrack(context: Context, inputStream: InputStream): GpxReader.TrackWithStats? {
+    private suspend fun parseGpxTrack(inputStream: InputStream, coeff: Double): GpxReader.TrackWithStats? {
         return withContext(Dispatchers.IO) {
-            val coeff = PreferenceManager.getDefaultSharedPreferences(context)
-                .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
             GpxReader.readTrackWithStats(inputStream, cpsCoefficient = coeff)
         }
     }
 
-    private suspend fun parseGpxTrackStats(context: Context, inputStream: InputStream): TrackStats? {
+    private suspend fun parseGpxTrackStats(inputStream: InputStream, coeff: Double): TrackStats? {
         return withContext(Dispatchers.IO) {
-            val coeff = PreferenceManager.getDefaultSharedPreferences(context)
-                .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
             GpxReader.readTrackStats(inputStream, cpsCoefficient = coeff)
         }
     }

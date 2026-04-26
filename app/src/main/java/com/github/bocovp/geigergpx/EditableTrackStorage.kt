@@ -3,6 +3,8 @@ package com.github.bocovp.geigergpx
 import android.content.Context
 import android.net.Uri
 import androidx.preference.PreferenceManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -11,20 +13,20 @@ object EditableTrackStorage {
     data class LoadResult(val points: List<TrackPoint>)
     data class SplitResult(val newTrackId: String, val newTrackTitle: String)
 
-    fun loadTrack(context: Context, trackId: String): LoadResult? {
+    suspend fun loadTrack(context: Context, trackId: String): LoadResult? = withContext(Dispatchers.IO) {
         val coeff = PreferenceManager.getDefaultSharedPreferences(context)
             .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        val input = openInputStream(context, trackId) ?: return null
-        val points = GpxReader.readTrack(input, cpsCoefficient = coeff) ?: return null
-        return LoadResult(points)
+        val input = openInputStream(context, trackId) ?: return@withContext null
+        val points = GpxReader.readTrack(input, cpsCoefficient = coeff) ?: return@withContext null
+        LoadResult(points)
     }
 
-    fun overwriteTrack(context: Context, trackId: String, points: List<TrackPoint>) {
+    suspend fun overwriteTrack(context: Context, trackId: String, points: List<TrackPoint>) = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
         val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
-        val output = openOutputStream(context, trackId) ?: return
+        val output = openOutputStream(context, trackId) ?: return@withContext
         output.use { out ->
             out.bufferedWriter().use { writer ->
                 GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
@@ -38,7 +40,7 @@ object EditableTrackStorage {
         sourceTitle: String,
         folderName: String?,
         points: List<TrackPoint>
-    ): SplitResult? {
+    ): SplitResult? = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
         val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
@@ -47,7 +49,7 @@ object EditableTrackStorage {
         val uri = when {
             sourceTrackId.startsWith("file:") -> {
                 val sourceFile = File(sourceTrackId.removePrefix("file:"))
-                val parentDir = sourceFile.parentFile ?: return null
+                val parentDir = sourceFile.parentFile ?: return@withContext null
                 val target = File(parentDir, nextName)
                 target.outputStream().use { out ->
                     out.bufferedWriter().use { writer ->
@@ -66,23 +68,24 @@ object EditableTrackStorage {
                         GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
                     }
                 }
-                result.uri ?: return null
+                result.uri ?: return@withContext null
             }
-            else -> return null
+            else -> return@withContext null
         }
         val trackId = if (uri.scheme == "content") "tree:$uri" else "file:${uri.path}"
-        return SplitResult(trackId, nextName)
+        SplitResult(trackId, nextName)
     }
 
     private suspend fun uniqueSplitFileName(context: Context, sourceTitle: String, folderName: String?): String {
         val baseName = sourceTitle.removeSuffix(".gpx")
-        val existingTitles = TrackCatalog.loadTrackListItems(
+        val items = TrackCatalog.loadTrackListItems(
             context = context,
             activePoints = emptyList(),
             includeCurrentTrack = false,
             includeMapTracks = false,
             browseFolderName = folderName
-        ).map { it.title.lowercase() }.toSet()
+        )
+        val existingTitles = items.map { it.title.lowercase() }.toSet()
         var index = 2
         while (true) {
             val candidate = "$baseName-part$index.gpx"

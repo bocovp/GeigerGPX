@@ -6,8 +6,10 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityTimePlotBinding
 import com.github.bocovp.geigergpx.R
@@ -16,6 +18,7 @@ import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,11 +44,11 @@ class TimePlotActivity : AppCompatActivity() {
     private val failedTrackIdsForPlot = mutableSetOf<String>()
     private var selectedTrackIdForPlot: String? = null
     private var plotCandidates: List<PlotCandidate> = emptyList()
+    private var refreshCandidatesJob: Job? = null
     private var plotLoadJob: Job? = null
     private var kdeRenderJob: Job? = null
     private var kdeRenderGeneration: Long = 0L
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
-    private var isRefreshing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,17 +85,17 @@ class TimePlotActivity : AppCompatActivity() {
             }
         }
 
-        cpsToUSvhCoeff = PreferenceManager.getDefaultSharedPreferences(this)
-            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-
         val selectedTrackId = intent.getStringExtra(EXTRA_TRACK_ID)
         if (!selectedTrackId.isNullOrBlank()) {
             rememberTrackSelection(this, selectedTrackId)
         }
 
-        showLoading(true)
-        binding.root.post {
-            refreshTrackCandidatesAndPlotAsync(selectedTrackId)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                TrackCatalog.allTracks.collectLatest {
+                    refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
+                }
+            }
         }
         invalidateOptionsMenu()
     }
@@ -100,7 +103,6 @@ class TimePlotActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         syncBottomNavigationSelection()
-        refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -201,11 +203,13 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun refreshTrackCandidatesAndPlotAsync(preferredTrackId: String? = null) {
-        if (isRefreshing) return
-        isRefreshing = true
-        showLoading(true)
-        lifecycleScope.launch {
+        refreshCandidatesJob?.cancel()
+        refreshCandidatesJob = lifecycleScope.launch {
             try {
+                showLoading(true)
+                cpsToUSvhCoeff = PreferenceManager.getDefaultSharedPreferences(this@TimePlotActivity)
+                    .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+
                 val activePoints = viewModel.activeTrackPoints.value.orEmpty()
                 val isTracking = viewModel.isTracking.value == true
                 val candidates = withContext(Dispatchers.IO) { loadPlotCandidates(activePoints, isTracking) }
@@ -220,19 +224,15 @@ class TimePlotActivity : AppCompatActivity() {
                     updateTrackTitle(null)
                     binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
                     showPlotMessage(R.string.time_plot_no_track_data)
-                    isRefreshing = false
                 } else if (resolvedTrackId != selectedTrackIdForPlot || currentPoints.isEmpty()) {
-                    // loadTrackForPlotAsync is now responsible for resetting isRefreshing
                     loadTrackForPlotAsync(resolvedTrackId)
                 } else {
                     showLoading(false)
-                    isRefreshing = false
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Throwable) {
                 showPlotMessage(R.string.time_plot_no_track_data)
-                isRefreshing = false
             }
         }
     }
@@ -268,7 +268,6 @@ class TimePlotActivity : AppCompatActivity() {
         if (normalizedTrackId == null || normalizedTrackId == TrackCatalog.currentTrackId()) {
             plotLoadJob?.cancel()
             loadTrackForPlot(trackId)
-            isRefreshing = false
             return
         }
 
@@ -307,7 +306,6 @@ class TimePlotActivity : AppCompatActivity() {
                 }
             } finally {
                 if (plotLoadJob == this.coroutineContext[Job]) {
-                    isRefreshing = false
                     if (shouldRefreshTrackCandidates) {
                         refreshTrackCandidatesAndPlotAsync()
                     }
