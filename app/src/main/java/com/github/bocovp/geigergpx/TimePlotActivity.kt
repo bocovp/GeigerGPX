@@ -331,6 +331,7 @@ class TimePlotActivity : AppCompatActivity() {
                 if (resolvedTrackId == null) {
                     plotLoadJob?.cancel()
                     renderCollectorJob?.cancel() // Hard stop on track change
+                    renderRequestFlow.value = null
                     selectedTrackIdForPlot = null
                     updateCurrentPoints(emptyList())
                     updateTrackTitle(null)
