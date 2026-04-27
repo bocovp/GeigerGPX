@@ -17,10 +17,12 @@ import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 
 class TimePlotActivity : AppCompatActivity() {
     private enum class PlotMode { SLIDING_WINDOW, KERNEL_ESTIMATOR }
@@ -31,16 +33,19 @@ class TimePlotActivity : AppCompatActivity() {
     )
 
     /**
-     * Cached result for the KDE mode on a saved (non-live) track.
-     *
-     * Building the estimator is O(N) and only needs to happen when [currentPoints] or
-     * [cpsToUSvhCoeff] change. The sample timestamps [ts2] and [firstTimestamp] depend only on
-     * the track's time bounds, which are also stable between slider moves. Invalidated by
-     * [updateCurrentPoints].
-     *
-     * Written on Dispatchers.Default, nulled on Main — [estimatorCache] is @Volatile so the null
-     * is immediately visible across threads.
+     * Captures the full state required for a render pass.
      */
+    private data class RenderRequest(
+        val mode: PlotMode,
+        val points: List<TrackPoint>,
+        val scaleSeconds: Double,
+        val coeff: Double,
+        val isCurrentTrack: Boolean,
+        val trackTitle: String,
+        val recalculateVerticalAxis: Boolean,
+        val generation: Long
+    )
+
     private data class EstimatorCache(
         val points: List<TrackPoint>,
         val estimator: KernelDensityEstimator,
@@ -49,15 +54,6 @@ class TimePlotActivity : AppCompatActivity() {
         val firstTimestamp: Double
     )
 
-    /**
-     * Cached result for the sliding-window mode.
-     *
-     * [TrackGeneralizer.generalize] is O(N) and only needs to re-run when [currentPoints],
-     * [cpsToUSvhCoeff], or [scaleSeconds] change. Invalidated by [updateCurrentPoints] when
-     * points or coeff change; the scale check is done inline in [calculateSlidingWindowPlot].
-     *
-     * Same @Volatile requirement as [estimatorCache].
-     */
     private data class SlidingWindowCache(
         val inputPoints: List<TrackPoint>,
         val scaleSeconds: Double,
@@ -75,23 +71,17 @@ class TimePlotActivity : AppCompatActivity() {
     @Volatile private var estimatorCache: EstimatorCache? = null
     @Volatile private var slidingWindowCache: SlidingWindowCache? = null
 
-    /**
-     * True while the user's finger is on the slider. Used to suppress the extra
-     * [updatePlot] that [onChangeListener] would otherwise fire for the final value
-     * immediately before [onStopTrackingTouch], avoiding a redundant cancelled render.
-     */
     private var isSliderBeingDragged = false
 
-    /**
-     * Tracks that failed to load in this session. Used to avoid repeatedly trying a stale/missing
-     * track ID when preferences still contain it.
-     */
     private val failedTrackIdsForPlot = mutableSetOf<String>()
     private var selectedTrackIdForPlot: String? = null
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var refreshCandidatesJob: Job? = null
     private var plotLoadJob: Job? = null
-    private var renderJob: Job? = null
+
+    // Conflation Strategy Properties
+    private val renderRequestFlow = MutableStateFlow<RenderRequest?>(null)
+    private var renderCollectorJob: Job? = null
     private var renderGeneration: Long = 0L
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
 
@@ -105,6 +95,7 @@ class TimePlotActivity : AppCompatActivity() {
         setupGeneralizationSlider()
         setupTrackSelector()
         observeTrackingState()
+        setupRenderCollector() // Initialize the confluent collector
 
         syncBottomNavigationSelection()
         binding.bottomNavigation.setOnItemSelectedListener { item ->
@@ -143,6 +134,71 @@ class TimePlotActivity : AppCompatActivity() {
             }
         }
         invalidateOptionsMenu()
+    }
+
+    /**
+     * Sets up the conflated rendering loop.
+     *
+     * Using [renderRequestFlow].collect ensures that once a render starts, it finishes.
+     * If multiple slider moves occur while the CPU is busy, only the LATEST one is
+     * processed next, preventing UI freeze and "starvation".
+     */
+    private fun setupRenderCollector() {
+        renderCollectorJob?.cancel()
+        renderCollectorJob = lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                renderRequestFlow.collect { request ->
+                    request ?: return@collect
+
+                    // Only show loading if the view is hidden (initial load)
+                    val shouldShowLoading = binding.timePlotView.visibility != View.VISIBLE
+                    if (shouldShowLoading) showLoading(true)
+
+                    val result = withContext(Dispatchers.Default) {
+                        if (request.mode == PlotMode.KERNEL_ESTIMATOR) {
+                            calculateKdePlot(request.isCurrentTrack, request.points, request.scaleSeconds, request.coeff)
+                        } else {
+                            calculateSlidingWindowPlot(request.points, request.scaleSeconds, request.coeff, request.trackTitle)
+                        }
+                    }
+
+                    // Apply the result. We don't check generations here because "laggy" 
+                    // updates are better than no updates during rapid movement.
+                    applyPlotResult(result, request.coeff, request.recalculateVerticalAxis)
+                }
+            }
+        }
+    }
+
+    private fun applyPlotResult(result: PlotResult?, coeff: Double, recalculateVerticalAxis: Boolean) {
+        when (result) {
+            is PlotResult.Kde -> {
+                val relativeSeconds = DoubleArray(result.ts2.size) { idx ->
+                    result.ts2[idx] - result.firstTimestamp
+                }
+                binding.timePlotView.setKernelSeries(
+                    relativeSeconds = relativeSeconds,
+                    mean = result.mean,
+                    low = result.low,
+                    high = result.high,
+                    cpsToUSvh = coeff,
+                    recalculateVerticalAxis = recalculateVerticalAxis
+                )
+                showPlotMessage(if (relativeSeconds.isEmpty()) R.string.time_plot_no_track_data else null)
+            }
+            is PlotResult.SlidingWindow -> {
+                binding.timePlotView.setPoints(
+                    points = result.points,
+                    cpsToUSvh = coeff,
+                    recalculateVerticalAxis = recalculateVerticalAxis
+                )
+                showPlotMessage(if (result.points.isEmpty()) R.string.time_plot_no_track_data else null)
+            }
+            null -> {
+                binding.timePlotView.setPoints(emptyList(), coeff, recalculateVerticalAxis)
+                showPlotMessage(R.string.time_plot_no_track_data)
+            }
+        }
     }
 
     override fun onResume() {
@@ -216,9 +272,6 @@ class TimePlotActivity : AppCompatActivity() {
             updateSliderDescription(durationMinutes)
             if (fromUser) {
                 appState.sharedKdeSliderInternalValue = value
-                // Only render during active drag. The final value change event fires just before
-                // onStopTrackingTouch; letting onStopTrackingTouch handle that render avoids
-                // launching a coroutine that is immediately cancelled.
                 if (isSliderBeingDragged) {
                     updatePlot(recalculateVerticalAxis = false)
                 }
@@ -232,7 +285,6 @@ class TimePlotActivity : AppCompatActivity() {
 
             override fun onStopTrackingTouch(slider: Slider) {
                 isSliderBeingDragged = false
-                // Recalculate vertical axis now that the user has committed to a scale.
                 updatePlot(recalculateVerticalAxis = true)
             }
         })
@@ -250,20 +302,12 @@ class TimePlotActivity : AppCompatActivity() {
         if (activeTrackObserverAttached) return
         activeTrackObserverAttached = true
         viewModel.activeTrackPoints.observe(this) { points ->
-            // Prevent the live recording stream from overwriting the plot after the user switches
-            // to a saved track (or to a no-data state).
             if (selectedTrackIdForPlot != TrackCatalog.currentTrackId()) return@observe
             updateCurrentPoints(points)
             updatePlot(recalculateVerticalAxis = true)
         }
     }
 
-    /**
-     * Updates [currentPoints] and invalidates both render caches.
-     *
-     * Must always be called instead of assigning [currentPoints] directly so that stale cached
-     * results are never used after a data change.
-     */
     private fun updateCurrentPoints(points: List<TrackPoint>) {
         currentPoints = points
         estimatorCache = null
@@ -286,12 +330,13 @@ class TimePlotActivity : AppCompatActivity() {
                 updateTrackSelectorUi()
                 if (resolvedTrackId == null) {
                     plotLoadJob?.cancel()
-                    renderJob?.cancel()
+                    renderCollectorJob?.cancel() // Hard stop on track change
                     selectedTrackIdForPlot = null
                     updateCurrentPoints(emptyList())
                     updateTrackTitle(null)
                     binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
                     showPlotMessage(R.string.time_plot_no_track_data)
+                    setupRenderCollector() // Restart the loop
                 } else if (resolvedTrackId != selectedTrackIdForPlot || currentPoints.isEmpty()) {
                     loadTrackForPlotAsync(resolvedTrackId)
                 } else {
@@ -339,8 +384,6 @@ class TimePlotActivity : AppCompatActivity() {
             return
         }
 
-        // Switch the "current track for plotting" immediately so the live observer can't
-        // overwrite the plot while the async load is in-flight.
         selectedTrackIdForPlot = normalizedTrackId
         plotLoadJob?.cancel()
         plotLoadJob = lifecycleScope.launch {
@@ -351,15 +394,9 @@ class TimePlotActivity : AppCompatActivity() {
                         TrackCatalog.loadTrackSamplesById(this@TimePlotActivity, normalizedTrackId)
                     }
                 }
-                result.onFailure { error ->
-                    if (error is CancellationException) {
-                        throw error
-                    }
-                }
+                result.onFailure { if (it is CancellationException) throw it }
 
-                if (selectedTrackIdForPlot != normalizedTrackId) {
-                    return@launch
-                }
+                if (selectedTrackIdForPlot != normalizedTrackId) return@launch
 
                 result.onSuccess { selected ->
                     if (selected != null) {
@@ -374,20 +411,14 @@ class TimePlotActivity : AppCompatActivity() {
                 }
             } finally {
                 if (plotLoadJob == this.coroutineContext[Job]) {
-                    if (shouldRefreshTrackCandidates) {
-                        refreshTrackCandidatesAndPlotAsync()
-                    }
+                    if (shouldRefreshTrackCandidates) refreshTrackCandidatesAndPlotAsync()
                 }
             }
         }
     }
 
     private fun showLoading(isLoading: Boolean) {
-        if (isLoading) {
-            showPlotMessage(R.string.time_plot_loading)
-        } else {
-            showPlotMessage(null)
-        }
+        if (isLoading) showPlotMessage(R.string.time_plot_loading) else showPlotMessage(null)
     }
 
     private fun showPlotMessage(messageResId: Int?) {
@@ -443,9 +474,7 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun resolveSelectedTrackId(candidates: List<PlotCandidate>, preferredTrackId: String?): String? {
-        if (candidates.isEmpty()) {
-            return null
-        }
+        if (candidates.isEmpty()) return null
         val preferredIds = listOfNotNull(
             preferredTrackId?.takeIf { it.isNotBlank() },
             preferredTrackSelection(this),
@@ -456,18 +485,15 @@ class TimePlotActivity : AppCompatActivity() {
             candidates.firstOrNull { it.id == candidateId }?.id
         }
         if (matchingCandidate != null) return matchingCandidate
-
         return candidates.firstOrNull { it.id !in failedTrackIdsForPlot }?.id
     }
 
     private fun cycleSelectedTrack(delta: Int) {
         if (plotCandidates.size <= 1) return
         val currentIndex = plotCandidates.indexOfFirst { it.id == selectedTrackIdForPlot }
-            .takeIf { it >= 0 }
-            ?: 0
+            .takeIf { it >= 0 } ?: 0
         val nextIndex = (currentIndex + delta).mod(plotCandidates.size)
         val nextTrackId = plotCandidates[nextIndex].id
-        // Allow retrying a previously failed track if the file re-appeared.
         failedTrackIdsForPlot.remove(nextTrackId)
         rememberTrackSelection(this, nextTrackId)
         loadTrackForPlotAsync(nextTrackId)
@@ -477,72 +503,26 @@ class TimePlotActivity : AppCompatActivity() {
         binding.averagingLabel.text = "Averaging window: ${"%.1f".format(Locale.US, valueMinutes)} min"
     }
 
+    /**
+     * Now simply captures the current state and emits it to the rendering flow.
+     */
     private fun updatePlot(recalculateVerticalAxis: Boolean = true) {
         val minDurationMinutes = KdeScaleSlider.internalToMinutes(binding.placeholderSlider.value)
-        val minDurationSeconds = minDurationMinutes * SECONDS_PER_MINUTE
-        val scaleSeconds = minDurationSeconds.toDouble()
-
-        renderJob?.cancel()
+        val scaleSeconds = minDurationMinutes.toDouble() * SECONDS_PER_MINUTE
         val generation = ++renderGeneration
         val isCurrentTrack = selectedTrackIdForPlot.isNullOrBlank() ||
                 selectedTrackIdForPlot == TrackCatalog.currentTrackId()
 
-        // Capture on Main before crossing to Dispatchers.Default.
-        val mode = plotMode
-        val coeff = cpsToUSvhCoeff
-        val points = currentPoints
-        val trackTitle = binding.trackNameField.text?.toString().orEmpty()
-
-        renderJob = lifecycleScope.launch {
-            if (points.isEmpty() && !isCurrentTrack) {
-                binding.timePlotView.setPoints(emptyList(), coeff, recalculateVerticalAxis)
-                showPlotMessage(R.string.time_plot_no_track_data)
-                return@launch
-            }
-
-            // Show loading only if the view is currently hidden (first load).
-            val shouldShowLoading = binding.timePlotView.visibility != View.VISIBLE
-            if (shouldShowLoading) showLoading(true)
-
-            val result = withContext(Dispatchers.Default) {
-                if (mode == PlotMode.KERNEL_ESTIMATOR) {
-                    calculateKdePlot(isCurrentTrack, points, scaleSeconds, coeff)
-                } else {
-                    calculateSlidingWindowPlot(points, scaleSeconds, coeff, trackTitle)
-                }
-            }
-
-            if (generation != renderGeneration || !isActive) return@launch
-
-            when (result) {
-                is PlotResult.Kde -> {
-                    val relativeSeconds = DoubleArray(result.ts2.size) { idx ->
-                        result.ts2[idx] - result.firstTimestamp
-                    }
-                    binding.timePlotView.setKernelSeries(
-                        relativeSeconds = relativeSeconds,
-                        mean = result.mean,
-                        low = result.low,
-                        high = result.high,
-                        cpsToUSvh = coeff,
-                        recalculateVerticalAxis = recalculateVerticalAxis
-                    )
-                    showPlotMessage(if (relativeSeconds.isEmpty()) R.string.time_plot_no_track_data else null)
-                }
-                is PlotResult.SlidingWindow -> {
-                    binding.timePlotView.setPoints(
-                        points = result.points,
-                        cpsToUSvh = coeff,
-                        recalculateVerticalAxis = recalculateVerticalAxis
-                    )
-                    showPlotMessage(if (result.points.isEmpty()) R.string.time_plot_no_track_data else null)
-                }
-                null -> {
-                    binding.timePlotView.setPoints(emptyList(), coeff, recalculateVerticalAxis)
-                    showPlotMessage(R.string.time_plot_no_track_data)
-                }
-            }
-        }
+        renderRequestFlow.value = RenderRequest(
+            mode = plotMode,
+            points = currentPoints,
+            scaleSeconds = scaleSeconds,
+            coeff = cpsToUSvhCoeff,
+            isCurrentTrack = isCurrentTrack,
+            trackTitle = binding.trackNameField.text?.toString().orEmpty(),
+            recalculateVerticalAxis = recalculateVerticalAxis,
+            generation = generation
+        )
     }
 
     private sealed class PlotResult {
@@ -556,15 +536,6 @@ class TimePlotActivity : AppCompatActivity() {
         data class SlidingWindow(val points: List<TrackPoint>) : PlotResult()
     }
 
-    /**
-     * Calculates the KDE plot result, reusing [estimatorCache] when possible.
-     *
-     * For a saved (non-live) track, a cache hit skips both the O(N) estimator build and the
-     * O(K) ts2 array construction, leaving only [KernelDensityEstimator.getConfidenceIntervals]
-     * to run — the cheap, scale-dependent part that must re-execute on every slider move.
-     *
-     * Runs on Dispatchers.Default.
-     */
     private suspend fun calculateKdePlot(
         isCurrentTrack: Boolean,
         points: List<TrackPoint>,
@@ -576,6 +547,7 @@ class TimePlotActivity : AppCompatActivity() {
         if (isCurrentTrack) {
             val liveBounds = TrackingService.activeKdeTimestampBounds() ?: return null
             if (liveBounds.second < liveBounds.first) return null
+            yield() // Check for cancellation before calling service
             val ts2 = buildTs2(liveBounds.first, liveBounds.second)
             val ci = TrackingService.activeKdeConfidenceIntervals(ts2, minScale) ?: return null
             return PlotResult.Kde(ts2, liveBounds.first, ci.first, ci.second, ci.third)
@@ -594,7 +566,7 @@ class TimePlotActivity : AppCompatActivity() {
             var totalDuration = 0.0
             var hasData = false
             for (p in points) {
-                kotlinx.coroutines.yield()
+                yield()
                 totalDuration += p.seconds.coerceAtLeast(0.0)
                 if (p.counts > 0) hasData = true
             }
@@ -606,7 +578,7 @@ class TimePlotActivity : AppCompatActivity() {
             estimator = KernelDensityEstimator(coeff)
             var accumulatedSeconds = 0.0
             for (p in points) {
-                kotlinx.coroutines.yield()
+                yield()
                 val durationSeconds = p.seconds.coerceAtLeast(0.0)
                 estimator.addSampleInterval(accumulatedSeconds, durationSeconds, p.counts.coerceAtLeast(0))
                 accumulatedSeconds += durationSeconds
@@ -614,16 +586,11 @@ class TimePlotActivity : AppCompatActivity() {
             estimatorCache = EstimatorCache(points, estimator, coeff, ts2, firstTimestamp)
         }
 
+        yield()
         val ci = estimator.getConfidenceIntervals(ts2, minScale) ?: return null
         return PlotResult.Kde(ts2, firstTimestamp, ci.first, ci.second, ci.third)
     }
 
-    /**
-     * Builds the array of [KDE_PLOT_SAMPLE_COUNT] evenly-spaced sample timestamps.
-     *
-     * Handles the single-point edge case (timestamps within 1e-9 s of each other) by returning
-     * a single-element array, avoiding a near-zero step that would produce 240 identical samples.
-     */
     private fun buildTs2(firstTimestamp: Double, lastTimestamp: Double): DoubleArray {
         return if (kotlin.math.abs(lastTimestamp - firstTimestamp) < 1e-9) {
             doubleArrayOf(firstTimestamp)
@@ -633,15 +600,6 @@ class TimePlotActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Calculates the sliding-window plot result, reusing [slidingWindowCache] when possible.
-     *
-     * [TrackGeneralizer.generalize] is O(N) and only needs to re-run when [scaleSeconds] or
-     * [coeff] change (points changes are handled by [updateCurrentPoints] nulling the cache).
-     * A cache hit on both values means no computation is done on the background thread at all.
-     *
-     * Runs on Dispatchers.Default.
-     */
     private suspend fun calculateSlidingWindowPlot(
         points: List<TrackPoint>,
         scaleSeconds: Double,
@@ -653,11 +611,8 @@ class TimePlotActivity : AppCompatActivity() {
             return PlotResult.SlidingWindow(cache.outputPoints)
         }
 
-        val track = MapTrack(
-            id = CURRENT_TRACK_TITLE,
-            title = trackTitle,
-            points = points
-        )
+        yield()
+        val track = MapTrack(id = CURRENT_TRACK_TITLE, title = trackTitle, points = points)
         val generalized = TrackGeneralizer(
             minDistanceMeters = 0.0,
             coeff = coeff,
@@ -671,12 +626,8 @@ class TimePlotActivity : AppCompatActivity() {
     private fun updateModeUi(toggleItem: MenuItem?) {
         toggleItem ?: return
         val (iconRes, titleRes) = when (plotMode) {
-            PlotMode.SLIDING_WINDOW -> {
-                R.drawable.baseline_planner_review_24 to R.string.time_plot_switch_to_kernel_estimator
-            }
-            PlotMode.KERNEL_ESTIMATOR -> {
-                R.drawable.baseline_bar_chart_24 to R.string.time_plot_switch_to_sliding_window
-            }
+            PlotMode.SLIDING_WINDOW -> R.drawable.baseline_planner_review_24 to R.string.time_plot_switch_to_kernel_estimator
+            PlotMode.KERNEL_ESTIMATOR -> R.drawable.baseline_bar_chart_24 to R.string.time_plot_switch_to_sliding_window
         }
         toggleItem.setIcon(iconRes)
         toggleItem.title = getString(titleRes)
@@ -687,21 +638,16 @@ class TimePlotActivity : AppCompatActivity() {
         const val CURRENT_TRACK_TITLE = "Currently recording"
         private const val SECONDS_PER_MINUTE = 60f
         private const val KDE_PLOT_SAMPLE_COUNT = 240
-
         private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
 
         fun rememberTrackSelection(context: android.content.Context, trackId: String) {
-            val app = context.applicationContext as? GeigerGpxApp ?: return
-            app.selectedTimePlotTrackId = trackId
+            (context.applicationContext as? GeigerGpxApp)?.selectedTimePlotTrackId = trackId
         }
-
         fun rememberCurrentTrackSelection(context: android.content.Context) {
             rememberTrackSelection(context, TrackCatalog.currentTrackId())
         }
-
         fun preferredTrackSelection(context: android.content.Context): String? {
-            val app = context.applicationContext as? GeigerGpxApp
-            return app?.selectedTimePlotTrackId
+            return (context.applicationContext as? GeigerGpxApp)?.selectedTimePlotTrackId
         }
     }
 }
