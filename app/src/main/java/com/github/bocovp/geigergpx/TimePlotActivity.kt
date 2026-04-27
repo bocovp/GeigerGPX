@@ -12,7 +12,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityTimePlotBinding
-import com.github.bocovp.geigergpx.R
 import com.google.android.material.slider.Slider
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
@@ -43,6 +42,7 @@ class TimePlotActivity : AppCompatActivity() {
      * is immediately visible across threads.
      */
     private data class EstimatorCache(
+        val points: List<TrackPoint>,
         val estimator: KernelDensityEstimator,
         val coeff: Double,
         val ts2: DoubleArray,
@@ -59,9 +59,10 @@ class TimePlotActivity : AppCompatActivity() {
      * Same @Volatile requirement as [estimatorCache].
      */
     private data class SlidingWindowCache(
+        val inputPoints: List<TrackPoint>,
         val scaleSeconds: Double,
         val coeff: Double,
-        val points: List<TrackPoint>
+        val outputPoints: List<TrackPoint>
     )
 
     private lateinit var binding: ActivityTimePlotBinding
@@ -564,7 +565,7 @@ class TimePlotActivity : AppCompatActivity() {
      *
      * Runs on Dispatchers.Default.
      */
-    private fun calculateKdePlot(
+    private suspend fun calculateKdePlot(
         isCurrentTrack: Boolean,
         points: List<TrackPoint>,
         scaleSeconds: Double,
@@ -580,15 +581,12 @@ class TimePlotActivity : AppCompatActivity() {
             return PlotResult.Kde(ts2, liveBounds.first, ci.first, ci.second, ci.third)
         }
 
-        // Saved track: check whether the cached estimator and ts2 are still valid.
-        // estimatorCache is nulled by updateCurrentPoints() whenever points change, so a
-        // non-null cache with a matching coeff is always safe to reuse.
         val cache = estimatorCache
         val estimator: KernelDensityEstimator
         val ts2: DoubleArray
         val firstTimestamp: Double
 
-        if (cache != null && cache.coeff == coeff) {
+        if (cache != null && cache.points === points && cache.coeff == coeff) {
             estimator = cache.estimator
             ts2 = cache.ts2
             firstTimestamp = cache.firstTimestamp
@@ -596,6 +594,7 @@ class TimePlotActivity : AppCompatActivity() {
             var totalDuration = 0.0
             var hasData = false
             for (p in points) {
+                kotlinx.coroutines.yield()
                 totalDuration += p.seconds.coerceAtLeast(0.0)
                 if (p.counts > 0) hasData = true
             }
@@ -607,11 +606,12 @@ class TimePlotActivity : AppCompatActivity() {
             estimator = KernelDensityEstimator(coeff)
             var accumulatedSeconds = 0.0
             for (p in points) {
+                kotlinx.coroutines.yield()
                 val durationSeconds = p.seconds.coerceAtLeast(0.0)
                 estimator.addSampleInterval(accumulatedSeconds, durationSeconds, p.counts.coerceAtLeast(0))
                 accumulatedSeconds += durationSeconds
             }
-            estimatorCache = EstimatorCache(estimator, coeff, ts2, firstTimestamp)
+            estimatorCache = EstimatorCache(points, estimator, coeff, ts2, firstTimestamp)
         }
 
         val ci = estimator.getConfidenceIntervals(ts2, minScale) ?: return null
@@ -642,15 +642,15 @@ class TimePlotActivity : AppCompatActivity() {
      *
      * Runs on Dispatchers.Default.
      */
-    private fun calculateSlidingWindowPlot(
+    private suspend fun calculateSlidingWindowPlot(
         points: List<TrackPoint>,
         scaleSeconds: Double,
         coeff: Double,
         trackTitle: String
     ): PlotResult.SlidingWindow {
         val cache = slidingWindowCache
-        if (cache != null && cache.scaleSeconds == scaleSeconds && cache.coeff == coeff) {
-            return PlotResult.SlidingWindow(cache.points)
+        if (cache != null && cache.inputPoints === points && cache.scaleSeconds == scaleSeconds && cache.coeff == coeff) {
+            return PlotResult.SlidingWindow(cache.outputPoints)
         }
 
         val track = MapTrack(
@@ -664,7 +664,7 @@ class TimePlotActivity : AppCompatActivity() {
             minDurationSeconds = scaleSeconds
         ).generalize(track)
 
-        slidingWindowCache = SlidingWindowCache(scaleSeconds, coeff, generalized.points)
+        slidingWindowCache = SlidingWindowCache(points, scaleSeconds, coeff, generalized.points)
         return PlotResult.SlidingWindow(generalized.points)
     }
 
