@@ -52,8 +52,8 @@ object DoseColorScale {
         return Color.rgb(r, g, b)
     }
 
-    fun clampColorbarMax(value: Double): Double {
-        if (!value.isFinite()) {
+    fun clampColorbarMax(value: Double?): Double {
+        if (value == null || !value.isFinite()) {
             return DEFAULT_MAX_DOSE
         }
         return value.coerceIn(MIN_MAX_DOSE, DEFAULT_MAX_DOSE)
