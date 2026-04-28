@@ -176,7 +176,7 @@ class EditTrackActivity : AppCompatActivity() {
     private fun refreshUiState() {
         editOverlay.points = points
         editOverlay.minDose = 0.0
-        editOverlay.maxDose = (points.maxOfOrNull { it.doseRate } ?: 0.5).coerceIn(0.5, 10.0)
+        editOverlay.maxDose = DoseColorScale.clampColorbarMax(points.maxOfOrNull { it.doseRate })
         editOverlay.highlightedIndices = highlightedIndices()
 
         val adjustEnabled = mode == EditMode.CUT_BEFORE || mode == EditMode.CUT_AFTER || mode == EditMode.SPLIT
