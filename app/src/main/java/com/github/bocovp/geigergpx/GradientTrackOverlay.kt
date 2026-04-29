@@ -27,6 +27,10 @@ class GradientTrackOverlay(context: android.content.Context) : Overlay() {
         style = Paint.Style.FILL
         isAntiAlias = true
     }
+    private val orphanGoodPointPaint = Paint().apply {
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
 
     override fun draw(canvas: Canvas, projection: Projection) {
         if (points.size < 2) return
@@ -61,6 +65,21 @@ class GradientTrackOverlay(context: android.content.Context) : Overlay() {
 
         paint.shader = null
         var i = 0
+
+        for (index in points.indices) {
+            val point = points[index]
+            if (point.badCoordinates) continue
+
+            val hasPreviousGoodNeighbor = points.getOrNull(index - 1)?.badCoordinates == false
+            val hasNextGoodNeighbor = points.getOrNull(index + 1)?.badCoordinates == false
+            if (hasPreviousGoodNeighbor || hasNextGoodNeighbor) continue
+
+            gp1.setCoords(point.latitude, point.longitude)
+            projection.toPixels(gp1, p1Pixels)
+            orphanGoodPointPaint.color = DoseColorScale.colorForDose(point.doseRate, minDose, maxDose)
+            canvas.drawCircle(p1Pixels.x.toFloat(), p1Pixels.y.toFloat(), paint.strokeWidth / 2f, orphanGoodPointPaint)
+        }
+
         while (i < points.size) {
             if (!points[i].badCoordinates) {
                 i += 1
