@@ -101,37 +101,21 @@ class TrackMapRenderer(
             }
             overlay.doseCoefficient = doseCoefficient
 
-            val poiPoints = pois.map {
-                TrackPoint(
-                    latitude = it.latitude,
-                    longitude = it.longitude,
-                    timeMillis = 0L,
-                    doseRate = it.doseRateForColor,
-                    counts = it.counts,
-                    seconds = it.seconds
-                )
-            }
-            val poiTrack = MapTrack(
-                id = "__pois__",
-                title = "POIs",
-                points = poiPoints
-            )
             val filteredTracks = tracks.map { track ->
                 track.copy(points = track.points.filterNot { it.badCoordinates })
             }
-            overlay.tracks = if (pois.isEmpty()) filteredTracks else filteredTracks + poiTrack
+            overlay.tracks = filteredTracks
 
+            // Always unlock before raster refresh so heatmap colors are computed
+            // against the same freshly clamped max that drives the colorbar labels.
+            overlay.lockedColorbarMaxDose = null
             val binnedMax = overlay.refreshRaster(
                 projection = mapView.projection,
                 viewWidth = mapView.width,
                 viewHeight = mapView.height
             )
             currentMin = 0.0
-            if (tracks.isEmpty() || binnedMax == null) {
-                currentMax = computeTrackAndPoiColorbarMax(tracks, pois, useKernelEstimator)
-            } else {
-                currentMax = binnedMax
-            }
+            currentMax = binnedMax ?: DoseColorScale.DEFAULT_MAX_DOSE
 
             scaleChanged = updateColorbarScale(currentMax)
 
