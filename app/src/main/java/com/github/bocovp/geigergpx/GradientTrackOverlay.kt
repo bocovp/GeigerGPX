@@ -66,22 +66,17 @@ class GradientTrackOverlay(context: android.content.Context) : Overlay() {
         paint.shader = null
         var i = 0
 
-        for (index in points.indices) {
-            val point = points[index]
-            if (point.badCoordinates) continue
-
-            val hasPreviousGoodNeighbor = points.getOrNull(index - 1)?.badCoordinates == false
-            val hasNextGoodNeighbor = points.getOrNull(index + 1)?.badCoordinates == false
-            if (hasPreviousGoodNeighbor || hasNextGoodNeighbor) continue
-
-            gp1.setCoords(point.latitude, point.longitude)
-            projection.toPixels(gp1, p1Pixels)
-            orphanGoodPointPaint.color = DoseColorScale.colorForDose(point.doseRate, minDose, maxDose)
-            canvas.drawCircle(p1Pixels.x.toFloat(), p1Pixels.y.toFloat(), paint.strokeWidth / 2f, orphanGoodPointPaint)
-        }
-
         while (i < points.size) {
-            if (!points[i].badCoordinates) {
+            val currentPoint = points[i]
+            if (!currentPoint.badCoordinates) {
+                val hasPreviousGoodNeighbor = points.getOrNull(i - 1)?.badCoordinates == false
+                val hasNextGoodNeighbor = points.getOrNull(i + 1)?.badCoordinates == false
+                if (!hasPreviousGoodNeighbor && !hasNextGoodNeighbor) {
+                    gp1.setCoords(currentPoint.latitude, currentPoint.longitude)
+                    projection.toPixels(gp1, p1Pixels)
+                    orphanGoodPointPaint.color = DoseColorScale.colorForDose(currentPoint.doseRate, minDose, maxDose)
+                    canvas.drawCircle(p1Pixels.x.toFloat(), p1Pixels.y.toFloat(), paint.strokeWidth / 2f, orphanGoodPointPaint)
+                }
                 i += 1
                 continue
             }
