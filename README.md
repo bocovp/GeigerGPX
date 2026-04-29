@@ -12,7 +12,7 @@ No modification to the radiometer is required; signals are recorded via the micr
 - **Fast current-dose preview:** A real-time dose rate estimate is shown (based on the last 10 detected pulses).
 - **Confidence interval calculation:** Confidence intervals (CIs) are computed using χ² quantiles at a 0.95 confidence level.
 - **Long-term Measurement mode:** A dedicated measurement workflow for low-background and long-duration sampling.
-- **Measurement waypoint export:** Measurement results are written to a separate GPX-file as `<wpt>` tags with description, coordinates, timestamp, dose rate, and CI-related fields.
+- **Measurement results export:** Measurement results are written to a separate GPX-file with `<wpt>` tags containing description, coordinates, timestamp, dose rate, and CI-related fields.
 - **Dose rate plots:** For recorded tracks the application provides a dose rate plot with a manually adjustable averaging window (fixed-duration window or Epanechnikov kernel estimator).
 - **Track editing:** One can crop beginning/end of the track, cut track into two, or mark some points as "bad" so they aren't shown on the map.
 - **Experimental Bluetooth audio input:** Audio capture from Bluetooth headsets is supported as an experimental feature, but it is way less stable and provides lower quality as compared to built-in microphone capture.
@@ -21,7 +21,7 @@ No modification to the radiometer is required; signals are recorded via the micr
 ## Screenshots
 
 <img width="23%" height="auto" alt="Main screen" src="https://github.com/user-attachments/assets/4768d1fd-f57b-4a70-ab51-6ad4ad73ccc7" />
-<img width="23%" height="auto" alt="Tracks screen" src="https://github.com/user-attachments/assets/42c71a24-cc2c-4b0e-985d-4695ceebe921" />
+<img width="23%" height="auto" alt="Tracks screen" src="https://github.com/user-attachments/assets/17ec6f2e-0def-4a57-9455-2fcbe582086c" />
 <img width="23%" height="auto" alt="POI screen" src="https://github.com/user-attachments/assets/01c8e0d5-2d57-4c84-8a04-bfa618e45015" />
 <img width="23%" height="auto" alt="Map screen" src="https://github.com/user-attachments/assets/34d1996c-4d27-413f-ab8f-ff368b37abf5" />
 
