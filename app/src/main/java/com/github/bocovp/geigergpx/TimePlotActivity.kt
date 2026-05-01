@@ -2,6 +2,7 @@ package com.github.bocovp.geigergpx
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.EditText
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -219,9 +220,7 @@ class TimePlotActivity : AppCompatActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         updateModeUi(menu.findItem(R.id.action_toggle_plot_mode))
-        val highlighted = appState.highlightedTrackPoint.value
-        val isVisible = highlighted != null &&
-            (selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()) == (highlighted.trackId ?: TrackCatalog.currentTrackId())
+        val isVisible = shouldShowAddPoiAction()
         menu.findItem(R.id.action_add_poi)?.isVisible = isVisible
         lastAddPoiVisible = isVisible
         return super.onPrepareOptionsMenu(menu)
@@ -253,21 +252,36 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun saveSelectedPointAsPoi() {
         val selected = appState.highlightedTrackPoint.value ?: return
-        lifecycleScope.launch {
-            val success = withContext(Dispatchers.IO) {
-                PoiLibrary.addPoi(
-                    context = this@TimePlotActivity,
-                    description = "${selected.trackTitle ?: "Track"} #${selected.pointIndex}",
-                    timestampMillis = selected.point.timeMillis,
-                    latitude = selected.point.latitude,
-                    longitude = selected.point.longitude,
-                    doseRate = selected.point.doseRate,
-                    counts = selected.point.counts,
-                    seconds = selected.point.seconds
-                )
-            }
-            android.widget.Toast.makeText(this@TimePlotActivity, if (success) "POI saved" else "Unable to save POI", android.widget.Toast.LENGTH_SHORT).show()
+        val defaultName = "${selected.trackTitle ?: "Track"} #${selected.pointIndex}"
+        val input = EditText(this).apply {
+            setText(defaultName)
+            setSelection(text.length)
+            hint = "POI"
         }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Add POI")
+            .setMessage("Define POI name:")
+            .setView(input)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val description = input.text?.toString().orEmpty()
+                lifecycleScope.launch {
+                    val success = withContext(Dispatchers.IO) {
+                        PoiLibrary.addPoi(
+                            context = applicationContext,
+                            description = description,
+                            timestampMillis = selected.point.timeMillis,
+                            latitude = selected.point.latitude,
+                            longitude = selected.point.longitude,
+                            doseRate = selected.point.doseRate,
+                            counts = selected.point.counts,
+                            seconds = selected.point.seconds
+                        )
+                    }
+                    android.widget.Toast.makeText(this@TimePlotActivity, if (success) "POI saved" else "Unable to save POI", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            .show()
     }
 
     private fun setupPointSelectionLinking() {
@@ -457,13 +471,17 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun invalidateAddPoiMenuIfNeeded() {
-        val highlighted = appState.highlightedTrackPoint.value
-        val isVisible = highlighted != null &&
-            (selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()) == (highlighted.trackId ?: TrackCatalog.currentTrackId())
+        val isVisible = shouldShowAddPoiAction()
         if (isVisible != lastAddPoiVisible) {
             invalidateOptionsMenu()
             lastAddPoiVisible = isVisible
         }
+    }
+
+    private fun shouldShowAddPoiAction(): Boolean {
+        val highlighted = appState.highlightedTrackPoint.value ?: return false
+        return (selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()) ==
+            (highlighted.trackId ?: TrackCatalog.currentTrackId())
     }
 
     private fun refreshTrackCandidatesAndPlotAsync(preferredTrackId: String? = null) {
