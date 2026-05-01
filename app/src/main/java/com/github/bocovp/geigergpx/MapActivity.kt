@@ -6,7 +6,10 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
+import android.widget.EditText
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
@@ -128,8 +131,10 @@ class MapActivity : AppCompatActivity() {
                     maxDistancePx = DOSE_SELECTION_TOUCH_THRESHOLD_DP * resources.displayMetrics.density
                 )
                 if (!handled) {
-                    trackMapRenderer.clearHighlightedPoint()
+                    val geo = binding.mapView.projection.fromPixels(x.toInt(), y.toInt())
+                    trackMapRenderer.setUnknownHighlightedPoint(geo.latitude, geo.longitude)
                 }
+                invalidateOptionsMenu()
             },
             onLongPressFinished = { /* Keep selected dose point visible until next interaction */ }
         )
@@ -164,6 +169,7 @@ class MapActivity : AppCompatActivity() {
         }
         updateModeUi(modeItem)
         modeItem?.isVisible = !isHeatmapMode
+        menu.findItem(R.id.action_add_poi)?.isVisible = !isHeatmapMode && trackMapRenderer.hasHighlightedPoint()
 
         return super.onPrepareOptionsMenu(menu)
     }
@@ -186,6 +192,7 @@ class MapActivity : AppCompatActivity() {
                 if (isHeatmapMode) {
                     trackMapRenderer.clearHighlightedPoint()
                 }
+                invalidateOptionsMenu()
                 refreshMapTracks(latestActivePoints)
                 true
             }
@@ -203,11 +210,60 @@ class MapActivity : AppCompatActivity() {
                 if (isHeatmapMode) {
                     trackMapRenderer.clearHighlightedPoint()
                 }
+                invalidateOptionsMenu()
                 refreshMapTracks(latestActivePoints)
+                true
+            }
+            R.id.action_add_poi -> {
+                showAddPoiDialog()
                 true
             }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    private fun showAddPoiDialog() {
+        val selected = trackMapRenderer.selectedPointInfo()
+        val defaultName = if (selected != null) "${selected.trackTitle} #${selected.pointIndex}" else "Unknown"
+        val input = EditText(this).apply {
+            setText(defaultName)
+            setSelection(text.length)
+            hint = "POI"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Add POI")
+            .setMessage("Define POI name:")
+            .setView(input)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val point = selected?.point
+                val success = if (point != null) {
+                    PoiLibrary.addPoi(
+                        context = this,
+                        description = input.text.toString(),
+                        timestampMillis = point.timeMillis,
+                        latitude = point.latitude,
+                        longitude = point.longitude,
+                        doseRate = point.doseRate,
+                        counts = point.counts,
+                        seconds = point.seconds
+                    )
+                } else {
+                    val current = trackMapRenderer.highlightedPoint()
+                    PoiLibrary.addPoi(
+                        context = this,
+                        description = input.text.toString().ifBlank { "Unknown" },
+                        timestampMillis = System.currentTimeMillis(),
+                        latitude = current?.latitude ?: 0.0,
+                        longitude = current?.longitude ?: 0.0,
+                        doseRate = 0.0,
+                        counts = 0,
+                        seconds = 0.0
+                    )
+                }
+                Toast.makeText(this, if (success) "POI added to Library" else "Unable to add POI", Toast.LENGTH_SHORT).show()
+            }
+            .show()
     }
 
     override fun onResume() {

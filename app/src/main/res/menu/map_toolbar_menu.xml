@@ -25,5 +25,12 @@
         android:orderInCategory="30"
         app:showAsAction="always" />
 
+    <item
+        android:id="@+id/action_add_poi"
+        android:icon="@drawable/baseline_place_24"
+        android:title="Add POI"
+        android:visible="false"
+        android:orderInCategory="40"
+        app:showAsAction="always" />
 
 </menu>

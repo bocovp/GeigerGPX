@@ -13,6 +13,11 @@ class TrackMapRenderer(
     private val tvHalf: TextView?,
     private val tvMax: TextView?
 ) {
+    data class SelectedPointInfo(
+        val point: TrackPoint,
+        val trackTitle: String,
+        val pointIndex: Int
+    )
     data class MapViewportState(
         val latitude: Double,
         val longitude: Double,
@@ -36,6 +41,7 @@ class TrackMapRenderer(
     private var cachedShowCpsUnit: Boolean = false
     private var highlightOverlay: DoseRateHighlightOverlay? = null
     private var highlightedPoint: DoseRateHighlightOverlay.HighlightPoint? = null
+    private var selectedPointInfo: SelectedPointInfo? = null
     private val nearestScreenPoint = android.graphics.Point()
     private val nearestGeoPoint = GeoPoint(0.0, 0.0)
 
@@ -303,6 +309,7 @@ class TrackMapRenderer(
 
     fun clearHighlightedPoint() {
         highlightedPoint = null
+        selectedPointInfo = null
         highlightOverlay?.highlightedPoint = null
         mapView.invalidate()
     }
@@ -314,8 +321,9 @@ class TrackMapRenderer(
         maxDistancePx: Double
     ): Boolean {
         val nearest = findNearestTrackSample(screenX, screenY, useKernelEstimator, maxDistancePx)
-
-        highlightedPoint = nearest?.let { p ->
+        selectedPointInfo = nearest
+        highlightedPoint = nearest?.let { selected ->
+            val p = selected.point
             val value = if (showCpsUnit()) {
                 val seconds = p.seconds.takeIf { it > 1e-9 } ?: 1.0
                 p.counts / seconds
@@ -336,14 +344,31 @@ class TrackMapRenderer(
         return nearest != null
     }
 
+    fun setUnknownHighlightedPoint(latitude: Double, longitude: Double) {
+        selectedPointInfo = null
+        highlightedPoint = DoseRateHighlightOverlay.HighlightPoint(
+            latitude = latitude,
+            longitude = longitude,
+            doseRateForColor = 0.0,
+            doseLabel = "??? μSv/h",
+            isUnknown = true
+        )
+        highlightOverlay?.highlightedPoint = highlightedPoint
+        mapView.invalidate()
+    }
+
+    fun selectedPointInfo(): SelectedPointInfo? = selectedPointInfo
+    fun hasHighlightedPoint(): Boolean = highlightedPoint != null
+    fun highlightedPoint(): DoseRateHighlightOverlay.HighlightPoint? = highlightedPoint
+
     private fun findNearestTrackSample(
         screenX: Float,
         screenY: Float,
         useKernelEstimator: Boolean,
         maxDistancePx: Double
-    ): TrackPoint? {
+    ): SelectedPointInfo? {
         val projection = mapView.projection
-        var nearest: TrackPoint? = null
+        var nearest: SelectedPointInfo? = null
         var nearestDistanceSquared = Double.POSITIVE_INFINITY
         val maxDistanceSquared = maxDistancePx.pow(2)
 
@@ -354,7 +379,7 @@ class TrackMapRenderer(
                 generalizedTracksById[track.id] ?: track.points
             }
 
-            points.forEach { p ->
+            points.forEachIndexed { index, p ->
                 if (p.badCoordinates) return@forEach
 
                 nearestGeoPoint.setCoords(p.latitude, p.longitude)
@@ -364,7 +389,7 @@ class TrackMapRenderer(
                 val distanceSquared = dx * dx + dy * dy
                 if (distanceSquared < nearestDistanceSquared) {
                     nearestDistanceSquared = distanceSquared.toDouble()
-                    nearest = p
+                    nearest = SelectedPointInfo(point = p, trackTitle = track.title, pointIndex = index + 1)
                 }
             }
         }
