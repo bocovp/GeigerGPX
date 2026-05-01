@@ -122,21 +122,28 @@ class MapActivity : AppCompatActivity() {
         val tvMax = findViewById<TextView>(R.id.tvMaxDose)
         trackMapRenderer = TrackMapRenderer(binding.mapView, tvHalf, tvMax)
 
+        var lastLongPressX = 0f
+        var lastLongPressY = 0f
+        var longPressHasTrackPointSelection = false
         mapDoseLongPressOverlay = MapDoseLongPressOverlay(
             onLongPressPositionChanged = { x, y ->
-                val handled = trackMapRenderer.updateHighlightedPointForScreenPosition(
+                lastLongPressX = x
+                lastLongPressY = y
+                longPressHasTrackPointSelection = trackMapRenderer.updateHighlightedPointForScreenPosition(
                     screenX = x,
                     screenY = y,
                     useKernelEstimator = !isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR,
                     maxDistancePx = DOSE_SELECTION_TOUCH_THRESHOLD_DP * resources.displayMetrics.density
                 )
-                if (!handled) {
-                    val geo = binding.mapView.projection.fromPixels(x.toInt(), y.toInt())
-                    trackMapRenderer.setUnknownHighlightedPoint(geo.latitude, geo.longitude)
-                }
                 invalidateOptionsMenu()
             },
-            onLongPressFinished = { /* Keep selected dose point visible until next interaction */ }
+            onLongPressFinished = {
+                if (!longPressHasTrackPointSelection) {
+                    val geo = binding.mapView.projection.fromPixels(lastLongPressX.toInt(), lastLongPressY.toInt())
+                    trackMapRenderer.setUnknownHighlightedPoint(geo.latitude, geo.longitude)
+                    invalidateOptionsMenu()
+                }
+            }
         )
         mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
         binding.mapView.overlays.add(mapDoseLongPressOverlay)
