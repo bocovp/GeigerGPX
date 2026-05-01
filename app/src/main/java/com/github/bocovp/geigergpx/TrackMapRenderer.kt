@@ -14,6 +14,7 @@ class TrackMapRenderer(
     private val tvMax: TextView?
 ) {
     data class SelectedPointInfo(
+        val trackId: String,
         val point: TrackPoint,
         val trackTitle: String,
         val pointIndex: Int
@@ -389,7 +390,7 @@ class TrackMapRenderer(
                 val distanceSquared = dx * dx + dy * dy
                 if (distanceSquared < nearestDistanceSquared) {
                     nearestDistanceSquared = distanceSquared.toDouble()
-                    nearest = SelectedPointInfo(point = p, trackTitle = track.title, pointIndex = index + 1)
+                    nearest = SelectedPointInfo(trackId = track.id, point = p, trackTitle = track.title, pointIndex = index + 1)
                 }
             }
         }

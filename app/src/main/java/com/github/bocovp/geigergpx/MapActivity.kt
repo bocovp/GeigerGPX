@@ -139,12 +139,24 @@ class MapActivity : AppCompatActivity() {
                     longPressHasTrackPointSelection = newlySelected
                     invalidateOptionsMenu()
                 }
+                val selected = trackMapRenderer.selectedPointInfo()
+                appState.setHighlightedTrackPoint(
+                    selected?.let {
+                        GeigerGpxApp.HighlightedTrackPoint(
+                            trackId = it.trackId,
+                            trackTitle = it.trackTitle,
+                            pointIndex = it.pointIndex,
+                            point = it.point
+                        )
+                    }
+                )
             },
 
             onLongPressFinished = {
                 if (!longPressHasTrackPointSelection) {
                     val geo = binding.mapView.projection.fromPixels(lastLongPressX.toInt(), lastLongPressY.toInt())
                     trackMapRenderer.setUnknownHighlightedPoint(geo.latitude, geo.longitude)
+                    appState.setHighlightedTrackPoint(null)
                     invalidateOptionsMenu()
                 }
             }
@@ -202,6 +214,7 @@ class MapActivity : AppCompatActivity() {
                 mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
                 if (isHeatmapMode) {
                     trackMapRenderer.clearHighlightedPoint()
+                    appState.setHighlightedTrackPoint(null)
                 }
                 invalidateOptionsMenu()
                 refreshMapTracks(latestActivePoints)
@@ -220,6 +233,7 @@ class MapActivity : AppCompatActivity() {
                 mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
                 if (isHeatmapMode) {
                     trackMapRenderer.clearHighlightedPoint()
+                    appState.setHighlightedTrackPoint(null)
                 }
                 invalidateOptionsMenu()
                 refreshMapTracks(latestActivePoints)

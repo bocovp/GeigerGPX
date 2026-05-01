@@ -75,6 +75,9 @@ class TimePlotView @JvmOverloads constructor(
 
     private var zoomX = 1f
     private var panFraction = 0f
+    private var selectedTimeSeconds: Double? = null
+    var onPointSelectionChanged: ((Double?) -> Unit)? = null
+    private var longPressSelecting = false
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
@@ -97,10 +100,19 @@ class TimePlotView @JvmOverloads constructor(
             if (plotWidth() <= 0f || zoomX <= 1f) {
                 return false
             }
+            if (longPressSelecting) {
+                selectFromX(e2.x)
+                return true
+            }
             panFraction += (distanceX / plotWidth()) * (1f / zoomX)
             clampPan()
             invalidate()
             return true
+        }
+
+        override fun onLongPress(e: MotionEvent) {
+            longPressSelecting = true
+            selectFromX(e.x)
         }
     })
 
@@ -126,6 +138,7 @@ class TimePlotView @JvmOverloads constructor(
             verticalAxisMaxValue = 1.0
             zoomX = 1f
             panFraction = 0f
+            selectedTimeSeconds = null
             invalidate()
             return
         }
@@ -185,6 +198,7 @@ class TimePlotView @JvmOverloads constructor(
             verticalAxisMaxValue = 1.0
             zoomX = 1f
             panFraction = 0f
+            selectedTimeSeconds = null
             invalidate()
             return
         }
@@ -207,6 +221,12 @@ class TimePlotView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                longPressSelecting = false
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> longPressSelecting = false
+        }
         val scaled = scaleDetector.onTouchEvent(event)
         val gestured = gestureDetector.onTouchEvent(event)
         return scaled || gestured || super.onTouchEvent(event)
@@ -240,6 +260,37 @@ class TimePlotView @JvmOverloads constructor(
         } else {
             drawSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
         }
+        selectedTimeSeconds?.let { selected ->
+            if (trackDurationSeconds > 0.0) {
+                val visibleDuration = trackDurationSeconds / zoomX
+                val start = (trackDurationSeconds - visibleDuration) * panFraction
+                val end = start + visibleDuration
+                if (selected in start..end) {
+                    val x = plotLeft + (((selected - start) / visibleDuration).toFloat() * plotWidth)
+                    canvas.drawLine(x, plotTop, x, plotBottom, axisPaint)
+                }
+            }
+        }
+    }
+
+    fun setSelectedTimeSeconds(seconds: Double?) {
+        if (selectedTimeSeconds == seconds) return
+        selectedTimeSeconds = seconds
+        invalidate()
+    }
+
+    private fun selectFromX(x: Float) {
+        if (trackDurationSeconds <= 0.0) return
+        val plotLeft = leftPaddingPx
+        val plotRight = width.toFloat() - rightPaddingPx
+        if (x < plotLeft || x > plotRight) return
+        val visibleDuration = trackDurationSeconds / zoomX
+        val start = (trackDurationSeconds - visibleDuration) * panFraction
+        val ratio = ((x - plotLeft) / (plotRight - plotLeft)).coerceIn(0f, 1f)
+        val selected = start + visibleDuration * ratio
+        selectedTimeSeconds = selected
+        onPointSelectionChanged?.invoke(selected)
+        invalidate()
     }
 
     private fun refreshAxisColors() {
