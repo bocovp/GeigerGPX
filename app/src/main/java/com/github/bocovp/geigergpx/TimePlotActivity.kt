@@ -80,6 +80,8 @@ class TimePlotActivity : AppCompatActivity() {
     private var refreshCandidatesJob: Job? = null
     private var plotLoadJob: Job? = null
     private var pendingHighlightedPoint: GeigerGpxApp.HighlightedTrackPoint? = null
+    private var pointMidElapsedSeconds: DoubleArray = DoubleArray(0)
+    private var lastAddPoiVisible: Boolean = false
 
     // Conflation Strategy Properties
     private val renderRequestFlow = MutableStateFlow<RenderRequest?>(null)
@@ -218,8 +220,10 @@ class TimePlotActivity : AppCompatActivity() {
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         updateModeUi(menu.findItem(R.id.action_toggle_plot_mode))
         val highlighted = appState.highlightedTrackPoint.value
-        menu.findItem(R.id.action_add_poi)?.isVisible = highlighted != null &&
+        val isVisible = highlighted != null &&
             (selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()) == (highlighted.trackId ?: TrackCatalog.currentTrackId())
+        menu.findItem(R.id.action_add_poi)?.isVisible = isVisible
+        lastAddPoiVisible = isVisible
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -278,7 +282,7 @@ class TimePlotActivity : AppCompatActivity() {
                     point = selected.second
                 )
             )
-            invalidateOptionsMenu()
+            invalidateAddPoiMenuIfNeeded()
         }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -290,15 +294,16 @@ class TimePlotActivity : AppCompatActivity() {
                             invalidateOptionsMenu()
                             return@collectLatest
                         }
-                        if (selected.trackId != null && selected.trackId != selectedTrackIdForPlot) {
+                        val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
+                        val targetId = selected.trackId ?: TrackCatalog.currentTrackId()
+                        if (targetId != currentId) {
                             pendingHighlightedPoint = selected
-                            loadTrackForPlotAsync(selected.trackId)
-                        }
-                        if ((selected.trackId ?: TrackCatalog.currentTrackId()) == (selectedTrackIdForPlot ?: TrackCatalog.currentTrackId())) {
+                            loadTrackForPlotAsync(targetId)
+                        } else if (targetId == currentId) {
                             val elapsed = elapsedSecondsAtPoint(selected.point)
                             binding.timePlotView.setSelectedTimeSeconds(elapsed)
                         }
-                        invalidateOptionsMenu()
+                        invalidateAddPoiMenuIfNeeded()
                     }
             }
         }
@@ -306,35 +311,14 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun nearestPointForElapsedSeconds(seconds: Double?): Pair<Int, TrackPoint>? {
         if (seconds == null || currentPoints.isEmpty()) return null
-        var elapsed = 0.0
-        var nearestIndex = -1
-        var nearestDistance = Double.MAX_VALUE
-        currentPoints.forEachIndexed { index, point ->
-            val mid = elapsed + point.seconds.coerceAtLeast(0.001) / 2.0
-            val distance = kotlin.math.abs(mid - seconds)
-            if (distance < nearestDistance) {
-                nearestDistance = distance
-                nearestIndex = index
-            }
-            elapsed += point.seconds.coerceAtLeast(0.001)
-        }
+        val nearestIndex = nearestIndexForElapsedSeconds(seconds)
         return if (nearestIndex >= 0) nearestIndex to currentPoints[nearestIndex] else null
     }
 
     private fun elapsedSecondsAtPoint(target: TrackPoint): Double {
-        var elapsed = 0.0
-        var nearestElapsed = 0.0
-        var minDiff = Long.MAX_VALUE
-        for (p in currentPoints) {
-            val duration = p.seconds.coerceAtLeast(0.001)
-            val diff = kotlin.math.abs(p.timeMillis - target.timeMillis)
-            if (diff < minDiff) {
-                minDiff = diff
-                nearestElapsed = elapsed + duration / 2.0
-            }
-            elapsed += duration
-        }
-        return nearestElapsed
+        if (currentPoints.isEmpty()) return 0.0
+        val idx = nearestIndexForTimeMillis(target.timeMillis)
+        return pointMidElapsedSeconds.getOrElse(idx) { 0.0 }
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -412,6 +396,60 @@ class TimePlotActivity : AppCompatActivity() {
         currentPoints = points
         estimatorCache = null
         slidingWindowCache = null
+        rebuildPointIndex()
+    }
+
+    private fun rebuildPointIndex() {
+        if (currentPoints.isEmpty()) {
+            pointMidElapsedSeconds = DoubleArray(0)
+            return
+        }
+        var elapsed = 0.0
+        pointMidElapsedSeconds = DoubleArray(currentPoints.size)
+        currentPoints.forEachIndexed { index, point ->
+            val duration = point.seconds.coerceAtLeast(0.001)
+            pointMidElapsedSeconds[index] = elapsed + duration / 2.0
+            elapsed += duration
+        }
+    }
+
+    private fun nearestIndexForElapsedSeconds(seconds: Double): Int {
+        val arr = pointMidElapsedSeconds
+        if (arr.isEmpty()) return -1
+        var lo = 0
+        var hi = arr.lastIndex
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (arr[mid] < seconds) lo = mid + 1 else hi = mid
+        }
+        if (lo == 0) return 0
+        val prev = lo - 1
+        return if (kotlin.math.abs(arr[lo] - seconds) < kotlin.math.abs(arr[prev] - seconds)) lo else prev
+    }
+
+    private fun nearestIndexForTimeMillis(targetMillis: Long): Int {
+        if (currentPoints.isEmpty()) return -1
+        var lo = 0
+        var hi = currentPoints.lastIndex
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (currentPoints[mid].timeMillis < targetMillis) lo = mid + 1 else hi = mid
+        }
+        if (lo == 0) return 0
+        val prev = lo - 1
+        val a = kotlin.math.abs(currentPoints[lo].timeMillis - targetMillis)
+        val b = kotlin.math.abs(currentPoints[prev].timeMillis - targetMillis)
+        return if (a < b) lo else prev
+    }
+
+    private fun invalidateAddPoiMenuIfNeeded() {
+        val highlighted = appState.highlightedTrackPoint.value
+        val isVisible = highlighted != null &&
+            (selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()) == (highlighted.trackId ?: TrackCatalog.currentTrackId())
+        if (isVisible != lastAddPoiVisible) {
+            invalidateOptionsMenu()
+            lastAddPoiVisible = isVisible
+        }
     }
 
     private fun refreshTrackCandidatesAndPlotAsync(preferredTrackId: String? = null) {

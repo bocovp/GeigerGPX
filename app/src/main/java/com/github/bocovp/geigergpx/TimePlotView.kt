@@ -9,7 +9,6 @@ import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
-import android.view.ViewConfiguration
 import android.view.View
 import androidx.core.graphics.ColorUtils
 import kotlin.math.ceil
@@ -79,9 +78,6 @@ class TimePlotView @JvmOverloads constructor(
     private var selectedTimeSeconds: Double? = null
     var onPointSelectionChanged: ((Double?) -> Unit)? = null
     private var longPressSelecting = false
-    private var downX = 0f
-    private var downY = 0f
-    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
@@ -227,16 +223,7 @@ class TimePlotView @JvmOverloads constructor(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                downX = event.x
-                downY = event.y
                 longPressSelecting = false
-            }
-            MotionEvent.ACTION_MOVE -> {
-                if (!longPressSelecting) {
-                    val dx = kotlin.math.abs(event.x - downX)
-                    val dy = kotlin.math.abs(event.y - downY)
-                    if (dx > touchSlop || dy > touchSlop) longPressSelecting = false
-                }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> longPressSelecting = false
         }
@@ -287,6 +274,7 @@ class TimePlotView @JvmOverloads constructor(
     }
 
     fun setSelectedTimeSeconds(seconds: Double?) {
+        if (selectedTimeSeconds == seconds) return
         selectedTimeSeconds = seconds
         invalidate()
     }
