@@ -289,7 +289,6 @@ class TimePlotActivity : AppCompatActivity() {
             val selected = nearestPointForElapsedSeconds(selectedSeconds)
             if (selected == null) {
                 appState.setHighlightedTrackPoint(null)
-                invalidateAddPoiMenuIfNeeded()
             } else {
                 val trackId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
                 appState.setHighlightedTrackPoint(
@@ -300,8 +299,8 @@ class TimePlotActivity : AppCompatActivity() {
                         point = selected.second
                     )
                 )
-                invalidateAddPoiMenuIfNeeded()
             }
+            invalidateAddPoiMenuIfNeeded()
         }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
