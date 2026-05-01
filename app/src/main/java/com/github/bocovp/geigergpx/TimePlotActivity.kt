@@ -79,6 +79,7 @@ class TimePlotActivity : AppCompatActivity() {
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var refreshCandidatesJob: Job? = null
     private var plotLoadJob: Job? = null
+    private var pendingHighlightedPoint: GeigerGpxApp.HighlightedTrackPoint? = null
 
     // Conflation Strategy Properties
     private val renderRequestFlow = MutableStateFlow<RenderRequest?>(null)
@@ -216,8 +217,9 @@ class TimePlotActivity : AppCompatActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         updateModeUi(menu.findItem(R.id.action_toggle_plot_mode))
-        menu.findItem(R.id.action_add_poi)?.isVisible =
-            selectedTrackIdForPlot == appState.highlightedTrackPoint.value?.trackId
+        val highlighted = appState.highlightedTrackPoint.value
+        menu.findItem(R.id.action_add_poi)?.isVisible = highlighted != null &&
+            (selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()) == (highlighted.trackId ?: TrackCatalog.currentTrackId())
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -289,6 +291,7 @@ class TimePlotActivity : AppCompatActivity() {
                             return@collectLatest
                         }
                         if (selected.trackId != null && selected.trackId != selectedTrackIdForPlot) {
+                            pendingHighlightedPoint = selected
                             loadTrackForPlotAsync(selected.trackId)
                         }
                         if ((selected.trackId ?: TrackCatalog.currentTrackId()) == (selectedTrackIdForPlot ?: TrackCatalog.currentTrackId())) {
@@ -320,14 +323,18 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun elapsedSecondsAtPoint(target: TrackPoint): Double {
         var elapsed = 0.0
+        var nearestElapsed = 0.0
+        var minDiff = Long.MAX_VALUE
         for (p in currentPoints) {
             val duration = p.seconds.coerceAtLeast(0.001)
-            if (p.timeMillis == target.timeMillis && p.latitude == target.latitude && p.longitude == target.longitude) {
-                return elapsed + duration / 2.0
+            val diff = kotlin.math.abs(p.timeMillis - target.timeMillis)
+            if (diff < minDiff) {
+                minDiff = diff
+                nearestElapsed = elapsed + duration / 2.0
             }
             elapsed += duration
         }
-        return 0.0
+        return nearestElapsed
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -549,6 +556,15 @@ class TimePlotActivity : AppCompatActivity() {
         updateTrackSelectorUi()
         updateCurrentPoints(selectedTrack.points)
         updatePlot()
+        val pending = pendingHighlightedPoint
+        if (pending != null) {
+            val pendingTrackId = pending.trackId ?: TrackCatalog.currentTrackId()
+            val currentTrackId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
+            if (pendingTrackId == currentTrackId) {
+                binding.timePlotView.setSelectedTimeSeconds(elapsedSecondsAtPoint(pending.point))
+                pendingHighlightedPoint = null
+            }
+        }
     }
 
     private fun updateTrackTitle(title: String?) {
