@@ -286,22 +286,26 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun setupPointSelectionLinking() {
         binding.timePlotView.onPointSelectionChanged = { selectedSeconds ->
-            val selected = nearestPointForElapsedSeconds(selectedSeconds) ?: return@onPointSelectionChanged
-            val trackId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
-            appState.setHighlightedTrackPoint(
-                GeigerGpxApp.HighlightedTrackPoint(
-                    trackId = trackId,
-                    trackTitle = binding.trackNameField.text?.toString(),
-                    pointIndex = selected.first + 1,
-                    point = selected.second
+            val selected = nearestPointForElapsedSeconds(selectedSeconds)
+            if (selected == null) {
+                appState.setHighlightedTrackPoint(null)
+                invalidateAddPoiMenuIfNeeded()
+            } else {
+                val trackId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
+                appState.setHighlightedTrackPoint(
+                    GeigerGpxApp.HighlightedTrackPoint(
+                        trackId = trackId,
+                        trackTitle = binding.trackNameField.text?.toString(),
+                        pointIndex = selected.first + 1,
+                        point = selected.second
+                    )
                 )
-            )
-            invalidateAddPoiMenuIfNeeded()
+                invalidateAddPoiMenuIfNeeded()
+            }
         }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 appState.highlightedTrackPoint
-                    .distinctUntilChanged()
                     .collectLatest { highlighted ->
                         val selected = highlighted ?: run {
                             binding.timePlotView.setSelectedTimeSeconds(null)
