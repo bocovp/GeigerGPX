@@ -15,7 +15,8 @@ class DoseRateHighlightOverlay(context: android.content.Context) : Overlay() {
         val latitude: Double,
         val longitude: Double,
         val doseRateForColor: Double,
-        val doseLabel: String
+        val doseLabel: String,
+        val isUnknown: Boolean = false
     )
 
     var highlightedPoint: HighlightPoint? = null
@@ -48,7 +49,7 @@ class DoseRateHighlightOverlay(context: android.content.Context) : Overlay() {
         val py = pointPixel.y.toFloat()
         val radius = 6.528f * density
 
-        fillPaint.color = DoseColorScale.colorForDose(point.doseRateForColor, minDose, maxDose)
+        fillPaint.color = if (point.isUnknown) Color.GRAY else DoseColorScale.colorForDose(point.doseRateForColor, minDose, maxDose)
         canvas.drawCircle(px, py, radius, fillPaint)
         canvas.drawCircle(px, py, radius, strokePaint)
 

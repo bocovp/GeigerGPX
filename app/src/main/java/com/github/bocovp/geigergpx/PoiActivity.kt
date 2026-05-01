@@ -128,15 +128,18 @@ class PoiActivity : AppCompatActivity() {
         } else {
             "Unknown time"
         }
-        return "$dateTime   ${formatDoseRateText(poi)} μSv/h"
+        return "$dateTime   ${formatDoseRateText(poi)}"
     }
 
     private fun formatDoseRateText(poi: PoiEntry): String {
+        if (poi.seconds <= 0.0) {
+            return "??? μSv/h"
+        }
         val coeff = PreferenceManager.getDefaultSharedPreferences(this)
             .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
         val ci = ConfidenceInterval(0.0, poi.seconds, poi.counts, false).scale(coeff)
-        return ci.toText(decimalDigits = 4)
+        return "${ci.toText(decimalDigits = 4)} μSv/h"
     }
 
     private fun onPoiToggled(poiId: String, visible: Boolean) {
@@ -251,7 +254,7 @@ class PoiActivity : AppCompatActivity() {
             appendLine("Longitude: $lon")
             appendLine("Counts: ${poi.counts}")
             appendLine("Seconds: ${String.format(Locale.US, "%.3f", poi.seconds)}")
-            append("Dose rate: ${formatDoseRateText(poi)} μSv/h")
+            append("Dose rate: ${formatDoseRateText(poi)}")
         }
     }
 
