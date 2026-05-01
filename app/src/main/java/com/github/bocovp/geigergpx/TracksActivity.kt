@@ -149,7 +149,7 @@ class TracksActivity : AppCompatActivity() {
             adapter.submit(items, selectedTracks, selectedFolders)
 
             val hasTracks = items.isNotEmpty()
-            val isLoading = currentRebuildProgress != null || TrackCatalog.rebuildProgress.value != null
+            val isLoading = TrackCatalog.isTrackCacheRebuildInProgress()
             binding.progressContainer.visibility = if (isLoading) View.VISIBLE else View.GONE
             binding.tracksRecyclerView.visibility = if (hasTracks && !isLoading) View.VISIBLE else View.GONE
             binding.emptyStateLabel.visibility = if (!hasTracks && !isLoading) View.VISIBLE else View.GONE
