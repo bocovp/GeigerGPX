@@ -47,6 +47,8 @@ class TracksActivity : AppCompatActivity() {
         intent.getStringExtra(EXTRA_SUBFOLDER_NAME)?.takeIf { it.isNotBlank() }
     }
     private var updateAdapterJob: Job? = null
+    @Volatile
+    private var currentRebuildProgress: Int? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,6 +98,7 @@ class TracksActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     TrackCatalog.rebuildProgress.collectLatest { progress ->
+                        currentRebuildProgress = progress
                         updateLoadingUi(progress)
                         if (progress == null) {
                             updateAdapter()
@@ -144,10 +147,12 @@ class TracksActivity : AppCompatActivity() {
             val selectedFolders = selectedFolderIds()
 
             adapter.submit(items, selectedTracks, selectedFolders)
-            
+
             val hasTracks = items.isNotEmpty()
-            binding.tracksRecyclerView.visibility = if (hasTracks) View.VISIBLE else View.GONE
-            binding.emptyStateLabel.visibility = if (!hasTracks && !TrackCatalog.isTrackCacheRebuildInProgress()) View.VISIBLE else View.GONE
+            val isLoading = currentRebuildProgress != null || TrackCatalog.rebuildProgress.value != null
+            binding.progressContainer.visibility = if (isLoading) View.VISIBLE else View.GONE
+            binding.tracksRecyclerView.visibility = if (hasTracks && !isLoading) View.VISIBLE else View.GONE
+            binding.emptyStateLabel.visibility = if (!hasTracks && !isLoading) View.VISIBLE else View.GONE
         }
     }
 
