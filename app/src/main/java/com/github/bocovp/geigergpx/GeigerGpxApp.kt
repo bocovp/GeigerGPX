@@ -1,14 +1,29 @@
 package com.github.bocovp.geigergpx
 
 import android.app.Application
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 class GeigerGpxApp : Application() {
+    data class HighlightedTrackPoint(
+        val trackId: String?,
+        val trackTitle: String?,
+        val pointIndex: Int,
+        val point: TrackPoint
+    )
+
     val trackingRepository: TrackingRepository by lazy { TrackingRepository() }
     private var restoredBackupName: String? = null
     private var backupRestoreAttempted: Boolean = false
     var isMainToolbarTitleHidden: Boolean = false
     var selectedTimePlotTrackId: String? = null
     @Volatile var sharedKdeSliderInternalValue: Float = 0f
+    private val _highlightedTrackPoint = MutableStateFlow<HighlightedTrackPoint?>(null)
+    val highlightedTrackPoint: StateFlow<HighlightedTrackPoint?> = _highlightedTrackPoint
+
+    fun setHighlightedTrackPoint(value: HighlightedTrackPoint?) {
+        _highlightedTrackPoint.value = value
+    }
 
     override fun onCreate() {
         super.onCreate()
