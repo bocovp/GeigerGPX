@@ -163,7 +163,7 @@ class MapActivity : AppCompatActivity() {
             toggleItem?.setIcon(R.drawable.baseline_scatter_plot_24)
         }
         updateModeUi(modeItem)
-        modeItem?.isEnabled = !isHeatmapMode
+        modeItem?.isVisible = !isHeatmapMode
 
         return super.onPrepareOptionsMenu(menu)
     }
