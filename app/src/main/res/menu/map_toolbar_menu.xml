@@ -4,33 +4,32 @@
     <!-- Usage: Toggles between standard lines and heatmap overlay -->
 
     <item
-        android:id="@+id/action_toggle_plot_mode"
-        android:icon="@drawable/baseline_planner_review_24"
-        android:title="@string/time_plot_switch_to_kernel_estimator"
+        android:id="@+id/action_add_poi"
+        android:icon="@drawable/baseline_add_location_alt_24"
+        android:title="Add POI"
+        android:visible="false"
         android:orderInCategory="10"
         app:showAsAction="always" />
 
+    <item
+        android:id="@+id/action_toggle_plot_mode"
+        android:icon="@drawable/baseline_planner_review_24"
+        android:title="@string/time_plot_switch_to_kernel_estimator"
+        android:orderInCategory="20"
+        app:showAsAction="always" />
 
     <item
         android:id="@+id/action_toggle_heatmap"
         android:icon="@drawable/baseline_scatter_plot_24"
         android:title="Show Heatmap"
-        android:orderInCategory="20"
+        android:orderInCategory="30"
         app:showAsAction="always" />
 
     <item
         android:id="@+id/action_auto_zoom"
         android:icon="@drawable/baseline_fit_screen_24"
         android:title="Auto Zoom"
-        android:orderInCategory="30"
-        app:showAsAction="always" />
-
-    <item
-        android:id="@+id/action_add_poi"
-        android:icon="@drawable/baseline_place_24"
-        android:title="Add POI"
-        android:visible="false"
         android:orderInCategory="40"
         app:showAsAction="always" />
-
+    
 </menu>

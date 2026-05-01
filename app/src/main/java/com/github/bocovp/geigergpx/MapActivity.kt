@@ -236,32 +236,37 @@ class MapActivity : AppCompatActivity() {
             .setView(input)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
+                val description = input.text.toString()
                 val point = selected?.point
-                val success = if (point != null) {
-                    PoiLibrary.addPoi(
-                        context = this,
-                        description = input.text.toString(),
-                        timestampMillis = point.timeMillis,
-                        latitude = point.latitude,
-                        longitude = point.longitude,
-                        doseRate = point.doseRate,
-                        counts = point.counts,
-                        seconds = point.seconds
-                    )
-                } else {
-                    val current = trackMapRenderer.highlightedPoint()
-                    PoiLibrary.addPoi(
-                        context = this,
-                        description = input.text.toString().ifBlank { "Unknown" },
-                        timestampMillis = System.currentTimeMillis(),
-                        latitude = current?.latitude ?: 0.0,
-                        longitude = current?.longitude ?: 0.0,
-                        doseRate = 0.0,
-                        counts = 0,
-                        seconds = 0.0
-                    )
+                val current = trackMapRenderer.highlightedPoint()
+                lifecycleScope.launch {
+                    val success = withContext(Dispatchers.IO) {
+                        if (point != null) {
+                            PoiLibrary.addPoi(
+                                context = this@MapActivity,
+                                description = description,
+                                timestampMillis = point.timeMillis,
+                                latitude = point.latitude,
+                                longitude = point.longitude,
+                                doseRate = point.doseRate,
+                                counts = point.counts,
+                                seconds = point.seconds
+                            )
+                        } else {
+                            PoiLibrary.addPoi(
+                                context = this@MapActivity,
+                                description = description.ifBlank { "Unknown" },
+                                timestampMillis = System.currentTimeMillis(),
+                                latitude = current?.latitude ?: 0.0,
+                                longitude = current?.longitude ?: 0.0,
+                                doseRate = 0.0,
+                                counts = 0,
+                                seconds = 0.0
+                            )
+                        }
+                    }
+                    Toast.makeText(this@MapActivity, if (success) "POI added to Library" else "Unable to add POI", Toast.LENGTH_SHORT).show()
                 }
-                Toast.makeText(this, if (success) "POI added to Library" else "Unable to add POI", Toast.LENGTH_SHORT).show()
             }
             .show()
     }
