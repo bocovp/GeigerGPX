@@ -376,11 +376,11 @@ class TrackMapRenderer(
             val points = if (useKernelEstimator) {
                 generalizedTracksById[track.id] ?: track.points
             } else {
-                generalizedTracksById[track.id] ?: track.points
+                track.points
             }
 
             points.forEachIndexed { index, p ->
-                if (p.badCoordinates) return@forEach
+                if (p.badCoordinates) return@forEachIndexed
 
                 nearestGeoPoint.setCoords(p.latitude, p.longitude)
                 projection.toPixels(nearestGeoPoint, nearestScreenPoint)
@@ -457,7 +457,7 @@ class TrackMapRenderer(
         val metersPerPixel = TileSystem.GroundResolution(mapLatitude, zoomLevel)
         val minDistanceMeters = metersPerPixel * 10.0
 
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
+        val prefs = PreferenceManager.getDefaultSharedPreferences(mapView.context)
         val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
 

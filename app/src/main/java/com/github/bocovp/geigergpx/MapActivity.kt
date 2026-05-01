@@ -129,14 +129,18 @@ class MapActivity : AppCompatActivity() {
             onLongPressPositionChanged = { x, y ->
                 lastLongPressX = x
                 lastLongPressY = y
-                longPressHasTrackPointSelection = trackMapRenderer.updateHighlightedPointForScreenPosition(
+                val newlySelected = trackMapRenderer.updateHighlightedPointForScreenPosition(
                     screenX = x,
                     screenY = y,
                     useKernelEstimator = !isHeatmapMode && plotMode == PlotMode.KERNEL_ESTIMATOR,
                     maxDistancePx = DOSE_SELECTION_TOUCH_THRESHOLD_DP * resources.displayMetrics.density
                 )
-                invalidateOptionsMenu()
+                if (longPressHasTrackPointSelection != newlySelected) {
+                    longPressHasTrackPointSelection = newlySelected
+                    invalidateOptionsMenu()
+                }
             },
+
             onLongPressFinished = {
                 if (!longPressHasTrackPointSelection) {
                     val geo = binding.mapView.projection.fromPixels(lastLongPressX.toInt(), lastLongPressY.toInt())
