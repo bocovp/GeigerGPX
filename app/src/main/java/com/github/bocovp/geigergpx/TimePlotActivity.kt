@@ -300,8 +300,12 @@ class TimePlotActivity : AppCompatActivity() {
                             pendingHighlightedPoint = selected
                             loadTrackForPlotAsync(targetId)
                         } else if (targetId == currentId) {
-                            val elapsed = elapsedSecondsAtPoint(selected.point)
-                            binding.timePlotView.setSelectedTimeSeconds(elapsed)
+                            if (currentPoints.isEmpty()) {
+                                pendingHighlightedPoint = selected
+                            } else {
+                                val elapsed = elapsedSecondsAtPoint(selected.point)
+                                binding.timePlotView.setSelectedTimeSeconds(elapsed)
+                            }
                         }
                         invalidateAddPoiMenuIfNeeded()
                     }
@@ -397,6 +401,16 @@ class TimePlotActivity : AppCompatActivity() {
         estimatorCache = null
         slidingWindowCache = null
         rebuildPointIndex()
+
+        val pending = pendingHighlightedPoint
+        if (pending != null && points.isNotEmpty()) {
+            val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
+            val targetId = pending.trackId ?: TrackCatalog.currentTrackId()
+            if (targetId == currentId) {
+                binding.timePlotView.setSelectedTimeSeconds(elapsedSecondsAtPoint(pending.point))
+                pendingHighlightedPoint = null
+            }
+        }
     }
 
     private fun rebuildPointIndex() {
@@ -594,15 +608,6 @@ class TimePlotActivity : AppCompatActivity() {
         updateTrackSelectorUi()
         updateCurrentPoints(selectedTrack.points)
         updatePlot()
-        val pending = pendingHighlightedPoint
-        if (pending != null) {
-            val pendingTrackId = pending.trackId ?: TrackCatalog.currentTrackId()
-            val currentTrackId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
-            if (pendingTrackId == currentTrackId) {
-                binding.timePlotView.setSelectedTimeSeconds(elapsedSecondsAtPoint(pending.point))
-                pendingHighlightedPoint = null
-            }
-        }
     }
 
     private fun updateTrackTitle(title: String?) {
