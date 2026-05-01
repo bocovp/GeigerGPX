@@ -2,12 +2,14 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <!-- Usage: Toggles between standard lines and heatmap overlay -->
+
     <item
-        android:id="@+id/action_auto_zoom"
-        android:icon="@drawable/baseline_fit_screen_24"
-        android:title="Auto Zoom"
+        android:id="@+id/action_toggle_plot_mode"
+        android:icon="@drawable/baseline_planner_review_24"
+        android:title="@string/time_plot_switch_to_kernel_estimator"
         android:orderInCategory="10"
         app:showAsAction="always" />
+
 
     <item
         android:id="@+id/action_toggle_heatmap"
@@ -17,11 +19,11 @@
         app:showAsAction="always" />
 
     <item
-        android:id="@+id/action_toggle_plot_mode"
-        android:enabled="false"
-        android:icon="@drawable/baseline_planner_review_24"
-        android:title="@string/time_plot_switch_to_kernel_estimator"
+        android:id="@+id/action_auto_zoom"
+        android:icon="@drawable/baseline_fit_screen_24"
+        android:title="Auto Zoom"
         android:orderInCategory="30"
         app:showAsAction="always" />
+
 
 </menu>
