@@ -54,6 +54,7 @@ class MapActivity : AppCompatActivity() {
     private var ignoreMapMoveEventsUntilMillis: Long = 0L
     private var heatmapRefreshPendingFromScroll = false
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
+    private var latestHighlightedTrackPoint: GeigerGpxApp.HighlightedTrackPoint? = null
 
     private val KDE_SLIDER_ENABLED = false
 
@@ -168,6 +169,28 @@ class MapActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 TrackCatalog.allTracks.collectLatest {
                     refreshMapTracks(latestActivePoints)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                appState.highlightedTrackPoint.collectLatest { highlighted ->
+                    latestHighlightedTrackPoint = highlighted
+                    if (isHeatmapMode) return@collectLatest
+                    val wasHighlighted = trackMapRenderer.hasHighlightedPoint()
+                    if (highlighted == null) {
+                        trackMapRenderer.clearHighlightedPoint()
+                    } else {
+                        trackMapRenderer.setHighlightedTrackPoint(
+                            trackId = highlighted.trackId,
+                            point = highlighted.point,
+                            trackTitle = highlighted.trackTitle,
+                            pointIndex = highlighted.pointIndex
+                        )
+                    }
+                    if (wasHighlighted != trackMapRenderer.hasHighlightedPoint()) {
+                        invalidateOptionsMenu()
+                    }
                 }
             }
         }
@@ -429,6 +452,16 @@ class MapActivity : AppCompatActivity() {
                     rememberViewportAfterProgrammaticAutoZoom()
                 }
                 hasVisibleMapContent = visibleTracks.isNotEmpty() || poiMapItems.isNotEmpty()
+                if (!isHeatmapMode) {
+                    latestHighlightedTrackPoint?.let { highlighted ->
+                        trackMapRenderer.setHighlightedTrackPoint(
+                            trackId = highlighted.trackId,
+                            point = highlighted.point,
+                            trackTitle = highlighted.trackTitle,
+                            pointIndex = highlighted.pointIndex
+                        )
+                    }
+                }
             } finally {
                 if (refreshJob == coroutineContext[Job]) {
                     binding.loadingLabel.visibility = View.GONE

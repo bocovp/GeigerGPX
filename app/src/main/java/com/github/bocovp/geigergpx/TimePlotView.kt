@@ -59,6 +59,10 @@ class TimePlotView @JvmOverloads constructor(
         color = Color.argb(100, 140, 140, 140)
         style = Paint.Style.FILL
     }
+    private val selectedPointPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(25, 118, 210)
+        style = Paint.Style.FILL
+    }
 
     private val leftPaddingPx = 43.52f * density
     private val rightPaddingPx = 11.968f * density
@@ -260,17 +264,7 @@ class TimePlotView @JvmOverloads constructor(
         } else {
             drawSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
         }
-        selectedTimeSeconds?.let { selected ->
-            if (trackDurationSeconds > 0.0) {
-                val visibleDuration = trackDurationSeconds / zoomX
-                val start = (trackDurationSeconds - visibleDuration) * panFraction
-                val end = start + visibleDuration
-                if (selected in start..end) {
-                    val x = plotLeft + (((selected - start) / visibleDuration).toFloat() * plotWidth)
-                    canvas.drawLine(x, plotTop, x, plotBottom, axisPaint)
-                }
-            }
-        }
+        drawSelectedPointMarker(canvas, plotLeft, plotTop, plotBottom, plotWidth, plotHeight)
     }
 
     fun setSelectedTimeSeconds(seconds: Double?) {
@@ -298,6 +292,53 @@ class TimePlotView @JvmOverloads constructor(
         axisPaint.color = ColorUtils.blendARGB(baseTextColor, Color.WHITE, 0.10f)
         textPaint.color = ColorUtils.blendARGB(baseTextColor, Color.WHITE, 0.20f)
         gridPaint.color = ColorUtils.setAlphaComponent(textPaint.color, 110)
+    }
+
+    private fun drawSelectedPointMarker(
+        canvas: Canvas,
+        plotLeft: Float,
+        plotTop: Float,
+        plotBottom: Float,
+        plotWidth: Float,
+        plotHeight: Float
+    ) {
+        val selected = selectedTimeSeconds ?: return
+        if (trackDurationSeconds <= 0.0) return
+        val visibleDuration = trackDurationSeconds / zoomX
+        val start = (trackDurationSeconds - visibleDuration) * panFraction
+        val end = start + visibleDuration
+        if (selected !in start..end) return
+
+        val x = plotLeft + (((selected - start) / visibleDuration).toFloat() * plotWidth)
+        val y = selectedYForTime(selected, plotBottom, plotHeight) ?: return
+        val radius = 3.8f * density
+        canvas.drawCircle(x, y, radius, selectedPointPaint)
+        if (longPressSelecting) {
+            canvas.drawLine(x, plotTop, x, plotBottom, axisPaint)
+        }
+    }
+
+    private fun selectedYForTime(selectedSeconds: Double, plotBottom: Float, plotHeight: Float): Float? {
+        if (kernelSeries.isNotEmpty()) {
+            val idx = kernelSeries.binarySearch { it.t.compareTo(selectedSeconds) }
+            return when {
+                idx >= 0 -> toY(kernelSeries[idx].mean, plotBottom, plotHeight)
+                kernelSeries.size < 2 -> null
+                else -> {
+                    val insert = -idx - 1
+                    val right = kernelSeries.getOrNull(insert) ?: return toY(kernelSeries.last().mean, plotBottom, plotHeight)
+                    val left = kernelSeries.getOrNull(insert - 1) ?: return toY(right.mean, plotBottom, plotHeight)
+                    val dt = (right.t - left.t).takeIf { it > 1e-9 } ?: return toY(left.mean, plotBottom, plotHeight)
+                    val ratio = ((selectedSeconds - left.t) / dt).coerceIn(0.0, 1.0)
+                    val interpolated = left.mean + (right.mean - left.mean) * ratio
+                    toY(interpolated, plotBottom, plotHeight)
+                }
+            }
+        }
+        val idx = plotSegments.binarySearch { it.startSeconds.compareTo(selectedSeconds) }
+        val segmentIdx = if (idx >= 0) idx else -idx - 2
+        val segment = plotSegments.getOrNull(segmentIdx)?.takeIf { selectedSeconds <= it.endSeconds } ?: return null
+        return toY(segment.value, plotBottom, plotHeight)
     }
 
     private fun resolveTextPrimaryColor(): Int {
