@@ -361,6 +361,44 @@ class TrackMapRenderer(
     fun selectedPointInfo(): SelectedPointInfo? = selectedPointInfo
     fun hasHighlightedPoint(): Boolean = highlightedPoint != null
     fun highlightedPoint(): DoseRateHighlightOverlay.HighlightPoint? = highlightedPoint
+    fun setHighlightedTrackPoint(
+        trackId: String?,
+        point: TrackPoint,
+        trackTitle: String? = null,
+        pointIndex: Int? = null
+    ) {
+        val resolvedTrack = lastRenderedTracks.firstOrNull { it.id == trackId }
+            ?: lastRenderedTracks.firstOrNull { candidate ->
+                candidate.points.any { it.timeMillis == point.timeMillis }
+            }
+        val resolvedIndex = pointIndex ?: resolvedTrack?.points?.indexOfFirst { it.timeMillis == point.timeMillis }?.plus(1)
+        selectedPointInfo = if (resolvedTrack != null && resolvedIndex != null && resolvedIndex > 0) {
+            SelectedPointInfo(
+                trackId = resolvedTrack.id,
+                point = point,
+                trackTitle = trackTitle ?: resolvedTrack.title,
+                pointIndex = resolvedIndex
+            )
+        } else {
+            null
+        }
+
+        val value = if (showCpsUnit()) {
+            val seconds = point.seconds.takeIf { it > 1e-9 } ?: 1.0
+            point.counts / seconds
+        } else {
+            point.doseRate
+        }
+        val unit = if (showCpsUnit()) "cps" else "μSv/h"
+        highlightedPoint = DoseRateHighlightOverlay.HighlightPoint(
+            latitude = point.latitude,
+            longitude = point.longitude,
+            doseRateForColor = point.doseRate,
+            doseLabel = String.format(java.util.Locale.US, "%.3f %s", value, unit)
+        )
+        highlightOverlay?.highlightedPoint = highlightedPoint
+        mapView.invalidate()
+    }
 
     private fun findNearestTrackSample(
         screenX: Float,
