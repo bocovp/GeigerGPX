@@ -177,6 +177,7 @@ class MapActivity : AppCompatActivity() {
                 appState.highlightedTrackPoint.collectLatest { highlighted ->
                     latestHighlightedTrackPoint = highlighted
                     if (isHeatmapMode) return@collectLatest
+                    val wasHighlighted = trackMapRenderer.hasHighlightedPoint()
                     if (highlighted == null) {
                         trackMapRenderer.clearHighlightedPoint()
                     } else {
@@ -187,7 +188,9 @@ class MapActivity : AppCompatActivity() {
                             pointIndex = highlighted.pointIndex
                         )
                     }
-                    invalidateOptionsMenu()
+                    if (wasHighlighted != trackMapRenderer.hasHighlightedPoint()) {
+                        invalidateOptionsMenu()
+                    }
                 }
             }
         }

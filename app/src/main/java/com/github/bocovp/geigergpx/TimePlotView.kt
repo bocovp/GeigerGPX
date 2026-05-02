@@ -335,8 +335,9 @@ class TimePlotView @JvmOverloads constructor(
                 }
             }
         }
-        val segment = plotSegments.firstOrNull { selectedSeconds >= it.startSeconds && selectedSeconds <= it.endSeconds }
-            ?: return null
+        val idx = plotSegments.binarySearch { it.startSeconds.compareTo(selectedSeconds) }
+        val segmentIdx = if (idx >= 0) idx else -idx - 2
+        val segment = plotSegments.getOrNull(segmentIdx)?.takeIf { selectedSeconds <= it.endSeconds } ?: return null
         return toY(segment.value, plotBottom, plotHeight)
     }
 
