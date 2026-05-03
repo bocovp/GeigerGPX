@@ -63,6 +63,12 @@ class TimePlotView @JvmOverloads constructor(
         color = Color.rgb(25, 118, 210)
         style = Paint.Style.FILL
     }
+    // Add this for the white outline
+    private val selectedPointStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f * density // Adjust this multiplier for a thicker/thinner outline
+    }
 
     private val leftPaddingPx = 43.52f * density
     private val rightPaddingPx = 11.968f * density
@@ -103,10 +109,6 @@ class TimePlotView @JvmOverloads constructor(
         ): Boolean {
             if (plotWidth() <= 0f || zoomX <= 1f) {
                 return false
-            }
-            if (longPressSelecting) {
-                selectFromX(e2.x)
-                return true
             }
             panFraction += (distanceX / plotWidth()) * (1f / zoomX)
             clampPan()
@@ -229,6 +231,14 @@ class TimePlotView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 longPressSelecting = false
             }
+
+            MotionEvent.ACTION_MOVE -> {
+                if (longPressSelecting) {
+                    selectFromX(event.x)
+                    return true // Consume the event so it doesn't get passed down
+                }
+            }
+
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> longPressSelecting = false
         }
         val scaled = scaleDetector.onTouchEvent(event)
@@ -312,7 +322,11 @@ class TimePlotView @JvmOverloads constructor(
         val x = plotLeft + (((selected - start) / visibleDuration).toFloat() * plotWidth)
         val y = selectedYForTime(selected, plotBottom, plotHeight) ?: return
         val radius = 3.8f * density
+
+        // 1. Draw the blue filled circle
         canvas.drawCircle(x, y, radius, selectedPointPaint)
+        // 2. Draw the white outline right on top
+        canvas.drawCircle(x, y, radius, selectedPointStrokePaint)
         if (longPressSelecting) {
             canvas.drawLine(x, plotTop, x, plotBottom, axisPaint)
         }
