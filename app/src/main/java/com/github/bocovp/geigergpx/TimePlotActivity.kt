@@ -67,8 +67,8 @@ class TimePlotActivity : AppCompatActivity() {
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var cpsToUSvhCoeff: Double = 1.0
     private var currentPoints: List<TrackPoint> = emptyList()
-    private var activeTrackObserverAttached = false
-    private var trackingObserverAttached = false
+   // private var activeTrackObserverAttached = false
+ //   private var trackingObserverAttached = false
 
     @Volatile private var estimatorCache: EstimatorCache? = null
     @Volatile private var slidingWindowCache: SlidingWindowCache? = null
@@ -99,7 +99,24 @@ class TimePlotActivity : AppCompatActivity() {
 
         setupGeneralizationSlider()
         setupTrackSelector()
-        observeTrackingState()
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                TrackCatalog.allTracks.collectLatest {
+                    refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
+                }
+
+                viewModel.activeTrackPoints.collectLatest { points ->
+                    if (selectedTrackIdForPlot != TrackCatalog.currentTrackId()) return@collectLatest
+                    updateCurrentPoints(points)
+                    updatePlot(recalculateVerticalAxis = true)
+                }
+
+                viewModel.isTracking.collectLatest {
+                    refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
+                }
+            }
+        }
         setupRenderCollector() // Initialize the confluent collector
         setupPointSelectionLinking()
 
@@ -132,13 +149,6 @@ class TimePlotActivity : AppCompatActivity() {
             rememberTrackSelection(this, selectedTrackId)
         }
 
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                TrackCatalog.allTracks.collectLatest {
-                    refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
-                }
-            }
-        }
         invalidateOptionsMenu()
     }
 
@@ -395,24 +405,6 @@ class TimePlotActivity : AppCompatActivity() {
         })
     }
 
-    private fun observeTrackingState() {
-        if (trackingObserverAttached) return
-        trackingObserverAttached = true
-        viewModel.isTracking.observe(this) {
-            refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
-        }
-    }
-
-    private fun observeActiveTrack() {
-        if (activeTrackObserverAttached) return
-        activeTrackObserverAttached = true
-        viewModel.activeTrackPoints.observe(this) { points ->
-            if (selectedTrackIdForPlot != TrackCatalog.currentTrackId()) return@observe
-            updateCurrentPoints(points)
-            updatePlot(recalculateVerticalAxis = true)
-        }
-    }
-
     private fun updateCurrentPoints(points: List<TrackPoint>) {
         currentPoints = points
         estimatorCache = null
@@ -615,7 +607,7 @@ class TimePlotActivity : AppCompatActivity() {
             updateTrackTitle(CURRENT_TRACK_TITLE)
             rememberCurrentTrackSelection(this)
             updateTrackSelectorUi()
-            observeActiveTrack()
+  //          observeActiveTrack()
             return true
         }
         return false

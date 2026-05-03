@@ -1,7 +1,8 @@
 package com.github.bocovp.geigergpx
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Shared app state for tracking/monitoring UI.
@@ -26,109 +27,109 @@ class TrackingRepository {
         val onBeep: Boolean = false
     )
 
-    private val _isTracking = MutableLiveData(false)
-    val isTracking: LiveData<Boolean> = _isTracking
+    private val _isTracking = MutableStateFlow(false)
+    val isTracking: StateFlow<Boolean> = _isTracking.asStateFlow()
 
-    private val _trackDurationSeconds = MutableLiveData(0L)
-    val trackDurationSeconds: LiveData<Long> = _trackDurationSeconds
+    private val _trackDurationSeconds = MutableStateFlow(0L)
+    val trackDurationSeconds: StateFlow<Long> = _trackDurationSeconds.asStateFlow()
 
-    private val _distanceMeters = MutableLiveData(0.0)
-    val distanceMeters: LiveData<Double> = _distanceMeters
+    private val _distanceMeters = MutableStateFlow(0.0)
+    val distanceMeters: StateFlow<Double> = _distanceMeters.asStateFlow()
 
-    private val _pointCount = MutableLiveData(0)
-    val pointCount: LiveData<Int> = _pointCount
+    private val _pointCount = MutableStateFlow(0)
+    val pointCount: StateFlow<Int> = _pointCount.asStateFlow()
 
-    private val _activeTrackPoints = MutableLiveData<List<TrackPoint>>(emptyList())
-    val activeTrackPoints: LiveData<List<TrackPoint>> = _activeTrackPoints
+    private val _activeTrackPoints = MutableStateFlow<List<TrackPoint>>(emptyList())
+    val activeTrackPoints: StateFlow<List<TrackPoint>> = _activeTrackPoints.asStateFlow()
 
-    private val _cpsUpdate = MutableLiveData(CpsUpdate())
-    val cpsUpdate: LiveData<CpsUpdate> = _cpsUpdate
+    private val _cpsUpdate = MutableStateFlow(CpsUpdate())
+    val cpsUpdate: StateFlow<CpsUpdate> = _cpsUpdate.asStateFlow()
 
     private val totalCounter = java.util.concurrent.atomic.AtomicInteger(0)
-    private val _totalCounts = MutableLiveData(0)
-    val totalCounts: LiveData<Int> = _totalCounts
+    private val _totalCounts = MutableStateFlow(0)
+    val totalCounts: StateFlow<Int> = _totalCounts.asStateFlow()
 
-    private val _countsAtTrackStart = MutableLiveData(0)
-    val countsAtTrackStart: LiveData<Int> = _countsAtTrackStart
+    private val _countsAtTrackStart = MutableStateFlow(0)
+    val countsAtTrackStart: StateFlow<Int> = _countsAtTrackStart.asStateFlow()
 
-    private val _countsAtMeasurementStart = MutableLiveData(0)
-    val countsAtMeasurementStart: LiveData<Int> = _countsAtMeasurementStart
+    private val _countsAtMeasurementStart = MutableStateFlow(0)
+    val countsAtMeasurementStart: StateFlow<Int> = _countsAtMeasurementStart.asStateFlow()
 
-    private val _savedTrackCounts = MutableLiveData<Int?>(null)
-    val savedTrackCounts: LiveData<Int?> = _savedTrackCounts
+    private val _savedTrackCounts = MutableStateFlow<Int?>(null)
+    val savedTrackCounts: StateFlow<Int?> = _savedTrackCounts.asStateFlow()
 
-    private val _gpsStatus = MutableLiveData("unknown")
-    val gpsStatus: LiveData<String> = _gpsStatus
+    private val _gpsStatus = MutableStateFlow("unknown")
+    val gpsStatus: StateFlow<String> = _gpsStatus.asStateFlow()
 
-    private val _audioStatus = MutableLiveData(AudioStatus())
-    val audioStatus: LiveData<AudioStatus> = _audioStatus
+    private val _audioStatus = MutableStateFlow(AudioStatus())
+    val audioStatus: StateFlow<AudioStatus> = _audioStatus.asStateFlow()
 
-    private val _measurementModeEnabled = MutableLiveData(false)
-    val measurementModeEnabled: LiveData<Boolean> = _measurementModeEnabled
-    private val _uiTickMillis = MutableLiveData(0L)
-    val uiTickMillis: LiveData<Long> = _uiTickMillis
+    private val _measurementModeEnabled = MutableStateFlow(false)
+    val measurementModeEnabled: StateFlow<Boolean> = _measurementModeEnabled.asStateFlow()
+    private val _uiTickMillis = MutableStateFlow(0L)
+    val uiTickMillis: StateFlow<Long> = _uiTickMillis.asStateFlow()
 
     fun updateTrackGeometry(distance: Double, points: Int) {
-        _distanceMeters.postValue(distance)
-        _pointCount.postValue(points)
+        _distanceMeters.value = distance
+        _pointCount.value = points
     }
 
     fun updateTrackDuration(trackDurationSeconds: Long) {
-        _trackDurationSeconds.postValue(trackDurationSeconds)
+        _trackDurationSeconds.value = trackDurationSeconds
     }
 
     fun updateTrackingState(tracking: Boolean, gpsStatus: String) {
-        _isTracking.postValue(tracking)
-        _gpsStatus.postValue(gpsStatus)
+        _isTracking.value = tracking
+        _gpsStatus.value = gpsStatus
     }
 
     fun updateCpsSnapshot(cpsSnapshot: CpsSnapshot, onBeep: Boolean = false) {
-        _cpsUpdate.postValue(CpsUpdate(snapshot = cpsSnapshot, onBeep = onBeep))
+        _cpsUpdate.value = CpsUpdate(snapshot = cpsSnapshot, onBeep = onBeep)
     }
 
     fun beginNewTrack() {
-        _countsAtTrackStart.postValue(totalCounter.get())
-        _savedTrackCounts.postValue(null)
-        _activeTrackPoints.postValue(emptyList())
+        _countsAtTrackStart.value = totalCounter.get()
+        _savedTrackCounts.value = null
+        _activeTrackPoints.value = emptyList()
     }
 
     fun setActiveTrackPoints(points: List<TrackPoint>) {
-        _activeTrackPoints.postValue(points)
+        _activeTrackPoints.value = points
     }
 
     fun finalizeTrackCounts() {
         val total = totalCounter.get()
-        val offset = _countsAtTrackStart.value ?: 0
-        _savedTrackCounts.postValue(total - offset)
+        val offset = _countsAtTrackStart.value
+        _savedTrackCounts.value = total - offset
     }
 
     fun discardTrackCounts() {
-        _savedTrackCounts.postValue(null)
+        _savedTrackCounts.value = null
     }
 
     fun updateMonitoringStatus(gpsStatus: String) {
-        _gpsStatus.postValue(gpsStatus)
+        _gpsStatus.value = gpsStatus
     }
 
     fun updateAudioStatus(audioStatus: String, errorCode: Int) {
-        _audioStatus.postValue(AudioStatus(status = audioStatus, errorCode = errorCode))
+        _audioStatus.value = AudioStatus(status = audioStatus, errorCode = errorCode)
     }
 
     fun updateMeasurementMode(enabled: Boolean) {
         if (enabled) {
-            _countsAtMeasurementStart.postValue(totalCounter.get())
+            _countsAtMeasurementStart.value = totalCounter.get()
         }
-        _measurementModeEnabled.postValue(enabled)
+        _measurementModeEnabled.value = enabled
     }
 
     fun notifyUiTick(nowMillis: Long) {
-        _uiTickMillis.postValue(nowMillis)
+        _uiTickMillis.value = nowMillis
     }
 
     /** Increment and return the global total beep count in a thread-safe way. */
     fun incrementTotalCounts(amount: Int): Int {
         val newValue = totalCounter.addAndGet(amount)
-        _totalCounts.postValue(newValue)
+        _totalCounts.value = newValue
         return newValue
     }
 
