@@ -114,20 +114,27 @@ class TracksActivity : AppCompatActivity() {
             }
         }
 
-        viewModel.activeTrackPoints.observe(this) {
-            updateAdapter()
-        }
-
-        viewModel.isTracking.observe(this) {
-            updateAdapter()
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.activeTrackPoints.collectLatest {
+                        updateAdapter()
+                    }
+                }
+                launch {
+                    viewModel.isTracking.collectLatest {
+                        updateAdapter()
+                    }
+                }
+            }
         }
     }
 
     private fun updateAdapter() {
         updateAdapterJob?.cancel()
         updateAdapterJob = lifecycleScope.launch {
-            val points = viewModel.activeTrackPoints.value.orEmpty()
-            val includeCurrentTrack = currentFolderName == null && viewModel.isTracking.value == true
+            val points = viewModel.activeTrackPoints.value
+            val includeCurrentTrack = currentFolderName == null && viewModel.isTracking.value
             
             // We still use loadTrackListItems for the complex filtering/item generation logic
             // but we call it reactively whenever any of its inputs change.
