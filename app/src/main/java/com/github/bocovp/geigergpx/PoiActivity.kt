@@ -153,7 +153,7 @@ class PoiActivity : AppCompatActivity() {
         PreferenceManager.getDefaultSharedPreferences(this)
             .edit {
                 putBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
-                    .putStringSet(PREF_MAP_VISIBLE_POI_IDS, selected)
+                putStringSet(PREF_MAP_VISIBLE_POI_IDS, selected)
             }
     }
 
@@ -163,8 +163,8 @@ class PoiActivity : AppCompatActivity() {
         if (!initialized) {
             prefs.edit {
                 putBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
-                    .putStringSet(PREF_MAP_VISIBLE_POI_IDS, allPoiIds)
-                }
+                putStringSet(PREF_MAP_VISIBLE_POI_IDS, allPoiIds)
+            }
             return allPoiIds
         }
 

@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Geiger GPX</string>
     <string name="loading_files">Loading files…</string>
-    <string name="loading_tracks">Loading track …</string>
+    <string name="loading_tracks">Loading tracks…</string>
     <string name="loading_poi_library">Loading POI library…</string>
     <string name="no_tracks_found">No tracks found</string>
     <string name="no_poi_file_found">No POI.gpx file found</string>
