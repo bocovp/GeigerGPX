@@ -35,6 +35,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.content.edit
+import androidx.core.net.toUri
 
 class MainActivity : AppCompatActivity() {
 
@@ -77,9 +79,9 @@ class MainActivity : AppCompatActivity() {
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             contentResolver.takePersistableUriPermission(uri, flags)
             PreferenceManager.getDefaultSharedPreferences(this)
-                .edit()
-                .putString(SettingsFragment.KEY_GPX_TREE_URI, uri.toString())
-                .apply()
+                .edit {
+                    putString(SettingsFragment.KEY_GPX_TREE_URI, uri.toString())
+                }
         }
         // Stop tracking regardless of whether a folder was chosen or cancelled
         stopTracking()
@@ -92,9 +94,9 @@ class MainActivity : AppCompatActivity() {
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             contentResolver.takePersistableUriPermission(uri, flags)
             PreferenceManager.getDefaultSharedPreferences(this)
-                .edit()
-                .putString(SettingsFragment.KEY_GPX_TREE_URI, uri.toString())
-                .apply()
+                .edit {
+                    putString(SettingsFragment.KEY_GPX_TREE_URI, uri.toString())
+                }
         } else {
             FileStorageManager.clearConfiguredTreeUri(this)
         }
@@ -208,7 +210,7 @@ class MainActivity : AppCompatActivity() {
                 if (treeUriString.isNullOrBlank()) {
                     Triple(probeError, true, false)
                 } else {
-                    val treeUri = runCatching { Uri.parse(treeUriString) }.getOrNull()
+                    val treeUri = runCatching { treeUriString.toUri() }.getOrNull()
                     val treeRoot = treeUri?.let { DocumentFile.fromTreeUri(this@MainActivity, it) }
                     val validFolder = treeRoot?.isDirectory == true
                     val writable = validFolder && FileStorageManager.isConfiguredFolderWritable(this@MainActivity)
@@ -775,7 +777,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-            data = Uri.parse("package:$packageName")
+            data = "package:$packageName".toUri()
         }
         startActivity(intent)
     }
