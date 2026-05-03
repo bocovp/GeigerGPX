@@ -55,6 +55,7 @@ class TimePlotView @JvmOverloads constructor(
         strokeWidth = 2.176f * density
         style = Paint.Style.STROKE
     }
+
     private val ciPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(100, 140, 140, 140)
         style = Paint.Style.FILL
@@ -70,10 +71,10 @@ class TimePlotView @JvmOverloads constructor(
         strokeWidth = 1.5f * density // Adjust this multiplier for a thicker/thinner outline
     }
 
-    private val leftPaddingPx = 43.52f * density
-    private val rightPaddingPx = 11.968f * density
-    private val topPaddingPx = 13.056f * density
-    private val bottomPaddingPx = 38.08f * density
+    private val leftPaddingPx = 35f * density
+    private val rightPaddingPx = 12f * density
+    private val topPaddingPx = 13f * density
+    private val bottomPaddingPx = 38f * density
 
     private var trackDurationSeconds = 0.0
     private var maxDoseValue = 1.0
@@ -258,23 +259,26 @@ class TimePlotView @JvmOverloads constructor(
         val plotHeight = plotBottom - plotTop
         if (plotWidth <= 0f || plotHeight <= 0f) return
 
-        canvas.drawLine(plotLeft, plotBottom, plotRight, plotBottom, axisPaint)
-        canvas.drawLine(plotLeft, plotTop, plotLeft, plotBottom, axisPaint)
-
         if (plotSegments.isEmpty() && kernelSeries.isEmpty()) {
             canvas.drawText(emptyMessage, plotLeft + 16f, plotTop + 40f, textPaint)
             return
+        } else {
+            if (kernelSeries.isNotEmpty()) {
+                drawKernelSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
+            } else {
+                drawSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
+            }
+            drawSelectedPointMarker(canvas, plotLeft, plotTop, plotBottom, plotWidth, plotHeight)
+
+            drawVerticalTicks(canvas, plotLeft, plotTop, plotBottom, plotRight)
+            drawHorizontalTicks(canvas, plotLeft, plotBottom, plotTop, plotRight)
+            drawHorizontalAxisLabel(canvas, plotLeft, plotBottom, plotRight)
         }
 
-        drawVerticalTicks(canvas, plotLeft, plotTop, plotBottom, plotRight)
-        drawHorizontalTicks(canvas, plotLeft, plotBottom, plotTop, plotRight)
-        drawHorizontalAxisLabel(canvas, plotLeft, plotBottom, plotRight)
-        if (kernelSeries.isNotEmpty()) {
-            drawKernelSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
-        } else {
-            drawSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
-        }
-        drawSelectedPointMarker(canvas, plotLeft, plotTop, plotBottom, plotWidth, plotHeight)
+        canvas.drawLine(plotLeft, plotBottom, plotRight, plotBottom, axisPaint)
+        canvas.drawLine(plotLeft, plotTop, plotLeft, plotBottom, axisPaint)
+        canvas.drawLine(plotLeft, plotTop, plotRight, plotTop, axisPaint)   // top
+        canvas.drawLine(plotRight, plotTop, plotRight, plotBottom, axisPaint) //Right
     }
 
     fun setSelectedTimeSeconds(seconds: Double?) {
@@ -454,15 +458,33 @@ class TimePlotView @JvmOverloads constructor(
         plotBottom: Float,
         plotRight: Float
     ) {
+        val fm = textPaint.fontMetrics
+        val labelMarginPx = 6f * density  // gap between right edge of label and the axis line
+        val tickLengthPx = 4f * density
+
         for (i in 0..verticalTickCount) {
             val ratio = i.toFloat() / verticalTickCount.toFloat()
             val y = plotBottom - ratio * (plotBottom - plotTop)
             val value = i * verticalTickStep
             canvas.drawLine(plotLeft, y, plotRight, y, gridPaint)
-            val dy = if (i == 0) 0f else 8f
-            canvas.drawText(String.format(java.util.Locale.US, "%.2f", value), 8f, y + dy, textPaint)
+            canvas.drawLine(plotLeft, y, plotLeft + tickLengthPx, y, axisPaint)
+
+            val label = if (i == 0) "0" else String.format(java.util.Locale.US, "%.2f", value)
+            val labelX = plotLeft - labelMarginPx - textPaint.measureText(label)
+            val labelY = if (i == 0) {
+                // Deliberately bottom-aligned: place the descent (bottom of glyphs) at the tick line
+                y - fm.descent + 2f * density
+            } else {
+                // Vertically centered on the tick line
+                y - (fm.ascent + fm.descent) / 2f
+            }
+            canvas.drawText(label, labelX, labelY, textPaint)
         }
-        canvas.drawText(yAxisUnit, plotLeft + 8f, plotTop + 28f, textPaint)
+
+        // Unit label: top edge aligned to plotTop, a small margin inside the plot
+        val unitMarginPx = 5f * density
+        val unitMarginPy = 2.5f * density
+        canvas.drawText(yAxisUnit, plotLeft + unitMarginPx, plotTop - fm.ascent + unitMarginPy, textPaint)
     }
 
     private fun drawHorizontalTicks(
@@ -479,12 +501,20 @@ class TimePlotView @JvmOverloads constructor(
         val end = start + visibleDuration
         val stepSeconds = chooseHorizontalTickStepSeconds(visibleDuration)
 
+        val fm = textPaint.fontMetrics
+        val labelMarginPx = 5f * density  // gap between axis line and top of label text
+        // Place baseline so the top of the text is labelMarginPx below plotBottom
+        val labelY = plotBottom + labelMarginPx - fm.ascent
+        val tickLengthPx = 4f * density
+
         var tick = floor(start / stepSeconds) * stepSeconds
         while (tick <= end + 0.0001) {
             val x = plotLeft + (((tick - start) / visibleDuration).toFloat() * (plotRight - plotLeft))
             if (x in plotLeft..plotRight) {
                 canvas.drawLine(x, plotTop, x, plotBottom, gridPaint)
-                canvas.drawText(formatTickLabel(tick), x - 24f, plotBottom + 34f, textPaint)
+                canvas.drawLine(x, plotBottom, x, plotBottom - tickLengthPx, axisPaint)
+                val label = formatTickLabel(tick)
+                canvas.drawText(label, x - textPaint.measureText(label) / 2f, labelY, textPaint)
             }
             tick += stepSeconds
         }
@@ -498,10 +528,14 @@ class TimePlotView @JvmOverloads constructor(
     ) {
         if (trackDurationSeconds <= 0.0) return
 
+        val fm = textPaint.fontMetrics
+        val tickLabelMarginPx = 4f * density
+        // Position below the tick labels: skip one full line height past the tick label baseline
+        val labelY = plotBottom + tickLabelMarginPx - fm.ascent + (fm.descent - fm.ascent)
+
         val textWidth = textPaint.measureText(xAxisUnit)
-        val x = plotRight - textWidth
-        val y = plotBottom + 65f
-        canvas.drawText(xAxisUnit, x, y, textPaint)
+        val nudgeRightPx = 4f * density
+        canvas.drawText(xAxisUnit, plotRight - textWidth + nudgeRightPx, labelY, textPaint)
     }
 
     private fun chooseHorizontalTickStepSeconds(durationSeconds: Double): Double {
@@ -539,11 +573,11 @@ class TimePlotView @JvmOverloads constructor(
 
     private fun formatTickLabel(seconds: Double): String {
         val totalMinutes = (seconds / 60.0).toInt()
-        val minutes = totalMinutes % 60
         return if (trackDurationSeconds < 3600.0) {
-            String.format("%02d", totalMinutes)
+            "$totalMinutes"
         } else {
             val hours = totalMinutes / 60
+            val minutes = totalMinutes % 60
             String.format("%d:%02d", hours, minutes)
         }
     }
