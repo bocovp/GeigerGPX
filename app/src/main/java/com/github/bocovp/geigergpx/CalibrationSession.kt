@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.preference.PreferenceManager
 import kotlin.concurrent.thread
+import androidx.core.content.edit
 
 /**
  * Orchestrates the two-stage calibration process.
@@ -157,9 +158,9 @@ class CalibrationSession(
         val finalThreshold = if (raw > 0f) raw else fallbackThreshold
 
         PreferenceManager.getDefaultSharedPreferences(context)
-            .edit()
-            .putFloat(thresholdPreferenceKey, finalThreshold)
-            .apply()
+            .edit {
+                putFloat(thresholdPreferenceKey, finalThreshold)
+            }
 
         // Both onFinished and stop() are dispatched to avoid blocking or interrupting
         // the onRawAudio callback chain that led here.

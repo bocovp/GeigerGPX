@@ -226,7 +226,7 @@ object GpxWriter {
         if (primaryResult.succeeded) {
             val savedUri = primaryResult.uri ?: return null
             return SaveTrackResult(
-                displayPath = FileStorageManager.getDisplayPath(context, savedUri),
+                displayPath = FileStorageManager.getDisplayPath(savedUri),
                 sourceId = if (savedUri.scheme == "content") "tree:$savedUri" else "file:${savedUri.path}"
             )
         }
@@ -244,7 +244,7 @@ object GpxWriter {
         val fallbackUri = fallbackResult.uri ?: return null
         val primaryMessage = primaryResult.error?.localizedMessage ?: "unknown error"
         return SaveTrackResult(
-            displayPath = FileStorageManager.getDisplayPath(context, fallbackUri),
+            displayPath = FileStorageManager.getDisplayPath(fallbackUri),
             sourceId = if (fallbackUri.scheme == "content") "tree:$fallbackUri" else "file:${fallbackUri.path}",
             warning = "Primary save failed: $primaryMessage. Saved in default app folder."
         )

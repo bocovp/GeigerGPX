@@ -2,6 +2,7 @@ package com.github.bocovp.geigergpx
 
 import android.content.Context
 import androidx.preference.PreferenceManager
+import androidx.core.content.edit
 
 object TrackSelectionPrefs {
     const val PREF_MAP_VISIBLE_TRACK_IDS = "map_visible_track_ids"
@@ -29,9 +30,9 @@ object TrackSelectionPrefs {
             selectedIds.remove(trackId)
         }
         PreferenceManager.getDefaultSharedPreferences(context)
-            .edit()
-            .putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selectedIds)
-            .apply()
+            .edit {
+                putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selectedIds)
+            }
     }
 
     fun setFolderSelected(context: Context, folderName: String, selected: Boolean) {
@@ -42,9 +43,9 @@ object TrackSelectionPrefs {
             selectedIds.remove(folderName)
         }
         PreferenceManager.getDefaultSharedPreferences(context)
-            .edit()
-            .putStringSet(PREF_MAP_VISIBLE_SUBFOLDER_NAMES, selectedIds)
-            .apply()
+            .edit {
+                putStringSet(PREF_MAP_VISIBLE_SUBFOLDER_NAMES, selectedIds)
+            }
     }
 
     fun replaceSelectedTrackId(context: Context, oldTrackId: String, newTrackId: String) {
@@ -55,17 +56,17 @@ object TrackSelectionPrefs {
         selectedIds.remove(oldTrackId)
         selectedIds.add(newTrackId)
         PreferenceManager.getDefaultSharedPreferences(context)
-            .edit()
-            .putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selectedIds)
-            .apply()
+            .edit {
+                putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selectedIds)
+            }
     }
 
     fun removeSelectedTrackId(context: Context, trackId: String) {
         val selectedIds = selectedTrackIds(context).toMutableSet()
         if (!selectedIds.remove(trackId)) return
         PreferenceManager.getDefaultSharedPreferences(context)
-            .edit()
-            .putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selectedIds)
-            .apply()
+            .edit {
+                putStringSet(PREF_MAP_VISIBLE_TRACK_IDS, selectedIds)
+            }
     }
 }

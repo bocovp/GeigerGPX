@@ -29,6 +29,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import java.util.Locale
+import androidx.core.net.toUri
 
 private const val CURRENT_TRACK_ID = "active-track"
 private const val CURRENT_TRACK_TITLE = "Currently recording"
@@ -820,7 +821,7 @@ object TrackCatalog {
     private fun openInputStreamForTrack(context: Context, sourceId: String): InputStream? {
         return when {
             sourceId.startsWith("tree:") -> {
-                val uri = Uri.parse(sourceId.removePrefix("tree:"))
+                val uri = sourceId.removePrefix("tree:").toUri()
                 context.contentResolver.openInputStream(uri)
             }
             sourceId.startsWith("file:") -> {

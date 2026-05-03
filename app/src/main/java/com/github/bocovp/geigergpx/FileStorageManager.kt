@@ -10,6 +10,8 @@ import androidx.preference.PreferenceManager
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import androidx.core.content.edit
+import androidx.core.net.toUri
 
 /**
  * Centralized file storage abstraction for GeigerGPX.
@@ -292,16 +294,16 @@ object FileStorageManager {
 
     fun clearConfiguredTreeUri(context: Context) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        prefs.edit().putString(PREFS_KEY_GPX_TREE_URI, null).apply()
+        prefs.edit { putString(PREFS_KEY_GPX_TREE_URI, null) }
     }
 
     fun configuredTreeUri(context: Context): Uri? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val treeUri = prefs.getString(PREFS_KEY_GPX_TREE_URI, null)
-        return if (treeUri.isNullOrBlank()) null else Uri.parse(treeUri)
+        return if (treeUri.isNullOrBlank()) null else treeUri.toUri()
     }
 
-    fun getDisplayPath(context: Context, uri: Uri): String {
+    fun getDisplayPath( uri: Uri): String {
         return try {
             if ("content" == uri.scheme) {
                 val docId = DocumentsContract.getDocumentId(uri)

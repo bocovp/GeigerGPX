@@ -30,6 +30,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.content.edit
 
 class MapActivity : AppCompatActivity() {
     private enum class PlotMode { SLIDING_WINDOW, KERNEL_ESTIMATOR }
@@ -508,16 +509,16 @@ class MapActivity : AppCompatActivity() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val initialized = prefs.getBoolean(PoiActivity.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, false)
         if (!initialized) {
-            prefs.edit()
-                .putBoolean(PoiActivity.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
-                .putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, allPoiIds)
-                .apply()
+            prefs.edit {
+                putBoolean(PoiActivity.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
+                    .putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, allPoiIds)
+            }
             return allPoiIds
         }
         val selected = prefs.getStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, emptySet())?.toSet() ?: emptySet()
         val sanitized = selected.intersect(allPoiIds)
         if (sanitized != selected) {
-            prefs.edit().putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, sanitized).apply()
+            prefs.edit { putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, sanitized)}
         }
         return sanitized
     }

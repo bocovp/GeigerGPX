@@ -20,6 +20,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.log10
 import kotlin.math.pow
+import androidx.core.net.toUri
+import androidx.core.content.edit
 
 class SettingsFragment : PreferenceFragmentCompat() {
     private val settingsPrefListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -34,9 +36,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
             requireContext().contentResolver.takePersistableUriPermission(uri, flags)
 
             PreferenceManager.getDefaultSharedPreferences(requireContext())
-                .edit()
-                .putString(KEY_GPX_TREE_URI, uri.toString())
-                .apply()
+                .edit {
+                    putString(KEY_GPX_TREE_URI, uri.toString())
+                }
 
             updateFolderSummary()
         }
@@ -153,7 +155,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         launchUi {
             try {
                 val summary = withContext(Dispatchers.IO) {
-                    val uri = android.net.Uri.parse(uriStr)
+                    val uri = uriStr.toUri()
                     val context = context ?: return@withContext uriStr
                     val doc = DocumentFile.fromTreeUri(context, uri)
                     doc?.name ?: uriStr
@@ -316,7 +318,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 if (value != null && value > 0f && value.isFinite()) {
                     // Going back from "our" deciBells to intensity
                     val value2 = fromDb(value);
-                    prefs.edit().putFloat(thresholdKey, value2.toFloat()).apply()
+                    prefs.edit {putFloat(thresholdKey, value2.toFloat())}
                     thresholdPref.summary = buildThresholdSummary(bluetooth)
                     Toast.makeText(context, "Threshold updated.", Toast.LENGTH_SHORT).show()
                 } else {

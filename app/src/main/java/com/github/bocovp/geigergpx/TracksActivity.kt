@@ -30,6 +30,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
+import androidx.core.net.toUri
 
 class TracksActivity : AppCompatActivity() {
 
@@ -536,8 +537,8 @@ class TracksActivity : AppCompatActivity() {
 
     private fun trackDocumentUri(item: TrackListItem): Uri? {
         return when {
-            item.id.startsWith("doc:") -> Uri.parse(item.id.removePrefix("doc:"))
-            item.id.startsWith("tree:") -> Uri.parse(item.id.removePrefix("tree:"))
+            item.id.startsWith("doc:") -> item.id.removePrefix("doc:").toUri()
+            item.id.startsWith("tree:") -> item.id.removePrefix("tree:").toUri()
             else -> null
         }
     }
@@ -547,7 +548,7 @@ class TracksActivity : AppCompatActivity() {
             .getString(SettingsFragment.KEY_GPX_TREE_URI, null)
             ?.takeIf { it.isNotBlank() }
             ?: return null
-        return Uri.parse(treeUri)
+        return treeUri.toUri()
     }
 
     private fun resolveDocumentDirectory(folderName: String?, createIfMissing: Boolean): DocumentFile? {

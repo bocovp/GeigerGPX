@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Geiger GPX</string>
-    <string name="loading_files">Loading files ...</string>
-    <string name="loading_tracks">Loading tracks...</string>
-    <string name="loading_poi_library">Loading POI library...</string>
+    <string name="loading_files">Loading files…</string>
+    <string name="loading_tracks">Loading track …</string>
+    <string name="loading_poi_library">Loading POI library…</string>
     <string name="no_tracks_found">No tracks found</string>
     <string name="no_poi_file_found">No POI.gpx file found</string>
     <string name="no_poi_in_library">No POI in Library</string>
@@ -13,7 +13,7 @@
     <string name="time_plot_switch_to_sliding_window">Switch to sliding window</string>
     <string name="time_plot_switch_to_kernel_estimator">Switch to kernel estimator</string>
     <string name="time_plot_no_track_data">No track data</string>
-    <string name="time_plot_loading">Loading...</string>
+    <string name="time_plot_loading">Loading…</string>
     <string name="time_plot_track_label">Track</string>
     <string name="time_plot_previous_track">Previous selected track</string>
     <string name="time_plot_next_track">Next selected track</string>

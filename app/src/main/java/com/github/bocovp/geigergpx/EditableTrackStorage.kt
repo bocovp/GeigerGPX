@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import androidx.core.net.toUri
 
 object EditableTrackStorage {
     data class LoadResult(val points: List<TrackPoint>)
@@ -100,8 +101,8 @@ object EditableTrackStorage {
                 val file = File(trackId.removePrefix("file:"))
                 if (file.exists()) file.inputStream() else null
             }
-            trackId.startsWith("tree:") -> context.contentResolver.openInputStream(Uri.parse(trackId.removePrefix("tree:")))
-            trackId.startsWith("doc:") -> context.contentResolver.openInputStream(Uri.parse(trackId.removePrefix("doc:")))
+            trackId.startsWith("tree:") -> context.contentResolver.openInputStream(trackId.removePrefix("tree:").toUri())
+            trackId.startsWith("doc:") -> context.contentResolver.openInputStream(trackId.removePrefix("doc:").toUri())
             else -> null
         }
     }
@@ -112,8 +113,8 @@ object EditableTrackStorage {
                 val file = File(trackId.removePrefix("file:"))
                 file.outputStream()
             }
-            trackId.startsWith("tree:") -> context.contentResolver.openOutputStream(Uri.parse(trackId.removePrefix("tree:")), "wt")
-            trackId.startsWith("doc:") -> context.contentResolver.openOutputStream(Uri.parse(trackId.removePrefix("doc:")), "wt")
+            trackId.startsWith("tree:") -> context.contentResolver.openOutputStream(trackId.removePrefix("tree:").toUri(), "wt")
+            trackId.startsWith("doc:") -> context.contentResolver.openOutputStream(trackId.removePrefix("doc:").toUri(), "wt")
             else -> null
         }
     }

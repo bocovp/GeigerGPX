@@ -12,6 +12,7 @@ import android.view.ViewConfiguration
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
+import androidx.core.graphics.toColorInt
 
 class EditTrackOverlay(context: android.content.Context) : Overlay() {
     private val density = context.resources.displayMetrics.density
@@ -65,7 +66,7 @@ class EditTrackOverlay(context: android.content.Context) : Overlay() {
         points.forEachIndexed { index, pt ->
             projection.toPixels(GeoPoint(pt.latitude, pt.longitude), p1)
             pointFillPaint.color = when {
-                highlightedIndices.contains(index) -> Color.parseColor("#1E88E5")
+                highlightedIndices.contains(index) -> "#1E88E5".toColorInt()
                 pt.badCoordinates -> Color.GRAY
                 else -> Color.WHITE
             }
@@ -113,7 +114,7 @@ class RectangleSelectionOverlay(
     private val borderPaint = Paint().apply {
         style = Paint.Style.STROKE
         strokeWidth = 1.632f * density
-        color = Color.parseColor("#1E88E5")
+        color = "#1E88E5".toColorInt()
     }
 
 
