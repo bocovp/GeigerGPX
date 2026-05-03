@@ -123,8 +123,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.buttonStart.setOnClickListener {
-            if (viewModel.isTracking.value == true) {
-                if ((viewModel.pointCount.value ?: 0) == 0) {
+            if (viewModel.isTracking.value) {
+                if (viewModel.pointCount.value == 0) {
                     cancelTracking()
                 } else {
                     showCancelTrackConfirmation()
@@ -396,9 +396,9 @@ class MainActivity : AppCompatActivity() {
         syncBottomNavigationSelection()
         applyKeepScreenOnFlag()
         updateCpsOrDoseLine(false)
-        refreshTrackDuration(viewModel.trackDurationSeconds.value ?: 0L)
+        refreshTrackDuration(viewModel.trackDurationSeconds.value)
         refreshMeasurementDurationFromTimer()
-        updateCountDisplay(viewModel.countDisplayState.value ?: TrackingViewModel.CountDisplayState())
+        updateCountDisplay(viewModel.countDisplayState.value)
         startMonitoring()
     }
 
@@ -411,7 +411,7 @@ class MainActivity : AppCompatActivity() {
         // dispatchTrackingAction() uses foreground-safe dispatch so we never crash.
         // Keep monitoring active in background while tracking or while
         // measurement mode is enabled.
-        if (viewModel.isTracking.value != true && !isMeasurementModeEnabled) {
+        if (!viewModel.isTracking.value && !isMeasurementModeEnabled) {
             stopMonitoring()
         }
     }

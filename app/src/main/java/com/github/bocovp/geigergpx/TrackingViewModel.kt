@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
-class TrackingViewModel(app: Application) : AndroidViewModel(app) {
+class  TrackingViewModel(app: Application) : AndroidViewModel(app) {
     data class CountDisplayState(
         val totalCounts: Int = 0,
         val trackCounts: Int = 0,
@@ -30,13 +30,17 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
     val cpsUpdate: StateFlow<TrackingRepository.CpsUpdate> = repo.cpsUpdate
 
     val countDisplayState: StateFlow<CountDisplayState> = combine(
-        repo.isTracking,
-        repo.measurementModeEnabled,
-        repo.savedTrackCounts,
-        repo.totalCounts,
-        repo.countsAtTrackStart,
-        repo.countsAtMeasurementStart
-    ) { tracking, measurementModeEnabled, savedTrackCounts, total, trackStart, measurementStart ->
+        combine(
+            repo.isTracking,
+            repo.measurementModeEnabled,
+            repo.savedTrackCounts,
+            ::Triple),
+        combine(
+            repo.totalCounts,
+            repo.countsAtTrackStart,
+            repo.countsAtMeasurementStart,
+            ::Triple)
+    ) { (tracking, measurementModeEnabled, savedTrackCounts), (total, trackStart, measurementStart) ->
         val calculatedTrackCounts = if (tracking) total - trackStart else (savedTrackCounts ?: 0)
         val calculatedMeasurementCounts = if (measurementModeEnabled) total - measurementStart else 0
             CountDisplayState(
