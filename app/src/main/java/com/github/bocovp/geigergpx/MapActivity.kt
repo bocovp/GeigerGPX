@@ -346,12 +346,20 @@ class MapActivity : AppCompatActivity() {
     }
 
     private fun observeTrack() {
-        viewModel.activeTrackPoints.observe(this) { points ->
-            latestActivePoints = points
-            refreshMapTracks(points)
-        }
-        viewModel.isTracking.observe(this) {
-            refreshMapTracks(latestActivePoints)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.activeTrackPoints.collectLatest { points ->
+                        latestActivePoints = points
+                        refreshMapTracks(points)
+                    }
+                }
+                launch {
+                    viewModel.isTracking.collectLatest {
+                        refreshMapTracks(latestActivePoints)
+                    }
+                }
+            }
         }
     }
 
@@ -367,7 +375,7 @@ class MapActivity : AppCompatActivity() {
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
 
         // Capture all main-thread state that the IO block needs.
-        // LiveData.value is @MainThread; read it here, not inside withContext.
+        // StateFlow.value is thread-safe; read once here for a consistent refresh snapshot.
         val includeCurrentTrack = viewModel.isTracking.value == true
 
         refreshJob = lifecycleScope.launch {

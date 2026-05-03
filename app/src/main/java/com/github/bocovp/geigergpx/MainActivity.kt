@@ -10,8 +10,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.view.menu.MenuBuilder
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.preference.PreferenceManager
 import com.github.bocovp.geigergpx.databinding.ActivityMainBinding
 import android.widget.Toast
@@ -440,72 +442,67 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun observeViewModel() {
-        viewModel.isTracking.observe(this) { tracking ->
-            binding.buttonStart.text = if (tracking) "Cancel" else "Start track"
-            binding.buttonStop.isEnabled = tracking
-        }
-
-        viewModel.trackDurationSeconds.observe(this) { seconds ->
-            refreshTrackDuration(seconds)
-        }
-
-        viewModel.uiTickMillis.observe(this) {
-            updateCpsOrDoseLine(false)
-            refreshMeasurementDurationFromTimer()
-        }
-
-        viewModel.distanceMeters.observe(this) { dist ->
-            binding.textDistance.text = "Distance: %.1f m".format(java.util.Locale.US, dist)
-        }
-
-        viewModel.pointCount.observe(this) { count ->
-            binding.textPoints.text = "Points: $count"
-        }
-
-        viewModel.cpsUpdate.observe(this) { update ->
-            latestCpsSnapshot = update.snapshot
-            updateCpsOrDoseLine(update.onBeep)
-            refreshMeasurementDurationFromTimer()
-        }
-
-        viewModel.countDisplayState.observe(this) { state ->
-            updateCountDisplay(state)
-        }
-
-        viewModel.gpsStatus.observe(this) { status ->
-            binding.textGpsStatus.text = "GPS status: $status"
-            val color = when (status) {
-                "Waiting" -> R.color.status_waiting
-                "Working" -> R.color.status_working
-                else -> if (status.startsWith("Spoofing detected")) {
-                    R.color.status_spoofing
-                } else {
-                    R.color.status_waiting
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.isTracking.collect { tracking ->
+                        binding.buttonStart.text = if (tracking) "Cancel" else "Start track"
+                        binding.buttonStop.isEnabled = tracking
+                    }
+                }
+                launch { viewModel.trackDurationSeconds.collect { seconds -> refreshTrackDuration(seconds) } }
+                launch {
+                    viewModel.uiTickMillis.collect {
+                        updateCpsOrDoseLine(false)
+                        refreshMeasurementDurationFromTimer()
+                    }
+                }
+                launch {
+                    viewModel.distanceMeters.collect { dist ->
+                        binding.textDistance.text = "Distance: %.1f m".format(java.util.Locale.US, dist)
+                    }
+                }
+                launch { viewModel.pointCount.collect { count -> binding.textPoints.text = "Points: $count" } }
+                launch {
+                    viewModel.cpsUpdate.collect { update ->
+                        latestCpsSnapshot = update.snapshot
+                        updateCpsOrDoseLine(update.onBeep)
+                        refreshMeasurementDurationFromTimer()
+                    }
+                }
+                launch { viewModel.countDisplayState.collect { state -> updateCountDisplay(state) } }
+                launch {
+                    viewModel.gpsStatus.collect { status ->
+                        binding.textGpsStatus.text = "GPS status: $status"
+                        val color = when (status) {
+                            "Waiting" -> R.color.status_waiting
+                            "Working" -> R.color.status_working
+                            else -> if (status.startsWith("Spoofing detected")) R.color.status_spoofing else R.color.status_waiting
+                        }
+                        binding.textGpsStatus.setTextColor(ContextCompat.getColor(this@MainActivity, color))
+                    }
+                }
+                launch {
+                    viewModel.audioStatus.collect { audioStatus ->
+                        binding.textAudioStatus.text = "Audio status: ${audioStatus.status}"
+                        val color = when (audioStatus.errorCode) {
+                            TrackingRepository.AUDIO_STATUS_WORKING -> R.color.status_working
+                            TrackingRepository.AUDIO_STATUS_ERROR -> R.color.status_spoofing
+                            else -> R.color.status_waiting
+                        }
+                        binding.textAudioStatus.setTextColor(ContextCompat.getColor(this@MainActivity, color))
+                    }
+                }
+                launch {
+                    viewModel.measurementModeEnabled.collect { enabled ->
+                        isMeasurementModeEnabled = enabled
+                        binding.buttonMeasurementMode.text = if (enabled) "Live Mode" else "Measure"
+                        binding.buttonSavePoi.isEnabled = enabled
+                        updateCpsOrDoseLine(false)
+                        refreshMeasurementDurationFromTimer()
+                    }
                 }
             }
-            binding.textGpsStatus.setTextColor(ContextCompat.getColor(this, color))
-        }
-
-        viewModel.audioStatus.observe(this) { audioStatus ->
-            binding.textAudioStatus.text = "Audio status: ${audioStatus.status}"
-            val color = when (audioStatus.errorCode) {
-                TrackingRepository.AUDIO_STATUS_WORKING -> R.color.status_working
-                TrackingRepository.AUDIO_STATUS_ERROR -> R.color.status_spoofing
-                else -> R.color.status_waiting
-            }
-            binding.textAudioStatus.setTextColor(ContextCompat.getColor(this, color))
-        }
-
-        viewModel.measurementModeEnabled.observe(this) { enabled ->
-            isMeasurementModeEnabled = enabled
-            binding.buttonMeasurementMode.text = if (enabled) {
-                "Live Mode"
-            } else {
-                "Measure"
-            }
-            binding.buttonSavePoi.isEnabled = enabled
-            updateCpsOrDoseLine(false)
-            refreshMeasurementDurationFromTimer()
         }
     }
 

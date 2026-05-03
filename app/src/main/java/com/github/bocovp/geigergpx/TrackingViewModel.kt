@@ -2,8 +2,11 @@ package com.github.bocovp.geigergpx
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MediatorLiveData
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 
 class TrackingViewModel(app: Application) : AndroidViewModel(app) {
     data class CountDisplayState(
@@ -14,50 +17,40 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo: TrackingRepository = (app as GeigerGpxApp).trackingRepository
 
-    val isTracking: LiveData<Boolean> = repo.isTracking
+    val isTracking: StateFlow<Boolean> = repo.isTracking
 
-    val trackDurationSeconds: LiveData<Long> = repo.trackDurationSeconds
+    val trackDurationSeconds: StateFlow<Long> = repo.trackDurationSeconds
 
-    val distanceMeters: LiveData<Double> = repo.distanceMeters
+    val distanceMeters: StateFlow<Double> = repo.distanceMeters
 
-    val pointCount: LiveData<Int> = repo.pointCount
+    val pointCount: StateFlow<Int> = repo.pointCount
 
-    val activeTrackPoints: LiveData<List<TrackPoint>> = repo.activeTrackPoints
+    val activeTrackPoints: StateFlow<List<TrackPoint>> = repo.activeTrackPoints
 
-    val cpsUpdate: LiveData<TrackingRepository.CpsUpdate> = repo.cpsUpdate
+    val cpsUpdate: StateFlow<TrackingRepository.CpsUpdate> = repo.cpsUpdate
 
-    val countDisplayState: LiveData<CountDisplayState> = MediatorLiveData<CountDisplayState>().apply {
-        value = CountDisplayState()
-
-        val update = {
-            val tracking = repo.isTracking.value ?: false
-            val measurementModeEnabled = repo.measurementModeEnabled.value ?: false
-            val savedTrackCounts = repo.savedTrackCounts.value
-            val total = repo.totalCounts.value ?: 0
-            val trackStart = repo.countsAtTrackStart.value ?: 0
-            val measurementStart = repo.countsAtMeasurementStart.value ?: 0
-            val calculatedTrackCounts = if (tracking) total - trackStart else (savedTrackCounts ?: 0)
-            val calculatedMeasurementCounts = if (measurementModeEnabled) total - measurementStart else 0
-            value = CountDisplayState(
+    val countDisplayState: StateFlow<CountDisplayState> = combine(
+        repo.isTracking,
+        repo.measurementModeEnabled,
+        repo.savedTrackCounts,
+        repo.totalCounts,
+        repo.countsAtTrackStart,
+        repo.countsAtMeasurementStart
+    ) { tracking, measurementModeEnabled, savedTrackCounts, total, trackStart, measurementStart ->
+        val calculatedTrackCounts = if (tracking) total - trackStart else (savedTrackCounts ?: 0)
+        val calculatedMeasurementCounts = if (measurementModeEnabled) total - measurementStart else 0
+            CountDisplayState(
                 totalCounts = total,
                 trackCounts = calculatedTrackCounts.coerceAtLeast(0),
                 measurementCounts = calculatedMeasurementCounts.coerceAtLeast(0)
             )
-        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CountDisplayState())
 
-        addSource(repo.isTracking) { update() }
-        addSource(repo.measurementModeEnabled) { update() }
-        addSource(repo.savedTrackCounts) { update() }
-        addSource(repo.totalCounts) { update() }
-        addSource(repo.countsAtTrackStart) { update() }
-        addSource(repo.countsAtMeasurementStart) { update() }
-    }
+    val gpsStatus: StateFlow<String> = repo.gpsStatus
 
-    val gpsStatus: LiveData<String> = repo.gpsStatus
+    val audioStatus: StateFlow<TrackingRepository.AudioStatus> = repo.audioStatus
 
-    val audioStatus: LiveData<TrackingRepository.AudioStatus> = repo.audioStatus
+    val measurementModeEnabled: StateFlow<Boolean> = repo.measurementModeEnabled
 
-    val measurementModeEnabled: LiveData<Boolean> = repo.measurementModeEnabled
-
-    val uiTickMillis: LiveData<Long> = repo.uiTickMillis
+    val uiTickMillis: StateFlow<Long> = repo.uiTickMillis
 }

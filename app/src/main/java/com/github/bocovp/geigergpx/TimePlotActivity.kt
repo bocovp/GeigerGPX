@@ -398,18 +398,26 @@ class TimePlotActivity : AppCompatActivity() {
     private fun observeTrackingState() {
         if (trackingObserverAttached) return
         trackingObserverAttached = true
-        viewModel.isTracking.observe(this) {
-            refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.isTracking.collectLatest {
+                    refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
+                }
+            }
         }
     }
 
     private fun observeActiveTrack() {
         if (activeTrackObserverAttached) return
         activeTrackObserverAttached = true
-        viewModel.activeTrackPoints.observe(this) { points ->
-            if (selectedTrackIdForPlot != TrackCatalog.currentTrackId()) return@observe
-            updateCurrentPoints(points)
-            updatePlot(recalculateVerticalAxis = true)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.activeTrackPoints.collectLatest { points ->
+                    if (selectedTrackIdForPlot != TrackCatalog.currentTrackId()) return@collectLatest
+                    updateCurrentPoints(points)
+                    updatePlot(recalculateVerticalAxis = true)
+                }
+            }
         }
     }
 
