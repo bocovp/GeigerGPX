@@ -395,10 +395,10 @@ class MainActivity : AppCompatActivity() {
         registerTrackSavedReceiverIfNeeded()
         syncBottomNavigationSelection()
         applyKeepScreenOnFlag()
-        updateCpsOrDoseLine(false)
-        refreshTrackDuration(viewModel.trackDurationSeconds.value)
-        refreshMeasurementDurationFromTimer()
-        updateCountDisplay(viewModel.countDisplayState.value)
+        //updateCpsOrDoseLine(false)
+        //refreshTrackDuration(viewModel.trackDurationSeconds.value)
+        //refreshMeasurementDurationFromTimer()
+        //updateCountDisplay(viewModel.countDisplayState.value)
         startMonitoring()
     }
 

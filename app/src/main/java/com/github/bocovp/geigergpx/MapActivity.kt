@@ -376,7 +376,7 @@ class MapActivity : AppCompatActivity() {
 
         // Capture all main-thread state that the IO block needs.
         // StateFlow.value is thread-safe; read once here for a consistent refresh snapshot.
-        val includeCurrentTrack = viewModel.isTracking.value == true
+        val includeCurrentTrack = viewModel.isTracking.value
 
         refreshJob = lifecycleScope.launch {
             try {
