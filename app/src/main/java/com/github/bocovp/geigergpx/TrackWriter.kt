@@ -187,7 +187,11 @@ class TrackWriter {
         val averagedCoordinates = coordinateAverager.consumeAverage()
         val avgLat = averagedCoordinates?.first ?: loc.latitude
         val avgLon = averagedCoordinates?.second ?: loc.longitude
-        val avgTimeMillis = (lastWrittenTime + now) / 2L
+        // GPX point time must represent the midpoint of the measurement window:
+        // timestamp = currentTime - duration / 2.
+        // The duration is tracked in seconds, so we convert to milliseconds first.
+        val halfDurationMillis = (movementStats.timeDeltaSec * 1000.0 / 2.0).toLong()
+        val avgTimeMillis = now - halfDurationMillis
 
         val point = TrackPoint(
             latitude = avgLat,
