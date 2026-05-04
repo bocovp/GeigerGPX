@@ -354,7 +354,7 @@ class EditTrackActivity : AppCompatActivity() {
             try {
                 val success = withContext(Dispatchers.IO) {
                     if (!hasEdits && !trackAlreadyEdited) {
-                        EditableTrackStorage.createRcBackupIfNeeded(this@EditTrackActivity, trackId)
+                        EditableTrackStorage.createRcBackupIfNeeded(trackId)
                     }
                     splitPoints?.let { secondPart ->
                         val result = EditableTrackStorage.createSplitTrack(

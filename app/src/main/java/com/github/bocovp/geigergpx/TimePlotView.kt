@@ -272,7 +272,7 @@ class TimePlotView @JvmOverloads constructor(
 
             drawVerticalTicks(canvas, plotLeft, plotTop, plotBottom, plotRight)
             drawHorizontalTicks(canvas, plotLeft, plotBottom, plotTop, plotRight)
-            drawHorizontalAxisLabel(canvas, plotLeft, plotBottom, plotRight)
+            drawHorizontalAxisLabel(canvas, plotBottom, plotRight)
         }
 
         canvas.drawLine(plotLeft, plotBottom, plotRight, plotBottom, axisPaint)
@@ -522,7 +522,6 @@ class TimePlotView @JvmOverloads constructor(
 
     private fun drawHorizontalAxisLabel(
         canvas: Canvas,
-        plotLeft: Float,
         plotBottom: Float,
         plotRight: Float
     ) {

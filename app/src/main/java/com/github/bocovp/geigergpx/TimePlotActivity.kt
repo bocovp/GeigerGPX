@@ -753,7 +753,7 @@ class TimePlotActivity : AppCompatActivity() {
         }
 
         yield()
-        val ci = estimator.getConfidenceIntervals(ts2, minScale) ?: return null
+        val ci = estimator.getConfidenceIntervals(ts2, minScale)
         return PlotResult.Kde(ts2, firstTimestamp, ci.first, ci.second, ci.third)
     }
 

@@ -132,7 +132,7 @@ object GpxReader {
 
                         if (parser.name.equals("trkpt", ignoreCase = true)) {
                             if (preferMetadataStats && metadataDistance != null && (metadataSeconds != null)) {
-                                val durationFromMetadata = ((metadataSeconds ?: 0.0) * 1000.0).roundToLong().coerceAtLeast(0L)
+                                val durationFromMetadata = (metadataSeconds * 1000.0).roundToLong().coerceAtLeast(0L)
                                 val stats = TrackStats(
                                     pointCount = metadataPointCount ?: 0,
                                     durationMillis = durationFromMetadata,
@@ -255,8 +255,8 @@ object GpxReader {
                 preferMetadataStats && metadataDistance != null && (metadataSeconds != null) -> {
                     TrackStats(
                         pointCount = metadataPointCount ?: 0,
-                        durationMillis = ((metadataSeconds ?: 0.0) * 1000.0).roundToLong().coerceAtLeast(0L),
-                        distanceMeters = metadataDistance ?: 0.0
+                        durationMillis = (metadataSeconds * 1000.0).roundToLong().coerceAtLeast(0L),
+                        distanceMeters = metadataDistance
                     )
                 }
                 else -> {

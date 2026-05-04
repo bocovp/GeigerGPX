@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -57,6 +58,7 @@ object TrackCatalog {
     private val cacheMutex = Mutex()
     private val rebuildMutex = Mutex()
     private val catalogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    @OptIn(ExperimentalCoroutinesApi::class)
     private val parseDispatcher = Dispatchers.IO.limitedParallelism(4)
     private val _rebuildProgress = MutableStateFlow<Int?>(null)
     val rebuildProgress: StateFlow<Int?> = _rebuildProgress

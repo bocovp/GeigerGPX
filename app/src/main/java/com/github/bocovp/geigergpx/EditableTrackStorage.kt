@@ -129,7 +129,7 @@ object EditableTrackStorage {
             else -> null
         }
     }
-    suspend fun createRcBackupIfNeeded(context: Context, trackId: String) = withContext(Dispatchers.IO) {
+    suspend fun createRcBackupIfNeeded(trackId: String) = withContext(Dispatchers.IO) {
         if (!trackId.startsWith("file:")) return@withContext
         val source = File(trackId.removePrefix("file:"))
         if (!source.exists()) return@withContext
