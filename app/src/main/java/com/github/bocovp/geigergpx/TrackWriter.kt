@@ -1,6 +1,7 @@
 package com.github.bocovp.geigergpx
 
 import android.location.Location
+import kotlin.math.roundToLong
 
 class TrackWriter {
     enum class GpsMode {
@@ -187,7 +188,11 @@ class TrackWriter {
         val averagedCoordinates = coordinateAverager.consumeAverage()
         val avgLat = averagedCoordinates?.first ?: loc.latitude
         val avgLon = averagedCoordinates?.second ?: loc.longitude
-        val avgTimeMillis = (lastWrittenTime + now) / 2L
+        // GPX point time must represent the midpoint of the measurement window:
+        // timestamp = currentTime - duration / 2.
+        // The duration is tracked in seconds, so we convert to milliseconds first.
+        val halfDurationMillis = (movementStats.timeDeltaSec * 500.0).roundToLong()
+        val avgTimeMillis = now - halfDurationMillis
 
         val point = TrackPoint(
             latitude = avgLat,
