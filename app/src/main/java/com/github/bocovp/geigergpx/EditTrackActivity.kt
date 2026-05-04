@@ -274,16 +274,18 @@ class EditTrackActivity : AppCompatActivity() {
                 val selected = normalizedSelection()
                 if (selected.isEmpty()) return
                 val source = selected.map { points[it] }
+                val totalCounts = source.sumOf { it.counts }
+                val totalSeconds = source.sumOf { it.seconds }
                 val nonBad = source.filterNot { it.badCoordinates }
                 val averagingPool = if (nonBad.isNotEmpty()) nonBad else source
 
                 val merged = source.first().copy(
-                    latitude = averagingPool.map { it.latitude }.average(),
-                    longitude = averagingPool.map { it.longitude }.average(),
-                    counts = source.sumOf { it.counts },
-                    seconds = source.sumOf { it.seconds },
-                    doseRate = if (source.sumOf { it.seconds } > 0.0) {
-                        source.sumOf { it.counts }.toDouble() / source.sumOf { it.seconds } * trackCalibrationCoefficient
+                    latitude = averagingPool.sumOf { it.latitude } / averagingPool.size,
+                    longitude = averagingPool.sumOf { it.longitude } / averagingPool.size,
+                    counts = totalCounts,
+                    seconds = totalSeconds,
+                    doseRate = if (totalSeconds > 0.0) {
+                        totalCounts.toDouble() / totalSeconds * trackCalibrationCoefficient
                     } else {
                         0.0
                     },
@@ -348,6 +350,7 @@ class EditTrackActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
+            binding.btnApply.isEnabled = false
             try {
                 val success = withContext(Dispatchers.IO) {
                     if (!hasEdits && !trackAlreadyEdited) {
@@ -395,6 +398,8 @@ class EditTrackActivity : AppCompatActivity() {
                 Toast.makeText(this@EditTrackActivity, "Track updated", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Toast.makeText(this@EditTrackActivity, "Error saving changes", Toast.LENGTH_SHORT).show()
+            } finally {
+                binding.btnApply.isEnabled = true
             }
         }
     }
