@@ -222,37 +222,51 @@ class EditTrackActivity : AppCompatActivity() {
 
         selectionOverlay.selectionEnabled = mode != EditMode.NONE
         binding.descriptionText.setText(descriptionText())
+        binding.btnApply.isEnabled = isApplyEnabled()
         binding.btnCancel.text = if (!hasEdits) "Cancel" else if (selectedIndices.isEmpty()) "Finish" else "Cancel"
         binding.mapView.invalidate()
     }
 
     private fun descriptionText(): String {
         return when (mode) {
-            EditMode.NONE -> "Move / zoom map"
-            EditMode.MARK_BAD -> "Mark ${selectedIndices.size} points as 'bad coordinates'"
-            EditMode.MARK_GOOD -> "Mark ${selectedIndices.size} points as 'good coordinates'"
+            EditMode.NONE -> "Zoom in and choose action"
+            EditMode.MARK_BAD -> if (selectedIndices.isEmpty()) "Select points to mark as bad" else "Mark ${selectedIndices.size} points as 'bad coordinates'"
+            EditMode.MARK_GOOD -> if (selectedIndices.isEmpty()) "Select points to mark as good" else "Mark ${selectedIndices.size} points as 'good coordinates'"
             EditMode.MERGE_POINTS -> {
                 val selected = normalizedSelection()
-                "Merge ${selected.size} points into one"
+                if (selected.isEmpty()) "Select points to merge" else "Merge ${selected.size} points into one"
             }
             EditMode.INTERPOLATE_COORDINATES -> {
                 val selected = normalizedSelection()
-                "Interpolate coordinates for ${selected.size} points"
+                if (selected.isEmpty()) "Select points to interpolate" else "Interpolate coordinates for ${selected.size} points"
             }
             EditMode.CUT_BEFORE -> {
-                val boundary = boundaryIndex ?: return ""
-                "Remove first ${boundary + 1} points"
+                val boundary = boundaryIndex
+                if (boundary == null) "Select points to remove" else "Remove first ${boundary + 1} points"
             }
             EditMode.CUT_AFTER -> {
-                val boundary = boundaryIndex ?: return ""
-                "Remove last ${points.size - boundary} points"
+                val boundary = boundaryIndex
+                if (boundary == null) "Select points to remove" else "Remove last ${points.size - boundary} points"
             }
             EditMode.SPLIT -> {
-                val split = boundaryIndex ?: return ""
-                val firstPart = split + 1
-                val secondPart = points.size - firstPart
-                "Split into $firstPart and $secondPart points"
+                val split = boundaryIndex
+                if (split == null) "Select points to split"
+                else {
+                    val firstPart = split + 1
+                    val secondPart = points.size - firstPart
+                    "Split into $firstPart and $secondPart points"
+                }
             }
+        }
+    }
+
+
+    private fun isApplyEnabled(): Boolean {
+        return when (mode) {
+            EditMode.MARK_BAD, EditMode.MARK_GOOD,
+            EditMode.MERGE_POINTS, EditMode.INTERPOLATE_COORDINATES -> selectedIndices.isNotEmpty()
+            EditMode.CUT_BEFORE, EditMode.CUT_AFTER, EditMode.SPLIT -> boundaryIndex != null
+            EditMode.NONE -> false
         }
     }
 
@@ -392,6 +406,8 @@ class EditTrackActivity : AppCompatActivity() {
                 points = updatedPoints
                 hasEdits = true
                 trackAlreadyEdited = true
+                mode = EditMode.NONE
+                binding.editModeDropdown.setText("Move / zoom", false)
                 selectedIndices = emptyList()
                 boundaryIndex = null
                 refreshUiState()
@@ -399,7 +415,7 @@ class EditTrackActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Toast.makeText(this@EditTrackActivity, "Error saving changes", Toast.LENGTH_SHORT).show()
             } finally {
-                binding.btnApply.isEnabled = true
+                binding.btnApply.isEnabled = isApplyEnabled()
             }
         }
     }
