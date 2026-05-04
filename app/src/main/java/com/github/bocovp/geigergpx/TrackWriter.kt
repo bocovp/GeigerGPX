@@ -184,21 +184,24 @@ class TrackWriter {
         coefficient: Double
     ): List<TrackPoint> = synchronized(lock) {
         val finalBeeps = totalBeeps - lastPointTotalBeeps
-        val finalCps = finalBeeps.toDouble() / movementStats.timeDeltaSec // TODO: add -1
+
+        // We do not subtract 1 from finalBeeps here since writing track point (choosing end of interval) is assumed to be triggered by timer, not by Geiger counter
+        val finalCps = finalBeeps.toDouble() / movementStats.timeDeltaSec
+
+        val finalDoseRate = finalCps * coefficient
         val averagedCoordinates = coordinateAverager.consumeAverage()
         val avgLat = averagedCoordinates?.first ?: loc.latitude
         val avgLon = averagedCoordinates?.second ?: loc.longitude
-        // GPX point time must represent the midpoint of the measurement window:
-        // timestamp = currentTime - duration / 2.
-        // The duration is tracked in seconds, so we convert to milliseconds first.
+
+        // GPX point time must represent the midpoint of the measurement window: timestamp = currentTime - duration / 2.
         val halfDurationMillis = (movementStats.timeDeltaSec * 500.0).roundToLong()
-        val avgTimeMillis = now - halfDurationMillis
+        val avgTimeMillis = now - halfDurationMillis  // older version:  (lastWrittenTime + now) / 2L, which is the same
 
         val point = TrackPoint(
             latitude = avgLat,
             longitude = avgLon,
             timeMillis = avgTimeMillis,
-            doseRate = finalCps * coefficient,
+            doseRate = finalDoseRate,
             counts = finalBeeps,
             seconds = movementStats.timeDeltaSec,
             badCoordinates = badCoordinates

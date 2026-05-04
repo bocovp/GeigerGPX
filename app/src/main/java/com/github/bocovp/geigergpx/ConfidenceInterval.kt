@@ -156,7 +156,7 @@ class ConfidenceInterval {
         this.sampleCount = sampleCount
     }
 
-    // Old implementation for reference
+    // Old implementation for reference; DO NOT DELETE
     constructor(t1: Double, tn: Double, n: Int) {
         // n is number of detected events here so n >= 2
         sampleCount = n
