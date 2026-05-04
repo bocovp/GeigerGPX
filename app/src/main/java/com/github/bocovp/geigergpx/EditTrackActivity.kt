@@ -385,7 +385,7 @@ class EditTrackActivity : AppCompatActivity() {
                 }
 
                 if (!success) {
-                    Toast.makeText(this@EditTrackActivity, "Failed to split track", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@EditTrackActivity, "Failed to save changes", Toast.LENGTH_SHORT).show()
                     return@launch
                 }
 
