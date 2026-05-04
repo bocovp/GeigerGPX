@@ -42,6 +42,7 @@ class EditTrackActivity : AppCompatActivity() {
     private var boundaryIndex: Int? = null
     private var hasEdits = false
     private var trackAlreadyEdited = false
+    private var trackCalibrationCoefficient: Double = 1.0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -147,6 +148,10 @@ class EditTrackActivity : AppCompatActivity() {
 
             points = loaded.points.toMutableList()
             trackAlreadyEdited = loaded.isEdited
+            trackCalibrationCoefficient = loaded.cpsToUsvh
+                ?: androidx.preference.PreferenceManager.getDefaultSharedPreferences(this@EditTrackActivity)
+                    .getString("cps_to_usvh", "1.0")?.toDoubleOrNull()
+                ?: 1.0
             fitMapToTrack()
             refreshUiState()
         }
@@ -277,11 +282,16 @@ class EditTrackActivity : AppCompatActivity() {
                     longitude = averagingPool.map { it.longitude }.average(),
                     counts = source.sumOf { it.counts },
                     seconds = source.sumOf { it.seconds },
+                    doseRate = if (source.sumOf { it.seconds } > 0.0) {
+                        source.sumOf { it.counts }.toDouble() / source.sumOf { it.seconds } * trackCalibrationCoefficient
+                    } else {
+                        0.0
+                    },
                     timeMillis = (
                         (source.first().timeMillis - (source.first().seconds * 500.0).toLong()) +
                             (source.last().timeMillis + (source.last().seconds * 500.0).toLong())
                         ) / 2,
-                    badCoordinates = false
+                    badCoordinates = nonBad.isEmpty()
                 )
 
                 updatedPoints.subList(selected.first(), selected.last() + 1).clear()
@@ -349,7 +359,8 @@ class EditTrackActivity : AppCompatActivity() {
                             trackId,
                             trackTitle,
                             trackFolder,
-                            secondPart
+                            secondPart,
+                            trackCalibrationCoefficient
                         ) ?: return@withContext false
                         TrackCatalog.onTrackSavedById(
                             this@EditTrackActivity,
@@ -359,7 +370,13 @@ class EditTrackActivity : AppCompatActivity() {
                             secondPart
                         )
                     }
-                    EditableTrackStorage.overwriteTrack(this@EditTrackActivity, trackId, updatedPoints, edited = true)
+                    EditableTrackStorage.overwriteTrack(
+                        this@EditTrackActivity,
+                        trackId,
+                        updatedPoints,
+                        edited = true,
+                        calibrationOverride = trackCalibrationCoefficient
+                    )
                     TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints)
                     true
                 }

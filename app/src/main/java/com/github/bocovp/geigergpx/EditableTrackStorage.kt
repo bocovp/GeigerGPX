@@ -11,7 +11,7 @@ import java.io.OutputStream
 import androidx.core.net.toUri
 
 object EditableTrackStorage {
-    data class LoadResult(val points: List<TrackPoint>, val isEdited: Boolean)
+    data class LoadResult(val points: List<TrackPoint>, val isEdited: Boolean, val cpsToUsvh: Double?)
     data class SplitResult(val newTrackId: String, val newTrackTitle: String)
 
     suspend fun loadTrack(context: Context, trackId: String): LoadResult? = withContext(Dispatchers.IO) {
@@ -19,13 +19,21 @@ object EditableTrackStorage {
             .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
         val input = openInputStream(context, trackId) ?: return@withContext null
         val loaded = GpxReader.readTrackWithMetadata(input, cpsCoefficient = coeff) ?: return@withContext null
-        LoadResult(loaded.points, loaded.isEdited)
+        LoadResult(loaded.points, loaded.isEdited, loaded.cpsToUsvh)
     }
 
-    suspend fun overwriteTrack(context: Context, trackId: String, points: List<TrackPoint>, edited: Boolean = false) = withContext(Dispatchers.IO) {
+    suspend fun overwriteTrack(
+        context: Context,
+        trackId: String,
+        points: List<TrackPoint>,
+        edited: Boolean = false,
+        calibrationOverride: Double? = null
+    ) = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val calibrationCoefficient = calibrationOverride
+            ?: prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull()
+            ?: 1.0
 
         val output = openOutputStream(context, trackId) ?: return@withContext
         output.use { out ->
@@ -40,11 +48,14 @@ object EditableTrackStorage {
         sourceTrackId: String,
         sourceTitle: String,
         folderName: String?,
-        points: List<TrackPoint>
+        points: List<TrackPoint>,
+        calibrationOverride: Double? = null
     ): SplitResult? = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val calibrationCoefficient = calibrationOverride
+            ?: prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull()
+            ?: 1.0
 
         val nextName = uniqueSplitFileName(context, sourceTitle, folderName)
         val uri = when {

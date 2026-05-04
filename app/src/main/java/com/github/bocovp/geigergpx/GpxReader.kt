@@ -32,7 +32,8 @@ object GpxReader {
 
     data class TrackWithMetadata(
         val points: List<TrackPoint>,
-        val isEdited: Boolean
+        val isEdited: Boolean,
+        val cpsToUsvh: Double?
     )
 
     private data class ParsedTrackData(
@@ -44,7 +45,7 @@ object GpxReader {
 
     fun readTrackWithMetadata(inputStream: InputStream, cpsCoefficient: Double = 1.0): TrackWithMetadata? {
         val parsed = readTrackInternal(inputStream, cpsCoefficient, parsePoints = true, preferMetadataStats = false) ?: return null
-        return TrackWithMetadata(parsed.points, parsed.edited)
+        return TrackWithMetadata(parsed.points, parsed.edited, parsed.metadata?.cpsToUsvh)
     }
 
     fun readTrack(inputStream: InputStream, cpsCoefficient: Double = 1.0): List<TrackPoint>? {
