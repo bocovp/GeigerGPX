@@ -39,7 +39,9 @@
             android:id="@+id/editModeDropdownLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Editing option"
+            android:hint="Action"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="4dp"
             app:endIconMode="dropdown_menu">
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
