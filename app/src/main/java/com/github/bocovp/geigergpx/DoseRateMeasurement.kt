@@ -5,8 +5,6 @@ import android.location.Location
 class DoseRateMeasurement(
     initialWindowSize: Int = 10
 ) {
-    private val mainCpsLock = Any()
-
     private var measurementModeEnabled: Boolean = false
     private var measurementStartTimestampMillis: Long = 0L
     private var measurementOldestTimestamp: Long = 0L
@@ -27,7 +25,8 @@ class DoseRateMeasurement(
         val meanDoseRate: Double
     )
 
-    fun toggleMeasurementMode(nowMillis: Long = System.currentTimeMillis()): Boolean = synchronized(mainCpsLock) {
+    @Synchronized
+    fun toggleMeasurementMode(nowMillis: Long = System.currentTimeMillis()): Boolean {
         measurementModeEnabled = !measurementModeEnabled
         if (measurementModeEnabled) {
             measurementStartTimestampMillis = nowMillis
@@ -41,19 +40,19 @@ class DoseRateMeasurement(
         measurementModeEnabled
     }
 
+    @Synchronized
     fun handleGpsLocation(loc: Location) {
-        synchronized(mainCpsLock) {
-            if (!measurementModeEnabled) return
-            measurementCoordinateAverager.process(loc)
-        }
+        if (!measurementModeEnabled) return
+        measurementCoordinateAverager.process(loc)
     }
 
-    fun consumeMeasurementAverageCoordinates(): Pair<Double, Double> = synchronized(mainCpsLock) {
-        measurementCoordinateAverager.consumeAverage() ?: Pair(0.0, 0.0)
+    @Synchronized
+    fun consumeMeasurementAverageCoordinates(): Pair<Double, Double> {
+        return measurementCoordinateAverager.consumeAverage() ?: Pair(0.0, 0.0)
     }
 
+    @Synchronized
     fun updateMainCpsWindowSize(newSize: Int) {
-        synchronized(mainCpsLock) {
             if (newSize == windowSize) return
 
             val preservedCount = minOf(mainCpsBeepCount, newSize)
@@ -72,59 +71,61 @@ class DoseRateMeasurement(
             windowSize = newSize
             mainCpsBeepCount = preservedCount
             mainCpsBeepNextIndex = preservedCount % newSize
-        }
     }
 
+    @Synchronized
     fun updateAlertConfig(alertDoseRate: Double, cpsToUsvhCoefficient: Double) {
-        synchronized(mainCpsLock) {
-            this.alertDoseRate = if (alertDoseRate > 0.0) alertDoseRate else 0.0
-            this.cpsToUsvhCoefficient = cpsToUsvhCoefficient
-        }
+        this.alertDoseRate = if (alertDoseRate > 0.0) alertDoseRate else 0.0
+        this.cpsToUsvhCoefficient = cpsToUsvhCoefficient
     }
 
+    @Synchronized
     fun processBeep(beepCount: Int, nowProvider: () -> Long = System::currentTimeMillis): AlertEvent? {
         if (beepCount <= 0) return null
-        return synchronized(mainCpsLock) {
-            repeat(beepCount) {
-                val beepTime = nowProvider()
-                mainCpsBeepTimes[mainCpsBeepNextIndex] = beepTime
-                mainCpsBeepNextIndex = (mainCpsBeepNextIndex + 1) % windowSize
-                if (mainCpsBeepCount < windowSize) {
-                    mainCpsBeepCount += 1
-                }
-                if (measurementModeEnabled) {
-                    if (measurementTimestampCount == 0L) {
-                        measurementOldestTimestamp = beepTime
-                    }
-                    measurementTimestampCount += 1L
-                }
+        repeat(beepCount) {
+            val beepTime = nowProvider()
+            mainCpsBeepTimes[mainCpsBeepNextIndex] = beepTime
+            mainCpsBeepNextIndex = (mainCpsBeepNextIndex + 1) % windowSize
+            if (mainCpsBeepCount < windowSize) {
+                mainCpsBeepCount += 1
             }
-            evaluateAlertLocked()
+            if (measurementModeEnabled) {
+                if (measurementTimestampCount == 0L) {
+                    measurementOldestTimestamp = beepTime
+                }
+                measurementTimestampCount += 1L
+            }
         }
+        return evaluateAlertLocked()
     }
 
-    fun calculateMainScreenCps(): Double = synchronized(mainCpsLock) { calculateMainScreenCpsLocked() }
+    @Synchronized
+    fun calculateMainScreenCps(): Double = calculateMainScreenCpsInternal()
 
-    fun currentSampleCount(): Int = synchronized(mainCpsLock) {
-        if (measurementModeEnabled) measurementTimestampCount.toInt() else mainCpsBeepCount
+    @Synchronized
+    fun currentSampleCount(): Int {
+        return if (measurementModeEnabled) measurementTimestampCount.toInt() else mainCpsBeepCount
     }
 
-    fun currentOldestTimestampMillis(): Long = synchronized(mainCpsLock) {
+    @Synchronized
+    fun currentOldestTimestampMillis(): Long {
         if (measurementModeEnabled) {
-            if (measurementTimestampCount < 1L) return@synchronized 0L
-            return@synchronized measurementOldestTimestamp
+            if (measurementTimestampCount < 1L) return 0L
+            return measurementOldestTimestamp
         }
 
-        if (mainCpsBeepCount < 1) return@synchronized 0L
-        mainCpsBeepTimes[oldestMainCpsIndex()]
+        if (mainCpsBeepCount < 1) return 0L
+        return mainCpsBeepTimes[oldestMainCpsIndex()]
     }
 
-    fun currentMeasurementStartTimestampMillis(): Long = synchronized(mainCpsLock) {
-        if (measurementModeEnabled) measurementStartTimestampMillis else 0L
+    @Synchronized
+    fun currentMeasurementStartTimestampMillis(): Long {
+        return if (measurementModeEnabled) measurementStartTimestampMillis else 0L
     }
 
-    fun currentSnapshot(): TrackingRepository.CpsSnapshot = synchronized(mainCpsLock) {
-        TrackingRepository.CpsSnapshot(
+    @Synchronized
+    fun currentSnapshot(): TrackingRepository.CpsSnapshot {
+        return TrackingRepository.CpsSnapshot(
             sampleCount = currentSampleCountLocked(),
             oldestTimestampMillis = currentOldestTimestampMillisLocked(),
             measurementStartTimestampMillis = if (measurementModeEnabled) {
@@ -164,7 +165,7 @@ class DoseRateMeasurement(
         if (alertDoseRate <= 0.0) return null
         if (mainCpsBeepCount < windowSize) return null
 
-        val meanDoseRate = calculateMainScreenCpsLocked() * cpsToUsvhCoefficient
+        val meanDoseRate = calculateMainScreenCpsInternal() * cpsToUsvhCoefficient
         if (meanDoseRate < alertDoseRate) return null
 
         val ratio = meanDoseRate / alertDoseRate
@@ -176,7 +177,7 @@ class DoseRateMeasurement(
         return AlertEvent(soundCount = soundCount, meanDoseRate = meanDoseRate)
     }
 
-    private fun calculateMainScreenCpsLocked(): Double {
+    private fun calculateMainScreenCpsInternal(): Double {
         if (measurementModeEnabled) {
             if (measurementTimestampCount < 2L || measurementOldestTimestamp == 0L) {
                 return 0.0
