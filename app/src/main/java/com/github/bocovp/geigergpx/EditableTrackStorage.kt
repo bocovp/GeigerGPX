@@ -11,26 +11,34 @@ import java.io.OutputStream
 import androidx.core.net.toUri
 
 object EditableTrackStorage {
-    data class LoadResult(val points: List<TrackPoint>)
+    data class LoadResult(val points: List<TrackPoint>, val isEdited: Boolean, val cpsToUsvh: Double?)
     data class SplitResult(val newTrackId: String, val newTrackTitle: String)
 
     suspend fun loadTrack(context: Context, trackId: String): LoadResult? = withContext(Dispatchers.IO) {
         val coeff = PreferenceManager.getDefaultSharedPreferences(context)
             .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
         val input = openInputStream(context, trackId) ?: return@withContext null
-        val points = GpxReader.readTrack(input, cpsCoefficient = coeff) ?: return@withContext null
-        LoadResult(points)
+        val loaded = GpxReader.readTrackWithMetadata(input, cpsCoefficient = coeff) ?: return@withContext null
+        LoadResult(loaded.points, loaded.isEdited, loaded.cpsToUsvh)
     }
 
-    suspend fun overwriteTrack(context: Context, trackId: String, points: List<TrackPoint>) = withContext(Dispatchers.IO) {
+    suspend fun overwriteTrack(
+        context: Context,
+        trackId: String,
+        points: List<TrackPoint>,
+        edited: Boolean = false,
+        calibrationOverride: Double? = null
+    ) = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val calibrationCoefficient = calibrationOverride
+            ?: prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull()
+            ?: 1.0
 
         val output = openOutputStream(context, trackId) ?: return@withContext
         output.use { out ->
             out.bufferedWriter().use { writer ->
-                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
+                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient, edited = edited)
             }
         }
     }
@@ -40,11 +48,14 @@ object EditableTrackStorage {
         sourceTrackId: String,
         sourceTitle: String,
         folderName: String?,
-        points: List<TrackPoint>
+        points: List<TrackPoint>,
+        calibrationOverride: Double? = null
     ): SplitResult? = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val calibrationCoefficient = calibrationOverride
+            ?: prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull()
+            ?: 1.0
 
         val nextName = uniqueSplitFileName(context, sourceTitle, folderName)
         val uri = when {
@@ -54,7 +65,7 @@ object EditableTrackStorage {
                 val target = File(parentDir, nextName)
                 target.outputStream().use { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient, edited = true)
                     }
                 }
                 Uri.fromFile(target)
@@ -66,7 +77,7 @@ object EditableTrackStorage {
                     relativePath = relativePath
                 ) { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient, edited = true)
                     }
                 }
                 result.uri ?: return@withContext null
@@ -117,5 +128,12 @@ object EditableTrackStorage {
             trackId.startsWith("doc:") -> context.contentResolver.openOutputStream(trackId.removePrefix("doc:").toUri(), "wt")
             else -> null
         }
+    }
+    suspend fun createRcBackupIfNeeded(context: Context, trackId: String) = withContext(Dispatchers.IO) {
+        if (!trackId.startsWith("file:")) return@withContext
+        val source = File(trackId.removePrefix("file:"))
+        if (!source.exists()) return@withContext
+        val backup = File(source.parentFile, source.nameWithoutExtension + ".rc")
+        if (!backup.exists()) source.copyTo(backup, overwrite = false)
     }
 }
