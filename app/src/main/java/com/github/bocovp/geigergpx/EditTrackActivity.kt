@@ -262,10 +262,9 @@ class EditTrackActivity : AppCompatActivity() {
 
 
     private fun isApplyEnabled(): Boolean {
-        if (mode == EditMode.NONE) return false
         return when (mode) {
-            EditMode.MARK_BAD, EditMode.MARK_GOOD -> selectedIndices.isNotEmpty()
-            EditMode.MERGE_POINTS, EditMode.INTERPOLATE_COORDINATES -> normalizedSelection().isNotEmpty()
+            EditMode.MARK_BAD, EditMode.MARK_GOOD,
+            EditMode.MERGE_POINTS, EditMode.INTERPOLATE_COORDINATES -> selectedIndices.isNotEmpty()
             EditMode.CUT_BEFORE, EditMode.CUT_AFTER, EditMode.SPLIT -> boundaryIndex != null
             EditMode.NONE -> false
         }
