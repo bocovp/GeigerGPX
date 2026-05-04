@@ -134,9 +134,11 @@ class EditTrackActivity : AppCompatActivity() {
 
     private fun loadTrack() {
         lifecycleScope.launch {
-            val loaded = withContext(Dispatchers.IO) {
-                EditableTrackStorage.loadTrack(this@EditTrackActivity, trackId)
-            }
+            val loaded = runCatching {
+                withContext(Dispatchers.IO) {
+                    EditableTrackStorage.loadTrack(this@EditTrackActivity, trackId)
+                }
+            }.getOrNull()
             if (loaded == null || loaded.points.isEmpty()) {
                 Toast.makeText(this@EditTrackActivity, "Unable to load track", Toast.LENGTH_SHORT).show()
                 finish()
@@ -336,22 +338,47 @@ class EditTrackActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
-            withContext(Dispatchers.IO) {
-                if (!hasEdits && !trackAlreadyEdited) {
-                    EditableTrackStorage.createRcBackupIfNeeded(this@EditTrackActivity, trackId)
+            try {
+                val success = withContext(Dispatchers.IO) {
+                    if (!hasEdits && !trackAlreadyEdited) {
+                        EditableTrackStorage.createRcBackupIfNeeded(this@EditTrackActivity, trackId)
+                    }
+                    splitPoints?.let { secondPart ->
+                        val result = EditableTrackStorage.createSplitTrack(
+                            this@EditTrackActivity,
+                            trackId,
+                            trackTitle,
+                            trackFolder,
+                            secondPart
+                        ) ?: return@withContext false
+                        TrackCatalog.onTrackSavedById(
+                            this@EditTrackActivity,
+                            result.newTrackId,
+                            result.newTrackTitle,
+                            trackFolder,
+                            secondPart
+                        )
+                    }
+                    EditableTrackStorage.overwriteTrack(this@EditTrackActivity, trackId, updatedPoints, edited = true)
+                    TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints)
+                    true
                 }
-                splitPoints?.let {
-                    EditableTrackStorage.createSplitTrack(this@EditTrackActivity, trackId, trackTitle, trackFolder, it)
+
+                if (!success) {
+                    Toast.makeText(this@EditTrackActivity, "Failed to split track", Toast.LENGTH_SHORT).show()
+                    return@launch
                 }
-                EditableTrackStorage.overwriteTrack(this@EditTrackActivity, trackId, updatedPoints, edited = true)
+
+                points = updatedPoints
+                hasEdits = true
+                trackAlreadyEdited = true
+                selectedIndices = emptyList()
+                boundaryIndex = null
+                refreshUiState()
+                Toast.makeText(this@EditTrackActivity, "Track updated", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@EditTrackActivity, "Error saving changes", Toast.LENGTH_SHORT).show()
             }
-            points = updatedPoints
-            hasEdits = true
-            trackAlreadyEdited = true
-            selectedIndices = emptyList()
-            boundaryIndex = null
-            refreshUiState()
-            Toast.makeText(this@EditTrackActivity, "Track updated", Toast.LENGTH_SHORT).show()
         }
     }
 
