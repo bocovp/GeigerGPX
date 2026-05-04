@@ -204,19 +204,19 @@ class MapActivity : AppCompatActivity() {
     }
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        val toggleItem = menu?.findItem(R.id.action_toggle_heatmap)
-        val modeItem = menu?.findItem(R.id.action_toggle_plot_mode)
+        val toggleItem = menu.findItem(R.id.action_toggle_heatmap)
+        val modeItem = menu.findItem(R.id.action_toggle_plot_mode)
 
         if (isHeatmapMode) {
-            toggleItem?.title = "Show Gradient Tracks"
-            toggleItem?.setIcon(R.drawable.baseline_line_axis_24)
+            toggleItem.title = "Show Gradient Tracks"
+            toggleItem.setIcon(R.drawable.baseline_line_axis_24)
         } else {
-            toggleItem?.title = "Show Heatmap"
-            toggleItem?.setIcon(R.drawable.baseline_scatter_plot_24)
+            toggleItem.title = "Show Heatmap"
+            toggleItem.setIcon(R.drawable.baseline_scatter_plot_24)
         }
         updateModeUi(modeItem)
-        modeItem?.isVisible = !isHeatmapMode
-        menu.findItem(R.id.action_add_poi)?.isVisible = !isHeatmapMode && trackMapRenderer.hasHighlightedPoint()
+        modeItem.isVisible = !isHeatmapMode
+        menu.findItem(R.id.action_add_poi).isVisible = !isHeatmapMode && trackMapRenderer.hasHighlightedPoint()
 
         return super.onPrepareOptionsMenu(menu)
     }

@@ -321,7 +321,7 @@ class TrackingService : Service() {
             notificationManager.postTrackingNotification("Monitoring...")
             repo.updateTrackDuration(stats.trackDurationSeconds)
             repo.updateTrackGeometry(distance = stats.distance, points = stats.points)
-            repo.updateTrackingState(tracking = false, gpsStatus = repo.gpsStatus.value ?: "Waiting")
+            repo.updateTrackingState(tracking = false, gpsStatus = repo.gpsStatus.value)
         } else {
             gpsManager.stopUpdates()
             stopBeepDetector()

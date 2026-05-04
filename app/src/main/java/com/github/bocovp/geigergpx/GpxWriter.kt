@@ -98,7 +98,7 @@ object GpxWriter {
             if (!backupFile.delete()) {
                 backupFile.deleteOnExit()
             }
-            val uri = writeResult.uri ?: return null
+            val uri = writeResult.uri
             val newTrackId = if (uri.scheme == "content") "tree:$uri" else "file:${uri.path}"
             TrackCatalog.onTrackMoved(context, "file:${backupFile.absolutePath}", newTrackId, null)
             newName
