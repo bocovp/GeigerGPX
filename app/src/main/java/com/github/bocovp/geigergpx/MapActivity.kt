@@ -519,9 +519,9 @@ class MapActivity : AppCompatActivity() {
         if (!initialized) {
             prefs.edit {
                 putBoolean(PoiActivity.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
-                putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, allPoiIds)
+                putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, emptySet())
             }
-            return allPoiIds
+            return emptySet()
         }
         val selected = prefs.getStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, emptySet())?.toSet() ?: emptySet()
         val sanitized = selected.intersect(allPoiIds)
