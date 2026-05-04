@@ -35,64 +35,19 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent">
 
-        <com.google.android.material.button.MaterialButtonToggleGroup
-            android:id="@+id/editModeToggle"
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/editModeDropdownLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
-            android:layout_gravity="center"
-            app:singleSelection="true"
-            app:selectionRequired="false">
+            android:hint="Editing option"
+            app:endIconMode="dropdown_menu">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnMarkBad"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                android:id="@+id/editModeDropdown"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Mark bad"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCutBefore"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:layout_height="wrap_content"
-                android:text="Cut before"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCutAfter"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:layout_height="wrap_content"
-                android:text="Cut after"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSplit"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:layout_height="wrap_content"
-                android:text="Split"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp" />
-        </com.google.android.material.button.MaterialButtonToggleGroup>
+                android:inputType="none" />
+        </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/descriptionText"

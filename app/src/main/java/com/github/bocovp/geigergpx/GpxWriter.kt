@@ -112,7 +112,8 @@ object GpxWriter {
         writer: java.io.BufferedWriter,
         points: List<TrackPoint>,
         saveDoseRateInEle: Boolean,
-        calibrationCoefficient: Double = 1.0
+        calibrationCoefficient: Double = 1.0,
+        edited: Boolean = false
     ) {
         val metadata = computeTrackMetadata(points, calibrationCoefficient)
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
@@ -127,6 +128,7 @@ object GpxWriter {
             writer.write("\t\t\t<rad:dose>${"%.3f".format(Locale.US, it)}</rad:dose>\n")
         }
         writer.write("\t\t\t<rad:cpsToUsvh>${formatCoefficient(metadata.cpsToUsvh)}</rad:cpsToUsvh>\n")
+        if (edited) writer.write("\t\t\t<rad:edited>true</rad:edited>\n")
         writer.write("\t\t</extensions>\n")
         writer.write("\t</metadata>\n")
         writer.write("\t<trk>\n\t\t<trkseg>\n")

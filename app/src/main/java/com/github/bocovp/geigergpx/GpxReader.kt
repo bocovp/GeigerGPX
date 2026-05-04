@@ -30,11 +30,22 @@ object GpxReader {
         val stats: TrackStats
     )
 
+    data class TrackWithMetadata(
+        val points: List<TrackPoint>,
+        val isEdited: Boolean
+    )
+
     private data class ParsedTrackData(
         val points: List<TrackPoint>,
         val stats: TrackStats,
-        val metadata: TrackMetadata?
+        val metadata: TrackMetadata?,
+        val edited: Boolean
     )
+
+    fun readTrackWithMetadata(inputStream: InputStream, cpsCoefficient: Double = 1.0): TrackWithMetadata? {
+        val parsed = readTrackInternal(inputStream, cpsCoefficient, parsePoints = true, preferMetadataStats = false) ?: return null
+        return TrackWithMetadata(parsed.points, parsed.edited)
+    }
 
     fun readTrack(inputStream: InputStream, cpsCoefficient: Double = 1.0): List<TrackPoint>? {
         val parsed = readTrackInternal(inputStream, cpsCoefficient, parsePoints = true, preferMetadataStats = false)
@@ -103,6 +114,7 @@ object GpxReader {
             var metadataDose: Double? = null
             var metadataCpsToUsvh: Double? = null
 
+            var metadataEdited = false
             var currentTag: String? = null
             var currentNamespace: String? = null
             var insideMetadata = false
@@ -132,7 +144,7 @@ object GpxReader {
                                     metadataSeconds,
                                     metadataDose,
                                     metadataCpsToUsvh
-                                ))
+                                ), metadataEdited)
                             }
 
                             insideTrkpt = true
@@ -176,6 +188,7 @@ object GpxReader {
                                 "seconds" -> metadataSeconds = value?.toDoubleOrNull()
                                 "dose" -> metadataDose = value?.toDoubleOrNull()
                                 "cpsToUsvh" -> metadataCpsToUsvh = value?.toDoubleOrNull()
+                                "edited" -> metadataEdited = value.equals("true", ignoreCase = true)
                             }
                         }
                     }
@@ -254,7 +267,7 @@ object GpxReader {
                 }
             }
 
-            return ParsedTrackData(points, stats, metadata)
+            return ParsedTrackData(points, stats, metadata, metadataEdited)
         }
     }
 
