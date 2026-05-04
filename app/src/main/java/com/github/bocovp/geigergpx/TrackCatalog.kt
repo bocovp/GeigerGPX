@@ -131,61 +131,62 @@ object TrackCatalog {
 
     private suspend fun rebuildTrackCacheLocked(context: Context) {
         _rebuildProgress.value = 0
+        try {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+            val sourceListing = listTrackFiles(context)
+            if (sourceListing is TrackSourceListing.Failure) {
+                Log.w("GPX", "Unable to rebuild track cache", sourceListing.error)
+                hasScannedStorage = true
+                return
+            }
 
-        val sourceListing = listTrackFiles(context)
-        if (sourceListing is TrackSourceListing.Failure) {
-            Log.w("GPX", "Unable to rebuild track cache", sourceListing.error)
-            hasScannedStorage = true
-            _rebuildProgress.value = null
-            return
-        }
+            val snapshot = (sourceListing as TrackSourceListing.Success).snapshot
+            val allSources = snapshot.allSources()
+            val totalCount = allSources.size
+            val updatedTracks = linkedMapOf<String, CachedParsedTrack>()
+            var processedCount = 0
 
-        val snapshot = (sourceListing as TrackSourceListing.Success).snapshot
-        val allSources = snapshot.allSources()
-        val totalCount = allSources.size
-        val updatedTracks = linkedMapOf<String, CachedParsedTrack>()
-        var processedCount = 0
-
-        coroutineScope {
-            val results = Channel<Pair<TrackSource, TrackStats?>>(Channel.UNLIMITED)
-            allSources.forEach { source ->
-                launch(parseDispatcher) {
-                    yield()
-                    val parsedStats = try {
-                        source.openStream().use { parseGpxTrackStats(it, coeff) }
-                    } catch (e: Exception) {
-                        Log.e("GPX", "Unable to parse track ${source.displayName}", e)
-                        null
+            coroutineScope {
+                val results = Channel<Pair<TrackSource, TrackStats?>>(Channel.UNLIMITED)
+                allSources.forEach { source ->
+                    launch(parseDispatcher) {
+                        yield()
+                        val parsedStats = try {
+                            source.openStream().use { parseGpxTrackStats(it, coeff) }
+                        } catch (e: Exception) {
+                            Log.e("GPX", "Unable to parse track ${source.displayName}", e)
+                            null
+                        }
+                        results.send(source to parsedStats)
                     }
-                    results.send(source to parsedStats)
                 }
+
+                repeat(totalCount) {
+                    val (source, stats) = results.receive()
+                    if (stats != null) {
+                        updatedTracks[source.id] = CachedParsedTrack.from(source, stats)
+                    }
+                    processedCount += 1
+                    if (totalCount > 0) {
+                        val progressPercent = (processedCount * 100) / totalCount
+                        _rebuildProgress.value = maxOf(1, progressPercent)
+                    }
+                }
+                results.close()
             }
 
-            repeat(totalCount) {
-                val (source, stats) = results.receive()
-                if (stats != null) {
-                    updatedTracks[source.id] = CachedParsedTrack.from(source, stats)
-                }
-                processedCount += 1
-                if (totalCount > 0) {
-                    val progressPercent = (processedCount * 100) / totalCount
-                    _rebuildProgress.value = maxOf(1, progressPercent)
-                }
+            cacheMutex.withLock {
+                parsedTrackCache.clear()
+                parsedTrackCache.putAll(updatedTracks)
+                _tracks.value = parsedTrackCache.toMap()
+                hasScannedStorage = true
             }
-            results.close()
+            persistTrackCache(context)
+        } finally {
+            _rebuildProgress.value = null
         }
-
-        cacheMutex.withLock {
-            parsedTrackCache.clear()
-            parsedTrackCache.putAll(updatedTracks)
-            _tracks.value = parsedTrackCache.toMap()
-            hasScannedStorage = true
-        }
-        persistTrackCache(context)
-        _rebuildProgress.value = null
     }
 
     fun isTrackCacheRebuildInProgress(): Boolean = isRebuilding.value
