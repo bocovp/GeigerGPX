@@ -250,10 +250,12 @@ class EditTrackActivity : AppCompatActivity() {
             }
             EditMode.SPLIT -> {
                 val split = boundaryIndex
-                if (split == null) return "Select points to split"
-                val firstPart = split + 1
-                val secondPart = points.size - firstPart
-                "Split into $firstPart and $secondPart points"
+                if (split == null) "Select points to split"
+                else {
+                    val firstPart = split + 1
+                    val secondPart = points.size - firstPart
+                    "Split into $firstPart and $secondPart points"
+                }
             }
         }
     }
