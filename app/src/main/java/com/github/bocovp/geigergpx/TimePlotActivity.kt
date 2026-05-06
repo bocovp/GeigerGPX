@@ -80,7 +80,6 @@ class TimePlotActivity : AppCompatActivity() {
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var refreshCandidatesJob: Job? = null
     private var plotLoadJob: Job? = null
-    private var pendingHighlightedPoint: GeigerGpxApp.HighlightedTrackPoint? = null
     private var pointMidElapsedSeconds: DoubleArray = DoubleArray(0)
     private var lastAddPoiVisible: Boolean = false
 
@@ -324,12 +323,9 @@ class TimePlotActivity : AppCompatActivity() {
                         val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
                         val targetId = selected.trackId ?: TrackCatalog.currentTrackId()
                         if (targetId != currentId) {
-                            pendingHighlightedPoint = selected
                             loadTrackForPlotAsync(targetId)
                         } else if (targetId == currentId) {
-                            if (currentPoints.isEmpty()) {
-                                pendingHighlightedPoint = selected
-                            } else {
+                            if (currentPoints.isNotEmpty()) {
                                 val elapsed = elapsedSecondsAtPoint(selected.point)
                                 binding.timePlotView.setSelectedTimeSeconds(elapsed)
                             }
@@ -416,7 +412,6 @@ class TimePlotActivity : AppCompatActivity() {
         val targetId = highlighted?.trackId ?: TrackCatalog.currentTrackId()
         if (highlighted != null && targetId == currentId && points.isNotEmpty()) {
             binding.timePlotView.setSelectedTimeSeconds(elapsedSecondsAtPoint(highlighted.point))
-            pendingHighlightedPoint = null
         } else {
             // Keep point selection local to the track it belongs to.
             binding.timePlotView.setSelectedTimeSeconds(null)
