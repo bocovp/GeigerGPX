@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.core.content.edit
+import org.osmdroid.util.GeoPoint
 
 class MapActivity : AppCompatActivity() {
     private enum class PlotMode { SLIDING_WINDOW, KERNEL_ESTIMATOR }
@@ -46,6 +47,7 @@ class MapActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMapBinding
     private lateinit var trackMapRenderer: TrackMapRenderer
     private lateinit var mapDoseLongPressOverlay: MapDoseLongPressOverlay
+    private lateinit var currentGpsPositionOverlay: CurrentGpsPositionOverlay
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
 
     private var latestActivePoints: List<TrackPoint> = emptyList()
@@ -165,6 +167,8 @@ class MapActivity : AppCompatActivity() {
         )
         mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
         binding.mapView.overlays.add(mapDoseLongPressOverlay)
+        currentGpsPositionOverlay = CurrentGpsPositionOverlay()
+        binding.mapView.overlays.add(currentGpsPositionOverlay)
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -359,8 +363,29 @@ class MapActivity : AppCompatActivity() {
                         refreshMapTracks(latestActivePoints)
                     }
                 }
+                launch {
+                    viewModel.measurementModeEnabled.collectLatest {
+                        updateCurrentGpsMarker()
+                    }
+                }
+                launch {
+                    viewModel.currentGpsLocation.collectLatest {
+                        updateCurrentGpsMarker()
+                    }
+                }
             }
         }
+    }
+
+    private fun updateCurrentGpsMarker() {
+        val shouldShow = viewModel.isTracking.value || viewModel.measurementModeEnabled.value
+        val location = viewModel.currentGpsLocation.value
+        currentGpsPositionOverlay.location = if (shouldShow && location != null) {
+            GeoPoint(location.latitude, location.longitude)
+        } else {
+            null
+        }
+        binding.mapView.invalidate()
     }
 
     private fun refreshMapTracks(activePoints: List<TrackPoint>) {
