@@ -407,6 +407,7 @@ class TrackingService : Service() {
 
     private fun handleLocation(processedLocation: GpsManager.ProcessedLocation) {
         val loc = processedLocation.location
+        repo.updateCurrentGpsLocation(loc.latitude, loc.longitude)
         val now = processedLocation.nowMillis
         val gpsMode = processedLocation.mode
         val tracking = trackWriter.isTracking()

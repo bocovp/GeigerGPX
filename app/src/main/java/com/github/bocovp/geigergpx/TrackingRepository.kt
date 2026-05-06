@@ -11,6 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * and UI-layer ViewModels.
  */
 class TrackingRepository {
+    data class GpsLocationSnapshot(
+        val latitude: Double,
+        val longitude: Double
+    )
     data class AudioStatus(
         val status: String = "unknown",
         val errorCode: Int = AUDIO_STATUS_WAITING
@@ -66,6 +70,8 @@ class TrackingRepository {
 
     private val _measurementModeEnabled = MutableStateFlow(false)
     val measurementModeEnabled: StateFlow<Boolean> = _measurementModeEnabled.asStateFlow()
+    private val _currentGpsLocation = MutableStateFlow<GpsLocationSnapshot?>(null)
+    val currentGpsLocation: StateFlow<GpsLocationSnapshot?> = _currentGpsLocation.asStateFlow()
     private val _uiTickMillis = MutableStateFlow(0L)
     val uiTickMillis: StateFlow<Long> = _uiTickMillis.asStateFlow()
 
@@ -109,6 +115,10 @@ class TrackingRepository {
 
     fun updateMonitoringStatus(gpsStatus: String) {
         _gpsStatus.value = gpsStatus
+    }
+
+    fun updateCurrentGpsLocation(latitude: Double, longitude: Double) {
+        _currentGpsLocation.value = GpsLocationSnapshot(latitude = latitude, longitude = longitude)
     }
 
     fun updateAudioStatus(audioStatus: String, errorCode: Int) {
