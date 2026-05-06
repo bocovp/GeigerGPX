@@ -411,19 +411,16 @@ class TimePlotActivity : AppCompatActivity() {
         slidingWindowCache = null
         rebuildPointIndex()
 
-        val pending = pendingHighlightedPoint
-        if (pending != null && points.isNotEmpty()) {
-            val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
-            val targetId = pending.trackId ?: TrackCatalog.currentTrackId()
-            if (targetId == currentId) {
-                binding.timePlotView.setSelectedTimeSeconds(elapsedSecondsAtPoint(pending.point))
-                pendingHighlightedPoint = null
-                return
-            }
+        val highlighted = appState.highlightedTrackPoint.value
+        val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
+        val targetId = highlighted?.trackId ?: TrackCatalog.currentTrackId()
+        if (highlighted != null && targetId == currentId && points.isNotEmpty()) {
+            binding.timePlotView.setSelectedTimeSeconds(elapsedSecondsAtPoint(highlighted.point))
+            pendingHighlightedPoint = null
+        } else {
+            // Keep point selection local to the track it belongs to.
+            binding.timePlotView.setSelectedTimeSeconds(null)
         }
-        // Keep point selection local to the track it belongs to.
-        // When a different track is shown, clear the marker.
-        binding.timePlotView.setSelectedTimeSeconds(null)
     }
 
     private fun rebuildPointIndex() {
