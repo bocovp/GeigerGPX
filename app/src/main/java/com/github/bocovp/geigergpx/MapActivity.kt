@@ -167,7 +167,7 @@ class MapActivity : AppCompatActivity() {
         )
         mapDoseLongPressOverlay.longPressEnabled = !isHeatmapMode
         binding.mapView.overlays.add(mapDoseLongPressOverlay)
-        currentGpsPositionOverlay = CurrentGpsPositionOverlay()
+        currentGpsPositionOverlay = CurrentGpsPositionOverlay(binding.mapView.context)
         binding.mapView.overlays.add(currentGpsPositionOverlay)
 
         lifecycleScope.launch {
