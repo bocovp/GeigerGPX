@@ -418,8 +418,12 @@ class TimePlotActivity : AppCompatActivity() {
             if (targetId == currentId) {
                 binding.timePlotView.setSelectedTimeSeconds(elapsedSecondsAtPoint(pending.point))
                 pendingHighlightedPoint = null
+                return
             }
         }
+        // Keep point selection local to the track it belongs to.
+        // When a different track is shown, clear the marker.
+        binding.timePlotView.setSelectedTimeSeconds(null)
     }
 
     private fun rebuildPointIndex() {
