@@ -31,8 +31,13 @@ stepSize              = 32;                (* sliding-window hop, samples *)
 magThreshold          = 5.0*^9;                (* \[LeftArrow] tune me *)
 magThreshold          = 5.0*^11;               (* \[LeftArrow] tune me *)
 
+magThreshold          = 0.5*^9;                (* \[LeftArrow] tune me *)
+magThreshold          = 0.5*^11;               (* \[LeftArrow] tune me *)
+
+
 dominanceThreshold    = 2.0;                   (* SILENCE\[RightArrow]BEEP: main > this \[Times] sideEnergy *)
 dominanceThresholdEnd = 1.1;                   (* BEEP\[RightArrow]DECAY  : main > this \[Times] sideEnergy *)
+
 
 oneBeepMin            = 0.025-0.0075;           (* valid single-beep min duration, s *)
 oneBeepMax            = 0.025+0.0075;           (* valid single-beep max duration, s *)
@@ -194,7 +199,7 @@ processAudio[samples_List] :=
    \[Section] 4  Load audio  \[LongDash]  change the path below
    ---------------------------------------------------------------- *)
 
-audioFile = "C:\\Users\\bp\\Documents\\GitHub\\GG Dataset\\Birds\\Birds_002.wav";    (* \[LeftArrow] SET THIS *)
+audioFile = "C:\\Users\\bp\\Documents\\GitHub\\GG Dataset\\2.75uSvh 30s\\2.75uSvh 30s_003_168.wav";    (* \[LeftArrow] SET THIS *)
 
 audio  = Import[audioFile];
 (*audio  = First[AudioSplit[audio, 4]];*)
@@ -257,7 +262,10 @@ spec = Spectrogram[
   ColorFunction     -> "SolarColors",
   FrameLabel        -> {"Time (s)", "Frequency (Hz)"},
   PlotLabel         -> Style["Spectrogram  |  red lines = detected beep starts", 14],
-  ImageSize         -> {500*5*totalDuration,600}/2,
+  MaxPlotPoints->500*5*totalDuration,
+  AspectRatio->1/50,
+  ImageSize->500*5*totalDuration,
+ 
    AspectRatio -> Full,
    PlotRangePadding -> None
 ];
@@ -275,6 +283,15 @@ beepOverlay = If[Length[beeps] > 0,
 ];
 
 Show[spec, beepOverlay]
+
+
+cut
+
+
+
+Tally["type"/.beeps]
+"type"/.beeps//Total
+%+0
 
 
 (* ----------------------------------------------------------------
