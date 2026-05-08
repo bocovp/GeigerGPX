@@ -323,8 +323,7 @@ class TimePlotActivity : AppCompatActivity() {
                         }
                         val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
                         val targetId = selected.trackId ?: TrackCatalog.currentTrackId()
-                        val visibleTrackId = currentPointsTrackIdForPlot ?: TrackCatalog.currentTrackId()
-                        if (targetId == currentId && visibleTrackId == currentId && currentPoints.isNotEmpty()) {
+                        if (targetId == currentId && currentPointsTrackIdForPlot == currentId && currentPoints.isNotEmpty()) {
                             val elapsed = elapsedSecondsAtPoint(selected.point)
                             binding.timePlotView.setSelectedTimeSeconds(elapsed)
                         } else {
@@ -411,8 +410,7 @@ class TimePlotActivity : AppCompatActivity() {
         val highlighted = appState.highlightedTrackPoint.value
         val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
         val targetId = highlighted?.trackId ?: TrackCatalog.currentTrackId()
-        val visibleTrackId = trackId ?: TrackCatalog.currentTrackId()
-        if (highlighted != null && targetId == currentId && visibleTrackId == currentId && points.isNotEmpty()) {
+        if (highlighted != null && targetId == currentId && trackId == currentId && points.isNotEmpty()) {
             binding.timePlotView.setSelectedTimeSeconds(elapsedSecondsAtPoint(highlighted.point))
         } else {
             // Keep point selection local to the track it belongs to.
