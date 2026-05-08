@@ -56,5 +56,7 @@ class  TrackingViewModel(app: Application) : AndroidViewModel(app) {
 
     val measurementModeEnabled: StateFlow<Boolean> = repo.measurementModeEnabled
 
+    val currentGpsLocation: StateFlow<TrackingRepository.GpsLocationSnapshot?> = repo.currentGpsLocation
+
     val uiTickMillis: StateFlow<Long> = repo.uiTickMillis
 }
