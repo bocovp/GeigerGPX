@@ -338,7 +338,16 @@ class TimePlotActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 appState.highlightedTrackPoint
-                    .collectLatest {
+                    .collectLatest { highlighted ->
+                        if (highlighted != null) {
+                            val targetId = highlighted.trackId ?: TrackCatalog.currentTrackId()
+                            val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
+
+                            // If the highlighted point belongs to a different track, switch to it
+                            if (targetId != currentId) {
+                                refreshTrackCandidatesAndPlotAsync(targetId)
+                            }
+                        }
                         syncPointSelection()
                     }
             }
@@ -639,19 +648,28 @@ class TimePlotActivity : AppCompatActivity() {
         }
     }
 
+// In TimePlotActivity.kt
+
     private fun resolveSelectedTrackId(candidates: List<PlotCandidate>, preferredTrackId: String?): String? {
         if (candidates.isEmpty()) return null
+
+        // Determine the track ID of the currently highlighted point, if any.
+        val highlightedId = appState.highlightedTrackPoint.value?.let {
+            it.trackId ?: TrackCatalog.currentTrackId()
+        }
+
         val preferredIds = listOfNotNull(
             preferredTrackId?.takeIf { it.isNotBlank() },
+            highlightedId, // Prioritize the track of the highlighted point
             preferredTrackSelection(this),
             selectedTrackIdForPlot
         )
+
         val matchingCandidate = preferredIds.firstNotNullOfOrNull { candidateId ->
             if (failedTrackIdsForPlot.contains(candidateId)) return@firstNotNullOfOrNull null
             candidates.firstOrNull { it.id == candidateId }?.id
         }
-        if (matchingCandidate != null) return matchingCandidate
-        return candidates.firstOrNull { it.id !in failedTrackIdsForPlot }?.id
+        return matchingCandidate ?: candidates.firstOrNull { it.id !in failedTrackIdsForPlot }?.id
     }
 
     private fun cycleSelectedTrack(delta: Int) {
