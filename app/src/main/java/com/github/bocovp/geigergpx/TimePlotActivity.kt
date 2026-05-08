@@ -77,6 +77,7 @@ class TimePlotActivity : AppCompatActivity() {
 
     private val failedTrackIdsForPlot = mutableSetOf<String>()
     private var selectedTrackIdForPlot: String? = null
+    private var currentPointsTrackIdForPlot: String? = null
     private var plotCandidates: List<PlotCandidate> = emptyList()
     private var refreshCandidatesJob: Job? = null
     private var plotLoadJob: Job? = null
@@ -107,7 +108,7 @@ class TimePlotActivity : AppCompatActivity() {
 
                 viewModel.activeTrackPoints.collectLatest { points ->
                     if (selectedTrackIdForPlot != TrackCatalog.currentTrackId()) return@collectLatest
-                    updateCurrentPoints(points)
+                    updateCurrentPoints(points, TrackCatalog.currentTrackId())
                     updatePlot(recalculateVerticalAxis = true)
                 }
 
@@ -401,8 +402,9 @@ class TimePlotActivity : AppCompatActivity() {
         })
     }
 
-    private fun updateCurrentPoints(points: List<TrackPoint>) {
+    private fun updateCurrentPoints(points: List<TrackPoint>, trackId: String?) {
         currentPoints = points
+        currentPointsTrackIdForPlot = trackId
         estimatorCache = null
         slidingWindowCache = null
         rebuildPointIndex()
@@ -410,7 +412,8 @@ class TimePlotActivity : AppCompatActivity() {
         val highlighted = appState.highlightedTrackPoint.value
         val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
         val targetId = highlighted?.trackId ?: TrackCatalog.currentTrackId()
-        if (highlighted != null && targetId == currentId && points.isNotEmpty()) {
+        val visibleTrackId = currentPointsTrackIdForPlot ?: TrackCatalog.currentTrackId()
+        if (highlighted != null && targetId == currentId && visibleTrackId == currentId && points.isNotEmpty()) {
             binding.timePlotView.setSelectedTimeSeconds(elapsedSecondsAtPoint(highlighted.point))
         } else {
             // Keep point selection local to the track it belongs to.
@@ -494,7 +497,7 @@ class TimePlotActivity : AppCompatActivity() {
                     renderCollectorJob?.cancel() // Hard stop on track change
                     renderRequestFlow.value = null
                     selectedTrackIdForPlot = null
-                    updateCurrentPoints(emptyList())
+                    updateCurrentPoints(emptyList(), null)
                     updateTrackTitle(null)
                     binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
                     showPlotMessage(R.string.time_plot_no_track_data)
@@ -615,7 +618,7 @@ class TimePlotActivity : AppCompatActivity() {
         rememberTrackSelection(this, trackId)
         updateTrackTitle(selectedTrack.title)
         updateTrackSelectorUi()
-        updateCurrentPoints(selectedTrack.points)
+        updateCurrentPoints(selectedTrack.points, trackId)
         updatePlot()
     }
 
