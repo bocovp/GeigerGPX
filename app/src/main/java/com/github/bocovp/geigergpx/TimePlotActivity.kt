@@ -215,6 +215,9 @@ class TimePlotActivity : AppCompatActivity() {
                 showPlotMessage(R.string.time_plot_no_track_data)
             }
         }
+
+        // Restore the point selection exactly when the new plot data is applied
+        syncPointSelection()
     }
 
     override fun onResume() {
@@ -294,6 +297,26 @@ class TimePlotActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun syncPointSelection() {
+        val highlighted = appState.highlightedTrackPoint.value
+        if (highlighted == null) {
+            binding.timePlotView.setSelectedTimeSeconds(null)
+            invalidateOptionsMenu()
+            return
+        }
+
+        val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
+        val targetId = highlighted.trackId ?: TrackCatalog.currentTrackId()
+
+        // Only show the point if the rendered plot matches the highlighted point's track
+        if (targetId == currentId && currentPointsTrackIdForPlot == currentId && currentPoints.isNotEmpty()) {
+            val elapsed = elapsedSecondsAtPoint(highlighted.point)
+            binding.timePlotView.setSelectedTimeSeconds(elapsed)
+        } else {
+            binding.timePlotView.setSelectedTimeSeconds(null)
+        }
+        invalidateAddPoiMenuIfNeeded()
+    }
     private fun setupPointSelectionLinking() {
         binding.timePlotView.onPointSelectionChanged = { selectedSeconds ->
             val selected = nearestPointForElapsedSeconds(selectedSeconds)
@@ -315,21 +338,8 @@ class TimePlotActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 appState.highlightedTrackPoint
-                    .collectLatest { highlighted ->
-                        val selected = highlighted ?: run {
-                            binding.timePlotView.setSelectedTimeSeconds(null)
-                            invalidateOptionsMenu()
-                            return@collectLatest
-                        }
-                        val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
-                        val targetId = selected.trackId ?: TrackCatalog.currentTrackId()
-                        if (targetId == currentId && currentPointsTrackIdForPlot == currentId && currentPoints.isNotEmpty()) {
-                            val elapsed = elapsedSecondsAtPoint(selected.point)
-                            binding.timePlotView.setSelectedTimeSeconds(elapsed)
-                        } else {
-                            binding.timePlotView.setSelectedTimeSeconds(null)
-                        }
-                        invalidateAddPoiMenuIfNeeded()
+                    .collectLatest {
+                        syncPointSelection()
                     }
             }
         }
@@ -407,15 +417,9 @@ class TimePlotActivity : AppCompatActivity() {
         slidingWindowCache = null
         rebuildPointIndex()
 
-        val highlighted = appState.highlightedTrackPoint.value
-        val currentId = selectedTrackIdForPlot ?: TrackCatalog.currentTrackId()
-        val targetId = highlighted?.trackId ?: TrackCatalog.currentTrackId()
-        if (highlighted != null && targetId == currentId && trackId == currentId && points.isNotEmpty()) {
-            binding.timePlotView.setSelectedTimeSeconds(elapsedSecondsAtPoint(highlighted.point))
-        } else {
-            // Keep point selection local to the track it belongs to.
-            binding.timePlotView.setSelectedTimeSeconds(null)
-        }
+        // Clear the view's point selection immediately to prevent glitches on the old plot.
+        // The correct point will be restored in applyPlotResult() once the new plot is drawn.
+        binding.timePlotView.setSelectedTimeSeconds(null)
     }
 
     private fun rebuildPointIndex() {
