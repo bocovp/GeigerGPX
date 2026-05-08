@@ -16,11 +16,11 @@
    \[Section] 1  Tunable parameters  (mirror the Kotlin companion object)
    ---------------------------------------------------------------- *)
 
-sampleRate            = 44100;             (* Hz *)
-freqMain              = 3276.0;            (* target beep frequency, Hz  \[LongDash] "bin 13" *)
-freqLow               = freqMain - 252.0;  (* lower side-band *)
-freqHigh              = freqMain + 252.0;  (* upper side-band *)
-windowSize            = 175;               (* Goertzel window, samples *)
+sampleRate            = 48000;             (* Hz *)
+freqMain              = 3278.05;            (* target beep frequency, Hz  \[LongDash] "bin 13" *)
+freqLow               = freqMain - 234.15;  (* lower side-band *)
+freqHigh              = freqMain + 234.15;  (* upper side-band *)
+windowSize            = 205;               (* Goertzel window, samples *)
 stepSize              = 32;                (* sliding-window hop, samples *)
 
 (* Primary detection gate \[LongDash] most important knob to tune.
@@ -34,17 +34,17 @@ magThreshold          = 5.0*^11;               (* \[LeftArrow] tune me *)
 dominanceThreshold    = 2.0;                   (* SILENCE\[RightArrow]BEEP: main > this \[Times] sideEnergy *)
 dominanceThresholdEnd = 1.1;                   (* BEEP\[RightArrow]DECAY  : main > this \[Times] sideEnergy *)
 
-oneBeepMin            = 0.025-0.005;           (* valid single-beep min duration, s *)
-oneBeepMax            = 0.025+0.005;           (* valid single-beep max duration, s *)
+oneBeepMin            = 0.025-0.0075;           (* valid single-beep min duration, s *)
+oneBeepMax            = 0.025+0.0075;           (* valid single-beep max duration, s *)
 
-twoBeepMin            = 0.025*2-0.01;          (* upper bound for a double-beep, s  *)
-twoBeepMax            = 0.025*2+0.01;          (* upper bound for a double-beep, s  *)
+twoBeepMin            = 0.025*2-0.015;          (* upper bound for a double-beep, s  *)
+twoBeepMax            = 0.025*2+0.015;          (* upper bound for a double-beep, s  *)
 
-threeBeepMin          = 0.025*3-0.01;          (* upper bound for a double-beep, s  *)
-threeBeepMax          = 0.025*3+0.01;          (* upper bound for a double-beep, s  *)
+threeBeepMin          = 0.025*3-0.015;          (* upper bound for a double-beep, s  *)
+threeBeepMax          = 0.025*3+0.015;          (* upper bound for a double-beep, s  *)
 
-fourBeepMin           = 0.025*4-0.01;          (* upper bound for a double-beep, s  *)
-fourBeepMax           = 0.025*4+0.01;          (* upper bound for a double-beep, s  *)
+fourBeepMin           = 0.025*4-0.015;          (* upper bound for a double-beep, s  *)
+fourBeepMax           = 0.025*4+0.015;          (* upper bound for a double-beep, s  *)
 
 (* Derived \[LongDash] intentionally mirrors  magThresholdEnd = magThreshold / 2f  *)
 magThresholdEnd = magThreshold / 2.0;
@@ -194,10 +194,10 @@ processAudio[samples_List] :=
    \[Section] 4  Load audio  \[LongDash]  change the path below
    ---------------------------------------------------------------- *)
 
-audioFile = "O:\\Temp\\FastBeeps.wav";    (* \[LeftArrow] SET THIS *)
+audioFile = "C:\\Users\\bp\\Documents\\GitHub\\GG Dataset\\Birds\\Birds_002.wav";    (* \[LeftArrow] SET THIS *)
 
 audio  = Import[audioFile];
-audio  = First[AudioSplit[audio, 4]];
+(*audio  = First[AudioSplit[audio, 4]];*)
 
 
 fs         = Round[First @ AudioSampleRate[audio]];  (* verify sample rate *)
@@ -251,12 +251,13 @@ freqAxisMax   = 8000;  (* Hz shown on the frequency axis *)
 
 (* Build spectrogram \[LongDash] SampleRate option ensures correct time axis *)
 spec = Spectrogram[
-  audio,512,171,
+  audio,512,128
+ ,
   PlotRange         -> {{0, totalDuration}, {0, freqAxisMax}},
   ColorFunction     -> "SolarColors",
   FrameLabel        -> {"Time (s)", "Frequency (Hz)"},
   PlotLabel         -> Style["Spectrogram  |  red lines = detected beep starts", 14],
-  ImageSize         -> {500*5*totalDuration,600},
+  ImageSize         -> {500*5*totalDuration,600}/2,
    AspectRatio -> Full,
    PlotRangePadding -> None
 ];
@@ -330,5 +331,4 @@ ImageSize     -> 500*5*totalDuration/2]
 
 
 
-
-
+Spectrogram[audio,512,16,MaxPlotPoints->5000,AspectRatio->1/50,ImageSize->10000]
