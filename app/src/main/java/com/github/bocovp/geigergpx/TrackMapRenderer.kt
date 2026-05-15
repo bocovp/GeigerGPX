@@ -28,6 +28,7 @@ class TrackMapRenderer(
     private val trackOverlays = mutableMapOf<String, GradientTrackOverlay>()
     private var poiOverlay: PoiOverlay? = null
     private var heatmapOverlay: HeatmapOverlay? = null
+    private var trackDosePointOverlay: TrackDosePointOverlay? = null
     private val renderedPointCounts = mutableMapOf<String, Int>()
     private val generalizedTracksById = mutableMapOf<String, List<TrackPoint>>()
     private var lastMaxDose = Double.NEGATIVE_INFINITY
@@ -106,6 +107,7 @@ class TrackMapRenderer(
                 mapView.overlays.add(it)
                 heatmapOverlay = it
             }
+            trackDosePointOverlay?.enabled = false
             overlay.doseCoefficient = doseCoefficient
 
             val filteredTracks = tracks.map { track ->
@@ -170,6 +172,19 @@ class TrackMapRenderer(
                     renderedPointCounts[track.id] = trackPoints.size
                     shouldInvalidate = true
                 }
+            }
+
+            val dosePointOverlay = trackDosePointOverlay ?: TrackDosePointOverlay(mapView.context).also {
+                mapView.overlays.add(it)
+                trackDosePointOverlay = it
+                shouldInvalidate = true
+            }
+            val shouldShowDosePoints = !useKernelEstimator
+            dosePointOverlay.enabled = shouldShowDosePoints
+            if (shouldShowDosePoints) {
+                dosePointOverlay.tracks = tracks
+                dosePointOverlay.minDose = currentMin
+                dosePointOverlay.maxDose = currentMax
             }
 
             val existingPoiOverlay = poiOverlay
