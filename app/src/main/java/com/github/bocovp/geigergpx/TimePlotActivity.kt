@@ -44,6 +44,7 @@ class TimePlotActivity : AppCompatActivity() {
         val scaleSeconds: Double,
         val coeff: Double,
         val isCurrentTrack: Boolean,
+        val visibleRange: TimePlotView.VisibleRange,
         val trackTitle: String,
         val recalculateVerticalAxis: Boolean,
         val generation: Long
@@ -172,7 +173,13 @@ class TimePlotActivity : AppCompatActivity() {
 
                     val result = withContext(Dispatchers.Default) {
                         if (request.mode == PlotMode.KERNEL_ESTIMATOR) {
-                            calculateKdePlot(request.isCurrentTrack, request.points, request.scaleSeconds, request.coeff)
+                            calculateKdePlot(
+                                isCurrentTrack = request.isCurrentTrack,
+                                points = request.points,
+                                scaleSeconds = request.scaleSeconds,
+                                coeff = request.coeff,
+                                visibleRange = request.visibleRange
+                            )
                         } else {
                             calculateSlidingWindowPlot(request.points, request.scaleSeconds, request.coeff, request.trackTitle)
                         }
@@ -721,6 +728,7 @@ class TimePlotActivity : AppCompatActivity() {
         val generation = ++renderGeneration
         val isCurrentTrack = selectedTrackIdForPlot.isNullOrBlank() ||
                 selectedTrackIdForPlot == TrackCatalog.currentTrackId()
+        val visibleRange = binding.timePlotView.visibleRangeSeconds()
 
         val shouldKeepEndVisible = isCurrentTrack && plotMode == PlotMode.KERNEL_ESTIMATOR && binding.timePlotView.isViewingEnd()
         renderRequestFlow.value = RenderRequest(
@@ -729,6 +737,7 @@ class TimePlotActivity : AppCompatActivity() {
             scaleSeconds = scaleSeconds,
             coeff = cpsToUSvhCoeff,
             isCurrentTrack = isCurrentTrack,
+            visibleRange = visibleRange,
             trackTitle = binding.trackNameField.text?.toString().orEmpty(),
             recalculateVerticalAxis = recalculateVerticalAxis,
             generation = generation
@@ -754,10 +763,9 @@ class TimePlotActivity : AppCompatActivity() {
         isCurrentTrack: Boolean,
         points: List<TrackPoint>,
         scaleSeconds: Double,
-        coeff: Double
+        coeff: Double,
+        visibleRange: TimePlotView.VisibleRange
     ): PlotResult.Kde? {
-        val visibleRange = binding.timePlotView.visibleRangeSeconds()
-
         val minScale = scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble())
 
         if (isCurrentTrack) {
@@ -804,8 +812,7 @@ class TimePlotActivity : AppCompatActivity() {
         val rangeEnd = visibleRange.endSeconds.coerceIn(rangeStart, totalDuration)
         val ts2 = buildTs2(rangeStart, rangeEnd)
         yield()
-        val tEndOverride = if (isCurrentTrack) kotlin.math.max(points.sumOf { it.seconds.coerceAtLeast(0.0) }, visibleRange.endSeconds) else null
-        val ci = estimator.getConfidenceIntervals(ts2, minScale, tEndOverride)
+        val ci = estimator.getConfidenceIntervals(ts2, minScale, null)
         return PlotResult.Kde(ts2, firstTimestamp, ci.first, ci.second, ci.third)
     }
 
