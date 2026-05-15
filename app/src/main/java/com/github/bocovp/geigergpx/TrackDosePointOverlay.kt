@@ -17,7 +17,7 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
 
     private val density = context.resources.displayMetrics.density
 
-    var pointsByTrack: List<List<TrackPoint>> = emptyList()
+    var tracks: List<MapTrack> = emptyList()
     var minDose: Double = 0.0
     var maxDose: Double = 1.0
     var enabled: Boolean = false
@@ -40,7 +40,7 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
     private val visiblePointsBuffer = ArrayList<TrackPoint>(MAX_VISIBLE_POINTS + 1)
 
     override fun draw(canvas: Canvas, projection: Projection) {
-        if (!enabled || pointsByTrack.isEmpty()) return
+        if (!enabled || tracks.isEmpty()) return
         if (projection.zoomLevel < MIN_ZOOM_FOR_POINTS) return
 
         val visibleBounds = projection.boundingBox ?: return
@@ -58,8 +58,8 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
 
     private fun collectVisiblePoints(bounds: BoundingBox): List<TrackPoint> {
         visiblePointsBuffer.clear()
-        pointsByTrack.forEach { trackPoints ->
-            trackPoints.forEach { point ->
+        tracks.forEach { track ->
+            track.points.forEach { point ->
                 if (point.badCoordinates) return@forEach
                 if (!bounds.contains(point.latitude, point.longitude)) return@forEach
                 visiblePointsBuffer.add(point)

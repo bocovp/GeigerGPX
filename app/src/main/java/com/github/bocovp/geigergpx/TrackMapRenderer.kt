@@ -182,7 +182,7 @@ class TrackMapRenderer(
             val shouldShowDosePoints = !useKernelEstimator
             dosePointOverlay.enabled = shouldShowDosePoints
             if (shouldShowDosePoints) {
-                dosePointOverlay.pointsByTrack = tracks.map { it.points }
+                dosePointOverlay.tracks = tracks
                 dosePointOverlay.minDose = currentMin
                 dosePointOverlay.maxDose = currentMax
             }
