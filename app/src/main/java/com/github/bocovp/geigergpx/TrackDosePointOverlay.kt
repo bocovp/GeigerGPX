@@ -20,7 +20,7 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
     var tracks: List<MapTrack> = emptyList()
     var minDose: Double = 0.0
     var maxDose: Double = 1.0
-    var enabled: Boolean = false
+    var enabledQ: Boolean = false
 
     private val pointFillPaint = Paint().apply {
         style = Paint.Style.FILL
@@ -40,7 +40,7 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
     private val visiblePointsBuffer = ArrayList<TrackPoint>(MAX_VISIBLE_POINTS + 1)
 
     override fun draw(canvas: Canvas, projection: Projection) {
-        if (!enabled || tracks.isEmpty()) return
+        if (!enabledQ || tracks.isEmpty()) return
         if (projection.zoomLevel < MIN_ZOOM_FOR_POINTS) return
 
         val visibleBounds = projection.boundingBox ?: return

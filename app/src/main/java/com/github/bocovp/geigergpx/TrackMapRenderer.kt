@@ -107,7 +107,7 @@ class TrackMapRenderer(
                 mapView.overlays.add(it)
                 heatmapOverlay = it
             }
-            trackDosePointOverlay?.enabled = false
+            trackDosePointOverlay?.enabledQ = false
             overlay.doseCoefficient = doseCoefficient
 
             val filteredTracks = tracks.map { track ->
@@ -180,7 +180,7 @@ class TrackMapRenderer(
                 shouldInvalidate = true
             }
             val shouldShowDosePoints = !useKernelEstimator
-            dosePointOverlay.enabled = shouldShowDosePoints
+            dosePointOverlay.enabledQ = shouldShowDosePoints
             if (shouldShowDosePoints) {
                 dosePointOverlay.tracks = tracks
                 dosePointOverlay.minDose = currentMin
