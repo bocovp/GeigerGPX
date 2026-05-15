@@ -616,7 +616,15 @@ class TimePlotActivity : AppCompatActivity() {
             updateTrackTitle(CURRENT_TRACK_TITLE)
             rememberCurrentTrackSelection(this)
             updateTrackSelectorUi()
-  //          observeActiveTrack()
+            // For the currently recorded track, initialize from the points already buffered
+            // in TrackWriter (the points that will be saved in the GPX file).
+            // This ensures the sliding-window plot can be rendered immediately even before
+            // the next activeTrackPoints emission arrives.
+            val pointsForPlot = viewModel.activeTrackPoints.value.ifEmpty {
+                TrackingService.activeTrackPointsSnapshot()
+            }
+            updateCurrentPoints(pointsForPlot, TrackCatalog.currentTrackId())
+            updatePlot(recalculateVerticalAxis = true)
             return true
         }
         return false
