@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
@@ -51,9 +52,7 @@ class TimePlotActivity : AppCompatActivity() {
     private data class EstimatorCache(
         val points: List<TrackPoint>,
         val estimator: KernelDensityEstimator,
-        val coeff: Double,
-        val ts2: DoubleArray,
-        val firstTimestamp: Double
+        val coeff: Double
     )
 
     private data class SlidingWindowCache(
@@ -87,6 +86,7 @@ class TimePlotActivity : AppCompatActivity() {
     // Conflation Strategy Properties
     private val renderRequestFlow = MutableStateFlow<RenderRequest?>(null)
     private var renderCollectorJob: Job? = null
+    private var liveKdeRefreshJob: Job? = null
     private var renderGeneration: Long = 0L
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
 
@@ -695,6 +695,23 @@ class TimePlotActivity : AppCompatActivity() {
         binding.averagingLabel.text = "Averaging window: ${"%.1f".format(Locale.US, valueMinutes)} min"
     }
 
+    private fun startOrStopLiveKdeRefresh() {
+        val isCurrentTrack = selectedTrackIdForPlot.isNullOrBlank() || selectedTrackIdForPlot == TrackCatalog.currentTrackId()
+        val shouldRun = isCurrentTrack && plotMode == PlotMode.KERNEL_ESTIMATOR
+        if (!shouldRun) {
+            liveKdeRefreshJob?.cancel()
+            liveKdeRefreshJob = null
+            return
+        }
+        if (liveKdeRefreshJob?.isActive == true) return
+        liveKdeRefreshJob = lifecycleScope.launch {
+            while (isActive) {
+                delay(LIVE_KDE_UPDATE_INTERVAL_MS)
+                updatePlot(recalculateVerticalAxis = false)
+            }
+        }
+    }
+
     /**
      * Now simply captures the current state and emits it to the rendering flow.
      */
@@ -705,6 +722,7 @@ class TimePlotActivity : AppCompatActivity() {
         val isCurrentTrack = selectedTrackIdForPlot.isNullOrBlank() ||
                 selectedTrackIdForPlot == TrackCatalog.currentTrackId()
 
+        val shouldKeepEndVisible = isCurrentTrack && plotMode == PlotMode.KERNEL_ESTIMATOR && binding.timePlotView.isViewingEnd()
         renderRequestFlow.value = RenderRequest(
             mode = plotMode,
             points = currentPoints,
@@ -715,6 +733,10 @@ class TimePlotActivity : AppCompatActivity() {
             recalculateVerticalAxis = recalculateVerticalAxis,
             generation = generation
         )
+        if (shouldKeepEndVisible) {
+            binding.timePlotView.scrollToEnd()
+        }
+        startOrStopLiveKdeRefresh()
     }
 
     private sealed class PlotResult {
@@ -734,26 +756,28 @@ class TimePlotActivity : AppCompatActivity() {
         scaleSeconds: Double,
         coeff: Double
     ): PlotResult.Kde? {
+        val visibleRange = binding.timePlotView.visibleRangeSeconds()
+
         val minScale = scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble())
 
         if (isCurrentTrack) {
             val liveBounds = TrackingService.activeKdeTimestampBounds() ?: return null
             if (liveBounds.second < liveBounds.first) return null
             yield() // Check for cancellation before calling service
-            val ts2 = buildTs2(liveBounds.first, liveBounds.second)
-            val ci = TrackingService.activeKdeConfidenceIntervals(ts2, minScale) ?: return null
+            val nowSeconds = kotlin.math.max(liveBounds.second, visibleRange.endSeconds)
+            val rangeStart = visibleRange.startSeconds.coerceIn(liveBounds.first, nowSeconds)
+            val rangeEnd = visibleRange.endSeconds.coerceIn(rangeStart, nowSeconds)
+            val ts2 = buildTs2(rangeStart, rangeEnd)
+            val ci = TrackingService.activeKdeConfidenceIntervals(ts2, minScale, tEndOverride = nowSeconds) ?: return null
             return PlotResult.Kde(ts2, liveBounds.first, ci.first, ci.second, ci.third)
         }
 
         val cache = estimatorCache
         val estimator: KernelDensityEstimator
-        val ts2: DoubleArray
-        val firstTimestamp: Double
+        val firstTimestamp = 0.0
 
         if (cache != null && cache.points === points && cache.coeff == coeff) {
             estimator = cache.estimator
-            ts2 = cache.ts2
-            firstTimestamp = cache.firstTimestamp
         } else {
             var totalDuration = 0.0
             var hasData = false
@@ -764,9 +788,6 @@ class TimePlotActivity : AppCompatActivity() {
             }
             if (!hasData || totalDuration <= 0.0) return null
 
-            firstTimestamp = 0.0
-            ts2 = buildTs2(firstTimestamp, totalDuration)
-
             estimator = KernelDensityEstimator(coeff)
             var accumulatedSeconds = 0.0
             for (p in points) {
@@ -775,11 +796,16 @@ class TimePlotActivity : AppCompatActivity() {
                 estimator.addSampleInterval(accumulatedSeconds, durationSeconds, p.counts.coerceAtLeast(0))
                 accumulatedSeconds += durationSeconds
             }
-            estimatorCache = EstimatorCache(points, estimator, coeff, ts2, firstTimestamp)
+            estimatorCache = EstimatorCache(points, estimator, coeff)
         }
 
+        val totalDuration = points.sumOf { it.seconds.coerceAtLeast(0.0) }
+        val rangeStart = visibleRange.startSeconds.coerceIn(0.0, totalDuration)
+        val rangeEnd = visibleRange.endSeconds.coerceIn(rangeStart, totalDuration)
+        val ts2 = buildTs2(rangeStart, rangeEnd)
         yield()
-        val ci = estimator.getConfidenceIntervals(ts2, minScale)
+        val tEndOverride = if (isCurrentTrack) kotlin.math.max(points.sumOf { it.seconds.coerceAtLeast(0.0) }, visibleRange.endSeconds) else null
+        val ci = estimator.getConfidenceIntervals(ts2, minScale, tEndOverride)
         return PlotResult.Kde(ts2, firstTimestamp, ci.first, ci.second, ci.third)
     }
 
@@ -830,6 +856,7 @@ class TimePlotActivity : AppCompatActivity() {
         const val CURRENT_TRACK_TITLE = "Currently recording"
         private const val SECONDS_PER_MINUTE = 60f
         private const val KDE_PLOT_SAMPLE_COUNT = 240
+        private const val LIVE_KDE_UPDATE_INTERVAL_MS = 200L
         private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
 
         fun rememberTrackSelection(context: android.content.Context, trackId: String) {

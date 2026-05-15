@@ -281,6 +281,33 @@ class TimePlotView @JvmOverloads constructor(
         canvas.drawLine(plotRight, plotTop, plotRight, plotBottom, axisPaint) //Right
     }
 
+
+    data class VisibleRange(
+        val startSeconds: Double,
+        val endSeconds: Double,
+        val durationSeconds: Double
+    )
+
+    fun visibleRangeSeconds(): VisibleRange {
+        if (trackDurationSeconds <= 0.0) return VisibleRange(0.0, 0.0, 0.0)
+        val visibleDuration = trackDurationSeconds / zoomX
+        val start = (trackDurationSeconds - visibleDuration) * panFraction
+        return VisibleRange(start, start + visibleDuration, visibleDuration)
+    }
+
+    fun isViewingEnd(toleranceFraction: Double = 0.03): Boolean {
+        if (trackDurationSeconds <= 0.0) return true
+        val range = visibleRangeSeconds()
+        val tolerance = (range.durationSeconds * toleranceFraction).coerceAtLeast(0.1)
+        return range.endSeconds >= trackDurationSeconds - tolerance
+    }
+
+    fun scrollToEnd() {
+        panFraction = 1f
+        clampPan()
+        invalidate()
+    }
+
     fun setSelectedTimeSeconds(seconds: Double?) {
         if (selectedTimeSeconds == seconds) return
         selectedTimeSeconds = seconds
