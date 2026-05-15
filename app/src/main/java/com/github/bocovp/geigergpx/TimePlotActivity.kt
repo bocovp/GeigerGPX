@@ -620,10 +620,7 @@ class TimePlotActivity : AppCompatActivity() {
             // in TrackWriter (the points that will be saved in the GPX file).
             // This ensures the sliding-window plot can be rendered immediately even before
             // the next activeTrackPoints emission arrives.
-            val activePoints = viewModel.activeTrackPoints.value.orEmpty()
-            val pointsForPlot = if (activePoints.isNotEmpty()) {
-                activePoints
-            } else {
+            val pointsForPlot = viewModel.activeTrackPoints.value.ifEmpty {
                 TrackingService.activeTrackPointsSnapshot()
             }
             updateCurrentPoints(pointsForPlot, TrackCatalog.currentTrackId())
