@@ -60,11 +60,16 @@ class TrackingService : Service() {
 
         fun activeKdeConfidenceIntervals(
             t2s: DoubleArray,
-            scaleSeconds: Double
+            scaleSeconds: Double,
+            tEndOverride: Double? = null
         ): Triple<DoubleArray, DoubleArray, DoubleArray>? {
             val service = runningInstance ?: return null
             val snapshot = service.kde?.copy() ?: return null
-            return snapshot.getConfidenceIntervals(t2s, scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble()))
+            return snapshot.getConfidenceIntervals(
+                t2s,
+                scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble()),
+                tEndOverride = tEndOverride
+            )
         }
     }
 
