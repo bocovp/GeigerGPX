@@ -712,9 +712,11 @@ class TimePlotActivity : AppCompatActivity() {
         }
         if (liveKdeRefreshJob?.isActive == true) return
         liveKdeRefreshJob = lifecycleScope.launch {
-            while (isActive) {
-                delay(LIVE_KDE_UPDATE_INTERVAL_MS)
-                updatePlot(recalculateVerticalAxis = false)
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
+                    delay(LIVE_KDE_UPDATE_INTERVAL_MS)
+                    updatePlot(recalculateVerticalAxis = false)
+                }
             }
         }
     }
@@ -772,9 +774,9 @@ class TimePlotActivity : AppCompatActivity() {
             val liveBounds = TrackingService.activeKdeTimestampBounds() ?: return null
             if (liveBounds.second < liveBounds.first) return null
             yield() // Check for cancellation before calling service
-            val nowSeconds = kotlin.math.max(liveBounds.second, visibleRange.endSeconds)
-            val rangeStart = visibleRange.startSeconds.coerceIn(liveBounds.first, nowSeconds)
-            val rangeEnd = visibleRange.endSeconds.coerceIn(rangeStart, nowSeconds)
+            val nowSeconds = kotlin.math.max(liveBounds.second, System.currentTimeMillis() / 1000.0)
+            val rangeStart = (liveBounds.first + visibleRange.startSeconds).coerceIn(liveBounds.first, nowSeconds)
+            val rangeEnd = (liveBounds.first + visibleRange.endSeconds).coerceIn(rangeStart, nowSeconds)
             val ts2 = buildTs2(rangeStart, rangeEnd)
             val ci = TrackingService.activeKdeConfidenceIntervals(ts2, minScale, tEndOverride = nowSeconds) ?: return null
             return PlotResult.Kde(ts2, liveBounds.first, ci.first, ci.second, ci.third)
