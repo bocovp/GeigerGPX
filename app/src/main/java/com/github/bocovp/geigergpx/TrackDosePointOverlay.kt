@@ -35,6 +35,9 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
     }
 
     private val reusablePixelPoint = Point()
+    private val reusableGeoPoint = GeoPoint(0.0, 0.0)
+    private val circleRadius = 4.352f * density
+    private val visiblePointsBuffer = ArrayList<TrackPoint>(MAX_VISIBLE_POINTS + 1)
 
     override fun draw(canvas: Canvas, projection: Projection) {
         if (!enabled || pointsByTrack.isEmpty()) return
@@ -42,26 +45,27 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
 
         val visibleBounds = projection.boundingBox ?: return
         val visiblePoints = collectVisiblePoints(visibleBounds)
-        if (visiblePoints.isEmpty() || visiblePoints.size >= MAX_VISIBLE_POINTS) return
+        if (visiblePoints.isEmpty() || visiblePoints.size > MAX_VISIBLE_POINTS) return
 
         visiblePoints.forEach { point ->
-            projection.toPixels(GeoPoint(point.latitude, point.longitude), reusablePixelPoint)
+            reusableGeoPoint.setCoords(point.latitude, point.longitude)
+            projection.toPixels(reusableGeoPoint, reusablePixelPoint)
             pointFillPaint.color = DoseColorScale.colorForDose(point.doseRate, minDose, maxDose)
-            canvas.drawCircle(reusablePixelPoint.x.toFloat(), reusablePixelPoint.y.toFloat(), 4.352f * density, pointFillPaint)
-            canvas.drawCircle(reusablePixelPoint.x.toFloat(), reusablePixelPoint.y.toFloat(), 4.352f * density, pointStrokePaint)
+            canvas.drawCircle(reusablePixelPoint.x.toFloat(), reusablePixelPoint.y.toFloat(), circleRadius, pointFillPaint)
+            canvas.drawCircle(reusablePixelPoint.x.toFloat(), reusablePixelPoint.y.toFloat(), circleRadius, pointStrokePaint)
         }
     }
 
     private fun collectVisiblePoints(bounds: BoundingBox): List<TrackPoint> {
-        val result = ArrayList<TrackPoint>()
+        visiblePointsBuffer.clear()
         pointsByTrack.forEach { trackPoints ->
             trackPoints.forEach { point ->
                 if (point.badCoordinates) return@forEach
                 if (!bounds.contains(point.latitude, point.longitude)) return@forEach
-                result.add(point)
-                if (result.size >= MAX_VISIBLE_POINTS) return result
+                visiblePointsBuffer.add(point)
+                if (visiblePointsBuffer.size > MAX_VISIBLE_POINTS) return visiblePointsBuffer
             }
         }
-        return result
+        return visiblePointsBuffer
     }
 }

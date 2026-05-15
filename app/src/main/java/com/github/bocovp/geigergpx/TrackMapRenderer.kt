@@ -180,13 +180,12 @@ class TrackMapRenderer(
                 shouldInvalidate = true
             }
             val shouldShowDosePoints = !useKernelEstimator
-            val trackPointSets = tracks.map { track ->
-                if (useKernelEstimator) generalizedTracksById[track.id] ?: track.points else track.points
-            }
             dosePointOverlay.enabled = shouldShowDosePoints
-            dosePointOverlay.pointsByTrack = trackPointSets
-            dosePointOverlay.minDose = currentMin
-            dosePointOverlay.maxDose = currentMax
+            if (shouldShowDosePoints) {
+                dosePointOverlay.pointsByTrack = tracks.map { it.points }
+                dosePointOverlay.minDose = currentMin
+                dosePointOverlay.maxDose = currentMax
+            }
 
             val existingPoiOverlay = poiOverlay
             val overlay = existingPoiOverlay ?: PoiOverlay(mapView.context).also {
