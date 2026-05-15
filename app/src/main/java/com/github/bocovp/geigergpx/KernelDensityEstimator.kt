@@ -157,10 +157,12 @@ class KernelDensityEstimator(private val coeff: Double) {
      * Delegates to [estimateDoseRateHelper] for the cps estimate, then multiplies
      * by [coeff].
      */
-    fun estimateDoseRate(t2s: DoubleArray, scale: Double): DoubleArray {
+    fun estimateDoseRate(t2s: DoubleArray,
+                         scale: Double,
+                         tEndOverride: Double? = null): DoubleArray {
         val bufCps = DoubleArray(t2s.size)
         val bufKernelMasses = DoubleArray(t2s.size)
-        estimateDoseRateHelper(t2s, scale, bufCps, bufKernelMasses)
+        estimateDoseRateHelper(t2s, scale, bufCps, bufKernelMasses, tEndOverride)
         val result = DoubleArray(t2s.size)
         for (j in t2s.indices) result[j] = bufCps[j] * coeff
         return result
@@ -173,7 +175,9 @@ class KernelDensityEstimator(private val coeff: Double) {
      *
      * @return Triple(doseRate [µSv/h], lowerBound [µSv/h], upperBound [µSv/h])
      */
-    fun getConfidenceIntervals(t2s: DoubleArray, scale: Double): Triple<DoubleArray, DoubleArray, DoubleArray> {
+    fun getConfidenceIntervals(t2s: DoubleArray,
+                               scale: Double,
+                               tEndOverride: Double? = null): Triple<DoubleArray, DoubleArray, DoubleArray> {
         if (size == 0 && stepCount == 0)
             return Triple(DoubleArray(t2s.size), DoubleArray(t2s.size), DoubleArray(t2s.size))
 
@@ -183,16 +187,19 @@ class KernelDensityEstimator(private val coeff: Double) {
         val bufLow = DoubleArray(t2s.size)
         val bufHigh = DoubleArray(t2s.size)
 
-        estimateDoseRateHelper(t2s, scale, bufCps, bufKernelMasses)
+        estimateDoseRateHelper(t2s, scale, bufCps, bufKernelMasses, tEndOverride)
 
         val invScale = 1.0 / scale
+
+        val effectiveTStart = dataTStart
+        val effectiveTEnd =  if (tEndOverride != null) maxOf(dataTEnd, tEndOverride) else dataTEnd
 
         for (i in t2s.indices) {
             val t  = t2s[i]
             val km = bufKernelMasses[i]
 
-            val uLo        = maxOf(-1.0, (t - dataTEnd)   * invScale)
-            val uHi        = minOf( 1.0, (t - dataTStart) * invScale)
+            val uLo        = maxOf(-1.0, (t - effectiveTEnd   ) * invScale)
+            val uHi        = minOf( 1.0, (t - effectiveTStart ) * invScale)
             val k2         = epanechnikovSquaredIntegral(uLo, uHi)
             val tEff       = if (k2 > 1e-12) scale * km * km / k2 else 0.0
             val scale2usvh = if (tEff > 0.0) 0.5 / tEff * coeff   else 0.0
@@ -230,7 +237,8 @@ class KernelDensityEstimator(private val coeff: Double) {
      */
     private fun estimateDoseRateHelper(
         t2s: DoubleArray, scale: Double,
-        outCps: DoubleArray, outKernelMasses: DoubleArray
+        outCps: DoubleArray, outKernelMasses: DoubleArray,
+        tEndOverride: Double? = null
     ) {
         if (size == 0 && stepCount == 0) {
             outCps.fill(0.0, 0, t2s.size)
@@ -239,7 +247,7 @@ class KernelDensityEstimator(private val coeff: Double) {
         }
 
         val tStart    = dataTStart
-        val tEnd      = dataTEnd
+        val tEnd      =   if (tEndOverride != null) maxOf(dataTEnd, tEndOverride) else dataTEnd
         val invScale  = 1.0 / scale
         val invScale2 = invScale  * invScale
         val invScale3 = invScale2 * invScale
@@ -377,15 +385,27 @@ class KernelDensityEstimator(private val coeff: Double) {
             i--
         }
 
-        // Merge with left neighbour if timestamps coincide.
-        // After bubble-back the array had no duplicates, so only i−1 can match.
+// Merge with a coincident neighbour if timestamps are within STEP_MERGE_EPSILON.
+//
+// Exit A (i > 0, stopped on left-neighbour condition):
+//   stepTs[i+1] was the last element displaced by the bubble, so
+//   stepTs[i+1] > stepTs[i] strictly. Only the LEFT neighbour can be within epsilon.
+//
+// Exit B (i == 0, loop ran off the left end):
+//   No left neighbour exists. The element now at index 1 is the former index-0
+//   element and may be within epsilon — check the RIGHT neighbour instead.
         if (i > 0 && stepTs[i] - stepTs[i - 1] <= STEP_MERGE_EPSILON) {
             stepWs[i - 1] += stepWs[i]
-            removeStepAt(i)          // close the gap; O(1) for end-of-array insertions
+            removeStepAt(i)
             i--
-            // Drop the merged entry if its weight is negligible.
             if (kotlin.math.abs(stepWs[i]) < STEP_WEIGHT_EPSILON) {
                 removeStepAt(i)
+            }
+        } else if (i == 0 && stepCount > 1 && stepTs[1] - stepTs[0] <= STEP_MERGE_EPSILON) {
+            stepWs[0] += stepWs[1]
+            removeStepAt(1)
+            if (kotlin.math.abs(stepWs[0]) < STEP_WEIGHT_EPSILON) {
+                removeStepAt(0)
             }
         }
     }

@@ -199,7 +199,7 @@ processAudio[samples_List] :=
    \[Section] 4  Load audio  \[LongDash]  change the path below
    ---------------------------------------------------------------- *)
 
-audioFile = "C:\\Users\\bp\\Documents\\GitHub\\GG Dataset\\2.75uSvh 30s\\2.75uSvh 30s_003_168.wav";    (* \[LeftArrow] SET THIS *)
+audioFile = "C:\\Users\\bp\\Documents\\GitHub\\GG Dataset\\2.75uSvh 30s\\2.75uSvh 30s_003.wav";    (* \[LeftArrow] SET THIS *)
 
 audio  = Import[audioFile];
 (*audio  = First[AudioSplit[audio, 4]];*)
