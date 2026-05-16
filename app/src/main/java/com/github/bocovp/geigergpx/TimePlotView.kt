@@ -88,12 +88,14 @@ class TimePlotView @JvmOverloads constructor(
     private var panFraction = 0f
     private var selectedTimeSeconds: Double? = null
     var onPointSelectionChanged: ((Double?) -> Unit)? = null
+    var onVisibleRangeChanged: (() -> Unit)? = null
     private var longPressSelecting = false
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
             zoomX = (zoomX * detector.scaleFactor).coerceIn(1f, 30f)
             clampPan()
+            onVisibleRangeChanged?.invoke()
             invalidate()
             return true
         }
@@ -113,6 +115,7 @@ class TimePlotView @JvmOverloads constructor(
             }
             panFraction += (distanceX / plotWidth()) * (1f / zoomX)
             clampPan()
+            onVisibleRangeChanged?.invoke()
             invalidate()
             return true
         }
@@ -183,6 +186,7 @@ class TimePlotView @JvmOverloads constructor(
         low: DoubleArray,
         high: DoubleArray,
         cpsToUSvh: Double,
+        totalTrackDurationSeconds: Double,
         recalculateVerticalAxis: Boolean = true
     ) {
         plotSegments.clear()
@@ -210,7 +214,8 @@ class TimePlotView @JvmOverloads constructor(
             return
         }
 
-        trackDurationSeconds = kernelSeries.last().t.coerceAtLeast(0.0)
+        trackDurationSeconds = totalTrackDurationSeconds.coerceAtLeast(0.0)
+
         updateXAxisUnit()
         maxDoseValue = kernelSeries.maxOfOrNull { maxOf(it.mean, it.high) }?.coerceAtLeast(0.1) ?: 1.0
         if (recalculateVerticalAxis) {

@@ -47,6 +47,7 @@ class TimePlotActivity : AppCompatActivity() {
         val visibleRange: TimePlotView.VisibleRange,
         val trackTitle: String,
         val recalculateVerticalAxis: Boolean,
+        val keepEndVisible: Boolean,
         val generation: Long
     )
 
@@ -101,20 +102,35 @@ class TimePlotActivity : AppCompatActivity() {
         setupGeneralizationSlider()
         setupTrackSelector()
 
+        // Listen for view panning/zooming to fetch new KDE fragments
+        binding.timePlotView.onVisibleRangeChanged = {
+            if (plotMode == PlotMode.KERNEL_ESTIMATOR) {
+                updatePlot(recalculateVerticalAxis = false)
+            }
+        }
+
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                TrackCatalog.allTracks.collectLatest {
-                    refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
+                launch {
+
+                    TrackCatalog.allTracks.collectLatest {
+                        refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
+                    }
                 }
 
-                viewModel.activeTrackPoints.collectLatest { points ->
-                    if (selectedTrackIdForPlot != TrackCatalog.currentTrackId()) return@collectLatest
-                    updateCurrentPoints(points, TrackCatalog.currentTrackId())
-                    updatePlot(recalculateVerticalAxis = true)
+                launch {
+                    viewModel.activeTrackPoints.collectLatest { points ->
+                        if (selectedTrackIdForPlot != TrackCatalog.currentTrackId()) return@collectLatest
+                        updateCurrentPoints(points, TrackCatalog.currentTrackId())
+                        if (plotMode == PlotMode.SLIDING_WINDOW) {
+                            updatePlot(recalculateVerticalAxis = true)
+                        }                    }
                 }
 
-                viewModel.isTracking.collectLatest {
-                    refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
+                launch {
+                    viewModel.isTracking.collectLatest {
+                        refreshTrackCandidatesAndPlotAsync(selectedTrackIdForPlot)
+                    }
                 }
             }
         }
@@ -178,7 +194,8 @@ class TimePlotActivity : AppCompatActivity() {
                                 points = request.points,
                                 scaleSeconds = request.scaleSeconds,
                                 coeff = request.coeff,
-                                visibleRange = request.visibleRange
+                                visibleRange = request.visibleRange,
+                                keepEndVisible = request.keepEndVisible
                             )
                         } else {
                             calculateSlidingWindowPlot(request.points, request.scaleSeconds, request.coeff, request.trackTitle)
@@ -205,8 +222,13 @@ class TimePlotActivity : AppCompatActivity() {
                     low = result.low,
                     high = result.high,
                     cpsToUSvh = coeff,
+                    totalTrackDurationSeconds = result.totalTrackDurationSeconds,
                     recalculateVerticalAxis = recalculateVerticalAxis
                 )
+                // Perform the scroll exactly AFTER the view has the new data and scale
+                if (result.keepEndVisible) {
+                    binding.timePlotView.scrollToEnd()
+                }
                 showPlotMessage(if (relativeSeconds.isEmpty()) R.string.time_plot_no_track_data else null)
             }
             is PlotResult.SlidingWindow -> {
@@ -427,15 +449,18 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun updateCurrentPoints(points: List<TrackPoint>, trackId: String?) {
+        val trackChanged = currentPointsTrackIdForPlot != trackId
+
         currentPoints = points
         currentPointsTrackIdForPlot = trackId
         estimatorCache = null
         slidingWindowCache = null
         rebuildPointIndex()
 
-        // Clear the view's point selection immediately to prevent glitches on the old plot.
-        // The correct point will be restored in applyPlotResult() once the new plot is drawn.
-        binding.timePlotView.setSelectedTimeSeconds(null)
+        // Only clear the view's point selection if we loaded a completely different track
+        if (trackChanged) {
+            binding.timePlotView.setSelectedTimeSeconds(null)
+        }
     }
 
     private fun rebuildPointIndex() {
@@ -742,11 +767,9 @@ class TimePlotActivity : AppCompatActivity() {
             visibleRange = visibleRange,
             trackTitle = binding.trackNameField.text?.toString().orEmpty(),
             recalculateVerticalAxis = recalculateVerticalAxis,
+            keepEndVisible = shouldKeepEndVisible,
             generation = generation
         )
-        if (shouldKeepEndVisible) {
-            binding.timePlotView.scrollToEnd()
-        }
         startOrStopLiveKdeRefresh()
     }
 
@@ -756,7 +779,9 @@ class TimePlotActivity : AppCompatActivity() {
             val firstTimestamp: Double,
             val mean: DoubleArray,
             val low: DoubleArray,
-            val high: DoubleArray
+            val high: DoubleArray,
+            val totalTrackDurationSeconds: Double,
+            val keepEndVisible: Boolean
         ) : PlotResult()
         data class SlidingWindow(val points: List<TrackPoint>) : PlotResult()
     }
@@ -766,7 +791,8 @@ class TimePlotActivity : AppCompatActivity() {
         points: List<TrackPoint>,
         scaleSeconds: Double,
         coeff: Double,
-        visibleRange: TimePlotView.VisibleRange
+        visibleRange: TimePlotView.VisibleRange,
+        keepEndVisible: Boolean
     ): PlotResult.Kde? {
         val minScale = scaleSeconds.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble())
 
@@ -775,11 +801,23 @@ class TimePlotActivity : AppCompatActivity() {
             if (liveBounds.second < liveBounds.first) return null
             yield() // Check for cancellation before calling service
             val nowSeconds = kotlin.math.max(liveBounds.second, System.currentTimeMillis() / 1000.0)
-            val rangeStart = (liveBounds.first + visibleRange.startSeconds).coerceIn(liveBounds.first, nowSeconds)
-            val rangeEnd = (liveBounds.first + visibleRange.endSeconds).coerceIn(rangeStart, nowSeconds)
+//            val rangeStart = (liveBounds.first + visibleRange.startSeconds).coerceIn(liveBounds.first, nowSeconds)
+//            val rangeEnd = (liveBounds.first + visibleRange.endSeconds).coerceIn(rangeStart, nowSeconds)
+
+            val (rangeStart, rangeEnd) = if (keepEndVisible) {
+                val start = (nowSeconds - visibleRange.durationSeconds)
+                    .coerceAtLeast(liveBounds.first)
+                start to nowSeconds
+            } else {
+                val s = (liveBounds.first + visibleRange.startSeconds).coerceIn(liveBounds.first, nowSeconds)
+                val e = (liveBounds.first + visibleRange.endSeconds).coerceIn(s, nowSeconds)
+                s to e
+            }
+
             val ts2 = buildTs2(rangeStart, rangeEnd)
             val ci = TrackingService.activeKdeConfidenceIntervals(ts2, minScale, tEndOverride = nowSeconds) ?: return null
-            return PlotResult.Kde(ts2, liveBounds.first, ci.first, ci.second, ci.third)
+            val totalDuration = nowSeconds - liveBounds.first
+            return PlotResult.Kde(ts2, liveBounds.first, ci.first, ci.second, ci.third, totalDuration, keepEndVisible)
         }
 
         val cache = estimatorCache
@@ -815,7 +853,7 @@ class TimePlotActivity : AppCompatActivity() {
         val ts2 = buildTs2(rangeStart, rangeEnd)
         yield()
         val ci = estimator.getConfidenceIntervals(ts2, minScale, null)
-        return PlotResult.Kde(ts2, firstTimestamp, ci.first, ci.second, ci.third)
+        return PlotResult.Kde(ts2, firstTimestamp, ci.first, ci.second, ci.third, totalDuration, keepEndVisible)
     }
 
     private fun buildTs2(firstTimestamp: Double, lastTimestamp: Double): DoubleArray {
