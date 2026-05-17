@@ -9,7 +9,6 @@ import android.view.View
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
-import android.view.WindowManager
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
@@ -59,7 +58,6 @@ class MapActivity : AppCompatActivity() {
     private var heatmapRefreshPendingFromScroll = false
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
     private var latestHighlightedTrackPoint: GeigerGpxApp.HighlightedTrackPoint? = null
-    private var keepScreenOnEnabled: Boolean = false
 
     private val KDE_SLIDER_ENABLED = false
 
@@ -210,7 +208,6 @@ class MapActivity : AppCompatActivity() {
     }
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        refreshKeepScreenOnMenuItem(menu.findItem(R.id.action_keep_screen_on))
         val toggleItem = menu.findItem(R.id.action_toggle_heatmap)
         val modeItem = menu.findItem(R.id.action_toggle_plot_mode)
 
@@ -230,12 +227,6 @@ class MapActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
-            R.id.action_keep_screen_on -> {
-                keepScreenOnEnabled = !keepScreenOnEnabled
-                applyKeepScreenOnFlag()
-                refreshKeepScreenOnMenuItem(item)
-                true
-            }
             R.id.action_auto_zoom -> {
                 val moved = trackMapRenderer.autoZoomToSelection(animate = true)
                 if (moved) {
@@ -281,26 +272,6 @@ class MapActivity : AppCompatActivity() {
                 true
             }
             else -> super.onOptionsItemSelected(item)
-        }
-    }
-
-    private fun refreshKeepScreenOnMenuItem(item: MenuItem?) {
-        item ?: return
-        val title = if (keepScreenOnEnabled) "Screen stay awake: ON" else "Screen stay awake: OFF"
-        val iconRes = if (keepScreenOnEnabled) {
-            R.drawable.baseline_lock_24
-        } else {
-            R.drawable.baseline_lock_open_24
-        }
-        item.title = title
-        item.setIcon(iconRes)
-    }
-
-    private fun applyKeepScreenOnFlag() {
-        if (keepScreenOnEnabled) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
@@ -355,7 +326,6 @@ class MapActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyKeepScreenOnFlag()
         syncBottomNavigationSelection()
         binding.mapView.onResume()
         rememberedViewportState?.let { trackMapRenderer.restoreViewport(it) }
@@ -363,7 +333,6 @@ class MapActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (hasVisibleMapContent) {
             rememberedViewportState = trackMapRenderer.currentViewportState()
         }
