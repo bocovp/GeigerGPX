@@ -333,7 +333,6 @@ class TimePlotView @JvmOverloads constructor(
         canvas.drawLine(plotRight, plotTop, plotRight, plotBottom, axisPaint) //Right
     }
 
-
     data class VisibleRange(
         val startSeconds: Double,
         val endSeconds: Double,
@@ -449,6 +448,7 @@ class TimePlotView @JvmOverloads constructor(
         val segment = plotSegments.getOrNull(segmentIdx)?.takeIf { selectedSeconds <= it.endSeconds } ?: return null
         return toY(segment.value, plotBottom, plotHeight)
     }
+
     private fun drawLastKernelPointMarker(
         canvas: Canvas,
         plotLeft: Float,
@@ -475,7 +475,6 @@ class TimePlotView @JvmOverloads constructor(
         val gap = 6f * density
         canvas.drawText(label, x - gap - textPaint.measureText(label), y - 3f * density, textPaint)
     }
-
 
     private fun colorForLiveDose(value: Double): Int {
         return DoseColorScale.colorForDose(

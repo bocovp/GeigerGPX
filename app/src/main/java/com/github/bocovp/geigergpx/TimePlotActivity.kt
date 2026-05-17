@@ -76,6 +76,7 @@ class TimePlotActivity : AppCompatActivity() {
     @Volatile private var slidingWindowCache: SlidingWindowCache? = null
 
     private var isSliderBeingDragged = false
+    private var userSelectedTimeSeconds: Double? = null
 
     private val failedTrackIdsForPlot = mutableSetOf<String>()
     private var selectedTrackIdForPlot: String? = null
@@ -372,8 +373,18 @@ class TimePlotActivity : AppCompatActivity() {
 
         // Only show the point if the rendered plot matches the highlighted point's track
         if (targetId == currentId && currentPointsTrackIdForPlot == currentId && currentPoints.isNotEmpty()) {
-            val elapsed = elapsedSecondsForHighlight(highlighted)
-            binding.timePlotView.setSelectedTimeSeconds(elapsed)
+            val pointElapsed = elapsedSecondsForHighlight(highlighted)
+
+            // Prevent aggressive snapping to the raw track point by preserving the exact continuous
+            // time the user touched, provided it still maps to the currently highlighted point index.
+            val userTime = userSelectedTimeSeconds
+            val timeToDisplay = if (userTime != null && nearestIndexForElapsedSeconds(userTime) == (highlighted.pointIndex - 1)) {
+                userTime
+            } else {
+                pointElapsed
+            }
+
+            binding.timePlotView.setSelectedTimeSeconds(timeToDisplay)
         } else {
             binding.timePlotView.setSelectedTimeSeconds(null)
         }
@@ -381,6 +392,8 @@ class TimePlotActivity : AppCompatActivity() {
     }
     private fun setupPointSelectionLinking() {
         binding.timePlotView.onPointSelectionChanged = { selectedSeconds ->
+            userSelectedTimeSeconds = selectedSeconds
+
             val selected = nearestPointForElapsedSeconds(selectedSeconds)
             if (selected == null) {
                 appState.setHighlightedTrackPoint(null)
