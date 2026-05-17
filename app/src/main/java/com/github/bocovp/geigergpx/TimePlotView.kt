@@ -11,6 +11,9 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import androidx.core.graphics.ColorUtils
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
 
@@ -70,6 +73,10 @@ class TimePlotView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeWidth = 1.5f * density // Adjust this multiplier for a thicker/thinner outline
     }
+    private val liveMarkerFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    private val liveMarkerLabelFormat = DecimalFormat("0.000", DecimalFormatSymbols(Locale.US))
 
     private val leftPaddingPx = 35f * density
     private val rightPaddingPx = 12f * density
@@ -369,9 +376,7 @@ class TimePlotView @JvmOverloads constructor(
     ) {
         val selected = selectedTimeSeconds ?: return
         if (trackDurationSeconds <= 0.0) return
-        val visibleDuration = trackDurationSeconds / zoomX
-        val start = (trackDurationSeconds - visibleDuration) * panFraction
-        val end = start + visibleDuration
+        val (start, end, visibleDuration) = visibleRangeSeconds()
         if (selected !in start..end) return
 
         val x = plotLeft + (((selected - start) / visibleDuration).toFloat() * plotWidth)
@@ -419,32 +424,20 @@ class TimePlotView @JvmOverloads constructor(
     ) {
         if (kernelSeries.isEmpty() || trackDurationSeconds <= 0.0) return
         val marker = kernelSeries.last()
-        val visibleDuration = trackDurationSeconds / zoomX
-        val start = (trackDurationSeconds - visibleDuration) * panFraction
-        val end = start + visibleDuration
+        val (start, end, visibleDuration) = visibleRangeSeconds()
         if (marker.t !in start..end) return
 
         val x = plotLeft + (((marker.t - start) / visibleDuration).toFloat() * plotWidth)
         val y = toY(marker.mean, plotBottom, plotHeight)
         val radius = 5f * density
 
-        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = colorForLiveDose(marker.mean)
-        }
-        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = axisPaint.strokeWidth
-            color = axisPaint.color
-        }
+        liveMarkerFillPaint.color = colorForLiveDose(marker.mean)
+        canvas.drawCircle(x, y, radius, liveMarkerFillPaint)
+        canvas.drawCircle(x, y, radius, axisPaint)
 
-        canvas.drawCircle(x, y, radius, fillPaint)
-        canvas.drawCircle(x, y, radius, borderPaint)
-
-        val label = String.format(java.util.Locale.US, "%.3f", marker.mean)
+        val label = liveMarkerLabelFormat.format(marker.mean)
         val gap = 6f * density
         canvas.drawText(label, x - gap - textPaint.measureText(label), y - 3f * density, textPaint)
-        if (longPressSelecting) canvas.drawLine(x, plotTop, x, plotBottom, axisPaint)
     }
 
     private fun resolveTextPrimaryColor(): Int {
