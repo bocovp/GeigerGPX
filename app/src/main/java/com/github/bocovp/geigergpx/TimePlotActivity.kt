@@ -6,6 +6,7 @@ import android.widget.EditText
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -85,6 +86,7 @@ class TimePlotActivity : AppCompatActivity() {
     private var pointMidElapsedSeconds: DoubleArray = DoubleArray(0)
     private var lastAddPoiVisible: Boolean = false
     private var shouldApplyInitialLiveWindow = false
+    private var keepScreenOnEnabled: Boolean = false
 
     // Conflation Strategy Properties
     private val renderRequestFlow = MutableStateFlow<RenderRequest?>(null)
@@ -269,15 +271,23 @@ class TimePlotActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         syncBottomNavigationSelection()
+        applyKeepScreenOnFlag()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.time_plot_toolbar_menu, menu)
+        refreshKeepScreenOnMenuItem(menu.findItem(R.id.action_keep_screen_on))
         updateModeUi(menu.findItem(R.id.action_toggle_plot_mode))
         return true
     }
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        refreshKeepScreenOnMenuItem(menu.findItem(R.id.action_keep_screen_on))
         updateModeUi(menu.findItem(R.id.action_toggle_plot_mode))
         val isVisible = shouldShowAddPoiAction()
         menu.findItem(R.id.action_add_poi)?.isVisible = isVisible
@@ -299,6 +309,12 @@ class TimePlotActivity : AppCompatActivity() {
                 }
                 updatePlot(recalculateVerticalAxis = true)
                 invalidateOptionsMenu()
+                true
+            }
+            R.id.action_keep_screen_on -> {
+                keepScreenOnEnabled = !keepScreenOnEnabled
+                applyKeepScreenOnFlag()
+                refreshKeepScreenOnMenuItem(item)
                 true
             }
             R.id.action_add_poi -> {
@@ -397,6 +413,22 @@ class TimePlotActivity : AppCompatActivity() {
                         syncPointSelection()
                     }
             }
+        }
+    }
+
+    private fun refreshKeepScreenOnMenuItem(item: MenuItem?) {
+        item ?: return
+        val title = if (keepScreenOnEnabled) "Screen stay awake: ON" else "Screen stay awake: OFF"
+        val iconRes = if (keepScreenOnEnabled) R.drawable.baseline_lock_24 else R.drawable.baseline_lock_open_24
+        item.title = title
+        item.setIcon(iconRes)
+    }
+
+    private fun applyKeepScreenOnFlag() {
+        if (keepScreenOnEnabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
