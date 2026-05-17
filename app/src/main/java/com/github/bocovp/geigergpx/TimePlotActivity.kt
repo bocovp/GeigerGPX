@@ -239,12 +239,19 @@ class TimePlotActivity : AppCompatActivity() {
                 showPlotMessage(if (relativeSeconds.isEmpty()) R.string.time_plot_no_track_data else null)
             }
             is PlotResult.SlidingWindow -> {
+                val wasViewingEnd = binding.timePlotView.isViewingEnd()
                 binding.timePlotView.setPoints(
                     points = result.points,
                     cpsToUSvh = coeff,
                     recalculateVerticalAxis = recalculateVerticalAxis,
                     isLiveUpdate = isCurrentTrack
                 )
+                if (shouldApplyInitialLiveWindow && result.points.isNotEmpty()) {
+                    binding.timePlotView.setInitialWindowSeconds(INITIAL_LIVE_WINDOW_SECONDS)
+                    shouldApplyInitialLiveWindow = false
+                } else if (isCurrentTrack && wasViewingEnd) {
+                    binding.timePlotView.scrollToEnd()
+                }
                 showPlotMessage(if (result.points.isEmpty()) R.string.time_plot_no_track_data else null)
             }
             null -> {
