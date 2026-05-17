@@ -228,7 +228,7 @@ class TimePlotActivity : AppCompatActivity() {
                     isLiveUpdate = true
                 )
                 if (shouldApplyInitialLiveWindow && result.totalTrackDurationSeconds > 0.0) {
-                    binding.timePlotView.setInitialWindowSeconds(120.0)
+                    binding.timePlotView.setInitialWindowSeconds(INITIAL_LIVE_WINDOW_SECONDS)
                     shouldApplyInitialLiveWindow = false
                 } else if (result.keepEndVisible) {
                     binding.timePlotView.scrollToEnd()
@@ -918,6 +918,7 @@ class TimePlotActivity : AppCompatActivity() {
         private const val SECONDS_PER_MINUTE = 60f
         private const val KDE_PLOT_SAMPLE_COUNT = 240
         private const val LIVE_KDE_UPDATE_INTERVAL_MS = 200L
+        private const val INITIAL_LIVE_WINDOW_SECONDS = 120.0
         private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
 
         fun rememberTrackSelection(context: android.content.Context, trackId: String) {

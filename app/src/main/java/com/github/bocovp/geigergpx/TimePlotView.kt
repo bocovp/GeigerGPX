@@ -440,6 +440,15 @@ class TimePlotView @JvmOverloads constructor(
         canvas.drawText(label, x - gap - textPaint.measureText(label), y - 3f * density, textPaint)
     }
 
+
+    private fun colorForLiveDose(value: Double): Int {
+        return DoseColorScale.colorForDose(
+            value = value.coerceAtLeast(0.0),
+            minDose = 0.0,
+            maxDose = 0.3
+        )
+    }
+
     private fun resolveTextPrimaryColor(): Int {
         val typedArray = context.obtainStyledAttributes(intArrayOf(android.R.attr.textColorPrimary))
         return try {
