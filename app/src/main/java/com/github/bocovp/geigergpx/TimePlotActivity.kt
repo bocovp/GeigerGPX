@@ -205,15 +205,17 @@ class TimePlotActivity : AppCompatActivity() {
 
                     // Apply the result. We don't check generations here because "laggy" 
                     // updates are better than no updates during rapid movement.
-                    applyPlotResult(result, request.coeff, request.recalculateVerticalAxis)
+                    applyPlotResult(result, request)
                 }
             }
         }
     }
 
-    private fun applyPlotResult(result: PlotResult?, coeff: Double, recalculateVerticalAxis: Boolean) {
-        val isCurrentTrack = selectedTrackIdForPlot.isNullOrBlank() ||
-                selectedTrackIdForPlot == TrackCatalog.currentTrackId()
+    private fun applyPlotResult(result: PlotResult?, request: RenderRequest) {
+        val isCurrentTrack = request.isCurrentTrack
+        val plotMode = request.mode
+        val coeff = request.coeff
+        val recalculateVerticalAxis = request.recalculateVerticalAxis
         binding.timePlotView.setShowLiveMarker(isCurrentTrack && plotMode == PlotMode.KERNEL_ESTIMATOR)
         when (result) {
             is PlotResult.Kde -> {
