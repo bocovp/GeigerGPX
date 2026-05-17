@@ -87,6 +87,7 @@ class TimePlotView @JvmOverloads constructor(
     private var maxDoseValue = 1.0
     private var yAxisUnit = "μSv/h"
     private var xAxisUnit = "min"
+    private var showLiveMarker = false
     private var verticalTickStep = 0.2
     private var verticalTickCount = 5
     private var verticalAxisMaxValue = 1.0
@@ -223,7 +224,12 @@ class TimePlotView @JvmOverloads constructor(
             return
         }
 
+        val previousDuration = trackDurationSeconds
+        val previousVisibleDuration = if (previousDuration > 0.0) previousDuration / zoomX else 0.0
         trackDurationSeconds = totalTrackDurationSeconds.coerceAtLeast(0.0)
+        if (isLiveUpdate && previousVisibleDuration > 0.0 && trackDurationSeconds > 0.0) {
+            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, 30f)
+        }
 
         updateXAxisUnit()
         maxDoseValue = kernelSeries.maxOfOrNull { maxOf(it.mean, it.high) }?.coerceAtLeast(0.1) ?: 1.0
@@ -339,6 +345,12 @@ class TimePlotView @JvmOverloads constructor(
         invalidate()
     }
 
+    fun setShowLiveMarker(show: Boolean) {
+        if (showLiveMarker == show) return
+        showLiveMarker = show
+        invalidate()
+    }
+
     fun setSelectedTimeSeconds(seconds: Double?) {
         if (selectedTimeSeconds == seconds) return
         selectedTimeSeconds = seconds
@@ -422,12 +434,13 @@ class TimePlotView @JvmOverloads constructor(
         plotWidth: Float,
         plotHeight: Float
     ) {
-        if (kernelSeries.isEmpty() || trackDurationSeconds <= 0.0) return
+        if (!showLiveMarker || kernelSeries.isEmpty() || trackDurationSeconds <= 0.0) return
         val marker = kernelSeries.last()
         val (start, end, visibleDuration) = visibleRangeSeconds()
-        if (marker.t !in start..end) return
+        val markerTime = trackDurationSeconds
+        if (markerTime !in start..end) return
 
-        val x = plotLeft + (((marker.t - start) / visibleDuration).toFloat() * plotWidth)
+        val x = plotLeft + (((markerTime - start) / visibleDuration).toFloat() * plotWidth)
         val y = toY(marker.mean, plotBottom, plotHeight)
         val radius = 5f * density
 

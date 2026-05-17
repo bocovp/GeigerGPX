@@ -212,6 +212,9 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun applyPlotResult(result: PlotResult?, coeff: Double, recalculateVerticalAxis: Boolean) {
+        val isCurrentTrack = selectedTrackIdForPlot.isNullOrBlank() ||
+                selectedTrackIdForPlot == TrackCatalog.currentTrackId()
+        binding.timePlotView.setShowLiveMarker(isCurrentTrack && plotMode == PlotMode.KERNEL_ESTIMATOR)
         when (result) {
             is PlotResult.Kde -> {
                 val relativeSeconds = DoubleArray(result.ts2.size) { idx ->
