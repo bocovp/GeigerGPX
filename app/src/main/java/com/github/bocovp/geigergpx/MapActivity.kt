@@ -206,7 +206,6 @@ class MapActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.map_toolbar_menu, menu)
-        refreshKeepScreenOnMenuItem(menu.findItem(R.id.action_keep_screen_on))
         return true
     }
 
