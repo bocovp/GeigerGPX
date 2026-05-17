@@ -21,6 +21,10 @@ class TimePlotView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
+    companion object {
+        private const val MAX_ZOOM_X = 30f
+    }
+
     private val density = context.resources.displayMetrics.density
 
     private data class PlotSegment(
@@ -87,6 +91,7 @@ class TimePlotView @JvmOverloads constructor(
     private var maxDoseValue = 1.0
     private var yAxisUnit = "μSv/h"
     private var xAxisUnit = "min"
+    private var showLiveMarker = false
     private var verticalTickStep = 0.2
     private var verticalTickCount = 5
     private var verticalAxisMaxValue = 1.0
@@ -100,7 +105,7 @@ class TimePlotView @JvmOverloads constructor(
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
-            zoomX = (zoomX * detector.scaleFactor).coerceIn(1f, 30f)
+            zoomX = (zoomX * detector.scaleFactor).coerceIn(1f, MAX_ZOOM_X)
             clampPan()
             onVisibleRangeChanged?.invoke()
             invalidate()
@@ -176,7 +181,7 @@ class TimePlotView @JvmOverloads constructor(
             elapsedSeconds += seconds
         }
 
-        trackDurationSeconds = elapsedSeconds
+        updateZoomForLiveUpdate(newDuration = elapsedSeconds, isLiveUpdate = isLiveUpdate)
         updateXAxisUnit()
         maxDoseValue = (plotSegments.maxOfOrNull { maxOf(it.value, it.ciHigh) } ?: 1.0).coerceAtLeast(0.1)
         if (recalculateVerticalAxis || (isLiveUpdate && maxDoseValue > verticalAxisMaxValue)) {
@@ -223,7 +228,7 @@ class TimePlotView @JvmOverloads constructor(
             return
         }
 
-        trackDurationSeconds = totalTrackDurationSeconds.coerceAtLeast(0.0)
+        updateZoomForLiveUpdate(newDuration = totalTrackDurationSeconds, isLiveUpdate = isLiveUpdate)
 
         updateXAxisUnit()
         maxDoseValue = kernelSeries.maxOfOrNull { maxOf(it.mean, it.high) }?.coerceAtLeast(0.1) ?: 1.0
@@ -235,10 +240,34 @@ class TimePlotView @JvmOverloads constructor(
         clampPan()
         invalidate()
     }
+    private fun updateZoomForLiveUpdate(newDuration: Double, isLiveUpdate: Boolean) {
+        val previousDuration = trackDurationSeconds
+        val previousVisibleDuration = if (previousDuration > 0.0) previousDuration / zoomX else 0.0
+        val previousStart = if (previousDuration > previousVisibleDuration) {
+            (previousDuration - previousVisibleDuration) * panFraction
+        } else {
+            0.0
+        }
+
+        trackDurationSeconds = newDuration.coerceAtLeast(0.0)
+
+        // Only maintain visible duration if we are already zoomed in (zoomX > 1).
+        // This prevents locking the window to a very small size at the start of a track.
+        if (isLiveUpdate && zoomX > 1f && previousVisibleDuration > 0.0 && trackDurationSeconds > 0.0) {
+            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, MAX_ZOOM_X)
+
+            // Adjust panFraction to keep the visible start time stable, preventing drift.
+            val denom = trackDurationSeconds - (trackDurationSeconds / zoomX)
+            if (denom > 0.0) {
+                panFraction = (previousStart / denom).toFloat().coerceIn(0f, 1f)
+            }
+        }
+    }
+
     fun setInitialWindowSeconds(windowSeconds: Double) {
         if (trackDurationSeconds <= 0.0) return
         val target = windowSeconds.coerceAtLeast(1.0)
-        zoomX = (trackDurationSeconds / target).toFloat().coerceAtLeast(1f)
+        zoomX = (trackDurationSeconds / target).toFloat().coerceIn(1f, MAX_ZOOM_X)
         panFraction = 1f
         clampPan()
         invalidate()
@@ -339,6 +368,12 @@ class TimePlotView @JvmOverloads constructor(
         invalidate()
     }
 
+    fun setShowLiveMarker(show: Boolean) {
+        if (showLiveMarker == show) return
+        showLiveMarker = show
+        invalidate()
+    }
+
     fun setSelectedTimeSeconds(seconds: Double?) {
         if (selectedTimeSeconds == seconds) return
         selectedTimeSeconds = seconds
@@ -422,12 +457,13 @@ class TimePlotView @JvmOverloads constructor(
         plotWidth: Float,
         plotHeight: Float
     ) {
-        if (kernelSeries.isEmpty() || trackDurationSeconds <= 0.0) return
+        if (!showLiveMarker || kernelSeries.isEmpty() || trackDurationSeconds <= 0.0) return
         val marker = kernelSeries.last()
         val (start, end, visibleDuration) = visibleRangeSeconds()
-        if (marker.t !in start..end) return
+        val markerTime = trackDurationSeconds
+        if (markerTime !in start..end) return
 
-        val x = plotLeft + (((marker.t - start) / visibleDuration).toFloat() * plotWidth)
+        val x = plotLeft + (((markerTime - start) / visibleDuration).toFloat() * plotWidth)
         val y = toY(marker.mean, plotBottom, plotHeight)
         val radius = 5f * density
 

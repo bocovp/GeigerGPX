@@ -205,13 +205,18 @@ class TimePlotActivity : AppCompatActivity() {
 
                     // Apply the result. We don't check generations here because "laggy" 
                     // updates are better than no updates during rapid movement.
-                    applyPlotResult(result, request.coeff, request.recalculateVerticalAxis)
+                    applyPlotResult(result, request)
                 }
             }
         }
     }
 
-    private fun applyPlotResult(result: PlotResult?, coeff: Double, recalculateVerticalAxis: Boolean) {
+    private fun applyPlotResult(result: PlotResult?, request: RenderRequest) {
+        val isCurrentTrack = request.isCurrentTrack
+        val plotMode = request.mode
+        val coeff = request.coeff
+        val recalculateVerticalAxis = request.recalculateVerticalAxis
+        binding.timePlotView.setShowLiveMarker(isCurrentTrack && plotMode == PlotMode.KERNEL_ESTIMATOR)
         when (result) {
             is PlotResult.Kde -> {
                 val relativeSeconds = DoubleArray(result.ts2.size) { idx ->
@@ -225,7 +230,7 @@ class TimePlotActivity : AppCompatActivity() {
                     cpsToUSvh = coeff,
                     totalTrackDurationSeconds = result.totalTrackDurationSeconds,
                     recalculateVerticalAxis = recalculateVerticalAxis,
-                    isLiveUpdate = true
+                    isLiveUpdate = isCurrentTrack
                 )
                 if (shouldApplyInitialLiveWindow && result.totalTrackDurationSeconds > 0.0) {
                     binding.timePlotView.setInitialWindowSeconds(INITIAL_LIVE_WINDOW_SECONDS)
@@ -236,15 +241,23 @@ class TimePlotActivity : AppCompatActivity() {
                 showPlotMessage(if (relativeSeconds.isEmpty()) R.string.time_plot_no_track_data else null)
             }
             is PlotResult.SlidingWindow -> {
+                val wasViewingEnd = binding.timePlotView.isViewingEnd()
                 binding.timePlotView.setPoints(
                     points = result.points,
                     cpsToUSvh = coeff,
-                    recalculateVerticalAxis = recalculateVerticalAxis
+                    recalculateVerticalAxis = recalculateVerticalAxis,
+                    isLiveUpdate = isCurrentTrack
                 )
+                if (shouldApplyInitialLiveWindow && result.points.isNotEmpty()) {
+                    binding.timePlotView.setInitialWindowSeconds(INITIAL_LIVE_WINDOW_SECONDS)
+                    shouldApplyInitialLiveWindow = false
+                } else if (isCurrentTrack && wasViewingEnd) {
+                    binding.timePlotView.scrollToEnd()
+                }
                 showPlotMessage(if (result.points.isEmpty()) R.string.time_plot_no_track_data else null)
             }
             null -> {
-                binding.timePlotView.setPoints(emptyList(), coeff, recalculateVerticalAxis)
+                binding.timePlotView.setPoints(emptyList(), coeff, recalculateVerticalAxis, isLiveUpdate = isCurrentTrack)
                 showPlotMessage(R.string.time_plot_no_track_data)
             }
         }
