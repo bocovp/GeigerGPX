@@ -223,7 +223,8 @@ class TimePlotActivity : AppCompatActivity() {
                     high = result.high,
                     cpsToUSvh = coeff,
                     totalTrackDurationSeconds = result.totalTrackDurationSeconds,
-                    recalculateVerticalAxis = recalculateVerticalAxis
+                    recalculateVerticalAxis = recalculateVerticalAxis,
+                    isLiveUpdate = true
                 )
                 // Perform the scroll exactly AFTER the view has the new data and scale
                 if (result.keepEndVisible) {
@@ -460,6 +461,7 @@ class TimePlotActivity : AppCompatActivity() {
         // Only clear the view's point selection if we loaded a completely different track
         if (trackChanged) {
             binding.timePlotView.setSelectedTimeSeconds(null)
+            binding.timePlotView.resetView()
         }
     }
 
@@ -804,9 +806,10 @@ class TimePlotActivity : AppCompatActivity() {
 //            val rangeStart = (liveBounds.first + visibleRange.startSeconds).coerceIn(liveBounds.first, nowSeconds)
 //            val rangeEnd = (liveBounds.first + visibleRange.endSeconds).coerceIn(rangeStart, nowSeconds)
 
-            val (rangeStart, rangeEnd) = if (keepEndVisible) {
-                val start = (nowSeconds - visibleRange.durationSeconds)
-                    .coerceAtLeast(liveBounds.first)
+            val (rangeStart, rangeEnd) = if (visibleRange.durationSeconds <= 0.0) {
+                liveBounds.first to nowSeconds
+            } else if (keepEndVisible) {
+                val start = (nowSeconds - visibleRange.durationSeconds).coerceAtLeast(liveBounds.first)
                 start to nowSeconds
             } else {
                 val s = (liveBounds.first + visibleRange.startSeconds).coerceIn(liveBounds.first, nowSeconds)
@@ -848,8 +851,9 @@ class TimePlotActivity : AppCompatActivity() {
         }
 
         val totalDuration = points.sumOf { it.seconds.coerceAtLeast(0.0) }
-        val rangeStart = visibleRange.startSeconds.coerceIn(0.0, totalDuration)
-        val rangeEnd = visibleRange.endSeconds.coerceIn(rangeStart, totalDuration)
+        val rangeStart = if (visibleRange.durationSeconds <= 0.0) 0.0 else visibleRange.startSeconds.coerceIn(0.0, totalDuration)
+        val rangeEnd = if (visibleRange.durationSeconds <= 0.0) totalDuration else visibleRange.endSeconds.coerceIn(rangeStart, totalDuration)
+
         val ts2 = buildTs2(rangeStart, rangeEnd)
         yield()
         val ci = estimator.getConfidenceIntervals(ts2, minScale, null)

@@ -133,7 +133,8 @@ class TimePlotView @JvmOverloads constructor(
     fun setPoints(
         points: List<TrackPoint>,
         cpsToUSvh: Double,
-        recalculateVerticalAxis: Boolean = true
+        recalculateVerticalAxis: Boolean = true,
+        isLiveUpdate: Boolean = false
     ) {
         kernelSeries = emptyList()
         plotSegments.clear()
@@ -171,7 +172,7 @@ class TimePlotView @JvmOverloads constructor(
         trackDurationSeconds = elapsedSeconds
         updateXAxisUnit()
         maxDoseValue = (plotSegments.maxOfOrNull { maxOf(it.value, it.ciHigh) } ?: 1.0).coerceAtLeast(0.1)
-        if (recalculateVerticalAxis) {
+        if (recalculateVerticalAxis || (isLiveUpdate && maxDoseValue > verticalAxisMaxValue)) {
             verticalTickStep = chooseVerticalTickStep(maxDoseValue)
             verticalTickCount = ceil(maxDoseValue / verticalTickStep).toInt()
             verticalAxisMaxValue = verticalTickStep * verticalTickCount
@@ -187,7 +188,8 @@ class TimePlotView @JvmOverloads constructor(
         high: DoubleArray,
         cpsToUSvh: Double,
         totalTrackDurationSeconds: Double,
-        recalculateVerticalAxis: Boolean = true
+        recalculateVerticalAxis: Boolean = true,
+        isLiveUpdate: Boolean = false
     ) {
         plotSegments.clear()
         yAxisUnit = if (kotlin.math.abs(cpsToUSvh - 1.0) < 1e-9) "cps" else "μSv/h"
@@ -218,7 +220,7 @@ class TimePlotView @JvmOverloads constructor(
 
         updateXAxisUnit()
         maxDoseValue = kernelSeries.maxOfOrNull { maxOf(it.mean, it.high) }?.coerceAtLeast(0.1) ?: 1.0
-        if (recalculateVerticalAxis) {
+        if (recalculateVerticalAxis || (isLiveUpdate && maxDoseValue > verticalAxisMaxValue)) {
             verticalTickStep = chooseVerticalTickStep(maxDoseValue)
             verticalTickCount = ceil(maxDoseValue / verticalTickStep).toInt()
             verticalAxisMaxValue = verticalTickStep * verticalTickCount
@@ -309,6 +311,14 @@ class TimePlotView @JvmOverloads constructor(
 
     fun scrollToEnd() {
         panFraction = 1f
+        clampPan()
+        invalidate()
+    }
+
+    fun resetView() {
+        zoomX = 1f
+        panFraction = 0f
+        trackDurationSeconds = 0.0
         clampPan()
         invalidate()
     }
