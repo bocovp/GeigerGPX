@@ -228,7 +228,7 @@ class TimePlotActivity : AppCompatActivity() {
                     cpsToUSvh = coeff,
                     totalTrackDurationSeconds = result.totalTrackDurationSeconds,
                     recalculateVerticalAxis = recalculateVerticalAxis,
-                    isLiveUpdate = true
+                    isLiveUpdate = isCurrentTrack
                 )
                 if (shouldApplyInitialLiveWindow && result.totalTrackDurationSeconds > 0.0) {
                     binding.timePlotView.setInitialWindowSeconds(INITIAL_LIVE_WINDOW_SECONDS)
@@ -242,12 +242,13 @@ class TimePlotActivity : AppCompatActivity() {
                 binding.timePlotView.setPoints(
                     points = result.points,
                     cpsToUSvh = coeff,
-                    recalculateVerticalAxis = recalculateVerticalAxis
+                    recalculateVerticalAxis = recalculateVerticalAxis,
+                    isLiveUpdate = isCurrentTrack
                 )
                 showPlotMessage(if (result.points.isEmpty()) R.string.time_plot_no_track_data else null)
             }
             null -> {
-                binding.timePlotView.setPoints(emptyList(), coeff, recalculateVerticalAxis)
+                binding.timePlotView.setPoints(emptyList(), coeff, recalculateVerticalAxis, isLiveUpdate = isCurrentTrack)
                 showPlotMessage(R.string.time_plot_no_track_data)
             }
         }
