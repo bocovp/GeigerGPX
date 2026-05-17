@@ -21,6 +21,10 @@ class TimePlotView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
+    companion object {
+        private const val MAX_ZOOM_X = 30f
+    }
+
     private val density = context.resources.displayMetrics.density
 
     private data class PlotSegment(
@@ -101,7 +105,7 @@ class TimePlotView @JvmOverloads constructor(
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
-            zoomX = (zoomX * detector.scaleFactor).coerceIn(1f, 30f)
+            zoomX = (zoomX * detector.scaleFactor).coerceIn(1f, MAX_ZOOM_X)
             clampPan()
             onVisibleRangeChanged?.invoke()
             invalidate()
@@ -177,7 +181,12 @@ class TimePlotView @JvmOverloads constructor(
             elapsedSeconds += seconds
         }
 
+        val previousDuration = trackDurationSeconds
+        val previousVisibleDuration = if (previousDuration > 0.0) previousDuration / zoomX else 0.0
         trackDurationSeconds = elapsedSeconds
+        if (isLiveUpdate && previousVisibleDuration > 0.0 && trackDurationSeconds > 0.0) {
+            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, MAX_ZOOM_X)
+        }
         updateXAxisUnit()
         maxDoseValue = (plotSegments.maxOfOrNull { maxOf(it.value, it.ciHigh) } ?: 1.0).coerceAtLeast(0.1)
         if (recalculateVerticalAxis || (isLiveUpdate && maxDoseValue > verticalAxisMaxValue)) {
@@ -228,7 +237,7 @@ class TimePlotView @JvmOverloads constructor(
         val previousVisibleDuration = if (previousDuration > 0.0) previousDuration / zoomX else 0.0
         trackDurationSeconds = totalTrackDurationSeconds.coerceAtLeast(0.0)
         if (isLiveUpdate && previousVisibleDuration > 0.0 && trackDurationSeconds > 0.0) {
-            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, 30f)
+            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, MAX_ZOOM_X)
         }
 
         updateXAxisUnit()
@@ -244,7 +253,7 @@ class TimePlotView @JvmOverloads constructor(
     fun setInitialWindowSeconds(windowSeconds: Double) {
         if (trackDurationSeconds <= 0.0) return
         val target = windowSeconds.coerceAtLeast(1.0)
-        zoomX = (trackDurationSeconds / target).toFloat().coerceAtLeast(1f)
+        zoomX = (trackDurationSeconds / target).toFloat().coerceIn(1f, MAX_ZOOM_X)
         panFraction = 1f
         clampPan()
         invalidate()
