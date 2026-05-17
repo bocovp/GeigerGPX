@@ -181,12 +181,7 @@ class TimePlotView @JvmOverloads constructor(
             elapsedSeconds += seconds
         }
 
-        val previousDuration = trackDurationSeconds
-        val previousVisibleDuration = if (previousDuration > 0.0) previousDuration / zoomX else 0.0
-        trackDurationSeconds = elapsedSeconds
-        if (isLiveUpdate && previousVisibleDuration > 0.0 && trackDurationSeconds > 0.0) {
-            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, MAX_ZOOM_X)
-        }
+        updateZoomForLiveUpdate(newDuration = elapsedSeconds, isLiveUpdate = isLiveUpdate)
         updateXAxisUnit()
         maxDoseValue = (plotSegments.maxOfOrNull { maxOf(it.value, it.ciHigh) } ?: 1.0).coerceAtLeast(0.1)
         if (recalculateVerticalAxis || (isLiveUpdate && maxDoseValue > verticalAxisMaxValue)) {
@@ -233,12 +228,7 @@ class TimePlotView @JvmOverloads constructor(
             return
         }
 
-        val previousDuration = trackDurationSeconds
-        val previousVisibleDuration = if (previousDuration > 0.0) previousDuration / zoomX else 0.0
-        trackDurationSeconds = totalTrackDurationSeconds.coerceAtLeast(0.0)
-        if (isLiveUpdate && previousVisibleDuration > 0.0 && trackDurationSeconds > 0.0) {
-            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, MAX_ZOOM_X)
-        }
+        updateZoomForLiveUpdate(newDuration = totalTrackDurationSeconds, isLiveUpdate = isLiveUpdate)
 
         updateXAxisUnit()
         maxDoseValue = kernelSeries.maxOfOrNull { maxOf(it.mean, it.high) }?.coerceAtLeast(0.1) ?: 1.0
@@ -250,6 +240,15 @@ class TimePlotView @JvmOverloads constructor(
         clampPan()
         invalidate()
     }
+    private fun updateZoomForLiveUpdate(newDuration: Double, isLiveUpdate: Boolean) {
+        val previousDuration = trackDurationSeconds
+        val previousVisibleDuration = if (previousDuration > 0.0) previousDuration / zoomX else 0.0
+        trackDurationSeconds = newDuration.coerceAtLeast(0.0)
+        if (isLiveUpdate && previousVisibleDuration > 0.0 && trackDurationSeconds > 0.0) {
+            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, MAX_ZOOM_X)
+        }
+    }
+
     fun setInitialWindowSeconds(windowSeconds: Double) {
         if (trackDurationSeconds <= 0.0) return
         val target = windowSeconds.coerceAtLeast(1.0)
