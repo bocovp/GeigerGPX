@@ -84,6 +84,7 @@ class TimePlotActivity : AppCompatActivity() {
     private var plotLoadJob: Job? = null
     private var pointMidElapsedSeconds: DoubleArray = DoubleArray(0)
     private var lastAddPoiVisible: Boolean = false
+    private var shouldApplyInitialLiveWindow = false
 
     // Conflation Strategy Properties
     private val renderRequestFlow = MutableStateFlow<RenderRequest?>(null)
@@ -226,8 +227,10 @@ class TimePlotActivity : AppCompatActivity() {
                     recalculateVerticalAxis = recalculateVerticalAxis,
                     isLiveUpdate = true
                 )
-                // Perform the scroll exactly AFTER the view has the new data and scale
-                if (result.keepEndVisible) {
+                if (shouldApplyInitialLiveWindow && result.totalTrackDurationSeconds > 0.0) {
+                    binding.timePlotView.setInitialWindowSeconds(120.0)
+                    shouldApplyInitialLiveWindow = false
+                } else if (result.keepEndVisible) {
                     binding.timePlotView.scrollToEnd()
                 }
                 showPlotMessage(if (relativeSeconds.isEmpty()) R.string.time_plot_no_track_data else null)
@@ -340,7 +343,7 @@ class TimePlotActivity : AppCompatActivity() {
 
         // Only show the point if the rendered plot matches the highlighted point's track
         if (targetId == currentId && currentPointsTrackIdForPlot == currentId && currentPoints.isNotEmpty()) {
-            val elapsed = elapsedSecondsAtPoint(highlighted.point)
+            val elapsed = elapsedSecondsForHighlight(highlighted)
             binding.timePlotView.setSelectedTimeSeconds(elapsed)
         } else {
             binding.timePlotView.setSelectedTimeSeconds(null)
@@ -394,6 +397,12 @@ class TimePlotActivity : AppCompatActivity() {
         if (currentPoints.isEmpty()) return 0.0
         val idx = nearestIndexForTimeMillis(target.timeMillis)
         return pointMidElapsedSeconds.getOrElse(idx) { 0.0 }
+    }
+
+    private fun elapsedSecondsForHighlight(highlighted: GeigerGpxApp.HighlightedTrackPoint): Double {
+        val idxFromSelection = (highlighted.pointIndex - 1).takeIf { it in currentPoints.indices }
+        if (idxFromSelection != null) return pointMidElapsedSeconds[idxFromSelection]
+        return elapsedSecondsAtPoint(highlighted.point)
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -462,6 +471,7 @@ class TimePlotActivity : AppCompatActivity() {
         if (trackChanged) {
             binding.timePlotView.setSelectedTimeSeconds(null)
             binding.timePlotView.resetView()
+            shouldApplyInitialLiveWindow = trackId == TrackCatalog.currentTrackId()
         }
     }
 

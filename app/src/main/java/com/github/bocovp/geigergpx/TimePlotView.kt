@@ -228,6 +228,14 @@ class TimePlotView @JvmOverloads constructor(
         clampPan()
         invalidate()
     }
+    fun setInitialWindowSeconds(windowSeconds: Double) {
+        if (trackDurationSeconds <= 0.0) return
+        val target = windowSeconds.coerceAtLeast(1.0)
+        zoomX = (trackDurationSeconds / target).toFloat().coerceAtLeast(1f)
+        panFraction = 1f
+        clampPan()
+        invalidate()
+    }
 
     fun setEmptyMessage(message: String) {
         emptyMessage = message
@@ -276,6 +284,7 @@ class TimePlotView @JvmOverloads constructor(
                 drawSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
             }
             drawSelectedPointMarker(canvas, plotLeft, plotTop, plotBottom, plotWidth, plotHeight)
+            drawLastKernelPointMarker(canvas, plotLeft, plotTop, plotBottom, plotWidth, plotHeight)
 
             drawVerticalTicks(canvas, plotLeft, plotTop, plotBottom, plotRight)
             drawHorizontalTicks(canvas, plotLeft, plotBottom, plotTop, plotRight)
@@ -399,6 +408,43 @@ class TimePlotView @JvmOverloads constructor(
         val segmentIdx = if (idx >= 0) idx else -idx - 2
         val segment = plotSegments.getOrNull(segmentIdx)?.takeIf { selectedSeconds <= it.endSeconds } ?: return null
         return toY(segment.value, plotBottom, plotHeight)
+    }
+    private fun drawLastKernelPointMarker(
+        canvas: Canvas,
+        plotLeft: Float,
+        plotTop: Float,
+        plotBottom: Float,
+        plotWidth: Float,
+        plotHeight: Float
+    ) {
+        if (kernelSeries.isEmpty() || trackDurationSeconds <= 0.0) return
+        val marker = kernelSeries.last()
+        val visibleDuration = trackDurationSeconds / zoomX
+        val start = (trackDurationSeconds - visibleDuration) * panFraction
+        val end = start + visibleDuration
+        if (marker.t !in start..end) return
+
+        val x = plotLeft + (((marker.t - start) / visibleDuration).toFloat() * plotWidth)
+        val y = toY(marker.mean, plotBottom, plotHeight)
+        val radius = 5f * density
+
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = colorForLiveDose(marker.mean)
+        }
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = axisPaint.strokeWidth
+            color = axisPaint.color
+        }
+
+        canvas.drawCircle(x, y, radius, fillPaint)
+        canvas.drawCircle(x, y, radius, borderPaint)
+
+        val label = String.format(java.util.Locale.US, "%.3f", marker.mean)
+        val gap = 6f * density
+        canvas.drawText(label, x - gap - textPaint.measureText(label), y - 3f * density, textPaint)
+        if (longPressSelecting) canvas.drawLine(x, plotTop, x, plotBottom, axisPaint)
     }
 
     private fun resolveTextPrimaryColor(): Int {
