@@ -11,6 +11,9 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import androidx.core.graphics.ColorUtils
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
 
@@ -70,6 +73,10 @@ class TimePlotView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeWidth = 1.5f * density // Adjust this multiplier for a thicker/thinner outline
     }
+    private val liveMarkerFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    private val liveMarkerLabelFormat = DecimalFormat("0.000", DecimalFormatSymbols(Locale.US))
 
     private val leftPaddingPx = 35f * density
     private val rightPaddingPx = 12f * density
@@ -228,6 +235,14 @@ class TimePlotView @JvmOverloads constructor(
         clampPan()
         invalidate()
     }
+    fun setInitialWindowSeconds(windowSeconds: Double) {
+        if (trackDurationSeconds <= 0.0) return
+        val target = windowSeconds.coerceAtLeast(1.0)
+        zoomX = (trackDurationSeconds / target).toFloat().coerceAtLeast(1f)
+        panFraction = 1f
+        clampPan()
+        invalidate()
+    }
 
     fun setEmptyMessage(message: String) {
         emptyMessage = message
@@ -276,6 +291,7 @@ class TimePlotView @JvmOverloads constructor(
                 drawSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
             }
             drawSelectedPointMarker(canvas, plotLeft, plotTop, plotBottom, plotWidth, plotHeight)
+            drawLastKernelPointMarker(canvas, plotLeft, plotTop, plotBottom, plotWidth, plotHeight)
 
             drawVerticalTicks(canvas, plotLeft, plotTop, plotBottom, plotRight)
             drawHorizontalTicks(canvas, plotLeft, plotBottom, plotTop, plotRight)
@@ -360,9 +376,7 @@ class TimePlotView @JvmOverloads constructor(
     ) {
         val selected = selectedTimeSeconds ?: return
         if (trackDurationSeconds <= 0.0) return
-        val visibleDuration = trackDurationSeconds / zoomX
-        val start = (trackDurationSeconds - visibleDuration) * panFraction
-        val end = start + visibleDuration
+        val (start, end, visibleDuration) = visibleRangeSeconds()
         if (selected !in start..end) return
 
         val x = plotLeft + (((selected - start) / visibleDuration).toFloat() * plotWidth)
@@ -399,6 +413,40 @@ class TimePlotView @JvmOverloads constructor(
         val segmentIdx = if (idx >= 0) idx else -idx - 2
         val segment = plotSegments.getOrNull(segmentIdx)?.takeIf { selectedSeconds <= it.endSeconds } ?: return null
         return toY(segment.value, plotBottom, plotHeight)
+    }
+    private fun drawLastKernelPointMarker(
+        canvas: Canvas,
+        plotLeft: Float,
+        plotTop: Float,
+        plotBottom: Float,
+        plotWidth: Float,
+        plotHeight: Float
+    ) {
+        if (kernelSeries.isEmpty() || trackDurationSeconds <= 0.0) return
+        val marker = kernelSeries.last()
+        val (start, end, visibleDuration) = visibleRangeSeconds()
+        if (marker.t !in start..end) return
+
+        val x = plotLeft + (((marker.t - start) / visibleDuration).toFloat() * plotWidth)
+        val y = toY(marker.mean, plotBottom, plotHeight)
+        val radius = 5f * density
+
+        liveMarkerFillPaint.color = colorForLiveDose(marker.mean)
+        canvas.drawCircle(x, y, radius, liveMarkerFillPaint)
+        canvas.drawCircle(x, y, radius, axisPaint)
+
+        val label = liveMarkerLabelFormat.format(marker.mean)
+        val gap = 6f * density
+        canvas.drawText(label, x - gap - textPaint.measureText(label), y - 3f * density, textPaint)
+    }
+
+
+    private fun colorForLiveDose(value: Double): Int {
+        return DoseColorScale.colorForDose(
+            value = value.coerceAtLeast(0.0),
+            minDose = 0.0,
+            maxDose = 0.3
+        )
     }
 
     private fun resolveTextPrimaryColor(): Int {
