@@ -243,9 +243,24 @@ class TimePlotView @JvmOverloads constructor(
     private fun updateZoomForLiveUpdate(newDuration: Double, isLiveUpdate: Boolean) {
         val previousDuration = trackDurationSeconds
         val previousVisibleDuration = if (previousDuration > 0.0) previousDuration / zoomX else 0.0
+        val previousStart = if (previousDuration > previousVisibleDuration) {
+            (previousDuration - previousVisibleDuration) * panFraction
+        } else {
+            0.0
+        }
+
         trackDurationSeconds = newDuration.coerceAtLeast(0.0)
-        if (isLiveUpdate && previousVisibleDuration > 0.0 && trackDurationSeconds > 0.0) {
+
+        // Only maintain visible duration if we are already zoomed in (zoomX > 1).
+        // This prevents locking the window to a very small size at the start of a track.
+        if (isLiveUpdate && zoomX > 1f && previousVisibleDuration > 0.0 && trackDurationSeconds > 0.0) {
             zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, MAX_ZOOM_X)
+
+            // Adjust panFraction to keep the visible start time stable, preventing drift.
+            val denom = trackDurationSeconds - (trackDurationSeconds / zoomX)
+            if (denom > 0.0) {
+                panFraction = (previousStart / denom).toFloat().coerceIn(0f, 1f)
+            }
         }
     }
 
