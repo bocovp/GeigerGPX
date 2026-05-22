@@ -91,6 +91,7 @@ class TimePlotView @JvmOverloads constructor(
     private var maxDoseValue = 1.0
     private var yAxisUnit = "μSv/h"
     private var xAxisUnit = "min"
+    private var xAxisTickFormat = XAxisTickFormat.MINUTES
     private var showLiveMarker = false
     private var verticalTickStep = 0.2
     private var verticalTickCount = 5
@@ -625,6 +626,7 @@ class TimePlotView @JvmOverloads constructor(
         val start = (trackDurationSeconds - visibleDuration) * panFraction
         val end = start + visibleDuration
         val stepSeconds = chooseHorizontalTickStepSeconds(visibleDuration)
+        updateXAxisUnit(stepSeconds)
 
         val fm = textPaint.fontMetrics
         val labelMarginPx = 5f * density  // gap between axis line and top of label text
@@ -663,12 +665,26 @@ class TimePlotView @JvmOverloads constructor(
     }
 
     private fun chooseHorizontalTickStepSeconds(durationSeconds: Double): Double {
-        val allowedStepsMinutes = listOf(1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0, 120.0, 300.0, 600.0)
+        val allowedStepsSeconds = listOf(
+            10.0,
+            15.0,
+            30.0,
+            60.0,
+            120.0,
+            300.0,
+            600.0,
+            900.0,
+            1800.0,
+            3600.0,
+            5400.0,
+            7200.0,
+            18000.0,
+            36000.0
+        )
         val targetTickCount = 5.0
-        val desiredStepMinutes = (durationSeconds / 60.0) / targetTickCount
-        val chosenStepMinutes = allowedStepsMinutes.minByOrNull { kotlin.math.abs(it - desiredStepMinutes) }
-            ?: allowedStepsMinutes.first()
-        return chosenStepMinutes * 60.0
+        val desiredStepSeconds = durationSeconds / targetTickCount
+        return allowedStepsSeconds.minByOrNull { kotlin.math.abs(it - desiredStepSeconds) }
+            ?: allowedStepsSeconds.first()
     }
 
     private fun chooseVerticalTickStep(maxValue: Double): Double {
@@ -696,18 +712,62 @@ class TimePlotView @JvmOverloads constructor(
     }
 
     private fun formatTickLabel(seconds: Double): String {
-        val totalMinutes = (seconds / 60.0).toInt()
-        return if (trackDurationSeconds < 3600.0) {
-            "$totalMinutes"
-        } else {
-            val hours = totalMinutes / 60
-            val minutes = totalMinutes % 60
-            String.format("%d:%02d", hours, minutes)
+        val totalSeconds = seconds.toInt()
+        return when (xAxisTickFormat) {
+            XAxisTickFormat.SECONDS -> {
+                "${totalSeconds % 60}"
+            }
+            XAxisTickFormat.MINUTES_SECONDS -> {
+                val minutes = totalSeconds / 60
+                val sec = totalSeconds % 60
+                String.format("%d:%02d", minutes, sec)
+            }
+            XAxisTickFormat.HOURS_MINUTES_SECONDS -> {
+                val hours = totalSeconds / 3600
+                val minutes = (totalSeconds % 3600) / 60
+                val sec = totalSeconds % 60
+                String.format("%d:%02d:%02d", hours, minutes, sec)
+            }
+            XAxisTickFormat.MINUTES -> {
+                val totalMinutes = totalSeconds / 60
+                "$totalMinutes"
+            }
+            XAxisTickFormat.HOURS_MINUTES -> {
+                val totalMinutes = totalSeconds / 60
+                val hours = totalMinutes / 60
+                val minutes = totalMinutes % 60
+                String.format("%d:%02d", hours, minutes)
+            }
         }
     }
 
-    private fun updateXAxisUnit() {
-        xAxisUnit = if (trackDurationSeconds < 3600.0) "min" else "h:mm"
+    private fun updateXAxisUnit(stepSeconds: Double = 60.0) {
+        val useSecondLevelTicks = stepSeconds < 60.0
+        xAxisTickFormat = if (useSecondLevelTicks) {
+            when {
+                trackDurationSeconds < 60.0 -> XAxisTickFormat.SECONDS
+                trackDurationSeconds < 3600.0 -> XAxisTickFormat.MINUTES_SECONDS
+                else -> XAxisTickFormat.HOURS_MINUTES_SECONDS
+            }
+        } else {
+            if (trackDurationSeconds < 3600.0) XAxisTickFormat.MINUTES else XAxisTickFormat.HOURS_MINUTES
+        }
+
+        xAxisUnit = when (xAxisTickFormat) {
+            XAxisTickFormat.SECONDS -> "sec"
+            XAxisTickFormat.MINUTES_SECONDS -> "m:ss"
+            XAxisTickFormat.HOURS_MINUTES_SECONDS -> "h:mm:ss"
+            XAxisTickFormat.MINUTES -> "min"
+            XAxisTickFormat.HOURS_MINUTES -> "h:mm"
+        }
+    }
+
+    private enum class XAxisTickFormat {
+        SECONDS,
+        MINUTES_SECONDS,
+        HOURS_MINUTES_SECONDS,
+        MINUTES,
+        HOURS_MINUTES
     }
 
     private fun toY(value: Double, bottom: Float, height: Float): Float {
