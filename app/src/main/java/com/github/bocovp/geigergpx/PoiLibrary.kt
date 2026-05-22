@@ -1,6 +1,7 @@
 package com.github.bocovp.geigergpx
 
 import android.content.Context
+import androidx.core.content.edit
 
 private const val POI_FILE_NAME = "POI.gpx"
 private const val POI_BACKUP_FILE_NAME = "POI-Backup.gpx"
@@ -86,6 +87,18 @@ object PoiLibrary {
                 seconds = seconds,
                 description = description.ifBlank { "POI" }
             )
+        }
+    }
+
+
+
+    fun selectPoi(context: Context, poiId: String) {
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+        val selected = prefs.getStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, emptySet())?.toMutableSet() ?: mutableSetOf()
+        selected.add(poiId)
+        prefs.edit {
+            putBoolean(PoiActivity.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
+            putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, selected)
         }
     }
 
