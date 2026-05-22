@@ -152,33 +152,33 @@ class PoiActivity : AppCompatActivity() {
         }
         PreferenceManager.getDefaultSharedPreferences(this)
             .edit {
-                putBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
-                putStringSet(PREF_MAP_VISIBLE_POI_IDS, selected)
+                putBoolean(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
+                putStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, selected)
             }
     }
 
     private fun ensurePoiSelectionInitialized(allPoiIds: Set<String>): Set<String> {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val initialized = prefs.getBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, false)
+        val initialized = prefs.getBoolean(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, false)
         if (!initialized) {
             prefs.edit {
-                putBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
-                putStringSet(PREF_MAP_VISIBLE_POI_IDS, emptySet())
+                putBoolean(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
+                putStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, emptySet())
             }
             return emptySet()
         }
 
-        val selected = prefs.getStringSet(PREF_MAP_VISIBLE_POI_IDS, emptySet())?.toSet() ?: emptySet()
+        val selected = prefs.getStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, emptySet())?.toSet() ?: emptySet()
         val sanitized = selected.intersect(allPoiIds)
         if (sanitized != selected) {
-            prefs.edit { putStringSet(PREF_MAP_VISIBLE_POI_IDS, sanitized)}
+            prefs.edit { putStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, sanitized)}
         }
         return sanitized
     }
 
     private fun selectedPoiIds(): Set<String> {
         return PreferenceManager.getDefaultSharedPreferences(this)
-            .getStringSet(PREF_MAP_VISIBLE_POI_IDS, emptySet())
+            .getStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, emptySet())
             ?.toSet()
             ?: emptySet()
     }
@@ -271,7 +271,7 @@ class PoiActivity : AppCompatActivity() {
                     val selected = selectedPoiIds().toMutableSet().apply { remove(item.poi.id) }
                     PreferenceManager.getDefaultSharedPreferences(this)
                         .edit {
-                            putStringSet(PREF_MAP_VISIBLE_POI_IDS, selected)
+                            putStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, selected)
                         }
                     refreshPoiList()
                 } else {
@@ -282,8 +282,6 @@ class PoiActivity : AppCompatActivity() {
     }
 
     companion object {
-        const val PREF_MAP_VISIBLE_POI_IDS = "map_visible_poi_ids"
-        const val PREF_MAP_VISIBLE_POI_IDS_INITIALIZED = "map_visible_poi_ids_initialized"
 
         private const val MENU_RENAME = 1
         private const val MENU_SHARE = 2

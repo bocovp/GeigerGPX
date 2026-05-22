@@ -5,6 +5,8 @@ import androidx.core.content.edit
 
 private const val POI_FILE_NAME = "POI.gpx"
 private const val POI_BACKUP_FILE_NAME = "POI-Backup.gpx"
+const val PREF_MAP_VISIBLE_POI_IDS = "map_visible_poi_ids"
+const val PREF_MAP_VISIBLE_POI_IDS_INITIALIZED = "map_visible_poi_ids_initialized"
 
 data class PoiEntry(
     val id: String,
@@ -94,11 +96,11 @@ object PoiLibrary {
 
     fun selectPoi(context: Context, poiId: String) {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
-        val selected = prefs.getStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, emptySet())?.toMutableSet() ?: mutableSetOf()
+        val selected = prefs.getStringSet(PREF_MAP_VISIBLE_POI_IDS, emptySet())?.toMutableSet() ?: mutableSetOf()
         selected.add(poiId)
         prefs.edit {
-            putBoolean(PoiActivity.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
-            putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, selected)
+            putBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
+            putStringSet(PREF_MAP_VISIBLE_POI_IDS, selected)
         }
     }
 
