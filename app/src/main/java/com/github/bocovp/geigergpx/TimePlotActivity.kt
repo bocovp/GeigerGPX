@@ -354,6 +354,9 @@ class TimePlotActivity : AppCompatActivity() {
                             seconds = selected.point.seconds
                         )
                     }
+                    if (success) {
+                        PoiLibrary.selectPoi(applicationContext, buildPoiId(selected.point.timeMillis, selected.point.latitude, selected.point.longitude))
+                    }
                     android.widget.Toast.makeText(this@TimePlotActivity, if (success) "POI saved" else "Unable to save POI", android.widget.Toast.LENGTH_SHORT).show()
                 }
             }

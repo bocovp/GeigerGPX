@@ -1,10 +1,10 @@
 package com.github.bocovp.geigergpx
 
 import android.content.Context
+import androidx.core.content.edit
 
 private const val POI_FILE_NAME = "POI.gpx"
 private const val POI_BACKUP_FILE_NAME = "POI-Backup.gpx"
-
 data class PoiEntry(
     val id: String,
     val timestampMillis: Long,
@@ -21,6 +21,9 @@ fun buildPoiId(timestampMillis: Long, latitude: Double, longitude: Double): Stri
 }
 
 object PoiLibrary {
+    const val PREF_MAP_VISIBLE_POI_IDS = "map_visible_poi_ids"
+    const val PREF_MAP_VISIBLE_POI_IDS_INITIALIZED = "map_visible_poi_ids_initialized"
+
     data class SaveResult(
         val success: Boolean,
         val warning: String? = null,
@@ -87,6 +90,49 @@ object PoiLibrary {
                 description = description.ifBlank { "POI" }
             )
         }
+    }
+
+
+
+
+    fun selectedPoiIds(context: Context): Set<String> {
+        return androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+            .getStringSet(PREF_MAP_VISIBLE_POI_IDS, emptySet())
+            ?.toSet()
+            ?: emptySet()
+    }
+
+    fun ensurePoiSelectionInitialized(context: Context, allPoiIds: Set<String>): Set<String> {
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+        val initialized = prefs.getBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, false)
+        if (!initialized) {
+            prefs.edit {
+                putBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
+                putStringSet(PREF_MAP_VISIBLE_POI_IDS, emptySet())
+            }
+            return emptySet()
+        }
+
+        val selected = selectedPoiIds(context)
+        val sanitized = selected.intersect(allPoiIds)
+        if (sanitized != selected) {
+            prefs.edit { putStringSet(PREF_MAP_VISIBLE_POI_IDS, sanitized) }
+        }
+        return sanitized
+    }
+
+    fun setPoiSelected(context: Context, poiId: String, selected: Boolean) {
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+        val selectedIds = selectedPoiIds(context).toMutableSet()
+        if (selected) selectedIds.add(poiId) else selectedIds.remove(poiId)
+        prefs.edit {
+            putBoolean(PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
+            putStringSet(PREF_MAP_VISIBLE_POI_IDS, selectedIds)
+        }
+    }
+
+    fun selectPoi(context: Context, poiId: String) {
+        setPoiSelected(context, poiId, selected = true)
     }
 
     fun renamePoi(context: Context, poi: PoiEntry, description: String): Boolean {

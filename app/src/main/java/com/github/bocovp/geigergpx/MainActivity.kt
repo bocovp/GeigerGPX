@@ -529,11 +529,12 @@ class MainActivity : AppCompatActivity() {
 
                 lifecycleScope.launch {
                     try {
+                        val timestampMillis = System.currentTimeMillis()
                         val saveResult = withContext(NonCancellable + Dispatchers.IO) {
                             PoiLibrary.addPoiWithResult(
                                 context = applicationContext,
                                 description = description,
-                                timestampMillis = System.currentTimeMillis(),
+                                timestampMillis = timestampMillis,
                                 latitude = latitude,
                                 longitude = longitude,
                                 doseRate = doseRate,
@@ -542,6 +543,7 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
                         if (saveResult.success) {
+                            PoiLibrary.selectPoi(applicationContext, buildPoiId(timestampMillis, latitude, longitude))
                             Toast.makeText(this@MainActivity, "POI saved", Toast.LENGTH_SHORT).show()
                             saveResult.warning?.let { warning ->
                                 Toast.makeText(this@MainActivity, warning, Toast.LENGTH_LONG).show()

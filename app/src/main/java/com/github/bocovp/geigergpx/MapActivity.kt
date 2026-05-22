@@ -539,21 +539,7 @@ class MapActivity : AppCompatActivity() {
     }
 
     private fun ensurePoiSelectionInitialized(allPoiIds: Set<String>): Set<String> {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val initialized = prefs.getBoolean(PoiActivity.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, false)
-        if (!initialized) {
-            prefs.edit {
-                putBoolean(PoiActivity.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
-                putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, emptySet())
-            }
-            return emptySet()
-        }
-        val selected = prefs.getStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, emptySet())?.toSet() ?: emptySet()
-        val sanitized = selected.intersect(allPoiIds)
-        if (sanitized != selected) {
-            prefs.edit { putStringSet(PoiActivity.PREF_MAP_VISIBLE_POI_IDS, sanitized)}
-        }
-        return sanitized
+        return PoiLibrary.ensurePoiSelectionInitialized(this, allPoiIds)
     }
 
     private fun selectedTrackIds(): Set<String> {
