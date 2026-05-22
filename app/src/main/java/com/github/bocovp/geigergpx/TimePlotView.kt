@@ -92,6 +92,22 @@ class TimePlotView @JvmOverloads constructor(
     private var yAxisUnit = "μSv/h"
     private var xAxisUnit = "min"
     private var xAxisTickFormat = XAxisTickFormat.MINUTES
+    private val allowedHorizontalTickStepsSeconds = listOf(
+        10.0,
+        15.0,
+        30.0,
+        60.0,
+        120.0,
+        300.0,
+        600.0,
+        900.0,
+        1800.0,
+        3600.0,
+        5400.0,
+        7200.0,
+        18000.0,
+        36000.0
+    )
     private var showLiveMarker = false
     private var verticalTickStep = 0.2
     private var verticalTickCount = 5
@@ -665,26 +681,10 @@ class TimePlotView @JvmOverloads constructor(
     }
 
     private fun chooseHorizontalTickStepSeconds(durationSeconds: Double): Double {
-        val allowedStepsSeconds = listOf(
-            10.0,
-            15.0,
-            30.0,
-            60.0,
-            120.0,
-            300.0,
-            600.0,
-            900.0,
-            1800.0,
-            3600.0,
-            5400.0,
-            7200.0,
-            18000.0,
-            36000.0
-        )
         val targetTickCount = 5.0
         val desiredStepSeconds = durationSeconds / targetTickCount
-        return allowedStepsSeconds.minByOrNull { kotlin.math.abs(it - desiredStepSeconds) }
-            ?: allowedStepsSeconds.first()
+        return allowedHorizontalTickStepsSeconds.minByOrNull { kotlin.math.abs(it - desiredStepSeconds) }
+            ?: allowedHorizontalTickStepsSeconds.first()
     }
 
     private fun chooseVerticalTickStep(maxValue: Double): Double {
@@ -712,7 +712,7 @@ class TimePlotView @JvmOverloads constructor(
     }
 
     private fun formatTickLabel(seconds: Double): String {
-        val totalSeconds = seconds.toInt()
+        val totalSeconds = kotlin.math.round(seconds).toInt()
         return when (xAxisTickFormat) {
             XAxisTickFormat.SECONDS -> {
                 "${totalSeconds % 60}"
@@ -720,13 +720,13 @@ class TimePlotView @JvmOverloads constructor(
             XAxisTickFormat.MINUTES_SECONDS -> {
                 val minutes = totalSeconds / 60
                 val sec = totalSeconds % 60
-                String.format("%d:%02d", minutes, sec)
+                String.format(java.util.Locale.US, "%d:%02d", minutes, sec)
             }
             XAxisTickFormat.HOURS_MINUTES_SECONDS -> {
                 val hours = totalSeconds / 3600
                 val minutes = (totalSeconds % 3600) / 60
                 val sec = totalSeconds % 60
-                String.format("%d:%02d:%02d", hours, minutes, sec)
+                String.format(java.util.Locale.US, "%d:%02d:%02d", hours, minutes, sec)
             }
             XAxisTickFormat.MINUTES -> {
                 val totalMinutes = totalSeconds / 60
@@ -736,7 +736,7 @@ class TimePlotView @JvmOverloads constructor(
                 val totalMinutes = totalSeconds / 60
                 val hours = totalMinutes / 60
                 val minutes = totalMinutes % 60
-                String.format("%d:%02d", hours, minutes)
+                String.format(java.util.Locale.US, "%d:%02d", hours, minutes)
             }
         }
     }
