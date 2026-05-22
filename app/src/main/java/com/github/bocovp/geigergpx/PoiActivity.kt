@@ -144,43 +144,15 @@ class PoiActivity : AppCompatActivity() {
     }
 
     private fun onPoiToggled(poiId: String, visible: Boolean) {
-        val selected = selectedPoiIds().toMutableSet()
-        if (visible) {
-            selected.add(poiId)
-        } else {
-            selected.remove(poiId)
-        }
-        PreferenceManager.getDefaultSharedPreferences(this)
-            .edit {
-                putBoolean(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
-                putStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, selected)
-            }
+        PoiLibrary.setPoiSelected(this, poiId, visible)
     }
 
     private fun ensurePoiSelectionInitialized(allPoiIds: Set<String>): Set<String> {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val initialized = prefs.getBoolean(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, false)
-        if (!initialized) {
-            prefs.edit {
-                putBoolean(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS_INITIALIZED, true)
-                putStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, emptySet())
-            }
-            return emptySet()
-        }
-
-        val selected = prefs.getStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, emptySet())?.toSet() ?: emptySet()
-        val sanitized = selected.intersect(allPoiIds)
-        if (sanitized != selected) {
-            prefs.edit { putStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, sanitized)}
-        }
-        return sanitized
+        return PoiLibrary.ensurePoiSelectionInitialized(this, allPoiIds)
     }
 
     private fun selectedPoiIds(): Set<String> {
-        return PreferenceManager.getDefaultSharedPreferences(this)
-            .getStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, emptySet())
-            ?.toSet()
-            ?: emptySet()
+        return PoiLibrary.selectedPoiIds(this)
     }
 
     private fun onPoiLongPressed(item: PoiUiItem, anchor: View) {
@@ -268,11 +240,7 @@ class PoiActivity : AppCompatActivity() {
                 val deleted = PoiLibrary.removePoi(this, item.poi)
                 if (deleted) {
                     Toast.makeText(this, "POI removed", Toast.LENGTH_SHORT).show()
-                    val selected = selectedPoiIds().toMutableSet().apply { remove(item.poi.id) }
-                    PreferenceManager.getDefaultSharedPreferences(this)
-                        .edit {
-                            putStringSet(PoiLibrary.PREF_MAP_VISIBLE_POI_IDS, selected)
-                        }
+                    PoiLibrary.setPoiSelected(this, item.poi.id, selected = false)
                     refreshPoiList()
                 } else {
                     Toast.makeText(this, "Unable to remove POI", Toast.LENGTH_SHORT).show()
