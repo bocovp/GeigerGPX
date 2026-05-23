@@ -472,9 +472,12 @@ class TrackMapRenderer(
 
     private fun ensureTrackDosePointOverlayOnTop() {
         val overlay = trackDosePointOverlay ?: return
-        if (mapView.overlays.lastOrNull() !== overlay) {
-            mapView.overlays.remove(overlay)
-            mapView.overlays.add(overlay)
+        val overlays = mapView.overlays
+        val lastTrackIndex = overlays.indexOfLast { it is GradientTrackOverlay }
+        val currentIndex = overlays.indexOf(overlay)
+        if (currentIndex != -1 && lastTrackIndex != -1 && currentIndex < lastTrackIndex) {
+            overlays.removeAt(currentIndex)
+            overlays.add(lastTrackIndex, overlay)
         }
     }
 
