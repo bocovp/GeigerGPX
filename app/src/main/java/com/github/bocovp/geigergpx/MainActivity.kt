@@ -543,7 +543,6 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
                         if (saveResult.success) {
-                            PoiLibrary.selectPoi(applicationContext, buildPoiId(timestampMillis, latitude, longitude))
                             Toast.makeText(this@MainActivity, "POI saved", Toast.LENGTH_SHORT).show()
                             saveResult.warning?.let { warning ->
                                 Toast.makeText(this@MainActivity, warning, Toast.LENGTH_LONG).show()

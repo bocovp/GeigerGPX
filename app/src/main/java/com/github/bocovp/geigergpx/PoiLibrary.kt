@@ -63,9 +63,10 @@ object PoiLibrary {
         longitude: Double,
         doseRate: Double,
         counts: Int,
-        seconds: Double
+        seconds: Double,
+        selected: Boolean = true
     ): Boolean {
-        return addPoiWithResult(context, description, timestampMillis, latitude, longitude, doseRate, counts, seconds).success
+        return addPoiWithResult(context, description, timestampMillis, latitude, longitude, doseRate, counts, seconds, selected).success
     }
 
     fun addPoiWithResult(
@@ -76,11 +77,13 @@ object PoiLibrary {
         longitude: Double,
         doseRate: Double,
         counts: Int,
-        seconds: Double
+        seconds: Double,
+        selected: Boolean = true
     ): SaveResult {
-        return modifyPoiFile(context) { list ->
+        val poiId = buildPoiId(timestampMillis, latitude, longitude)
+        val result = modifyPoiFile(context) { list ->
             list + PoiEntry(
-                id = buildPoiId(timestampMillis, latitude, longitude),
+                id = poiId,
                 timestampMillis = timestampMillis,
                 latitude = latitude,
                 longitude = longitude,
@@ -90,6 +93,10 @@ object PoiLibrary {
                 description = description.ifBlank { "POI" }
             )
         }
+        if (result.success && selected) {
+            selectPoi(context, poiId)
+        }
+        return result
     }
 
 

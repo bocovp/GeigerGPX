@@ -320,6 +320,9 @@ class MapActivity : AppCompatActivity() {
                             )
                         }
                     }
+                    if (success) {
+                        refreshMapTracks(latestActivePoints)
+                    }
                     Toast.makeText(this@MapActivity, if (success) "POI added to Library" else "Unable to add POI", Toast.LENGTH_SHORT).show()
                 }
             }
