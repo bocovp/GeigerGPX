@@ -171,7 +171,7 @@ object GpxReader {
                                 currentTag == "fix" && value.equals("none", ignoreCase = true) -> {
                                     badCoordinates = true
                                 }
-                                currentNamespace == RAD_NAMESPACE && currentTag == "doseRate" -> {
+                                currentNamespace == RAD_NAMESPACE && (currentTag == "doseRate" || currentTag == "doserate") -> {
                                     doseRate = value?.toDoubleOrNull() ?: 0.0
                                 }
                                 currentNamespace == RAD_NAMESPACE && currentTag == "counts" -> {
@@ -183,12 +183,12 @@ object GpxReader {
                             }
                         } else if (insideMetadata && currentNamespace == RAD_NAMESPACE) {
                             when (currentTag) {
-                                "pointCount" -> metadataPointCount = value?.toIntOrNull()
+                                "pointCount", "pointcount" -> metadataPointCount = value?.toIntOrNull()
                                 "distance" -> metadataDistance = value?.toDoubleOrNull()
                                 "counts" -> metadataCounts = value?.toLongOrNull()
                                 "seconds" -> metadataSeconds = value?.toDoubleOrNull()
                                 "dose" -> metadataDose = value?.toDoubleOrNull()
-                                "cpsToUsvh" -> metadataCpsToUsvh = value?.toDoubleOrNull()
+                                "cpsToUsvh", "cc" -> metadataCpsToUsvh = value?.toDoubleOrNull()
                                 "edited" -> metadataEdited = value.equals("true", ignoreCase = true)
                             }
                         }
@@ -328,7 +328,7 @@ object GpxReader {
                         when {
                             currentTag == "time" -> time = parseIsoTime(parser.text)
                             currentTag == "name" -> name = parser.text.orEmpty().trim()
-                            currentNamespace == RAD_NAMESPACE && currentTag == "doseRate" -> {
+                            currentNamespace == RAD_NAMESPACE && (currentTag == "doseRate" || currentTag == "doserate") -> {
                                 doseRate = parser.text?.trim()?.toDoubleOrNull() ?: 0.0
                             }
                             currentNamespace == RAD_NAMESPACE && currentTag == "counts" -> {
