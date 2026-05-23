@@ -185,6 +185,7 @@ class TrackMapRenderer(
                 dosePointOverlay.tracks = tracks
                 dosePointOverlay.minDose = currentMin
                 dosePointOverlay.maxDose = currentMax
+                ensureTrackDosePointOverlayOnTop()
             }
 
             val existingPoiOverlay = poiOverlay
@@ -463,6 +464,14 @@ class TrackMapRenderer(
         overlay.maxDose = maxDose
         overlay.highlightedPoint = highlightedPoint
 
+        if (mapView.overlays.lastOrNull() !== overlay) {
+            mapView.overlays.remove(overlay)
+            mapView.overlays.add(overlay)
+        }
+    }
+
+    private fun ensureTrackDosePointOverlayOnTop() {
+        val overlay = trackDosePointOverlay ?: return
         if (mapView.overlays.lastOrNull() !== overlay) {
             mapView.overlays.remove(overlay)
             mapView.overlays.add(overlay)
