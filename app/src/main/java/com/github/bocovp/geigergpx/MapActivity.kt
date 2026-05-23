@@ -295,47 +295,30 @@ class MapActivity : AppCompatActivity() {
                 val point = selected?.point
                 val current = trackMapRenderer.highlightedPoint()
                 lifecycleScope.launch {
-                    val poiToAdd = if (point != null) {
-                        PoiEntry(
-                            id = buildPoiId(point.timeMillis, point.latitude, point.longitude),
-                            timestampMillis = point.timeMillis,
-                            latitude = point.latitude,
-                            longitude = point.longitude,
-                            doseRate = point.doseRate,
-                            counts = point.counts,
-                            seconds = point.seconds,
-                            description = description
-                        )
-                    } else {
-                        val timestampMillis = System.currentTimeMillis()
-                        val latitude = current?.latitude ?: 0.0
-                        val longitude = current?.longitude ?: 0.0
-                        PoiEntry(
-                            id = buildPoiId(timestampMillis, latitude, longitude),
-                            timestampMillis = timestampMillis,
-                            latitude = latitude,
-                            longitude = longitude,
-                            doseRate = 0.0,
-                            counts = 0,
-                            seconds = 0.0,
-                            description = description.ifBlank { "Unknown" }
-                        )
-                    }
                     val success = withContext(Dispatchers.IO) {
-                        val added = PoiLibrary.addPoi(
-                            context = this@MapActivity,
-                            description = poiToAdd.description,
-                            timestampMillis = poiToAdd.timestampMillis,
-                            latitude = poiToAdd.latitude,
-                            longitude = poiToAdd.longitude,
-                            doseRate = poiToAdd.doseRate,
-                            counts = poiToAdd.counts,
-                            seconds = poiToAdd.seconds
-                        )
-                        if (added) {
-                            PoiLibrary.selectPoi(this@MapActivity, poiToAdd.id)
+                        if (point != null) {
+                            PoiLibrary.addPoi(
+                                context = this@MapActivity,
+                                description = description,
+                                timestampMillis = point.timeMillis,
+                                latitude = point.latitude,
+                                longitude = point.longitude,
+                                doseRate = point.doseRate,
+                                counts = point.counts,
+                                seconds = point.seconds
+                            )
+                        } else {
+                            PoiLibrary.addPoi(
+                                context = this@MapActivity,
+                                description = description.ifBlank { "Unknown" },
+                                timestampMillis = System.currentTimeMillis(),
+                                latitude = current?.latitude ?: 0.0,
+                                longitude = current?.longitude ?: 0.0,
+                                doseRate = 0.0,
+                                counts = 0,
+                                seconds = 0.0
+                            )
                         }
-                        added
                     }
                     if (success) {
                         refreshMapTracks(latestActivePoints)
