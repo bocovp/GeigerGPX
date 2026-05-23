@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.core.content.edit
+import kotlinx.coroutines.delay
 import org.osmdroid.util.GeoPoint
 
 class MapActivity : AppCompatActivity() {
@@ -52,6 +53,7 @@ class MapActivity : AppCompatActivity() {
 
     private var latestActivePoints: List<TrackPoint> = emptyList()
     private var refreshJob: Job? = null
+    private var zoomDebounceJob: Job? = null
     private var hasLoadedMapTracks = false
     private var hasVisibleMapContent = false
     private var ignoreMapMoveEventsUntilMillis: Long = 0L
@@ -112,7 +114,11 @@ class MapActivity : AppCompatActivity() {
 
             override fun onZoom(event: ZoomEvent?): Boolean {
                 onUserMapMoved()
-                refreshMapTracks(latestActivePoints)
+                zoomDebounceJob?.cancel()
+                zoomDebounceJob = lifecycleScope.launch {
+                    delay(300)
+                    refreshMapTracks(latestActivePoints)
+                }
                 return false
             }
         })
