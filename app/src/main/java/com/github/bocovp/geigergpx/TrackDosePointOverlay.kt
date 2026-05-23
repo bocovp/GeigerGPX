@@ -11,6 +11,11 @@ import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
 
 class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
+    private data class VisibleTrackPoint(
+        val trackIndex: Int,
+        val point: TrackPoint
+    )
+
     companion object {
         private const val MIN_ZOOM_FOR_POINTS = 16.0
         private const val MAX_VISIBLE_POINTS = 200
@@ -39,7 +44,7 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
     private val reusablePixelPoint = Point()
     private val reusableGeoPoint = GeoPoint(0.0, 0.0)
     private val circleRadius = 4.352f * density
-    private val visiblePointsBuffer = ArrayList<TrackPoint>(MAX_VISIBLE_POINTS + 1)
+    private val visiblePointsBuffer = ArrayList<VisibleTrackPoint>(MAX_VISIBLE_POINTS + 1)
 
     override fun draw(canvas: Canvas, projection: Projection) {
         if (!enabledQ || tracks.isEmpty()) return
@@ -50,7 +55,8 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
         if (visiblePoints.isEmpty() || visiblePoints.size > MAX_VISIBLE_POINTS) return
         if (!hasSufficientMeanDistance(visiblePoints, projection)) return
 
-        visiblePoints.forEach { point ->
+        visiblePoints.forEach { visiblePoint ->
+            val point = visiblePoint.point
             reusableGeoPoint.setCoords(point.latitude, point.longitude)
             projection.toPixels(reusableGeoPoint, reusablePixelPoint)
             pointFillPaint.color = DoseColorScale.colorForDose(point.doseRate, minDose, maxDose)
@@ -59,40 +65,45 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
         }
     }
 
-    private fun collectVisiblePoints(bounds: BoundingBox): List<TrackPoint> {
+    private fun collectVisiblePoints(bounds: BoundingBox): List<VisibleTrackPoint> {
         visiblePointsBuffer.clear()
-        tracks.forEach { track ->
+        tracks.forEachIndexed { trackIndex, track ->
             track.points.forEach { point ->
                 if (point.badCoordinates) return@forEach
                 if (!bounds.contains(point.latitude, point.longitude)) return@forEach
-                visiblePointsBuffer.add(point)
+                visiblePointsBuffer.add(VisibleTrackPoint(trackIndex, point))
                 if (visiblePointsBuffer.size > MAX_VISIBLE_POINTS) return visiblePointsBuffer
             }
         }
         return visiblePointsBuffer
     }
 
-    private fun hasSufficientMeanDistance(visiblePoints: List<TrackPoint>, projection: Projection): Boolean {
+    private fun hasSufficientMeanDistance(visiblePoints: List<VisibleTrackPoint>, projection: Projection): Boolean {
         if (visiblePoints.size < 2) return true
 
         var distanceSum = 0.0
+        var distanceCount = 0
         var previousX = 0.0
         var previousY = 0.0
 
-        visiblePoints.forEachIndexed { index, point ->
+        visiblePoints.forEachIndexed { index, visiblePoint ->
+            val point = visiblePoint.point
             reusableGeoPoint.setCoords(point.latitude, point.longitude)
             projection.toPixels(reusableGeoPoint, reusablePixelPoint)
             val currentX = reusablePixelPoint.x.toDouble()
             val currentY = reusablePixelPoint.y.toDouble()
 
-            if (index > 0) {
+            if (index > 0 && visiblePoints[index - 1].trackIndex == visiblePoint.trackIndex) {
                 distanceSum += hypot(currentX - previousX, currentY - previousY)
+                distanceCount++
             }
             previousX = currentX
             previousY = currentY
         }
 
-        val meanDistance = distanceSum / (visiblePoints.size - 1)
+        if (distanceCount == 0) return true
+
+        val meanDistance = distanceSum / distanceCount
         return meanDistance > circleRadius * MIN_MEAN_DISTANCE_TO_RADIUS_RATIO
     }
 }
