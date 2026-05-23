@@ -61,6 +61,7 @@ class MapActivity : AppCompatActivity() {
 
     private val KDE_SLIDER_ENABLED = false
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Configuration.getInstance().load(this, PreferenceManager.getDefaultSharedPreferences(this))
@@ -177,6 +178,7 @@ class MapActivity : AppCompatActivity() {
                 }
             }
         }
+
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 appState.highlightedTrackPoint.collectLatest { highlighted ->
@@ -593,4 +595,5 @@ class MapActivity : AppCompatActivity() {
         toggleItem.setIcon(iconRes)
         toggleItem.title = getString(titleRes)
     }
+
 }

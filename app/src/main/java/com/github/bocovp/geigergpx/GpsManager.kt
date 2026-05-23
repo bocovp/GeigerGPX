@@ -84,4 +84,5 @@ class GpsManager(
             GpsSpoofingDetector.Mode.SPOOFING -> TrackWriter.GpsMode.SPOOFING
         }
     }
+
 }

@@ -23,10 +23,12 @@ class GradientTrackOverlay(context: android.content.Context) : Overlay() {
         strokeCap = Paint.Cap.ROUND
         isAntiAlias = true
     }
+
     private val badPointPaint = Paint().apply {
         style = Paint.Style.FILL
         isAntiAlias = true
     }
+
     private val orphanGoodPointPaint = Paint().apply {
         style = Paint.Style.FILL
         isAntiAlias = true

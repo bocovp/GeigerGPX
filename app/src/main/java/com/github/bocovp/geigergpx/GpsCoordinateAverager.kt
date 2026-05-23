@@ -11,6 +11,7 @@ class GpsCoordinateAverager {
     val currentPointCount: Int
         get() = pointCount
 
+
     fun process(location: Location) {
         val accuracy = location.accuracy.takeIf { it > 0f } ?: 1.0f
         val weight = 1.0 / (accuracy * accuracy).coerceAtLeast(1.0f)
@@ -39,4 +40,5 @@ class GpsCoordinateAverager {
         totalWeight = 0.0
         pointCount = 0
     }
+
 }
