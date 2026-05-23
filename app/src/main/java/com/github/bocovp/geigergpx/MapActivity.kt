@@ -322,7 +322,7 @@ class MapActivity : AppCompatActivity() {
                         )
                     }
                     val success = withContext(Dispatchers.IO) {
-                        PoiLibrary.addPoi(
+                        val added = PoiLibrary.addPoi(
                             context = this@MapActivity,
                             description = poiToAdd.description,
                             timestampMillis = poiToAdd.timestampMillis,
@@ -332,9 +332,13 @@ class MapActivity : AppCompatActivity() {
                             counts = poiToAdd.counts,
                             seconds = poiToAdd.seconds
                         )
+                        if (added) {
+                            PoiLibrary.selectPoi(this@MapActivity, poiToAdd.id)
+                        }
+                        added
                     }
                     if (success) {
-                        PoiLibrary.selectPoi(applicationContext, poiToAdd.id)
+                        refreshMapTracks(latestActivePoints)
                     }
                     Toast.makeText(this@MapActivity, if (success) "POI added to Library" else "Unable to add POI", Toast.LENGTH_SHORT).show()
                 }
