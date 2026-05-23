@@ -37,9 +37,7 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
     }
 
     private val reusablePixelPoint = Point()
-    private val reusablePixelPointNext = Point()
     private val reusableGeoPoint = GeoPoint(0.0, 0.0)
-    private val reusableGeoPointNext = GeoPoint(0.0, 0.0)
     private val circleRadius = 4.352f * density
     private val visiblePointsBuffer = ArrayList<TrackPoint>(MAX_VISIBLE_POINTS + 1)
 
@@ -50,7 +48,7 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
         val visibleBounds = projection.boundingBox ?: return
         val visiblePoints = collectVisiblePoints(visibleBounds)
         if (visiblePoints.isEmpty() || visiblePoints.size > MAX_VISIBLE_POINTS) return
-        if (!hasSufficientMeanDistanceBetweenVisibleNeighbourPoints(projection, visibleBounds)) return
+        if (!hasSufficientMeanDistance(visiblePoints, projection)) return
 
         visiblePoints.forEach { point ->
             reusableGeoPoint.setCoords(point.latitude, point.longitude)
@@ -74,39 +72,27 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
         return visiblePointsBuffer
     }
 
-    private fun hasSufficientMeanDistanceBetweenVisibleNeighbourPoints(
-        projection: Projection,
-        bounds: BoundingBox
-    ): Boolean {
+    private fun hasSufficientMeanDistance(visiblePoints: List<TrackPoint>, projection: Projection): Boolean {
+        if (visiblePoints.size < 2) return true
+
         var distanceSum = 0.0
-        var distanceCount = 0
+        var previousX = 0.0
+        var previousY = 0.0
 
-        tracks.forEach { track ->
-            val points = track.points
-            if (points.size < 2) return@forEach
+        visiblePoints.forEachIndexed { index, point ->
+            reusableGeoPoint.setCoords(point.latitude, point.longitude)
+            projection.toPixels(reusableGeoPoint, reusablePixelPoint)
+            val currentX = reusablePixelPoint.x.toDouble()
+            val currentY = reusablePixelPoint.y.toDouble()
 
-            for (i in 0 until points.lastIndex) {
-                val point = points[i]
-                val nextPoint = points[i + 1]
-                if (point.badCoordinates || nextPoint.badCoordinates) continue
-                if (!bounds.contains(point.latitude, point.longitude)) continue
-                if (!bounds.contains(nextPoint.latitude, nextPoint.longitude)) continue
-
-                reusableGeoPoint.setCoords(point.latitude, point.longitude)
-                reusableGeoPointNext.setCoords(nextPoint.latitude, nextPoint.longitude)
-                projection.toPixels(reusableGeoPoint, reusablePixelPoint)
-                projection.toPixels(reusableGeoPointNext, reusablePixelPointNext)
-
-                val dx = (reusablePixelPointNext.x - reusablePixelPoint.x).toDouble()
-                val dy = (reusablePixelPointNext.y - reusablePixelPoint.y).toDouble()
-                distanceSum += hypot(dx, dy)
-                distanceCount++
+            if (index > 0) {
+                distanceSum += hypot(currentX - previousX, currentY - previousY)
             }
+            previousX = currentX
+            previousY = currentY
         }
 
-        if (distanceCount == 0) return false
-
-        val meanDistance = distanceSum / distanceCount
+        val meanDistance = distanceSum / (visiblePoints.size - 1)
         return meanDistance > circleRadius * MIN_MEAN_DISTANCE_TO_RADIUS_RATIO
     }
 }
