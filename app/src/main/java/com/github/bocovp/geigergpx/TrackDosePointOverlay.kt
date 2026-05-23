@@ -84,8 +84,6 @@ class TrackDosePointOverlay(context: android.content.Context) : Overlay() {
     }
 
     private fun hasSufficientMeanDistance(visiblePoints: List<VisibleTrackPoint>, projection: Projection): Boolean {
-        if (visiblePoints.size < 2) return true
-
         var distanceSum = 0.0
         var distanceCount = 0
         var previousX = 0.0
