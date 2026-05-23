@@ -120,14 +120,14 @@ object GpxWriter {
         writer.write("<gpx version=\"1.1\" creator=\"${getCreator()}\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
         writer.write("\t<metadata>\n")
         writer.write("\t\t<extensions>\n")
-        writer.write("\t\t\t<rad:pointCount>${metadata.pointCount}</rad:pointCount>\n")
+        writer.write("\t\t\t<rad:pointcount>${metadata.pointCount}</rad:pointcount>\n")
         writer.write("\t\t\t<rad:distance>${"%.3f".format(Locale.US, metadata.distanceMeters)}</rad:distance>\n")
         writer.write("\t\t\t<rad:counts>${metadata.counts}</rad:counts>\n")
         writer.write("\t\t\t<rad:seconds>${"%.3f".format(Locale.US, metadata.seconds)}</rad:seconds>\n")
         metadata.doseMuSv?.let {
             writer.write("\t\t\t<rad:dose>${"%.3f".format(Locale.US, it)}</rad:dose>\n")
         }
-        writer.write("\t\t\t<rad:cpsToUsvh>${formatCoefficient(metadata.cpsToUsvh)}</rad:cpsToUsvh>\n")
+        writer.write("\t\t\t<rad:cc dimension=\"uSv/h\">${formatCoefficient(metadata.cpsToUsvh)}</rad:cc>\n")
         if (edited) writer.write("\t\t\t<rad:edited>true</rad:edited>\n")
         writer.write("\t\t</extensions>\n")
         writer.write("\t</metadata>\n")
@@ -155,7 +155,7 @@ object GpxWriter {
                 sb.append("\t\t\t\t<ele>").append(doseStr).append("</ele>\n")
             }
             sb.append("\t\t\t\t<extensions>\n")
-            sb.append("\t\t\t\t\t<rad:doseRate>").append(doseStr).append("</rad:doseRate>\n")
+            sb.append("\t\t\t\t\t<rad:doserate>").append(doseStr).append("</rad:doserate>\n")
             sb.append("\t\t\t\t\t<rad:counts>").append(p.counts).append("</rad:counts>\n")
             sb.append("\t\t\t\t\t<rad:seconds>").append(secondsStr).append("</rad:seconds>\n")
             sb.append("\t\t\t\t</extensions>\n")
@@ -179,7 +179,7 @@ object GpxWriter {
                 builder.append("\t\t<time>${escapeXml(timeValue)}</time>\n")
             }
             builder.append("\t\t<extensions>\n")
-            builder.append("\t\t\t<rad:doseRate>${"%.5f".format(Locale.US, poi.doseRate)}</rad:doseRate>\n")
+            builder.append("\t\t\t<rad:doserate>${"%.5f".format(Locale.US, poi.doseRate)}</rad:doserate>\n")
             builder.append("\t\t\t<rad:counts>${poi.counts}</rad:counts>\n")
             builder.append("\t\t\t<rad:seconds>${"%.3f".format(Locale.US, poi.seconds)}</rad:seconds>\n")
             builder.append("\t\t</extensions>\n")
