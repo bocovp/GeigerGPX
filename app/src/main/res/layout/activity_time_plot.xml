@@ -61,7 +61,7 @@
             android:maxLines="1"
             android:singleLine="true"
             android:ellipsize="end"
-            android:text="Currently recording"
+            android:text=""
             android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
     </com.google.android.material.textfield.TextInputLayout>
 
@@ -73,6 +73,7 @@
         android:layout_marginTop="4dp"
         android:layout_marginEnd="12dp"
         android:layout_marginBottom="4dp"
+        android:visibility="invisible"
         app:layout_constraintBottom_toTopOf="@id/averagingLabel"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -120,20 +121,16 @@
         app:layout_constraintStart_toStartOf="parent"
         app:menu="@menu/main_bottom_nav_menu" />
 
-
-
-
-
-
     <TextView
         android:id="@+id/loadingLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/time_plot_loading"
+        android:text="@string/time_plot_no_track_data"
         android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="@id/timePlotView"
-        app:layout_constraintEnd_toEndOf="@id/timePlotView"
-        app:layout_constraintStart_toStartOf="@id/timePlotView"
-        app:layout_constraintTop_toTopOf="@id/timePlotView" />
+        android:visibility="visible"
+        app:layout_constraintTop_toBottomOf="@id/trackNameInputLayout"
+        app:layout_constraintBottom_toTopOf="@id/averagingLabel"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

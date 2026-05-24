@@ -188,8 +188,8 @@ class TimePlotActivity : AppCompatActivity() {
                     request ?: return@collect
 
                     // Only show loading if the view is hidden (initial load)
-                    val shouldShowLoading = binding.timePlotView.visibility != View.VISIBLE
-                    if (shouldShowLoading) showLoading(true)
+                    // val shouldShowLoading = binding.timePlotView.visibility != View.VISIBLE
+                    // if (shouldShowLoading) showLoading(true)
 
                     val result = withContext(Dispatchers.Default) {
                         if (request.mode == PlotMode.KERNEL_ESTIMATOR) {
@@ -606,6 +606,8 @@ class TimePlotActivity : AppCompatActivity() {
                 if (resolvedTrackId == null) {
                     plotLoadJob?.cancel()
                     renderCollectorJob?.cancel() // Hard stop on track change
+                    liveKdeRefreshJob?.cancel()
+                    liveKdeRefreshJob = null
                     renderRequestFlow.value = null
                     selectedTrackIdForPlot = null
                     updateCurrentPoints(emptyList(), null)
@@ -702,14 +704,14 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun showPlotMessage(messageResId: Int?) {
         if (messageResId == null) {
-            binding.loadingLabel.visibility = View.GONE
+            binding.loadingLabel.visibility = View.INVISIBLE
             binding.timePlotView.visibility = View.VISIBLE
             binding.trackNameField.visibility = View.VISIBLE
         } else {
             binding.loadingLabel.setText(messageResId)
             binding.loadingLabel.visibility = View.VISIBLE
             binding.timePlotView.visibility = View.INVISIBLE
-            binding.trackNameField.visibility = View.INVISIBLE
+            binding.trackNameField.visibility = if (binding.trackNameField.text.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
         }
     }
 
@@ -801,7 +803,7 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun startOrStopLiveKdeRefresh() {
         val isCurrentTrack = selectedTrackIdForPlot.isNullOrBlank() || selectedTrackIdForPlot == TrackCatalog.currentTrackId()
-        val shouldRun = isCurrentTrack && plotMode == PlotMode.KERNEL_ESTIMATOR
+        val shouldRun = isCurrentTrack && plotMode == PlotMode.KERNEL_ESTIMATOR && viewModel.isTracking.value == true
         if (!shouldRun) {
             liveKdeRefreshJob?.cancel()
             liveKdeRefreshJob = null
