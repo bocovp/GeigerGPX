@@ -2,9 +2,14 @@ package com.github.bocovp.geigergpx
 
 import android.content.Context
 import androidx.core.content.edit
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private const val POI_FILE_NAME = "POI.gpx"
 private const val POI_BACKUP_FILE_NAME = "POI-Backup.gpx"
+
+private val ISO_INSTANT_FORMATTER: DateTimeFormatter = DateTimeFormatter.ISO_INSTANT
 data class PoiEntry(
     val id: String,
     val timestampMillis: Long,
@@ -17,7 +22,11 @@ data class PoiEntry(
 )
 
 fun buildPoiId(timestampMillis: Long, latitude: Double, longitude: Double): String {
-    return "${timestampMillis}_${latitude}_${longitude}"
+    // Using the same str formatters as in GpxWriter
+    val timeStr = ISO_INSTANT_FORMATTER.format(Instant.ofEpochMilli(timestampMillis))
+    val latStr = "%.8f".format(Locale.US, latitude)
+    val lonStr = "%.8f".format(Locale.US, longitude)
+    return "${timeStr}_${latStr}_${lonStr}"
 }
 
 object PoiLibrary {

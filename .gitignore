@@ -63,3 +63,4 @@ app/release/
 # Compiled Baseline Profile artifacts
 **/*.dm
 **/*.profm
+/.antigravitycli

@@ -327,6 +327,9 @@ class MapActivity : AppCompatActivity() {
                         }
                     }
                     if (success) {
+                        trackMapRenderer.clearHighlightedPoint()
+                        appState.setHighlightedTrackPoint(null)
+                        invalidateOptionsMenu() // hides "Add POI" since no point is selected
                         refreshMapTracks(latestActivePoints)
                     }
                     Toast.makeText(this@MapActivity, if (success) "POI added to Library" else "Unable to add POI", Toast.LENGTH_SHORT).show()

@@ -131,7 +131,8 @@ object GpxWriter {
         if (edited) writer.write("\t\t\t<rad:edited>true</rad:edited>\n")
         writer.write("\t\t</extensions>\n")
         writer.write("\t</metadata>\n")
-        writer.write("\t<trk>\n\t\t<trkseg>\n")
+        writer.write("\t<trk>\n\")\n")
+        writer.write("\t\t<trkseg>\n")
 
         val sb = StringBuilder(256)
 
