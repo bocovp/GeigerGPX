@@ -616,9 +616,7 @@ class TimePlotActivity : AppCompatActivity() {
                     showPlotMessage(R.string.time_plot_no_track_data)
                     setupRenderCollector() // Restart the loop
                 } else if (resolvedTrackId != selectedTrackIdForPlot || currentPoints.isEmpty()) {
-                    val shouldShowLoading = resolvedTrackId != null &&
-                        resolvedTrackId != TrackCatalog.currentTrackId()
-                    if (shouldShowLoading) showLoading(true)
+                    if (resolvedTrackId != TrackCatalog.currentTrackId()) showLoading(true)
                     loadTrackForPlotAsync(resolvedTrackId)
                 } else {
                     showLoading(false)

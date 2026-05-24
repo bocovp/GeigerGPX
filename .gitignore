@@ -64,3 +64,4 @@ app/release/
 **/*.dm
 **/*.profm
 /.antigravitycli
+*.salive
