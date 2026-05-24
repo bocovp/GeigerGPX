@@ -594,7 +594,6 @@ class TimePlotActivity : AppCompatActivity() {
         refreshCandidatesJob?.cancel()
         refreshCandidatesJob = lifecycleScope.launch {
             try {
-                showLoading(true)
                 cpsToUSvhCoeff = PreferenceManager.getDefaultSharedPreferences(this@TimePlotActivity)
                     .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
 
@@ -615,6 +614,7 @@ class TimePlotActivity : AppCompatActivity() {
                     showPlotMessage(R.string.time_plot_no_track_data)
                     setupRenderCollector() // Restart the loop
                 } else if (resolvedTrackId != selectedTrackIdForPlot || currentPoints.isEmpty()) {
+                    showLoading(true)
                     loadTrackForPlotAsync(resolvedTrackId)
                 } else {
                     showLoading(false)
