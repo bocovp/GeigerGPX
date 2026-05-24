@@ -410,7 +410,10 @@ class MapActivity : AppCompatActivity() {
         // the old AtomicInteger sequence guard.
         refreshJob?.cancel()
 
-        val showLoading = !hasLoadedMapTracks || TrackCatalog.isTrackCacheEmpty()
+        // Keep the loading banner for the initial map bootstrap only.
+        // When there is simply no selected/available track content, the renderer
+        // should surface the empty-state message without a loading flicker.
+        val showLoading = !hasLoadedMapTracks && TrackCatalog.isTrackCacheEmpty()
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
 
         // Capture all main-thread state that the IO block needs.
