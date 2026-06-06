@@ -294,7 +294,7 @@ object DeviceConfigManager {
             threeBeepTol = pars["threeBeepTol"]?.toDoubleOrNull() ?: base.threeBeepTol,
             fourBeepTol = pars["fourBeepTol"]?.toDoubleOrNull() ?: base.fourBeepTol
         )
-        if (sampleRate != null) {
+        if (sampleRate != null && config.windowSize > 0) {
             val binWidth = sampleRate.toFloat() / config.windowSize.toFloat()
             config = config.copy(
                 freqLow = pars["binLow"]?.toFloatOrNull()?.let { it * binWidth } ?: config.freqLow,
