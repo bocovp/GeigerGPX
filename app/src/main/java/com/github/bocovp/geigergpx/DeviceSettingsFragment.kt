@@ -92,7 +92,7 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
         signed: Boolean = false
     ) {
         category.addPreference(EditTextPreference(requireContext()).apply {
-            key = key
+            this.key = key
             title = titleText
             dialogTitle = if (unit == null) titleText else "$titleText ($unit)"
             setOnBindEditTextListener { edit ->
