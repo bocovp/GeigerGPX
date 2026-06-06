@@ -38,7 +38,12 @@ object DeviceConfigManager {
     fun init(context: Context, @XmlRes xmlRes: Int = R.xml.devices) {
         synchronized(lock) {
             appContext = context.applicationContext
-            parsedDevices = parseDevices(context.applicationContext, xmlRes)
+            parsedDevices = try {
+                parseDevices(context.applicationContext, xmlRes)
+            } catch (e: Exception) {
+                android.util.Log.e("DeviceConfigManager", "Failed to parse devices XML", e)
+                emptyList()
+            }
             ensurePreferences(context.applicationContext)
         }
     }
@@ -124,10 +129,10 @@ object DeviceConfigManager {
     private fun ensureInitialized(context: Context?): Context {
         synchronized(lock) {
             appContext?.let { return it }
+            val ctx = context ?: throw IllegalStateException("DeviceConfigManager is not initialized")
+            init(ctx)
+            return appContext!!
         }
-        val ctx = context ?: throw IllegalStateException("DeviceConfigManager is not initialized")
-        init(ctx)
-        return ctx.applicationContext
     }
 
     private fun ensurePreferences(context: Context) {
@@ -281,18 +286,18 @@ object DeviceConfigManager {
             fourBeepTol = 0.015
         )
         var config = base.copy(
-            windowSize = pars["windowSize"]?.toIntOrNull() ?: base.windowSize,
-            stepSize = pars["stepSize"]?.toIntOrNull() ?: base.stepSize,
-            freqMain = pars["freqMain"]?.toFloatOrNull() ?: base.freqMain,
-            freqLow = pars["freqLow"]?.toFloatOrNull() ?: base.freqLow,
-            freqHigh = pars["freqHigh"]?.toFloatOrNull() ?: base.freqHigh,
-            duration = pars["duration"]?.toDoubleOrNull() ?: base.duration,
-            dominanceThreshold = pars["dominanceThreshold"]?.toFloatOrNull() ?: base.dominanceThreshold,
-            dominanceThresholdEnd = pars["dominanceThresholdEnd"]?.toFloatOrNull() ?: base.dominanceThresholdEnd,
-            oneBeepTol = pars["oneBeepTol"]?.toDoubleOrNull() ?: base.oneBeepTol,
-            twoBeepTol = pars["twoBeepTol"]?.toDoubleOrNull() ?: base.twoBeepTol,
-            threeBeepTol = pars["threeBeepTol"]?.toDoubleOrNull() ?: base.threeBeepTol,
-            fourBeepTol = pars["fourBeepTol"]?.toDoubleOrNull() ?: base.fourBeepTol
+            windowSize = pars["windowSize"]?.toIntOrNull()?.takeIf { it > 0 } ?: base.windowSize,
+            stepSize = pars["stepSize"]?.toIntOrNull()?.takeIf { it > 0 } ?: base.stepSize,
+            freqMain = pars["freqMain"]?.toFloatOrNull()?.takeIf { it > 0 } ?: base.freqMain,
+            freqLow = pars["freqLow"]?.toFloatOrNull()?.takeIf { it > 0 } ?: base.freqLow,
+            freqHigh = pars["freqHigh"]?.toFloatOrNull()?.takeIf { it > 0 } ?: base.freqHigh,
+            duration = pars["duration"]?.toDoubleOrNull()?.takeIf { it > 0 } ?: base.duration,
+            dominanceThreshold = pars["dominanceThreshold"]?.toFloatOrNull()?.takeIf { it > 0 } ?: base.dominanceThreshold,
+            dominanceThresholdEnd = pars["dominanceThresholdEnd"]?.toFloatOrNull()?.takeIf { it > 0 } ?: base.dominanceThresholdEnd,
+            oneBeepTol = pars["oneBeepTol"]?.toDoubleOrNull()?.takeIf { it > 0 } ?: base.oneBeepTol,
+            twoBeepTol = pars["twoBeepTol"]?.toDoubleOrNull()?.takeIf { it > 0 } ?: base.twoBeepTol,
+            threeBeepTol = pars["threeBeepTol"]?.toDoubleOrNull()?.takeIf { it > 0 } ?: base.threeBeepTol,
+            fourBeepTol = pars["fourBeepTol"]?.toDoubleOrNull()?.takeIf { it > 0 } ?: base.fourBeepTol
         )
         if (sampleRate != null && config.windowSize > 0) {
             val binWidth = sampleRate.toFloat() / config.windowSize.toFloat()
