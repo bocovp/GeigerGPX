@@ -27,6 +27,7 @@ class GeigerGpxApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        DeviceConfigManager.init(this)
         GpxWriter.initVersion(this)
     }
 

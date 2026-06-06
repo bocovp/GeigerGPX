@@ -113,7 +113,8 @@ object GpxWriter {
         points: List<TrackPoint>,
         saveDoseRateInEle: Boolean,
         sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY,
-        edited: Boolean = false
+        edited: Boolean = false,
+        deviceName: String? = null
     ) {
         val metadata = computeTrackMetadata(points, sensitivity)
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
@@ -126,6 +127,9 @@ object GpxWriter {
         writer.write("\t\t\t<rad:seconds>${"%.3f".format(Locale.US, metadata.seconds)}</rad:seconds>\n")
         metadata.doseMuSv?.let {
             writer.write("\t\t\t<rad:dose>${"%.3f".format(Locale.US, it)}</rad:dose>\n")
+        }
+        deviceName?.takeIf { it.isNotBlank() }?.let {
+            writer.write("\t\t\t<rad:device>${escapeXml(it)}</rad:device>\n")
         }
         writer.write("\t\t\t<rad:sensitivity dimension=\"cps/uSv/h\">${RadiationCalibration.formatSensitivity(metadata.sensitivity)}</rad:sensitivity>\n")
         if (edited) writer.write("\t\t\t<rad:edited>true</rad:edited>\n")
@@ -216,6 +220,7 @@ object GpxWriter {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
         val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
+        val deviceName = DeviceConfigManager.currentDeviceName(prefs)
 
         val primaryResult = FileStorageManager.writeStreamDetailed(
             context = context,
@@ -223,7 +228,7 @@ object GpxWriter {
             forceDefaultFolder = forceDefaultFolder
         ) { out ->
             out.bufferedWriter().use { writer ->
-                writeTrackXml(writer, points, saveDoseRateInEle, sensitivity)
+                writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName = deviceName)
             }
         }
         if (primaryResult.succeeded) {
@@ -241,7 +246,7 @@ object GpxWriter {
             forceDefaultFolder = true
         ) { out ->
             out.bufferedWriter().use { writer ->
-                writeTrackXml(writer, points, saveDoseRateInEle, sensitivity)
+                writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName = deviceName)
             }
         }
         val fallbackUri = fallbackResult.uri ?: return null
