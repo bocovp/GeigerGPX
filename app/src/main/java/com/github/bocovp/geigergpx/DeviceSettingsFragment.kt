@@ -33,7 +33,6 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceScreen = preferenceManager.createPreferenceScreen(requireContext())
-        DeviceConfigManager.init(requireContext())
 
         val category = PreferenceCategory(requireContext()).apply {
             title = "Device"
@@ -107,7 +106,7 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
 
     private fun showDeviceChooser() {
         val app = requireActivity().application as GeigerGpxApp
-        if (app.trackingRepository.isTracking.value || app.trackingRepository.measurementModeEnabled.value) {
+        if (app.trackingRepository.isTracking.value == true  || app.trackingRepository.measurementModeEnabled.value == true ) {
             Toast.makeText(requireContext(), "Cannot change device while recording or measurement mode is active.", Toast.LENGTH_LONG).show()
             return
         }

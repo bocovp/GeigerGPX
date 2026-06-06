@@ -50,7 +50,11 @@ object DeviceConfigManager {
 
     fun currentDeviceName(prefs: SharedPreferences): String {
         val stored = prefs.getString(KEY_DEVICE_NAME, null)
-        val names = devices().map { it.name }
+        val names =  try {
+            devices().map { it.name }
+        } catch (_: IllegalStateException) {
+            emptyList()
+        }
         return when {
             stored == CUSTOM_DEVICE_NAME -> CUSTOM_DEVICE_NAME
             stored != null && names.contains(stored) -> stored
@@ -61,7 +65,11 @@ object DeviceConfigManager {
 
     fun currentDevice(prefs: SharedPreferences): Device? {
         val name = currentDeviceName(prefs)
-        return devices().firstOrNull { it.name == name }
+        return try {
+            devices().firstOrNull { it.name == name }
+        } catch (_: IllegalStateException) {
+            null
+        }
     }
 
     fun isCustom(prefs: SharedPreferences): Boolean = currentDeviceName(prefs) == CUSTOM_DEVICE_NAME
@@ -73,7 +81,7 @@ object DeviceConfigManager {
     }
 
     fun rateConfigFor(sampleRate: Int): GoertzelDetector.RateConfig {
-        val context = ensureInitialized(null)
+        val context = synchronized(lock) { appContext } ?: return configFromPars(emptyMap())
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val device = currentDevice(prefs)
         if (device != null) {
@@ -179,16 +187,16 @@ object DeviceConfigManager {
     }
 
     private fun parseDevices(context: Context, @XmlRes xmlRes: Int): List<Device> {
-        val parser = context.resources.getXml(xmlRes)
         val result = mutableListOf<Device>()
-        var event = parser.eventType
-        while (event != XmlPullParser.END_DOCUMENT) {
-            if (event == XmlPullParser.START_TAG && parser.name == "device") {
-                result.add(parseDevice(parser))
+        context.resources.getXml(xmlRes).use { parser ->
+            var event = parser.eventType
+            while (event != XmlPullParser.END_DOCUMENT) {
+                if (event == XmlPullParser.START_TAG && parser.name == "device") {
+                    result.add(parseDevice(parser))
+                }
+                event = parser.next()
             }
-            event = parser.next()
         }
-        parser.close()
         return result
     }
 
@@ -199,7 +207,7 @@ object DeviceConfigManager {
         val parameterSets = mutableListOf<Map<String, String>>()
         val startDepth = parser.depth
         var event = parser.next()
-        while (!(event == XmlPullParser.END_TAG && parser.depth == startDepth && parser.name == "device")) {
+        while (event != XmlPullParser.END_DOCUMENT && !(event == XmlPullParser.END_TAG && parser.depth == startDepth && parser.name == "device")) {
             if (event == XmlPullParser.START_TAG) {
                 when (parser.name) {
                     "sensitivity" -> sensitivity = parser.nextText().trim().toDoubleOrNull() ?: sensitivity
@@ -223,7 +231,7 @@ object DeviceConfigManager {
     ) {
         val startDepth = parser.depth
         var event = parser.next()
-        while (!(event == XmlPullParser.END_TAG && parser.depth == startDepth && parser.name == "detector")) {
+        while (event != XmlPullParser.END_DOCUMENT && !(event == XmlPullParser.END_TAG && parser.depth == startDepth && parser.name == "detector")) {
             if (event == XmlPullParser.START_TAG) {
                 when (parser.name) {
                     "par" -> {
@@ -242,7 +250,7 @@ object DeviceConfigManager {
         val pars = mutableMapOf<String, String>()
         val startDepth = parser.depth
         var event = parser.next()
-        while (!(event == XmlPullParser.END_TAG && parser.depth == startDepth && parser.name == "parameterSet")) {
+        while (event != XmlPullParser.END_DOCUMENT && !(event == XmlPullParser.END_TAG && parser.depth == startDepth && parser.name == "parameterSet")) {
             if (event == XmlPullParser.START_TAG && parser.name == "par") {
                 val key = parser.getAttributeValue(null, "name")
                 val value = parser.nextText().trim()
