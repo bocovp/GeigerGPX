@@ -360,8 +360,7 @@ object GpxReader {
                                 doseRate = doseRate,
                                 counts = counts,
                                 seconds = seconds,
-                                description = name.ifBlank { "POI" },
-                                sensitivity = sensitivityFromPoi(counts, seconds, doseRate)
+                                description = name.ifBlank { "POI" }
                             )
                         )
                         insideWpt = false

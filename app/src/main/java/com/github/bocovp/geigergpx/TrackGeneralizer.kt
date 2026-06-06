@@ -11,7 +11,7 @@ class TrackGeneralizer(
 
     fun generalize(track: MapTrack, kdeScale: Double? = null): MapTrack {
         if (track.points.size < 2) return track
-        val trackSensitivity = track.sensitivity.takeIf { it > 0.0 } ?: sensitivity
+        val trackSensitivity = track.sensitivity.takeIf { it > 0.0 } ?: sensitivity.takeIf { it > 0.0 } ?: RadiationCalibration.DEFAULT_SENSITIVITY
 
         val geoPointSource = GeoPoint(0.0, 0.0)
         val geoPointLast = GeoPoint(0.0, 0.0)

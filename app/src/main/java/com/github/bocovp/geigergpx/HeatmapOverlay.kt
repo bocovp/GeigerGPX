@@ -131,7 +131,7 @@ class HeatmapOverlay(
 
 
         for (poi in pois) {
-            if (poi.counts == 0) continue
+            if (poi.counts == 0 || poi.seconds <= 0.0001) continue
 
             geoPoint.setCoords(poi.latitude, poi.longitude)
             projection.toPixels(geoPoint, pPixels)

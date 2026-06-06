@@ -104,12 +104,7 @@ object PoiLibrary {
                 doseRate = doseRate,
                 counts = counts,
                 seconds = seconds,
-                description = description.ifBlank { "POI" },
-                sensitivity = if (counts > 0 && seconds > 0.000001 && doseRate > 0.0) {
-                    (counts / seconds) / doseRate
-                } else {
-                    RadiationCalibration.DEFAULT_SENSITIVITY
-                }
+                description = description.ifBlank { "POI" }
             )
         }
         if (result.success && selected) {
