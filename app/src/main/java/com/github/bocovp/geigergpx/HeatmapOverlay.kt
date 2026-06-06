@@ -8,7 +8,7 @@ import kotlin.math.min
 import org.osmdroid.util.PointL
 
 class HeatmapOverlay(
-    var doseCoefficient: Double = 1.0
+    var sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
 ) : Overlay() {
 
     // Data source
@@ -91,7 +91,7 @@ class HeatmapOverlay(
         val gridX = Math.floorDiv(worldTopLeft.x, gridSizePixels.toLong())
         val gridY = Math.floorDiv(worldTopLeft.y, gridSizePixels.toLong())
         val lockPart = lockedColorbarMaxDose?.toString() ?: "auto"
-        val key = "$tracksVersion|$doseCoefficient|$lockPart|$gridX|$gridY|$viewWidth|$viewHeight|$cols|$rows"
+        val key = "$tracksVersion|$sensitivity|$lockPart|$gridX|$gridY|$viewWidth|$viewHeight|$cols|$rows"
         if (cachedKey == key) {
             return cachedRaster?.copy(offsetX = offsetX, offsetY = offsetY)
         }
@@ -129,7 +129,7 @@ class HeatmapOverlay(
 
             val totalSeconds = sumSeconds[i]
             val squareCps = if (totalSeconds > 0.0001) totalCounts / totalSeconds else 0.0
-            val squareDoseRate = squareCps * doseCoefficient
+            val squareDoseRate = RadiationCalibration.doseRateFromCps(squareCps, sensitivity)
 
             if (squareDoseRate > maxBinnedDose) maxBinnedDose = squareDoseRate
         }
@@ -150,7 +150,7 @@ class HeatmapOverlay(
             }
             val totalSeconds = sumSeconds[i]
             val squareCps = if (totalSeconds > 0.0001) totalCounts / totalSeconds else 0.0
-            val squareDoseRate = squareCps * doseCoefficient
+            val squareDoseRate = RadiationCalibration.doseRateFromCps(squareCps, sensitivity)
             val squareAlpha = min(255, 255 * totalCounts / 20)
             val colorInt = DoseColorScale.colorForDose(squareDoseRate, minDose, maxDose)
             // Clearer (older) version:

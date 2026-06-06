@@ -97,7 +97,7 @@ class TrackingService : Service() {
     @Volatile private var maxTimeWithoutCountsS: Double = 1.0
     @Volatile private var maxTimeWithoutGpsS: Double = 60.0
     @Volatile private var alertDoseRate: Double = 0.0
-    @Volatile private var cpsToUsvhCoefficient: Double = 1.0
+    @Volatile private var sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
     private var toneGenerator: ToneGenerator? = null
     private val lastAlertAtMillis = AtomicLong(0L)
     private val doseRateMeasurement = DoseRateMeasurement()
@@ -115,6 +115,7 @@ class TrackingService : Service() {
             "max_time_without_gps_s",
             "dose_rate_avg_timestamps_n",
             "alert_dose_rate",
+            RadiationCalibration.KEY_SENSITIVITY,
             "cps_to_usvh" -> loadTrackingPrefs()
         }
     }
@@ -158,7 +159,7 @@ class TrackingService : Service() {
         minCountsPerPoint = prefs.getString("min_counts_per_point", "0")?.toIntOrNull() ?: 0
         maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")?.toDoubleOrNull() ?: 1.0
         maxTimeWithoutGpsS = prefs.getString("max_time_without_gps_s", "60")?.toDoubleOrNull() ?: 60.0
-        cpsToUsvhCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
         val configuredAlertDoseRate = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
         alertDoseRate = if (configuredAlertDoseRate > 0.0) configuredAlertDoseRate else 0.0
 
@@ -170,7 +171,7 @@ class TrackingService : Service() {
         doseRateMeasurement.updateMainCpsWindowSize(requestedWindowSize)
         doseRateMeasurement.updateAlertConfig(
             alertDoseRate = alertDoseRate,
-            cpsToUsvhCoefficient = cpsToUsvhCoefficient
+            sensitivity = sensitivity
         )
     }
 
@@ -271,7 +272,7 @@ class TrackingService : Service() {
         trackWriter.start(now, currentTotal)
         gpsManager.reset()
 
-        kde = KernelDensityEstimator(cpsToUsvhCoefficient)
+        kde = KernelDensityEstimator(sensitivity)
         kde?.clear()
 
         if (isMonitoring) {
@@ -436,7 +437,7 @@ class TrackingService : Service() {
                     spacingM = spacingM,
                     minCountsPerPoint = minCountsPerPoint,
                     maxTimeWithoutCountsS = maxTimeWithoutCountsS,
-                    coefficient = cpsToUsvhCoefficient
+                    sensitivity = sensitivity
                 )
             } else {
                 maybeCommitNoGpsPoint(
@@ -569,7 +570,7 @@ class TrackingService : Service() {
     }
 
     private fun showDoseRateAlertNotification(meanDoseRate: Double) {
-        val unit = if (cpsToUsvhCoefficient == 1.0) "cps" else "μSv/h"
+        val unit = if (sensitivity == 1.0) "cps" else "μSv/h"
         notificationManager.postAlertNotification(meanDoseRate = meanDoseRate, unit = unit)
     }
 
@@ -678,7 +679,7 @@ class TrackingService : Service() {
             totalBeeps = totalBeeps,
             minCountsPerPoint = minCountsPerPoint,
             maxTimeWithoutCountsS = maxTimeWithoutCountsS,
-            coefficient = cpsToUsvhCoefficient
+            sensitivity = sensitivity
         )
     }
 }

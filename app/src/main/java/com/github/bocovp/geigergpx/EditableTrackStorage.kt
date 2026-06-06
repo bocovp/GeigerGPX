@@ -11,15 +11,13 @@ import java.io.OutputStream
 import androidx.core.net.toUri
 
 object EditableTrackStorage {
-    data class LoadResult(val points: List<TrackPoint>, val isEdited: Boolean, val cpsToUsvh: Double?)
+    data class LoadResult(val points: List<TrackPoint>, val isEdited: Boolean, val sensitivity: Double?)
     data class SplitResult(val newTrackId: String, val newTrackTitle: String)
 
     suspend fun loadTrack(context: Context, trackId: String): LoadResult? = withContext(Dispatchers.IO) {
-        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
-            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
         val input = openInputStream(context, trackId) ?: return@withContext null
-        val loaded = GpxReader.readTrackWithMetadata(input, cpsCoefficient = coeff) ?: return@withContext null
-        LoadResult(loaded.points, loaded.isEdited, loaded.cpsToUsvh)
+        val loaded = GpxReader.readTrackWithMetadata(input) ?: return@withContext null
+        LoadResult(loaded.points, loaded.isEdited, loaded.sensitivity)
     }
 
     suspend fun overwriteTrack(
@@ -27,18 +25,16 @@ object EditableTrackStorage {
         trackId: String,
         points: List<TrackPoint>,
         edited: Boolean = false,
-        calibrationOverride: Double? = null
+        sensitivityOverride: Double? = null
     ) = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val calibrationCoefficient = calibrationOverride
-            ?: prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull()
-            ?: 1.0
+        val sensitivity = sensitivityOverride ?: RadiationCalibration.sensitivityFromPrefs(prefs)
 
         val output = openOutputStream(context, trackId) ?: return@withContext
         output.use { out ->
             out.bufferedWriter().use { writer ->
-                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient, edited = edited)
+                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, edited = edited)
             }
         }
     }
@@ -49,13 +45,11 @@ object EditableTrackStorage {
         sourceTitle: String,
         folderName: String?,
         points: List<TrackPoint>,
-        calibrationOverride: Double? = null
+        sensitivityOverride: Double? = null
     ): SplitResult? = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val calibrationCoefficient = calibrationOverride
-            ?: prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull()
-            ?: 1.0
+        val sensitivity = sensitivityOverride ?: RadiationCalibration.sensitivityFromPrefs(prefs)
 
         val nextName = uniqueSplitFileName(context, sourceTitle, folderName)
         val uri = when {
@@ -65,7 +59,7 @@ object EditableTrackStorage {
                 val target = File(parentDir, nextName)
                 target.outputStream().use { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient, edited = true)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, edited = true)
                     }
                 }
                 Uri.fromFile(target)
@@ -77,7 +71,7 @@ object EditableTrackStorage {
                     relativePath = relativePath
                 ) { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient, edited = true)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, edited = true)
                     }
                 }
                 result.uri ?: return@withContext null

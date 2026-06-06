@@ -44,11 +44,11 @@ class ConfidenceInterval {
         fun getFalseAlarmRate(
             alertDoseRate: Double,
             avgTimestamps: Int,
-            cps2uSvhCoefficient: Double
+            sensitivity: Double
         ): Double {
             // Have to work in cps here!
             val lambda = 1.0 // background cps
-            val A = alertDoseRate / cps2uSvhCoefficient // Alert cps
+            val A = alertDoseRate * sensitivity // Alert cps
             val K = avgTimestamps
             val T = 3600.0 // 1 hour
             return g(A/lambda, K) * A * T
@@ -198,11 +198,11 @@ class ConfidenceInterval {
         }
     }
 
-    fun scale(coef: Double): ConfidenceInterval = ConfidenceInterval(
-        mean = mean * coef,
-        delta = delta * coef,
-        lowBound = lowBound * coef,
-        highBound = highBound * coef,
+    fun scale(factor: Double): ConfidenceInterval = ConfidenceInterval(
+        mean = mean * factor,
+        delta = delta * factor,
+        lowBound = lowBound * factor,
+        highBound = highBound * factor,
         sampleCount = sampleCount
     )
 

@@ -56,8 +56,8 @@ class TrackMapRenderer(
         kdeScaleSeconds: Double? = null
     ): Boolean {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
-        val doseCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        cachedShowCpsUnit = kotlin.math.abs(doseCoefficient - 1.0) < 1e-9
+        val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
+        cachedShowCpsUnit = kotlin.math.abs(sensitivity - 1.0) < 1e-9
 
         val activeTrackIds = tracks.map { it.id }.toSet()
         val currentZoomLevel = mapView.zoomLevelDouble
@@ -103,12 +103,12 @@ class TrackMapRenderer(
                 poiOverlay = null
             }
 
-            val overlay = heatmapOverlay ?: HeatmapOverlay(doseCoefficient).also {
+            val overlay = heatmapOverlay ?: HeatmapOverlay(sensitivity).also {
                 mapView.overlays.add(it)
                 heatmapOverlay = it
             }
             trackDosePointOverlay?.enabledQ = false
-            overlay.doseCoefficient = doseCoefficient
+            overlay.sensitivity = sensitivity
 
             val filteredTracks = tracks.map { track ->
                 track.copy(points = track.points.filterNot { it.badCoordinates })
@@ -524,10 +524,9 @@ class TrackMapRenderer(
         val minDistanceMeters = metersPerPixel * 10.0
 
         val prefs = PreferenceManager.getDefaultSharedPreferences(mapView.context)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
 
-
-        val generalizer = TrackGeneralizer(minDistanceMeters, coeff)
+        val generalizer = TrackGeneralizer(minDistanceMeters, sensitivity)
         val kdeScale = if (useKernelEstimator) kdeScaleSeconds?.coerceAtLeast(KdeScaleSlider.MIN_SECONDS.toDouble()) else null
 
         generalizedTracksById.clear()

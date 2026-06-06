@@ -20,7 +20,7 @@ class DoseRateMeasurement(
 
     private val measurementCoordinateAverager = GpsCoordinateAverager()
     private var alertDoseRate: Double = 0.0
-    private var cpsToUsvhCoefficient: Double = 1.0
+    private var sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
 
     data class AlertEvent(
         val soundCount: Int,
@@ -75,10 +75,10 @@ class DoseRateMeasurement(
         }
     }
 
-    fun updateAlertConfig(alertDoseRate: Double, cpsToUsvhCoefficient: Double) {
+    fun updateAlertConfig(alertDoseRate: Double, sensitivity: Double) {
         synchronized(mainCpsLock) {
             this.alertDoseRate = if (alertDoseRate > 0.0) alertDoseRate else 0.0
-            this.cpsToUsvhCoefficient = cpsToUsvhCoefficient
+            this.sensitivity = sensitivity
         }
     }
 
@@ -164,7 +164,7 @@ class DoseRateMeasurement(
         if (alertDoseRate <= 0.0) return null
         if (mainCpsBeepCount < windowSize) return null
 
-        val meanDoseRate = calculateMainScreenCpsLocked() * cpsToUsvhCoefficient
+        val meanDoseRate = RadiationCalibration.doseRateFromCps(calculateMainScreenCpsLocked(), sensitivity)
         if (meanDoseRate < alertDoseRate) return null
 
         val ratio = meanDoseRate / alertDoseRate

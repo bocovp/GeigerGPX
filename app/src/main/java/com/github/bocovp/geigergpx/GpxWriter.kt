@@ -41,7 +41,7 @@ object GpxWriter {
         val counts: Long,
         val seconds: Double,
         val doseMuSv: Double?,
-        val cpsToUsvh: Double
+        val sensitivity: Double
     )
 
     data class SaveTrackResult(
@@ -112,10 +112,10 @@ object GpxWriter {
         writer: java.io.BufferedWriter,
         points: List<TrackPoint>,
         saveDoseRateInEle: Boolean,
-        calibrationCoefficient: Double = 1.0,
+        sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY,
         edited: Boolean = false
     ) {
-        val metadata = computeTrackMetadata(points, calibrationCoefficient)
+        val metadata = computeTrackMetadata(points, sensitivity)
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
         writer.write("<gpx version=\"1.1\" creator=\"${getCreator()}\" xmlns=\"$GPX_NAMESPACE\" xmlns:rad=\"$RAD_NAMESPACE\">\n")
         writer.write("\t<metadata>\n")
@@ -127,11 +127,11 @@ object GpxWriter {
         metadata.doseMuSv?.let {
             writer.write("\t\t\t<rad:dose>${"%.3f".format(Locale.US, it)}</rad:dose>\n")
         }
-        writer.write("\t\t\t<rad:cc dimension=\"uSv/h\">${formatCoefficient(metadata.cpsToUsvh)}</rad:cc>\n")
+        writer.write("\t\t\t<rad:sensitivity dimension=\"cps/uSv/h\">${RadiationCalibration.formatSensitivity(metadata.sensitivity)}</rad:sensitivity>\n")
         if (edited) writer.write("\t\t\t<rad:edited>true</rad:edited>\n")
         writer.write("\t\t</extensions>\n")
         writer.write("\t</metadata>\n")
-        writer.write("\t<trk>\n\")\n")
+        writer.write("\t<trk>\n")
         writer.write("\t\t<trkseg>\n")
 
         val sb = StringBuilder(256)
@@ -215,7 +215,7 @@ object GpxWriter {
     ): SaveTrackResult? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
-        val calibrationCoefficient = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
 
         val primaryResult = FileStorageManager.writeStreamDetailed(
             context = context,
@@ -223,7 +223,7 @@ object GpxWriter {
             forceDefaultFolder = forceDefaultFolder
         ) { out ->
             out.bufferedWriter().use { writer ->
-                writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
+                writeTrackXml(writer, points, saveDoseRateInEle, sensitivity)
             }
         }
         if (primaryResult.succeeded) {
@@ -241,7 +241,7 @@ object GpxWriter {
             forceDefaultFolder = true
         ) { out ->
             out.bufferedWriter().use { writer ->
-                writeTrackXml(writer, points, saveDoseRateInEle, calibrationCoefficient)
+                writeTrackXml(writer, points, saveDoseRateInEle, sensitivity)
             }
         }
         val fallbackUri = fallbackResult.uri ?: return null
@@ -262,16 +262,7 @@ object GpxWriter {
             .replace("'", "&apos;")
     }
 
-    private fun formatCoefficient(value: Double): String {
-        val rounded = kotlin.math.round(value * 1_000_000.0) / 1_000_000.0
-        return if (rounded % 1.0 == 0.0) {
-            "%.1f".format(Locale.US, rounded)
-        } else {
-            "%s".format(Locale.US, rounded.toString())
-        }
-    }
-
-    private fun computeTrackMetadata(points: List<TrackPoint>, calibrationCoefficient: Double): TrackMetadata {
+    private fun computeTrackMetadata(points: List<TrackPoint>, sensitivity: Double): TrackMetadata {
         var distanceMeters = 0.0
         var counts = 0L
         var seconds = 0.0
@@ -296,8 +287,8 @@ object GpxWriter {
             lastValid = point
         }
 
-        val doseMuSv = if (calibrationCoefficient != 1.0) {
-            (counts.toDouble() * calibrationCoefficient) / 3600.0
+        val doseMuSv = if (sensitivity != 1.0) {
+            counts.toDouble() / sensitivity / 3600.0
         } else {
             null
         }
@@ -308,7 +299,7 @@ object GpxWriter {
             counts = counts,
             seconds = seconds,
             doseMuSv = doseMuSv,
-            cpsToUsvh = calibrationCoefficient
+            sensitivity = sensitivity
         )
     }
 }

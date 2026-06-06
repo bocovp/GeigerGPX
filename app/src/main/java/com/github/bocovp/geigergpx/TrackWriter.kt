@@ -97,7 +97,7 @@ class TrackWriter {
         spacingM: Double,
         minCountsPerPoint: Int,
         maxTimeWithoutCountsS: Double,
-        coefficient: Double
+        sensitivity: Double
     ): ProcessLocationResult = synchronized(lock) {
         if (lastWrittenLocation == null) {
             initializeAnchor(loc, now, totalBeeps)
@@ -117,18 +117,18 @@ class TrackWriter {
             return ProcessLocationResult()
         }
 
-        val snapshot = commitPoint(loc, now, movementStats, totalBeeps, coefficient)
+        val snapshot = commitPoint(loc, now, movementStats, totalBeeps, sensitivity)
         ProcessLocationResult(snapshot = snapshot)
     }
 
-    private fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int, coefficient: Double): List<TrackPoint> = synchronized(lock) {
+    private fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int, sensitivity: Double): List<TrackPoint> = synchronized(lock) {
         return commitPointInternal(
             loc = loc,
             now = now,
             movementStats = movementStats,
             totalBeeps = totalBeeps,
             badCoordinates = false,
-            coefficient = coefficient
+            sensitivity = sensitivity
         )
     }
 
@@ -139,7 +139,7 @@ class TrackWriter {
         totalBeeps: Int,
         minCountsPerPoint: Int,
         maxTimeWithoutCountsS: Double,
-        coefficient: Double
+        sensitivity: Double
     ): ProcessLocationResult = synchronized(lock) {
         if (mode == GpsMode.ACTIVE) return ProcessLocationResult()
         val lastLoc = lastWrittenLocation ?: return ProcessLocationResult()
@@ -166,7 +166,7 @@ class TrackWriter {
             movementStats = movementStats,
             totalBeeps = totalBeeps,
             badCoordinates = true,
-            coefficient = coefficient
+            sensitivity = sensitivity
         )
         ProcessLocationResult(snapshot = snapshot)
     }
@@ -181,14 +181,14 @@ class TrackWriter {
         movementStats: MovementStats,
         totalBeeps: Int,
         badCoordinates: Boolean,
-        coefficient: Double
+        sensitivity: Double
     ): List<TrackPoint> = synchronized(lock) {
         val finalBeeps = totalBeeps - lastPointTotalBeeps
 
         // We do not subtract 1 from finalBeeps here since writing track point (choosing end of interval) is assumed to be triggered by timer, not by Geiger counter
         val finalCps = finalBeeps.toDouble() / movementStats.timeDeltaSec
 
-        val finalDoseRate = finalCps * coefficient
+        val finalDoseRate = RadiationCalibration.doseRateFromCps(finalCps, sensitivity)
         val averagedCoordinates = coordinateAverager.consumeAverage()
         val avgLat = averagedCoordinates?.first ?: loc.latitude
         val avgLon = averagedCoordinates?.second ?: loc.longitude

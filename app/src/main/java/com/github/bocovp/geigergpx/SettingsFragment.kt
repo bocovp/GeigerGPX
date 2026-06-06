@@ -25,7 +25,7 @@ import androidx.core.content.edit
 
 class SettingsFragment : PreferenceFragmentCompat() {
     private val settingsPrefListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == "cps_to_usvh" || key == "dose_rate_avg_timestamps_n" || key == "alert_dose_rate") {
+        if (key == RadiationCalibration.KEY_SENSITIVITY || key == "cps_to_usvh" || key == "dose_rate_avg_timestamps_n" || key == "alert_dose_rate") {
             updateAlertDoseRateSummary()
         }
     }
@@ -83,13 +83,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
         maxTimeWithoutGps?.summaryProvider = summaryWithUnit("s")
 
-        val coeff = findPreference<EditTextPreference>("cps_to_usvh")
-        coeff?.setOnBindEditTextListener { edit ->
+        val sensitivity = findPreference<EditTextPreference>(RadiationCalibration.KEY_SENSITIVITY)
+        sensitivity?.setOnBindEditTextListener { edit ->
             edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                     android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or
                     android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
         }
-        coeff?.summaryProvider = summaryWithUnit("μSv/h per cps")
+        sensitivity?.summaryProvider = summaryWithUnit("cps per μSv/h")
 
         val avgTimestamps = findPreference<ListPreference>("dose_rate_avg_timestamps_n")
         avgTimestamps?.summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
@@ -180,9 +180,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
 
         val avgTimestamps = prefs.getString("dose_rate_avg_timestamps_n", "10")?.toIntOrNull() ?: 10
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        val falseAlarmRate = ConfidenceInterval.getFalseAlarmRate(normalizedAlert, avgTimestamps, coeff)
-        val unit = if (coeff == 1.0) "cps" else "μSv/h"
+        val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
+        val falseAlarmRate = ConfidenceInterval.getFalseAlarmRate(normalizedAlert, avgTimestamps, sensitivity)
+        val unit = if (sensitivity == 1.0) "cps" else "μSv/h"
         return String.format(
             java.util.Locale.US,
             "%.2f %s      False alarms: %.1f / hour",
