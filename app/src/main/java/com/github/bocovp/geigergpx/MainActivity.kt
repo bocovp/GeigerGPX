@@ -521,10 +521,9 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Save POI") { _, _ ->
                 val description = input.text?.toString()?.trim().orEmpty()
                 val (counts, seconds) = getCurrentMeasurementCountsAndSeconds()
-                val coeff = PreferenceManager.getDefaultSharedPreferences(this)
-                    .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-                val doseRate = ConfidenceInterval(0.0, seconds, counts, false).scale(coeff).mean
-//                  val doseRate = ConfidenceInterval(0.0, seconds, counts + 1).scale(coeff).mean
+                val sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this))
+                val doseRate = ConfidenceInterval(0.0, seconds, counts, false).scale(1.0 / sensitivity).mean
+//                  val doseRate = ConfidenceInterval(0.0, seconds, counts + 1).scale(1.0 / sensitivity).mean
                 val (latitude, longitude) = TrackingService.consumeMeasurementAverageCoordinates()
 
                 lifecycleScope.launch {
@@ -578,7 +577,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateCpsOrDoseLine(onBeep: Boolean) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+        val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
+        val inverseSensitivity = 1.0 / sensitivity
 
         var t1: Double
         var ignoredFirst : Int
@@ -613,11 +613,11 @@ class MainActivity : AppCompatActivity() {
             ConfidenceInterval(t1, t_now, eventsInside, false) // disregarding t1
         }
 
-        val doseRateMean = ci.mean * coeff
-        val doseRateDelta = ci.delta * coeff
+        val doseRateMean = ci.mean * inverseSensitivity
+        val doseRateDelta = ci.delta * inverseSensitivity
 
         val decimalDigits = if (isMeasurementModeEnabled) {
-            if (doseRateDelta < 0.01  * (coeff / 0.1)) 4 else 3
+            if (doseRateDelta < 0.01 * (10.0 / sensitivity)) 4 else 3
         } else 2
 
         val doseColor = when {
@@ -628,11 +628,11 @@ class MainActivity : AppCompatActivity() {
         }
         binding.textCps.setTextColor(ContextCompat.getColor(this, doseColor))
 
-        if (coeff == 1.0) {
+        if (sensitivity == 1.0) {
             val cpsText = ci.toText(decimalDigits, doseRateDisplayMode)
             binding.textCps.text = "CPS: $cpsText"
         } else {
-            val doseRateText = ci.scale(coeff).toText(decimalDigits, doseRateDisplayMode)
+            val doseRateText = ci.scale(inverseSensitivity).toText(decimalDigits, doseRateDisplayMode)
             binding.textCps.text = "Dose rate: $doseRateText μSv/h"
         }
     }

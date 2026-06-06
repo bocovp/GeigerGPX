@@ -6,7 +6,6 @@ import android.net.Uri
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
-import androidx.preference.PreferenceManager
 import java.io.File
 import java.io.BufferedReader
 import java.io.BufferedWriter
@@ -132,9 +131,6 @@ object TrackCatalog {
     private suspend fun rebuildTrackCacheLocked(context: Context) {
         _rebuildProgress.value = 0
         try {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-            val coeff = prefs.getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-
             val sourceListing = listTrackFiles(context)
             if (sourceListing is TrackSourceListing.Failure) {
                 Log.w("GPX", "Unable to rebuild track cache", sourceListing.error)
@@ -154,7 +150,7 @@ object TrackCatalog {
                     launch(parseDispatcher) {
                         yield()
                         val parsedStats = try {
-                            source.openStream().use { parseGpxTrackStats(it, coeff) }
+                            source.openStream().use { parseGpxTrackStats(it) }
                         } catch (e: Exception) {
                             Log.e("GPX", "Unable to parse track ${source.displayName}", e)
                             null
@@ -251,9 +247,7 @@ object TrackCatalog {
             val cached = if (shouldIncludeMapTrack && !source.hasPoints()) {
                 try {
                     val parsed = withContext(Dispatchers.IO) {
-                        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
-                            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-                        openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(it, coeff) }
+                        openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(it) }
                     }
                     if (parsed != null) {
                         val updated = source.withPoints(parsed.points)
@@ -464,9 +458,7 @@ object TrackCatalog {
             }
         } ?: return null
 
-        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
-            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-        val stats = runCatching { source.openStream().use { parseGpxTrackStats(it, coeff) } }.getOrNull() ?: return null
+        val stats = runCatching { source.openStream().use { parseGpxTrackStats(it) } }.getOrNull() ?: return null
         return CachedParsedTrack.from(source.copy(folderName = folderName), stats)
     }
 
@@ -513,12 +505,9 @@ object TrackCatalog {
 
         if (displayName == null) return null
 
-        val coeff = PreferenceManager.getDefaultSharedPreferences(context)
-            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-
         // Need to parse outside the lock to avoid blocking other readers
         val parsed = withContext(Dispatchers.IO) {
-            openInputStreamForTrack(context, trackId)?.use { parseGpxTrack(it, coeff) }
+            openInputStreamForTrack(context, trackId)?.use { parseGpxTrack(it) }
         } ?: return null
 
         cacheMutex.withLock {
@@ -569,15 +558,15 @@ object TrackCatalog {
         return TrackStats(points.size, durationMillis, distance)
     }
 
-    private suspend fun parseGpxTrack(inputStream: InputStream, coeff: Double): GpxReader.TrackWithStats? {
+    private suspend fun parseGpxTrack(inputStream: InputStream): GpxReader.TrackWithStats? {
         return withContext(Dispatchers.IO) {
-            GpxReader.readTrackWithStats(inputStream, cpsCoefficient = coeff)
+            GpxReader.readTrackWithStats(inputStream)
         }
     }
 
-    private suspend fun parseGpxTrackStats(inputStream: InputStream, coeff: Double): TrackStats? {
+    private suspend fun parseGpxTrackStats(inputStream: InputStream): TrackStats? {
         return withContext(Dispatchers.IO) {
-            GpxReader.readTrackStats(inputStream, cpsCoefficient = coeff)
+            GpxReader.readTrackStats(inputStream)
         }
     }
 

@@ -22,7 +22,7 @@ object GpxReader {
         val counts: Long,
         val seconds: Double,
         val doseMuSv: Double?,
-        val cpsToUsvh: Double?
+        val sensitivity: Double?
     )
 
     data class TrackWithStats(
@@ -33,7 +33,7 @@ object GpxReader {
     data class TrackWithMetadata(
         val points: List<TrackPoint>,
         val isEdited: Boolean,
-        val cpsToUsvh: Double?
+        val sensitivity: Double?
     )
 
     private data class ParsedTrackData(
@@ -43,25 +43,25 @@ object GpxReader {
         val edited: Boolean
     )
 
-    fun readTrackWithMetadata(inputStream: InputStream, cpsCoefficient: Double = 1.0): TrackWithMetadata? {
-        val parsed = readTrackInternal(inputStream, cpsCoefficient, parsePoints = true, preferMetadataStats = false) ?: return null
-        return TrackWithMetadata(parsed.points, parsed.edited, parsed.metadata?.cpsToUsvh)
+    fun readTrackWithMetadata(inputStream: InputStream): TrackWithMetadata? {
+        val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false) ?: return null
+        return TrackWithMetadata(parsed.points, parsed.edited, parsed.metadata?.sensitivity)
     }
 
-    fun readTrack(inputStream: InputStream, cpsCoefficient: Double = 1.0): List<TrackPoint>? {
-        val parsed = readTrackInternal(inputStream, cpsCoefficient, parsePoints = true, preferMetadataStats = false)
+    fun readTrack(inputStream: InputStream): List<TrackPoint>? {
+        val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false)
             ?: return null
         return parsed.points
     }
 
-    fun readTrackWithStats(inputStream: InputStream, cpsCoefficient: Double = 1.0): TrackWithStats? {
-        val parsed = readTrackInternal(inputStream, cpsCoefficient, parsePoints = true, preferMetadataStats = false)
+    fun readTrackWithStats(inputStream: InputStream): TrackWithStats? {
+        val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false)
             ?: return null
         return TrackWithStats(parsed.points, parsed.stats)
     }
 
-    fun readTrackStats(inputStream: InputStream, cpsCoefficient: Double = 1.0): TrackStats? {
-        val parsed = readTrackInternal(inputStream, cpsCoefficient, parsePoints = false, preferMetadataStats = true)
+    fun readTrackStats(inputStream: InputStream): TrackStats? {
+        val parsed = readTrackInternal(inputStream, parsePoints = false, preferMetadataStats = true)
             ?: return null
         return parsed.stats
     }
@@ -85,7 +85,6 @@ object GpxReader {
 
     private fun readTrackInternal(
         inputStream: InputStream,
-        cpsCoefficient: Double,
         parsePoints: Boolean,
         preferMetadataStats: Boolean
     ): ParsedTrackData? {
@@ -113,7 +112,7 @@ object GpxReader {
             var metadataCounts: Long? = null
             var metadataSeconds: Double? = null
             var metadataDose: Double? = null
-            var metadataCpsToUsvh: Double? = null
+            var metadataSensitivity: Double? = null
 
             var metadataEdited = false
             var currentTag: String? = null
@@ -144,7 +143,7 @@ object GpxReader {
                                     metadataCounts,
                                     metadataSeconds,
                                     metadataDose,
-                                    metadataCpsToUsvh
+                                    metadataSensitivity
                                 ), metadataEdited)
                             }
 
@@ -188,7 +187,8 @@ object GpxReader {
                                 "counts" -> metadataCounts = value?.toLongOrNull()
                                 "seconds" -> metadataSeconds = value?.toDoubleOrNull()
                                 "dose" -> metadataDose = value?.toDoubleOrNull()
-                                "cpsToUsvh", "cc" -> metadataCpsToUsvh = value?.toDoubleOrNull()
+                                "sensitivity" -> metadataSensitivity = value?.toDoubleOrNull()?.takeIf { it > 0.0 }
+                                "cpsToUsvh", "cc" -> metadataSensitivity = value?.toDoubleOrNull()?.takeIf { it > 0.0 }?.let { 1.0 / it } // deprecated
                                 "edited" -> metadataEdited = value.equals("true", ignoreCase = true)
                             }
                         }
@@ -202,7 +202,7 @@ object GpxReader {
                         if (parser.name == "trkpt" && insideTrkpt) {
                             val resolvedDoseRate = when {
                                 doseRate > 0.0 -> doseRate
-                                seconds > 0.000001 -> (counts / seconds) * cpsCoefficient
+                                seconds > 0.000001 -> RadiationCalibration.doseRateFromCps(counts / seconds, metadataSensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY)
                                 else -> 0.0
                             }
 
@@ -247,7 +247,7 @@ object GpxReader {
                 metadataCounts,
                 metadataSeconds,
                 metadataDose,
-                metadataCpsToUsvh
+                metadataSensitivity
             )
 
             if (parsePoints && points.isEmpty()) return null
@@ -278,9 +278,9 @@ object GpxReader {
         counts: Long?,
         seconds: Double?,
         dose: Double?,
-        cpsToUsvh: Double?
+        sensitivity: Double?
     ): TrackMetadata? {
-        if (pointCount == null && distanceMeters == null && counts == null && seconds == null && dose == null && cpsToUsvh == null) {
+        if (pointCount == null && distanceMeters == null && counts == null && seconds == null && dose == null && sensitivity == null) {
             return null
         }
         return TrackMetadata(
@@ -289,7 +289,7 @@ object GpxReader {
             counts = counts ?: 0L,
             seconds = seconds ?: 0.0,
             doseMuSv = dose,
-            cpsToUsvh = cpsToUsvh
+            sensitivity = sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY
         )
     }
 

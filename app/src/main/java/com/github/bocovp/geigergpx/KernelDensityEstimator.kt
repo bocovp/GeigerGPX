@@ -10,9 +10,9 @@ import kotlin.math.floor
  * convolution with the kernel is evaluated analytically — no discretisation.
  * See companion TeX document for the full mathematical derivation.
  *
- * @param coeff  calibration factor [µSv/h per cps]
+ * @param sensitivity  sensitivity [cps per µSv/h]
  */
-class KernelDensityEstimator(private val coeff: Double) {
+class KernelDensityEstimator(private val sensitivity: Double) {
 
     companion object {
         private const val INITIAL_CAPACITY    = 256
@@ -44,6 +44,7 @@ class KernelDensityEstimator(private val coeff: Double) {
 
     // Reused to access chi2L / chi2R without duplicating that logic.
     private val ci = ConfidenceInterval(0.0, 0.0, 0.0, 0.0, 0)
+    private val inverseSensitivity = if (sensitivity > 0.0) 1.0 / sensitivity else 0.0
 
     /**
      * Creates a deep copy of the estimator's current state.
@@ -53,7 +54,7 @@ class KernelDensityEstimator(private val coeff: Double) {
      */
     @Synchronized
     fun copy(): KernelDensityEstimator {
-        val other = KernelDensityEstimator(coeff)
+        val other = KernelDensityEstimator(sensitivity)
         other.ts = ts.copyOf(size)
         other.ns = ns.copyOf(size)
         other.size = size
@@ -155,7 +156,7 @@ class KernelDensityEstimator(private val coeff: Double) {
     /**
      * Estimates dose rate in µSv/h at each query point in [t2s] (sorted ascending).
      * Delegates to [estimateDoseRateHelper] for the cps estimate, then multiplies
-     * by [coeff].
+     * by the precalculated inverse sensitivity.
      */
     fun estimateDoseRate(t2s: DoubleArray,
                          scale: Double,
@@ -164,7 +165,7 @@ class KernelDensityEstimator(private val coeff: Double) {
         val bufKernelMasses = DoubleArray(t2s.size)
         estimateDoseRateHelper(t2s, scale, bufCps, bufKernelMasses, tEndOverride)
         val result = DoubleArray(t2s.size)
-        for (j in t2s.indices) result[j] = bufCps[j] * coeff
+        for (j in t2s.indices) result[j] = bufCps[j] * inverseSensitivity
         return result
     }
 
@@ -202,7 +203,7 @@ class KernelDensityEstimator(private val coeff: Double) {
             val uHi        = minOf( 1.0, (t - effectiveTStart ) * invScale)
             val k2         = epanechnikovSquaredIntegral(uLo, uHi)
             val tEff       = if (k2 > 1e-12) scale * km * km / k2 else 0.0
-            val scale2usvh = if (tEff > 0.0) 0.5 / tEff * coeff   else 0.0
+            val scale2usvh = if (tEff > 0.0) 0.5 / tEff * inverseSensitivity   else 0.0
 
             val nEff = (bufCps[i] * tEff).coerceAtLeast(0.0)
             val nF   = floor(nEff).toInt()
@@ -212,7 +213,7 @@ class KernelDensityEstimator(private val coeff: Double) {
             val chiL = ci.chi2L(nF) + frac * (ci.chi2L(nC) - ci.chi2L(nF))
             val chiR = ci.chi2R(nF + 1) + frac * (ci.chi2R(nC + 1) - ci.chi2R(nF + 1))
 
-            bufMean[i] = bufCps[i] * coeff
+            bufMean[i] = bufCps[i] * inverseSensitivity
             bufLow[i]  = chiL * scale2usvh
             bufHigh[i] = chiR * scale2usvh
         }

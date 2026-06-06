@@ -5,7 +5,7 @@ import kotlin.math.roundToInt
 
 class TrackGeneralizer(
     private val minDistanceMeters: Double,
-    private val coeff: Double,
+    private val sensitivity: Double,
     private val minDurationSeconds: Double = 0.0
 ) {
 
@@ -47,7 +47,7 @@ class TrackGeneralizer(
                 latitude = if (averagedCoordinatePoints > 0) latSum / averagedCoordinatePoints else fallbackPoint.latitude,
                 longitude = if (averagedCoordinatePoints > 0) lonSum / averagedCoordinatePoints else fallbackPoint.longitude,
                 timeMillis = fallbackPoint.timeMillis,
-                doseRate = if (secondsSum > 0.0) countsSum * coeff / secondsSum else 0.0,
+                doseRate = if (secondsSum > 0.0) countsSum / sensitivity / secondsSum else 0.0,
                 counts = countsSum,
                 seconds = secondsSum,
                 badCoordinates = averagedCoordinatePoints == 0
@@ -107,7 +107,7 @@ class TrackGeneralizer(
     ): List<TrackPoint> {
         if (generalizedTrackPoints.isEmpty() || kdeScale <= 0.0) return generalizedTrackPoints
 
-        val kernelEstimator = KernelDensityEstimator(coeff)
+        val kernelEstimator = KernelDensityEstimator(sensitivity)
         var intervalStartSeconds = 0.0
         for (sample in sourceTrack.points) {
             kernelEstimator.addSampleInterval(
@@ -128,8 +128,8 @@ class TrackGeneralizer(
         val estimatedDoseRate = kernelEstimator.estimateDoseRate(midpointSeconds, kdeScale)
         return generalizedTrackPoints.mapIndexed { idx, sample ->
             val doseRate = estimatedDoseRate.getOrElse(idx) { sample.doseRate }.coerceAtLeast(0.0)
-            val counts = if (coeff > 0.0) {
-                ((doseRate / coeff) * sample.seconds).roundToInt().coerceAtLeast(0)
+            val counts = if (sensitivity > 0.0) {
+                (doseRate * sensitivity * sample.seconds).roundToInt().coerceAtLeast(0)
             } else {
                 sample.counts
             }

@@ -30,10 +30,10 @@
         app:iconSpaceReserved="false">
 
         <EditTextPreference
-            android:key="cps_to_usvh"
-            android:title="Conversion factor"
-            android:defaultValue="0.1"
-            android:dialogTitle="Conversion factor (in μSv/h per cps)" />
+            android:key="sensitivity"
+            android:title="Sensitivity"
+            android:defaultValue="10.0"
+            android:dialogTitle="Sensitivity (in cps per μSv/h)" />
 
         <ListPreference
             android:key="dose_rate_avg_timestamps_n"

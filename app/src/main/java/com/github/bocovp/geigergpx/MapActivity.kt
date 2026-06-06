@@ -453,13 +453,12 @@ class MapActivity : AppCompatActivity() {
                     val selectedPoiIds = ensurePoiSelectionInitialized(allPois.map { it.id }.toSet())
                     val visiblePois = allPois.filter { it.id in selectedPoiIds }
 
-                    val coeff = PreferenceManager.getDefaultSharedPreferences(this@MapActivity)
-                        .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-                    val showCpsUnit = kotlin.math.abs(coeff - 1.0) < 1e-9
+                    val sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this@MapActivity))
+                    val showCpsUnit = kotlin.math.abs(sensitivity - 1.0) < 1e-9
 
                     val poiMapItems = visiblePois.map { poi ->
                         val cps = if (poi.seconds > 0.0001) poi.counts / poi.seconds else 0.0
-                        val doseRate = cps * coeff
+                        val doseRate = RadiationCalibration.doseRateFromCps(cps, sensitivity)
                         val value = if (showCpsUnit) cps else doseRate
                         val unit = if (showCpsUnit) "cps" else "μSv/h"
                         PoiMapItem(

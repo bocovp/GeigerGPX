@@ -42,7 +42,7 @@ class EditTrackActivity : AppCompatActivity() {
     private var boundaryIndex: Int? = null
     private var hasEdits = false
     private var trackAlreadyEdited = false
-    private var trackCalibrationCoefficient: Double = 1.0
+    private var trackSensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -148,10 +148,8 @@ class EditTrackActivity : AppCompatActivity() {
 
             points = loaded.points.toMutableList()
             trackAlreadyEdited = loaded.isEdited
-            trackCalibrationCoefficient = loaded.cpsToUsvh
-                ?: androidx.preference.PreferenceManager.getDefaultSharedPreferences(this@EditTrackActivity)
-                    .getString("cps_to_usvh", "1.0")?.toDoubleOrNull()
-                ?: 1.0
+            trackSensitivity = loaded.sensitivity
+                ?: RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(this@EditTrackActivity))
             fitMapToTrack()
             refreshUiState()
         }
@@ -299,7 +297,7 @@ class EditTrackActivity : AppCompatActivity() {
                     counts = totalCounts,
                     seconds = totalSeconds,
                     doseRate = if (totalSeconds > 0.0) {
-                        totalCounts.toDouble() / totalSeconds * trackCalibrationCoefficient
+                        totalCounts.toDouble() / totalSeconds / trackSensitivity
                     } else {
                         0.0
                     },
@@ -377,7 +375,7 @@ class EditTrackActivity : AppCompatActivity() {
                             trackTitle,
                             trackFolder,
                             secondPart,
-                            trackCalibrationCoefficient
+                            trackSensitivity
                         ) ?: return@withContext false
                         TrackCatalog.onTrackSavedById(
                             this@EditTrackActivity,
@@ -392,7 +390,7 @@ class EditTrackActivity : AppCompatActivity() {
                         trackId,
                         updatedPoints,
                         edited = true,
-                        calibrationOverride = trackCalibrationCoefficient
+                        sensitivityOverride = trackSensitivity
                     )
                     TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints)
                     true

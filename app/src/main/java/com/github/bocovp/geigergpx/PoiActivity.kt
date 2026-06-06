@@ -136,10 +136,8 @@ class PoiActivity : AppCompatActivity() {
         if (poi.seconds <= 0.0) {
             return "??? μSv/h"
         }
-        val coeff = PreferenceManager.getDefaultSharedPreferences(this)
-            .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
-
-        val ci = ConfidenceInterval(0.0, poi.seconds, poi.counts, false).scale(coeff)
+        val sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this))
+        val ci = ConfidenceInterval(0.0, poi.seconds, poi.counts, false).scale(1.0 / sensitivity)
         return "${ci.toText(decimalDigits = 4)} μSv/h"
     }
 

@@ -161,13 +161,13 @@ class TimePlotView @JvmOverloads constructor(
 
     fun setPoints(
         points: List<TrackPoint>,
-        cpsToUSvh: Double,
+        sensitivity: Double,
         recalculateVerticalAxis: Boolean = true,
         isLiveUpdate: Boolean = false
     ) {
         kernelSeries = emptyList()
         plotSegments.clear()
-        yAxisUnit = if (kotlin.math.abs(cpsToUSvh - 1.0) < 1e-9) "cps" else "μSv/h"
+        yAxisUnit = if (kotlin.math.abs(sensitivity - 1.0) < 1e-9) "cps" else "μSv/h"
 
         if (points.isEmpty()) {
             trackDurationSeconds = 0.0
@@ -192,8 +192,8 @@ class TimePlotView @JvmOverloads constructor(
                 startSeconds = elapsedSeconds,
                 endSeconds = elapsedSeconds + seconds,
                 value = value,
-                ciLow = ci.lowBound.coerceAtLeast(0.0) * cpsToUSvh,
-                ciHigh = ci.highBound.coerceAtLeast(0.0) * cpsToUSvh
+                ciLow = ci.lowBound.coerceAtLeast(0.0) / sensitivity,
+                ciHigh = ci.highBound.coerceAtLeast(0.0) / sensitivity
             )
             elapsedSeconds += seconds
         }
@@ -215,13 +215,13 @@ class TimePlotView @JvmOverloads constructor(
         mean: DoubleArray,
         low: DoubleArray,
         high: DoubleArray,
-        cpsToUSvh: Double,
+        sensitivity: Double,
         totalTrackDurationSeconds: Double,
         recalculateVerticalAxis: Boolean = true,
         isLiveUpdate: Boolean = false
     ) {
         plotSegments.clear()
-        yAxisUnit = if (kotlin.math.abs(cpsToUSvh - 1.0) < 1e-9) "cps" else "μSv/h"
+        yAxisUnit = if (kotlin.math.abs(sensitivity - 1.0) < 1e-9) "cps" else "μSv/h"
         val size = minOf(relativeSeconds.size, mean.size, low.size, high.size)
         kernelSeries = List(size) { idx ->
             KernelPoint(

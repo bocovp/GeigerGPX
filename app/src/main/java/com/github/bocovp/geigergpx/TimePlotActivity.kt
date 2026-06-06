@@ -43,7 +43,7 @@ class TimePlotActivity : AppCompatActivity() {
         val mode: PlotMode,
         val points: List<TrackPoint>,
         val scaleSeconds: Double,
-        val coeff: Double,
+        val sensitivity: Double,
         val isCurrentTrack: Boolean,
         val visibleRange: TimePlotView.VisibleRange,
         val trackTitle: String,
@@ -55,19 +55,19 @@ class TimePlotActivity : AppCompatActivity() {
     private data class EstimatorCache(
         val points: List<TrackPoint>,
         val estimator: KernelDensityEstimator,
-        val coeff: Double
+        val sensitivity: Double
     )
 
     private data class SlidingWindowCache(
         val inputPoints: List<TrackPoint>,
         val scaleSeconds: Double,
-        val coeff: Double,
+        val sensitivity: Double,
         val outputPoints: List<TrackPoint>
     )
 
     private lateinit var binding: ActivityTimePlotBinding
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
-    private var cpsToUSvhCoeff: Double = 1.0
+    private var sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
     private var currentPoints: List<TrackPoint> = emptyList()
    // private var activeTrackObserverAttached = false
  //   private var trackingObserverAttached = false
@@ -197,12 +197,12 @@ class TimePlotActivity : AppCompatActivity() {
                                 isCurrentTrack = request.isCurrentTrack,
                                 points = request.points,
                                 scaleSeconds = request.scaleSeconds,
-                                coeff = request.coeff,
+                                sensitivity = request.sensitivity,
                                 visibleRange = request.visibleRange,
                                 keepEndVisible = request.keepEndVisible
                             )
                         } else {
-                            calculateSlidingWindowPlot(request.points, request.scaleSeconds, request.coeff, request.trackTitle)
+                            calculateSlidingWindowPlot(request.points, request.scaleSeconds, request.sensitivity, request.trackTitle)
                         }
                     }
 
@@ -217,7 +217,7 @@ class TimePlotActivity : AppCompatActivity() {
     private fun applyPlotResult(result: PlotResult?, request: RenderRequest) {
         val isCurrentTrack = request.isCurrentTrack
         val plotMode = request.mode
-        val coeff = request.coeff
+        val sensitivity = request.sensitivity
         val recalculateVerticalAxis = request.recalculateVerticalAxis
         binding.timePlotView.setShowLiveMarker(isCurrentTrack && plotMode == PlotMode.KERNEL_ESTIMATOR)
         when (result) {
@@ -230,7 +230,7 @@ class TimePlotActivity : AppCompatActivity() {
                     mean = result.mean,
                     low = result.low,
                     high = result.high,
-                    cpsToUSvh = coeff,
+                    sensitivity = sensitivity,
                     totalTrackDurationSeconds = result.totalTrackDurationSeconds,
                     recalculateVerticalAxis = recalculateVerticalAxis,
                     isLiveUpdate = isCurrentTrack
@@ -247,7 +247,7 @@ class TimePlotActivity : AppCompatActivity() {
                 val wasViewingEnd = binding.timePlotView.isViewingEnd()
                 binding.timePlotView.setPoints(
                     points = result.points,
-                    cpsToUSvh = coeff,
+                    sensitivity = sensitivity,
                     recalculateVerticalAxis = recalculateVerticalAxis,
                     isLiveUpdate = isCurrentTrack
                 )
@@ -260,7 +260,7 @@ class TimePlotActivity : AppCompatActivity() {
                 showPlotMessage(if (result.points.isEmpty()) R.string.time_plot_no_track_data else null)
             }
             null -> {
-                binding.timePlotView.setPoints(emptyList(), coeff, recalculateVerticalAxis, isLiveUpdate = isCurrentTrack)
+                binding.timePlotView.setPoints(emptyList(), sensitivity, recalculateVerticalAxis, isLiveUpdate = isCurrentTrack)
                 showPlotMessage(R.string.time_plot_no_track_data)
             }
         }
@@ -594,8 +594,7 @@ class TimePlotActivity : AppCompatActivity() {
         refreshCandidatesJob?.cancel()
         refreshCandidatesJob = lifecycleScope.launch {
             try {
-                cpsToUSvhCoeff = PreferenceManager.getDefaultSharedPreferences(this@TimePlotActivity)
-                    .getString("cps_to_usvh", "1.0")?.toDoubleOrNull() ?: 1.0
+                sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this@TimePlotActivity))
 
                 val activePoints = viewModel.activeTrackPoints.value.orEmpty()
                 val isTracking = viewModel.isTracking.value == true
@@ -612,7 +611,7 @@ class TimePlotActivity : AppCompatActivity() {
                     selectedTrackIdForPlot = null
                     updateCurrentPoints(emptyList(), null)
                     updateTrackTitle(null)
-                    binding.timePlotView.setPoints(emptyList(), cpsToUSvhCoeff, recalculateVerticalAxis = true)
+                    binding.timePlotView.setPoints(emptyList(), sensitivity, recalculateVerticalAxis = true)
                     showPlotMessage(R.string.time_plot_no_track_data)
                     setupRenderCollector() // Restart the loop
                 } else if (resolvedTrackId != selectedTrackIdForPlot || currentPoints.isEmpty()) {
@@ -834,7 +833,7 @@ class TimePlotActivity : AppCompatActivity() {
             mode = plotMode,
             points = currentPoints,
             scaleSeconds = scaleSeconds,
-            coeff = cpsToUSvhCoeff,
+            sensitivity = sensitivity,
             isCurrentTrack = isCurrentTrack,
             visibleRange = visibleRange,
             trackTitle = binding.trackNameField.text?.toString().orEmpty(),
@@ -862,7 +861,7 @@ class TimePlotActivity : AppCompatActivity() {
         isCurrentTrack: Boolean,
         points: List<TrackPoint>,
         scaleSeconds: Double,
-        coeff: Double,
+        sensitivity: Double,
         visibleRange: TimePlotView.VisibleRange,
         keepEndVisible: Boolean
     ): PlotResult.Kde? {
@@ -897,7 +896,7 @@ class TimePlotActivity : AppCompatActivity() {
         val estimator: KernelDensityEstimator
         val firstTimestamp = 0.0
 
-        if (cache != null && cache.points === points && cache.coeff == coeff) {
+        if (cache != null && cache.points === points && cache.sensitivity == sensitivity) {
             estimator = cache.estimator
         } else {
             var totalDuration = 0.0
@@ -909,7 +908,7 @@ class TimePlotActivity : AppCompatActivity() {
             }
             if (!hasData || totalDuration <= 0.0) return null
 
-            estimator = KernelDensityEstimator(coeff)
+            estimator = KernelDensityEstimator(sensitivity)
             var accumulatedSeconds = 0.0
             for (p in points) {
                 yield()
@@ -917,7 +916,7 @@ class TimePlotActivity : AppCompatActivity() {
                 estimator.addSampleInterval(accumulatedSeconds, durationSeconds, p.counts.coerceAtLeast(0))
                 accumulatedSeconds += durationSeconds
             }
-            estimatorCache = EstimatorCache(points, estimator, coeff)
+            estimatorCache = EstimatorCache(points, estimator, sensitivity)
         }
 
         val totalDuration = points.sumOf { it.seconds.coerceAtLeast(0.0) }
@@ -942,11 +941,11 @@ class TimePlotActivity : AppCompatActivity() {
     private suspend fun calculateSlidingWindowPlot(
         points: List<TrackPoint>,
         scaleSeconds: Double,
-        coeff: Double,
+        sensitivity: Double,
         trackTitle: String
     ): PlotResult.SlidingWindow {
         val cache = slidingWindowCache
-        if (cache != null && cache.inputPoints === points && cache.scaleSeconds == scaleSeconds && cache.coeff == coeff) {
+        if (cache != null && cache.inputPoints === points && cache.scaleSeconds == scaleSeconds && cache.sensitivity == sensitivity) {
             return PlotResult.SlidingWindow(cache.outputPoints)
         }
 
@@ -954,11 +953,11 @@ class TimePlotActivity : AppCompatActivity() {
         val track = MapTrack(id = CURRENT_TRACK_TITLE, title = trackTitle, points = points)
         val generalized = TrackGeneralizer(
             minDistanceMeters = 0.0,
-            coeff = coeff,
+            sensitivity = sensitivity,
             minDurationSeconds = scaleSeconds
         ).generalize(track)
 
-        slidingWindowCache = SlidingWindowCache(points, scaleSeconds, coeff, generalized.points)
+        slidingWindowCache = SlidingWindowCache(points, scaleSeconds, sensitivity, generalized.points)
         return PlotResult.SlidingWindow(generalized.points)
     }
 
