@@ -27,7 +27,8 @@ object GpxReader {
 
     data class TrackWithStats(
         val points: List<TrackPoint>,
-        val stats: TrackStats
+        val stats: TrackStats,
+        val sensitivity: Double
     )
 
     data class TrackWithMetadata(
@@ -45,7 +46,7 @@ object GpxReader {
 
     fun readTrackWithMetadata(inputStream: InputStream): TrackWithMetadata? {
         val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false) ?: return null
-        return TrackWithMetadata(parsed.points, parsed.edited, parsed.metadata?.sensitivity)
+        return TrackWithMetadata(parsed.points, parsed.edited, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY)
     }
 
     fun readTrack(inputStream: InputStream): List<TrackPoint>? {
@@ -57,13 +58,19 @@ object GpxReader {
     fun readTrackWithStats(inputStream: InputStream): TrackWithStats? {
         val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false)
             ?: return null
-        return TrackWithStats(parsed.points, parsed.stats)
+        return TrackWithStats(parsed.points, parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY)
     }
 
     fun readTrackStats(inputStream: InputStream): TrackStats? {
         val parsed = readTrackInternal(inputStream, parsePoints = false, preferMetadataStats = true)
             ?: return null
         return parsed.stats
+    }
+
+    fun readTrackStatsWithSensitivity(inputStream: InputStream): TrackWithStats? {
+        val parsed = readTrackInternal(inputStream, parsePoints = false, preferMetadataStats = true)
+            ?: return null
+        return TrackWithStats(emptyList(), parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY)
     }
 
     fun readPois(xml: String): List<PoiEntry> {
@@ -353,7 +360,8 @@ object GpxReader {
                                 doseRate = doseRate,
                                 counts = counts,
                                 seconds = seconds,
-                                description = name.ifBlank { "POI" }
+                                description = name.ifBlank { "POI" },
+                                sensitivity = sensitivityFromPoi(counts, seconds, doseRate)
                             )
                         )
                         insideWpt = false
@@ -366,6 +374,14 @@ object GpxReader {
         }
 
         return result.sortedByDescending { it.timestampMillis }
+    }
+
+    private fun sensitivityFromPoi(counts: Int, seconds: Double, doseRate: Double): Double {
+        return if (counts > 0 && seconds > 0.000001 && doseRate > 0.0) {
+            (counts / seconds) / doseRate
+        } else {
+            RadiationCalibration.DEFAULT_SENSITIVITY
+        }
     }
 
     private fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {

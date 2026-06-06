@@ -458,7 +458,7 @@ class MapActivity : AppCompatActivity() {
 
                     val poiMapItems = visiblePois.map { poi ->
                         val cps = if (poi.seconds > 0.0001) poi.counts / poi.seconds else 0.0
-                        val doseRate = RadiationCalibration.doseRateFromCps(cps, sensitivity)
+                        val doseRate = RadiationCalibration.doseRateFromCps(cps, poi.sensitivity)
                         val value = if (showCpsUnit) cps else doseRate
                         val unit = if (showCpsUnit) "cps" else "μSv/h"
                         PoiMapItem(
@@ -469,6 +469,7 @@ class MapActivity : AppCompatActivity() {
                             doseRateForColor = doseRate,
                             counts = poi.counts,
                             seconds = poi.seconds,
+                            sensitivity = poi.sensitivity,
                             doseLabel = String.format(Locale.US, "%.3f %s", value, unit)
                         )
                     }

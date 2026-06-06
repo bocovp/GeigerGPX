@@ -18,7 +18,12 @@ data class PoiEntry(
     val doseRate: Double,
     val counts: Int,
     val seconds: Double,
-    val description: String
+    val description: String,
+    val sensitivity: Double = if (counts > 0 && seconds > 0.000001 && doseRate > 0.0) {
+        (counts / seconds) / doseRate
+    } else {
+        RadiationCalibration.DEFAULT_SENSITIVITY
+    }
 )
 
 fun buildPoiId(timestampMillis: Long, latitude: Double, longitude: Double): String {
@@ -99,7 +104,12 @@ object PoiLibrary {
                 doseRate = doseRate,
                 counts = counts,
                 seconds = seconds,
-                description = description.ifBlank { "POI" }
+                description = description.ifBlank { "POI" },
+                sensitivity = if (counts > 0 && seconds > 0.000001 && doseRate > 0.0) {
+                    (counts / seconds) / doseRate
+                } else {
+                    RadiationCalibration.DEFAULT_SENSITIVITY
+                }
             )
         }
         if (result.success && selected) {

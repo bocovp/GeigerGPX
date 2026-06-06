@@ -11,6 +11,7 @@ class TrackGeneralizer(
 
     fun generalize(track: MapTrack, kdeScale: Double? = null): MapTrack {
         if (track.points.size < 2) return track
+        val trackSensitivity = track.sensitivity.takeIf { it > 0.0 } ?: sensitivity
 
         val geoPointSource = GeoPoint(0.0, 0.0)
         val geoPointLast = GeoPoint(0.0, 0.0)
@@ -47,7 +48,7 @@ class TrackGeneralizer(
                 latitude = if (averagedCoordinatePoints > 0) latSum / averagedCoordinatePoints else fallbackPoint.latitude,
                 longitude = if (averagedCoordinatePoints > 0) lonSum / averagedCoordinatePoints else fallbackPoint.longitude,
                 timeMillis = fallbackPoint.timeMillis,
-                doseRate = if (secondsSum > 0.0) countsSum / sensitivity / secondsSum else 0.0,
+                doseRate = if (secondsSum > 0.0) countsSum / trackSensitivity / secondsSum else 0.0,
                 counts = countsSum,
                 seconds = secondsSum,
                 badCoordinates = averagedCoordinatePoints == 0
@@ -95,7 +96,7 @@ class TrackGeneralizer(
         flushAveragedPoint()
 
         if (kdeScale != null) {
-            return track.copy(points = applyKdeToGeneralizedTrack(track, generalized, kdeScale))
+            return track.copy(points = applyKdeToGeneralizedTrack(track, generalized, kdeScale, trackSensitivity))
         }
         return track.copy(points = generalized)
     }
@@ -103,7 +104,8 @@ class TrackGeneralizer(
     private fun applyKdeToGeneralizedTrack(
         sourceTrack: MapTrack,
         generalizedTrackPoints: List<TrackPoint>,
-        kdeScale: Double
+        kdeScale: Double,
+        sensitivity: Double
     ): List<TrackPoint> {
         if (generalizedTrackPoints.isEmpty() || kdeScale <= 0.0) return generalizedTrackPoints
 
