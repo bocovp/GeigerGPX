@@ -7,6 +7,10 @@
         android:title="Signal detection"
         app:iconSpaceReserved="false">
 
+        <Preference
+            android:key="dosimeter"
+            android:title="Dosimeter" />
+
         <com.github.bocovp.geigergpx.LongPressPreference
             android:key="threshold_calibration"
             android:title="Threshold (press to calibrate)"
@@ -28,12 +32,6 @@
         android:key="dose_rate_measurement_section"
         android:title="Dose rate measurement"
         app:iconSpaceReserved="false">
-
-        <EditTextPreference
-            android:key="sensitivity"
-            android:title="Sensitivity"
-            android:defaultValue="10.0"
-            android:dialogTitle="Sensitivity (in cps per μSv/h)" />
 
         <ListPreference
             android:key="dose_rate_avg_timestamps_n"

@@ -5,13 +5,7 @@ import kotlin.math.cos
 
 class GoertzelDetector(
     private val magThreshold: Float,
-    private val sampleRate: Int = DEFAULT_SAMPLE_RATE,
-    // windowSize, stepSize, freqLow, freqHigh are derived from sampleRate in init
-    // via configFor() — they are NOT constructor parameters.
-    private val oneBeep: Double = BEEP_DURATION,
-
-    private val dominanceThreshold: Float = DEFAULT_DOMINANCE_THRESHOLD,
-    private val dominanceThresholdEnd: Float = DEFAULT_DOMINANCE_THRESHOLD_END
+    private val sampleRate: Int = DEFAULT_SAMPLE_RATE
 ) {
 
     var onBeep: (Float, Int) -> Unit = { _, _ -> }
@@ -44,35 +38,39 @@ class GoertzelDetector(
     private val threeBeepMax: Double
     private val fourBeepMin: Double
     private val fourBeepMax: Double
+    private val dominanceThreshold: Float
+    private val dominanceThresholdEnd: Float
 
 
     private val magThresholdEnd = magThreshold / 2f
 
     init {
-        // The switch block: all rate-dependent parameters are resolved here.
-        val cfg    = configFor(sampleRate)
+        // Rate-dependent parameters are resolved from the currently selected device.
+        val cfg    = DeviceConfigManager.rateConfigFor(sampleRate)
         windowSize = cfg.windowSize
         stepSize   = cfg.stepSize
         freqMain   = cfg.freqMain
         freqLow    = cfg.freqLow
         freqHigh   = cfg.freqHigh
+        dominanceThreshold = cfg.dominanceThreshold
+        dominanceThresholdEnd = cfg.dominanceThresholdEnd
 
         // Goertzel coefficients depend on freqLow/freqHigh, which are now resolved.
         coeffMain = coeff(freqMain)
         coeffLow  = coeff(cfg.freqLow)
         coeffHigh = coeff(cfg.freqHigh)
 
-        oneBeepMin = oneBeep - cfg.oneBeepTol
-        oneBeepMax = oneBeep + cfg.oneBeepTol
+        oneBeepMin = cfg.duration - cfg.oneBeepTol
+        oneBeepMax = cfg.duration + cfg.oneBeepTol
 
-        twoBeepMin = oneBeep * 2 - cfg.twoBeepTol
-        twoBeepMax = oneBeep * 2 + cfg.twoBeepTol
+        twoBeepMin = cfg.duration * 2 - cfg.twoBeepTol
+        twoBeepMax = cfg.duration * 2 + cfg.twoBeepTol
 
-        threeBeepMin = oneBeep * 3 - cfg.threeBeepTol
-        threeBeepMax = oneBeep * 3 + cfg.threeBeepTol
+        threeBeepMin = cfg.duration * 3 - cfg.threeBeepTol
+        threeBeepMax = cfg.duration * 3 + cfg.threeBeepTol
 
-        fourBeepMin = oneBeep * 4 - cfg.fourBeepTol
-        fourBeepMax = oneBeep * 4 + cfg.fourBeepTol
+        fourBeepMin = cfg.duration * 4 - cfg.fourBeepTol
+        fourBeepMax = cfg.duration * 4 + cfg.fourBeepTol
 
         hann = FloatArray(windowSize) {
             (0.5 - 0.5 * cos(2.0 * PI * it / (windowSize - 1))).toFloat()
@@ -226,93 +224,20 @@ class GoertzelDetector(
         const val  BEEP_DURATION = 0.025
         const val DEFAULT_DOMINANCE_THRESHOLD     = 2.0f
         const val DEFAULT_DOMINANCE_THRESHOLD_END = 1.1f
-
-        // -------------------------------------------------------------------------
-        // Rate-driven configuration switch.
-        // windowSize is chosen so the bin width (sampleRate / windowSize) is ~200 Hz
-        // at all three supported rates, keeping the witness bins exactly ±1 bin away
-        // from freqMain (bins 15 and 17 at SCO rates; bins 12 and 14 at 44100 Hz).
-        // stepSize is ~18 % of windowSize across all rates for consistent temporal
-        // resolution of beep edge detection.
-        // -------------------------------------------------------------------------
-        private data class RateConfig(
-            val windowSize:   Int,
-            val stepSize:     Int,
-            val freqMain:     Float,
-            val freqLow:      Float,
-            val freqHigh:     Float,
-            val oneBeepTol:   Double,
-            val twoBeepTol:   Double,
-            val threeBeepTol: Double,
-            val fourBeepTol:  Double
-        )
-
-        private fun configFor(sampleRate: Int): RateConfig =
-            when (sampleRate) {
-                16000 -> {
-                    // Bluetooth  audio
-                    val winSize  = 83 // 0.005 s
-                    val binWidth = 16000f / winSize // bin width = 205.1 Hz
-                    RateConfig(
-                        windowSize = winSize,
-                        stepSize   = 12, // 0.00075 s
-                        freqLow    = 16 * binWidth, //  3084.34
-                        freqMain   = 17 * binWidth, //  3277.11
-                        freqHigh   = 18 * binWidth, //  3469.88
-                        oneBeepTol = 0.0075,
-                        twoBeepTol = 0.015,
-                        threeBeepTol = 0.015,
-                        fourBeepTol = 0.015
-                    )
-                }
-                8000 -> {
-                    // Bluetooth  audio
-                    val winSize  = 61 // 0.0076 s
-                    val binWidth = 8000f / winSize
-                    RateConfig(
-                        windowSize = winSize,
-                        stepSize   = 6, // 0.00075 s
-                        freqLow    = 23 * binWidth, //  3016.39
-                        freqMain   = 25 * binWidth, //  3278.69
-                        freqHigh   = 27 * binWidth, //  3540.98
-                        oneBeepTol = 0.0075,
-                        twoBeepTol = 0.015,
-                        threeBeepTol = 0.015,
-                        fourBeepTol = 0.015
-                    )
-                }
-                48000 -> {
-                    // Bluetooth  audio
-                    val winSize  = 205 // 0.0043 s
-                    val binWidth = 48000f / winSize
-                    RateConfig(
-                        windowSize = winSize,
-                        stepSize   = 32, // 0.00067s
-                        freqLow    = 13 * binWidth, //  3043.90
-                        freqMain   = 14 * binWidth, //  3278.05
-                        freqHigh   = 15 * binWidth, //  3512.20
-                        oneBeepTol = 0.0075,
-                        twoBeepTol = 0.015,
-                        threeBeepTol = 0.015,
-                        fourBeepTol = 0.015
-                    )
-                }
-                else -> {
-                    // 44100 Hz (built-in mic) or any unexpected rate.
-                    val winSize  = 175
-                    val binWidth = sampleRate.toFloat() / winSize  //  in width = 252 Hz
-                    RateConfig(
-                        windowSize = winSize, // 0.004s
-                        stepSize   = 32, // 0.00073 s
-                        freqLow    = 12 * binWidth, //3024
-                        freqMain   = 13 * binWidth, //3276
-                        freqHigh   = 14 * binWidth, //3528
-                        oneBeepTol = 0.01,
-                        twoBeepTol = 0.015,
-                        threeBeepTol = 0.015,
-                        fourBeepTol = 0.015
-                    )
-                }
-            }
     }
+
+    data class RateConfig(
+        val windowSize:   Int,
+        val stepSize:     Int,
+        val freqMain:     Float,
+        val freqLow:      Float,
+        val freqHigh:     Float,
+        val duration:     Double,
+        val dominanceThreshold: Float,
+        val dominanceThresholdEnd: Float,
+        val oneBeepTol:   Double,
+        val twoBeepTol:   Double,
+        val threeBeepTol: Double,
+        val fourBeepTol:  Double
+    )
 }

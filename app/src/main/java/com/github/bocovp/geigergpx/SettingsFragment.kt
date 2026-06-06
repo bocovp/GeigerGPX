@@ -28,6 +28,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
         if (key == RadiationCalibration.KEY_SENSITIVITY || key == "cps_to_usvh" || key == "dose_rate_avg_timestamps_n" || key == "alert_dose_rate") {
             updateAlertDoseRateSummary()
         }
+        if (key == DeviceConfigManager.KEY_DEVICE_NAME) {
+            updateDosimeterSummary()
+        }
     }
 
     private val folderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -83,13 +86,16 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
         maxTimeWithoutGps?.summaryProvider = summaryWithUnit("s")
 
-        val sensitivity = findPreference<EditTextPreference>(RadiationCalibration.KEY_SENSITIVITY)
-        sensitivity?.setOnBindEditTextListener { edit ->
-            edit.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or
-                    android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
+        val dosimeter = findPreference<Preference>("dosimeter")
+        dosimeter?.setOnPreferenceClickListener {
+            parentFragmentManager
+                .beginTransaction()
+                .replace(R.id.settingsContainer, DeviceSettingsFragment())
+                .addToBackStack(null)
+                .commit()
+            true
         }
-        sensitivity?.summaryProvider = summaryWithUnit("cps per μSv/h")
+        updateDosimeterSummary()
 
         val avgTimestamps = findPreference<ListPreference>("dose_rate_avg_timestamps_n")
         avgTimestamps?.summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
@@ -128,8 +134,10 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
     override fun onResume() {
         super.onResume()
+        (activity as? SettingsActivity)?.supportActionBar?.title = "Settings"
         preferenceManager.sharedPreferences?.registerOnSharedPreferenceChangeListener(settingsPrefListener)
         updateAlertDoseRateSummary()
+        updateDosimeterSummary()
     }
 
     override fun onPause() {
@@ -142,6 +150,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
             val value = pref.text.orEmpty()
             if (value.isBlank()) "Not set" else "$value $unit"
         }
+    }
+
+    private fun updateDosimeterSummary() {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        findPreference<Preference>("dosimeter")?.summary = DeviceConfigManager.currentDeviceName(prefs)
     }
 
     private fun updateFolderSummary() {

@@ -9,13 +9,17 @@ object RadiationCalibration {
     const val DEFAULT_SENSITIVITY = 10.0
 
     fun sensitivityFromPrefs(prefs: SharedPreferences): Double {
-        val sensitivity = prefs.getString(KEY_SENSITIVITY, null)?.toDoubleOrNull()
-        if (sensitivity != null && sensitivity > 0.0) return sensitivity
+        return try {
+            DeviceConfigManager.sensitivityFromPrefs(prefs)
+        } catch (_: IllegalStateException) {
+            val sensitivity = prefs.getString(KEY_SENSITIVITY, null)?.toDoubleOrNull()
+            if (sensitivity != null && sensitivity > 0.0) return sensitivity
 
-        val legacyCoefficient = prefs.getString(KEY_LEGACY_CPS_TO_USVH, null)?.toDoubleOrNull()
-        if (legacyCoefficient != null && legacyCoefficient > 0.0) return 1.0 / legacyCoefficient
+            val legacyCoefficient = prefs.getString(KEY_LEGACY_CPS_TO_USVH, null)?.toDoubleOrNull()
+            if (legacyCoefficient != null && legacyCoefficient > 0.0) return 1.0 / legacyCoefficient
 
-        return DEFAULT_SENSITIVITY
+            DEFAULT_SENSITIVITY
+        }
     }
 
     fun doseRateFromCps(cps: Double, sensitivity: Double): Double {
