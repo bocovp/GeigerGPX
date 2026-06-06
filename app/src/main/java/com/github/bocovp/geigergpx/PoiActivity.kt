@@ -11,7 +11,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.lifecycle.lifecycleScope
-import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.bocovp.geigergpx.databinding.ActivityPoiBinding
 import java.text.SimpleDateFormat
@@ -136,8 +135,7 @@ class PoiActivity : AppCompatActivity() {
         if (poi.seconds <= 0.0) {
             return "??? μSv/h"
         }
-        val sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this))
-        val ci = ConfidenceInterval(0.0, poi.seconds, poi.counts, false).scale(1.0 / sensitivity)
+        val ci = ConfidenceInterval(0.0, poi.seconds, poi.counts, false).scale(1.0 / poi.sensitivity)
         return "${ci.toText(decimalDigits = 4)} μSv/h"
     }
 

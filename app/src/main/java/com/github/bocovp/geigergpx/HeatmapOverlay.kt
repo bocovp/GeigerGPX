@@ -15,7 +15,13 @@ class HeatmapOverlay(
     var tracks: List<MapTrack> = emptyList()
         set(value) {
             field = value
-            tracksVersion++
+            dataVersion++
+            cachedRaster = null
+        }
+    var pois: List<PoiMapItem> = emptyList()
+        set(value) {
+            field = value
+            dataVersion++
             cachedRaster = null
         }
     var minDose: Double = 0.0
@@ -34,7 +40,7 @@ class HeatmapOverlay(
         val maxDose: Double
     )
 
-    private var tracksVersion: Long = 0
+    private var dataVersion: Long = 0
     private var cachedRaster: RasterResult? = null
     private var cachedKey: String? = null
 
@@ -44,7 +50,7 @@ class HeatmapOverlay(
     }
 
     override fun draw(canvas: Canvas, projection: Projection) {
-        if (tracks.isEmpty()) return
+        if (tracks.isEmpty() && pois.isEmpty()) return
 
         val viewWidth = canvas.width
         val viewHeight = canvas.height
@@ -77,7 +83,7 @@ class HeatmapOverlay(
         viewWidth: Int,
         viewHeight: Int
     ): RasterResult? {
-        if (tracks.isEmpty() || viewWidth <= 0 || viewHeight <= 0) return null
+        if ((tracks.isEmpty() && pois.isEmpty()) || viewWidth <= 0 || viewHeight <= 0) return null
 
         val screenRect = projection.intrinsicScreenRect
         val worldTopLeft = PointL()
@@ -91,7 +97,7 @@ class HeatmapOverlay(
         val gridX = Math.floorDiv(worldTopLeft.x, gridSizePixels.toLong())
         val gridY = Math.floorDiv(worldTopLeft.y, gridSizePixels.toLong())
         val lockPart = lockedColorbarMaxDose?.toString() ?: "auto"
-        val key = "$tracksVersion|$sensitivity|$lockPart|$gridX|$gridY|$viewWidth|$viewHeight|$cols|$rows"
+        val key = "$dataVersion|$lockPart|$gridX|$gridY|$viewWidth|$viewHeight|$cols|$rows"
         if (cachedKey == key) {
             return cachedRaster?.copy(offsetX = offsetX, offsetY = offsetY)
         }
@@ -100,6 +106,7 @@ class HeatmapOverlay(
 
         val sumCounts = IntArray(cellCount)
         val sumSeconds = DoubleArray(cellCount)
+        val sumDose = DoubleArray(cellCount)
 
         val pPixels = Point()
         val geoPoint = org.osmdroid.util.GeoPoint(0.0, 0.0)
@@ -118,7 +125,25 @@ class HeatmapOverlay(
                 val index = row * cols + col
                 sumCounts[index] += pt.counts
                 sumSeconds[index] += pt.seconds
+                sumDose[index] += pt.counts / (track.sensitivity.takeIf { it > 0.0 } ?: RadiationCalibration.DEFAULT_SENSITIVITY)
             }
+        }
+
+
+        for (poi in pois) {
+            if (poi.counts == 0 || poi.seconds <= 0.0001) continue
+
+            geoPoint.setCoords(poi.latitude, poi.longitude)
+            projection.toPixels(geoPoint, pPixels)
+
+            val col = (pPixels.x + offsetX) / gridSizePixels
+            val row = (pPixels.y + offsetY) / gridSizePixels
+            if (col !in 0 until cols || row !in 0 until rows) continue
+
+            val index = row * cols + col
+            sumCounts[index] += poi.counts
+            sumSeconds[index] += poi.seconds
+            sumDose[index] += poi.counts / (poi.sensitivity.takeIf { it > 0.0 } ?: RadiationCalibration.DEFAULT_SENSITIVITY)
         }
 
         var maxBinnedDose = Double.NEGATIVE_INFINITY
@@ -128,8 +153,7 @@ class HeatmapOverlay(
             if (totalCounts == 0) continue
 
             val totalSeconds = sumSeconds[i]
-            val squareCps = if (totalSeconds > 0.0001) totalCounts / totalSeconds else 0.0
-            val squareDoseRate = RadiationCalibration.doseRateFromCps(squareCps, sensitivity)
+            val squareDoseRate = if (totalSeconds > 0.0001) sumDose[i] / totalSeconds else 0.0
 
             if (squareDoseRate > maxBinnedDose) maxBinnedDose = squareDoseRate
         }
@@ -149,8 +173,7 @@ class HeatmapOverlay(
                 continue
             }
             val totalSeconds = sumSeconds[i]
-            val squareCps = if (totalSeconds > 0.0001) totalCounts / totalSeconds else 0.0
-            val squareDoseRate = RadiationCalibration.doseRateFromCps(squareCps, sensitivity)
+            val squareDoseRate = if (totalSeconds > 0.0001) sumDose[i] / totalSeconds else 0.0
             val squareAlpha = min(255, 255 * totalCounts / 20)
             val colorInt = DoseColorScale.colorForDose(squareDoseRate, minDose, maxDose)
             // Clearer (older) version:

@@ -594,7 +594,9 @@ class TimePlotActivity : AppCompatActivity() {
         refreshCandidatesJob?.cancel()
         refreshCandidatesJob = lifecycleScope.launch {
             try {
-                sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this@TimePlotActivity))
+                if (selectedTrackIdForPlot == null || selectedTrackIdForPlot == TrackCatalog.currentTrackId()) {
+                    sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this@TimePlotActivity))
+                }
 
                 val activePoints = viewModel.activeTrackPoints.value.orEmpty()
                 val isTracking = viewModel.isTracking.value == true
@@ -723,6 +725,7 @@ class TimePlotActivity : AppCompatActivity() {
             // in TrackWriter (the points that will be saved in the GPX file).
             // This ensures the sliding-window plot can be rendered immediately even before
             // the next activeTrackPoints emission arrives.
+            sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this))
             val pointsForPlot = viewModel.activeTrackPoints.value.ifEmpty {
                 TrackingService.activeTrackPointsSnapshot()
             }
@@ -739,6 +742,7 @@ class TimePlotActivity : AppCompatActivity() {
         rememberTrackSelection(this, trackId)
         updateTrackTitle(selectedTrack.title)
         updateTrackSelectorUi()
+        sensitivity = selectedTrack.sensitivity
         updateCurrentPoints(selectedTrack.points, trackId)
         updatePlot()
     }
@@ -950,7 +954,7 @@ class TimePlotActivity : AppCompatActivity() {
         }
 
         yield()
-        val track = MapTrack(id = CURRENT_TRACK_TITLE, title = trackTitle, points = points)
+        val track = MapTrack(id = CURRENT_TRACK_TITLE, title = trackTitle, points = points, sensitivity = sensitivity)
         val generalized = TrackGeneralizer(
             minDistanceMeters = 0.0,
             sensitivity = sensitivity,

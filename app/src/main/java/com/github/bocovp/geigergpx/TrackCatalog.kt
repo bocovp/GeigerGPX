@@ -145,7 +145,7 @@ object TrackCatalog {
             var processedCount = 0
 
             coroutineScope {
-                val results = Channel<Pair<TrackSource, TrackStats?>>(Channel.UNLIMITED)
+                val results = Channel<Pair<TrackSource, GpxReader.TrackWithStats?>>(Channel.UNLIMITED)
                 allSources.forEach { source ->
                     launch(parseDispatcher) {
                         yield()
@@ -160,9 +160,9 @@ object TrackCatalog {
                 }
 
                 repeat(totalCount) {
-                    val (source, stats) = results.receive()
-                    if (stats != null) {
-                        updatedTracks[source.id] = CachedParsedTrack.from(source, stats)
+                    val (source, parsed) = results.receive()
+                    if (parsed != null) {
+                        updatedTracks[source.id] = CachedParsedTrack.from(source, parsed.stats, parsed.sensitivity)
                     }
                     processedCount += 1
                     if (totalCount > 0) {
@@ -223,7 +223,7 @@ object TrackCatalog {
                     title = CURRENT_TRACK_TITLE,
                     subtitle = formatStats(currentTrack.stats),
                     mapTrack = if (includeCurrentMapTrack) {
-                        MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.points)
+                        MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.points, RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)))
                     } else {
                         null
                     },
@@ -270,7 +270,7 @@ object TrackCatalog {
             val stats = cached.stats
             val mapTrack = when {
                 !shouldIncludeMapTrack -> null
-                else -> MapTrack(source.sourceId, source.displayName, cached.pointsOrEmpty())
+                else -> MapTrack(source.sourceId, source.displayName, cached.pointsOrEmpty(), cached.sensitivity)
             }
 
             items.add(
@@ -458,8 +458,8 @@ object TrackCatalog {
             }
         } ?: return null
 
-        val stats = runCatching { source.openStream().use { parseGpxTrackStats(it) } }.getOrNull() ?: return null
-        return CachedParsedTrack.from(source.copy(folderName = folderName), stats)
+        val parsed = runCatching { source.openStream().use { parseGpxTrackStats(it) } }.getOrNull() ?: return null
+        return CachedParsedTrack.from(source.copy(folderName = folderName), parsed.stats, parsed.sensitivity)
     }
 
 
@@ -484,23 +484,20 @@ object TrackCatalog {
     data class TrackPlotData(
         val id: String,
         val title: String,
-        val points: List<TrackPoint>
+        val points: List<TrackPoint>,
+        val sensitivity: Double
     )
 
     suspend fun loadTrackSamplesById(context: Context, trackId: String): TrackPlotData? {
         rebuildTrackCacheIfNeeded(context)
 
-        val (points, displayName) = cacheMutex.withLock {
-            val cached = parsedTrackCache[trackId] ?: return@withLock null to null
-            if (cached.hasPoints()) {
-                cached.pointsOrEmpty() to cached.displayName
-            } else {
-                null to cached.displayName
-            }
-        }
+        val cachedTrack = cacheMutex.withLock { parsedTrackCache[trackId] }
+        val points = cachedTrack?.takeIf { it.hasPoints() }?.pointsOrEmpty()
+        val displayName = cachedTrack?.displayName
+        val cachedSensitivity = cachedTrack?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY
 
         if (points != null && displayName != null) {
-            return TrackPlotData(id = trackId, title = displayName, points = points)
+            return TrackPlotData(id = trackId, title = displayName, points = points, sensitivity = cachedSensitivity)
         }
 
         if (displayName == null) return null
@@ -512,12 +509,12 @@ object TrackCatalog {
 
         cacheMutex.withLock {
             val cached = parsedTrackCache[trackId] ?: return@withLock
-            val updated = cached.withPoints(parsed.points)
+            val updated = cached.copy(sensitivity = parsed.sensitivity).withPoints(parsed.points)
             parsedTrackCache[trackId] = updated
             _tracks.value = parsedTrackCache.toMap()
         }
 
-        return TrackPlotData(id = trackId, title = displayName, points = parsed.points)
+        return TrackPlotData(id = trackId, title = displayName, points = parsed.points, sensitivity = parsed.sensitivity)
     }
     fun folderItemId(folderName: String): String = "folder:$folderName"
 
@@ -564,9 +561,9 @@ object TrackCatalog {
         }
     }
 
-    private suspend fun parseGpxTrackStats(inputStream: InputStream): TrackStats? {
+    private suspend fun parseGpxTrackStats(inputStream: InputStream): GpxReader.TrackWithStats? {
         return withContext(Dispatchers.IO) {
-            GpxReader.readTrackStats(inputStream)
+            GpxReader.readTrackStatsWithSensitivity(inputStream)
         }
     }
 
@@ -597,6 +594,7 @@ object TrackCatalog {
         val displayName: String,
         val folderName: String?,
         val stats: TrackStats,
+        val sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY,
         val pointCache: List<TrackPoint>? = null
     ) {
         fun hasPoints(): Boolean = pointCache != null
@@ -610,6 +608,7 @@ object TrackCatalog {
                 .put("sourceId", sourceId)
                 .put("displayName", displayName)
                 .put("folderName", folderName)
+                .put("sensitivity", sensitivity)
                 .put("stats", JSONObject()
                     .put("pointCount", stats.pointCount)
                     .put("durationMillis", stats.durationMillis)
@@ -617,12 +616,13 @@ object TrackCatalog {
         }
 
         companion object {
-            fun from(source: TrackSource, stats: TrackStats): CachedParsedTrack {
+            fun from(source: TrackSource, stats: TrackStats, sensitivity: Double): CachedParsedTrack {
                 return CachedParsedTrack(
                     sourceId = source.id,
                     displayName = source.displayName,
                     folderName = source.folderName,
                     stats = stats,
+                    sensitivity = sensitivity,
                     pointCache = null
                 )
             }
@@ -642,7 +642,8 @@ object TrackCatalog {
                         pointCount = statsJson.getInt("pointCount"),
                         durationMillis = statsJson.getLong("durationMillis"),
                         distanceMeters = statsJson.getDouble("distanceMeters")
-                    )
+                    ),
+                    sensitivity = json.optDouble("sensitivity", RadiationCalibration.DEFAULT_SENSITIVITY).takeIf { it > 0.0 } ?: RadiationCalibration.DEFAULT_SENSITIVITY
                 )
             }
         }

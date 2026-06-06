@@ -114,6 +114,7 @@ class TrackMapRenderer(
                 track.copy(points = track.points.filterNot { it.badCoordinates })
             }
             overlay.tracks = filteredTracks
+            overlay.pois = pois
 
             // Always unlock before raster refresh so heatmap colors are computed
             // against the same freshly clamped max that drives the colorbar labels.

@@ -18,6 +18,7 @@ data class PoiMapItem(
     val doseRateForColor: Double,
     val counts: Int,
     val seconds: Double,
+    val sensitivity: Double,
     val doseLabel: String
 )
 
