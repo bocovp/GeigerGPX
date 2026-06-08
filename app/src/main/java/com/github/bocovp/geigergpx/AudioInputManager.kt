@@ -12,6 +12,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
+import android.media.AudioTimestamp
 import android.os.Build
 import android.media.MediaRecorder
 import android.util.Log
@@ -27,11 +28,11 @@ class AudioInputManager(
     private val magThreshold: Float = DEFAULT_MAG_THRESHOLD,
     private val bluetoothMagThreshold: Float = DEFAULT_BLUETOOTH_MAG_THRESHOLD,
     private val useBluetoothMicIfAvailable: Boolean = false,
-    private val onBeep: (Float, Int) -> Unit,
+    private val onBeep: (Float, Int, Long) -> Unit,
     private val onAudioHealth: (Boolean) -> Unit = {},
     private val onAudioStatus: (String, Int) -> Unit = { _, _ -> },
     private val onRecordingStarted: (sampleRate: Int) -> Unit = {},
-    private val onRawAudio: ((ShortArray) -> Unit)? = null
+    private val onRawAudio: ((ShortArray, Long) -> Unit)? = null
 ) {
 
     private val running = AtomicBoolean(false)
@@ -158,6 +159,7 @@ class AudioInputManager(
                     if (audioBuf == null || audioBuf.size != bufferSize) {
                         audioBuf = ShortArray(bufferSize)
                     }
+                    var totalFramesRead = 0L
 
                     val innerLoopBreak = AtomicBoolean(false)
 
@@ -183,6 +185,33 @@ class AudioInputManager(
                             Log.e(TAG, "Hardware read error: $read")
                             publishAudioStatus("Hardware error, recovering...", AUDIO_STATUS_ERROR)
                             break
+                        }
+
+                        // Compute hardware timestamp for the first sample of this buffer.
+                        val bufferStartFrame = totalFramesRead
+                        totalFramesRead += read
+                        // If you ever change this app to use a stereo microphone array (CHANNEL_IN_STEREO),
+                        // 1 frame will equal 2 samples. You would need to change it to
+                        // totalFramesRead += read / 2. As long as the app stays in Mono, your
+                        // frame-to-sample math is bulletproof.
+
+                        val bufferStartNs: Long = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            val ts = AudioTimestamp()
+                            if (currentAr.getTimestamp(ts, AudioTimestamp.TIMEBASE_MONOTONIC) == AudioRecord.SUCCESS && ts.nanoTime > 0L) {
+                                // Extrapolate back from ts.framePosition to the first frame of this buffer
+                                val extrapolated = ts.nanoTime - (ts.framePosition - bufferStartFrame) * 1_000_000_000L / actualSampleRate
+                                val now = System.nanoTime()
+                                if (extrapolated - now in -2_000_000_000L..2_000_000_000L) {
+                                    extrapolated
+                                } else {
+                                    now - read.toLong() * 1_000_000_000L / actualSampleRate
+                                }
+                            } else {
+                                // Fallback: assume read() returned immediately after capture
+                                System.nanoTime() - read.toLong() * 1_000_000_000L / actualSampleRate
+                            }
+                        } else {
+                            System.nanoTime() - read.toLong() * 1_000_000_000L / actualSampleRate
                         }
 
                         val isZero = audioBuf!!.all { it == 0.toShort() }
@@ -212,9 +241,9 @@ class AudioInputManager(
 
                         val samples = audioBuf!!.copyOf(read)
                         if (onRawAudio != null) {
-                            onRawAudio.invoke(samples)
+                            onRawAudio.invoke(samples, bufferStartNs)
                         } else {
-                            detector.processSamples(samples)
+                            detector.processSamples(samples, bufferStartNs)
                         }
                     }
 
@@ -604,7 +633,7 @@ class AudioInputManager(
 
         fun createWithPrefs(
             context: Context,
-            onBeep: (Float, Int) -> Unit,
+            onBeep: (Float, Int, Long) -> Unit,
             onAudioHealth: (Boolean) -> Unit = {},
             onAudioStatus: (String, Int) -> Unit = { _, _ -> }
         ): com.github.bocovp.geigergpx.AudioInputManager {

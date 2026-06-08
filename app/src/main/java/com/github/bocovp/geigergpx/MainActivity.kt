@@ -420,10 +420,19 @@ class MainActivity : AppCompatActivity() {
         binding.textDuration.text = "Duration: ${TrackingRepository.formatDuration(seconds)}"
     }
 
+    private fun formatCounts(counts: Int, countsPerBeep: Int): String {
+        return if (countsPerBeep > 1) {
+            val beeps = counts / countsPerBeep
+            "$countsPerBeep \u00D7 $beeps"
+        } else {
+            counts.toString()
+        }
+    }
     private fun updateCountDisplay(state: TrackingViewModel.CountDisplayState) {
-        binding.textTrackCounts.text = "Track counts: ${state.trackCounts}"
-        binding.textMeasurementCounts.text = "Counts: ${state.measurementCounts}"
-        binding.textTotalCounts.text = "Total counts: ${state.totalCounts}"
+        val cpb = state.countsPerBeep
+        binding.textTrackCounts.text = "Track counts: ${formatCounts(state.trackCounts, cpb)}"
+        binding.textMeasurementCounts.text = "Counts: ${formatCounts(state.measurementCounts, cpb)}"
+        binding.textTotalCounts.text = "Total counts: ${formatCounts(state.totalCounts, cpb)}"
     }
 
     private fun refreshMeasurementDurationFromTimer() {

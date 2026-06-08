@@ -64,10 +64,10 @@ class CalibrationSession(
         context = context.applicationContext,
         magThreshold = fallbackThreshold / 1000f,  // irrelevant; onRawAudio bypasses internal detector
         useBluetoothMicIfAvailable = useBluetoothMicIfAvailable,
-        onBeep = { _, _ -> },
+        onBeep = { _, _, _ -> },
         onAudioStatus = onAudioStatus,
         onRecordingStarted = { sampleRate -> onRecordingStarted(sampleRate) },
-        onRawAudio = { samples -> processSamples(samples) }
+        onRawAudio = { samples, bufferStartNs -> processSamples(samples, bufferStartNs) }
     )
 
     fun start() {
@@ -101,7 +101,7 @@ class CalibrationSession(
         onProgress(1, 0, stageOneDurationSeconds)
     }
 
-    private fun processSamples(samples: ShortArray) {
+    private fun processSamples(samples: ShortArray, bufferStartNs: Long) {
         // Guard against samples arriving before onRecordingStarted (should never
         // happen given AudioBeepDetector's ordering guarantee, but be safe).
         val s1 = stageOneDetector ?: return
@@ -114,7 +114,7 @@ class CalibrationSession(
             val toProcess = minOf(samples.size, remaining)
 
             if (toProcess > 0) {
-                s1.processSamples(samples.copyOfRange(0, toProcess))
+                s1.processSamples(samples.copyOfRange(0, toProcess), bufferStartNs)
                 stageOneSamplesProcessed += toProcess
                 offset = toProcess
             }
@@ -125,7 +125,10 @@ class CalibrationSession(
         }
 
         if (offset < samples.size) {
-            stageTwoDetector?.processSamples(samples.copyOfRange(offset, samples.size))
+            val stageTwoNs = if (bufferStartNs != 0L && actualSampleRate > 0)
+                bufferStartNs + offset.toLong() * 1_000_000_000L / actualSampleRate
+            else 0L
+            stageTwoDetector?.processSamples(samples.copyOfRange(offset, samples.size), stageTwoNs)
         }
     }
 
@@ -138,7 +141,7 @@ class CalibrationSession(
             magThreshold = baseThreshold,
             sampleRate   = actualSampleRate
         ).apply {
-            onBeep = { peakMain, _ ->
+            onBeep = { peakMain, _, _ ->
                 if (peakMain.isFinite() && peaks.size < totalBeepCount) {
                     peaks.add(peakMain)
                     onProgress(2, peaks.size, totalBeepCount)

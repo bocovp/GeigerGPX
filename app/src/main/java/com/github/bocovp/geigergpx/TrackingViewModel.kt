@@ -12,7 +12,8 @@ class  TrackingViewModel(app: Application) : AndroidViewModel(app) {
     data class CountDisplayState(
         val totalCounts: Int = 0,
         val trackCounts: Int = 0,
-        val measurementCounts: Int = 0
+        val measurementCounts: Int = 0,
+        val countsPerBeep: Int = 1 // <-- Add this
     )
 
     private val repo: TrackingRepository = (app as GeigerGpxApp).trackingRepository
@@ -39,14 +40,16 @@ class  TrackingViewModel(app: Application) : AndroidViewModel(app) {
             repo.totalCounts,
             repo.countsAtTrackStart,
             repo.countsAtMeasurementStart,
-            ::Triple)
-    ) { (tracking, measurementModeEnabled, savedTrackCounts), (total, trackStart, measurementStart) ->
+            ::Triple),
+        repo.countsPerBeep
+    ) { (tracking, measurementModeEnabled, savedTrackCounts), (total, trackStart, measurementStart), cpb ->
         val calculatedTrackCounts = if (tracking) total - trackStart else (savedTrackCounts ?: 0)
         val calculatedMeasurementCounts = if (measurementModeEnabled) total - measurementStart else 0
             CountDisplayState(
                 totalCounts = total,
                 trackCounts = calculatedTrackCounts.coerceAtLeast(0),
-                measurementCounts = calculatedMeasurementCounts.coerceAtLeast(0)
+                measurementCounts = calculatedMeasurementCounts.coerceAtLeast(0),
+                countsPerBeep = cpb
             )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CountDisplayState())
 
