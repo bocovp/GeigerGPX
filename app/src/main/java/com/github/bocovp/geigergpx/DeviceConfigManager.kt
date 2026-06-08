@@ -88,7 +88,7 @@ object DeviceConfigManager {
 
     fun countsPerBeepFromPrefs(prefs: SharedPreferences): Int {
         currentDevice(prefs)?.let { return it.fallbackConfig.countsPerBeep }
-        return prefs.getString(KEY_COUNTS_PER_BEEP, null)?.toIntOrNull()?.takeIf { it > 0 } ?: 1
+        return prefs.getString(KEY_COUNTS_PER_BEEP, null)?.toIntOrNull()?.takeIf {  it in 1..1000  } ?: 1
     }
 
     fun rateConfigFor(sampleRate: Int): GoertzelDetector.RateConfig {

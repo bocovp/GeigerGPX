@@ -518,8 +518,11 @@ class TrackingService : Service() {
                     if (trackWriter.isTracking()) {
                         // beepEndNs is CLOCK_MONOTONIC (same as System.nanoTime()).
                         // Anchor it to wall-clock once, at callback time.
-                        val wallSeconds = System.currentTimeMillis() / 1000.0 +
-                                (beepEndNs - System.nanoTime()) / 1e9
+                        val wallSeconds = if (beepEndNs > 0L) {
+                            System.currentTimeMillis() / 1000.0 + (beepEndNs - System.nanoTime()) / 1e9
+                        } else {
+                            System.currentTimeMillis() / 1000.0
+                        }
                         kde?.addPoint(wallSeconds, actualCounts, spreadCounts = true)
                     }
                 }

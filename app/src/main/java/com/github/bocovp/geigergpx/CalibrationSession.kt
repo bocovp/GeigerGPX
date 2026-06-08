@@ -125,7 +125,7 @@ class CalibrationSession(
         }
 
         if (offset < samples.size) {
-            val stageTwoNs = if (bufferStartNs != 0L)
+            val stageTwoNs = if (bufferStartNs != 0L && actualSampleRate > 0)
                 bufferStartNs + offset.toLong() * 1_000_000_000L / actualSampleRate
             else 0L
             stageTwoDetector?.processSamples(samples.copyOfRange(offset, samples.size), stageTwoNs)

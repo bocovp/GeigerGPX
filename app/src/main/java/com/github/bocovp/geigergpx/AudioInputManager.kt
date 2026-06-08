@@ -199,7 +199,13 @@ class AudioInputManager(
                             val ts = AudioTimestamp()
                             if (currentAr.getTimestamp(ts, AudioTimestamp.TIMEBASE_MONOTONIC) == AudioRecord.SUCCESS && ts.nanoTime > 0L) {
                                 // Extrapolate back from ts.framePosition to the first frame of this buffer
-                                ts.nanoTime - (ts.framePosition - bufferStartFrame) * 1_000_000_000L / actualSampleRate
+                                val extrapolated = ts.nanoTime - (ts.framePosition - bufferStartFrame) * 1_000_000_000L / actualSampleRate
+                                val now = System.nanoTime()
+                                if (extrapolated - now in -2_000_000_000L..2_000_000_000L) {
+                                    extrapolated
+                                } else {
+                                    now - read.toLong() * 1_000_000_000L / actualSampleRate
+                                }
                             } else {
                                 // Fallback: assume read() returned immediately after capture
                                 System.nanoTime() - read.toLong() * 1_000_000_000L / actualSampleRate
