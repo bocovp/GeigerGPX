@@ -83,9 +83,25 @@ class KernelDensityEstimator(private val sensitivity: Double) {
      * Records a new point event.
      * @param time  event timestamp in seconds
      * @param n     number of counts detected at this event
-     */
+     * @param spreadCounts  if true and n > 1, evenly spaces the counts between the last recorded time and this event
+     * */
     @Synchronized
-    fun addPoint(time: Double, n: Int) {
+    fun addPoint(time: Double, n: Int, spreadCounts: Boolean = false) {
+        if (n <= 0) return
+
+        if (spreadCounts && n > 1 && dataTEnd != Double.NEGATIVE_INFINITY && time > dataTEnd) {
+            val startT = dataTEnd
+            val step = (time - startT) / n
+            for (i in 1..n) {
+                insertPoint(startT + i * step, 1)
+            }
+        } else {
+            // Fallback for n=1, or the very first point of the track
+            insertPoint(time, n)
+        }
+    }
+
+    private fun insertPoint(time: Double, n: Int) {
         if (size == ts.size) growPoints()
         ts[size] = time
         ns[size] = n

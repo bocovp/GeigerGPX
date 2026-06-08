@@ -98,6 +98,7 @@ class TrackingService : Service() {
     @Volatile private var maxTimeWithoutGpsS: Double = 60.0
     @Volatile private var alertDoseRate: Double = 0.0
     @Volatile private var sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
+    @Volatile private var countsPerBeep: Int = 1
     private var toneGenerator: ToneGenerator? = null
     private val lastAlertAtMillis = AtomicLong(0L)
     private val doseRateMeasurement = DoseRateMeasurement()
@@ -162,6 +163,9 @@ class TrackingService : Service() {
         sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
         val configuredAlertDoseRate = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
         alertDoseRate = if (configuredAlertDoseRate > 0.0) configuredAlertDoseRate else 0.0
+
+        countsPerBeep = DeviceConfigManager.countsPerBeepFromPrefs(prefs)
+        repo.updateCountsPerBeep(countsPerBeep)
 
         val allowedSizes = setOf(5, 10, 20, 50, 100)
         val requestedWindowSize = prefs.getString("dose_rate_avg_timestamps_n", "10")
@@ -498,15 +502,25 @@ class TrackingService : Service() {
 
         audioBeepDetector = AudioInputManager.createWithPrefs(
             context = this,
-            onBeep = { _, count ->
-                if (count > 0) {
-                    repo.incrementTotalCounts(count)
-                    val alertEvent = doseRateMeasurement.processBeep(count)
+            onBeep = { _, beepCount, beepEndNs ->
+                if (beepCount > 0) {
+                    // 1. Calculate actual quantum counts based on device hardware multiplier
+                    val actualCounts = beepCount * countsPerBeep
+
+                    // 2. Update repository and alert systems using actualCounts
+                    repo.incrementTotalCounts(actualCounts)
+
+                    val alertEvent = doseRateMeasurement.processBeep(actualCounts)
                     repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true) // ????????????????????
                     alertEvent?.let { dispatchDoseRateAlert(it) }
 
+                    // 3. Feed the KDE with sub-millisecond precision and auto-spreading
                     if (trackWriter.isTracking()) {
-                        kde?.addPoint(System.currentTimeMillis() / 1000.0, count)
+                        // beepEndNs is CLOCK_MONOTONIC (same as System.nanoTime()).
+                        // Anchor it to wall-clock once, at callback time.
+                        val wallSeconds = System.currentTimeMillis() / 1000.0 +
+                                (beepEndNs - System.nanoTime()) / 1e9
+                        kde?.addPoint(wallSeconds, actualCounts, spreadCounts = true)
                     }
                 }
             },

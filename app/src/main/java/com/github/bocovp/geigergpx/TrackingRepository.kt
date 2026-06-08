@@ -75,6 +75,9 @@ class TrackingRepository {
     private val _uiTickMillis = MutableStateFlow(0L)
     val uiTickMillis: StateFlow<Long> = _uiTickMillis.asStateFlow()
 
+    private val _countsPerBeep = MutableStateFlow(1)
+    val countsPerBeep: StateFlow<Int> = _countsPerBeep.asStateFlow()
+
     fun updateTrackGeometry(distance: Double, points: Int) {
         _distanceMeters.value = distance
         _pointCount.value = points
@@ -130,6 +133,10 @@ class TrackingRepository {
             _countsAtMeasurementStart.value = totalCounter.get()
         }
         _measurementModeEnabled.value = enabled
+    }
+
+    fun updateCountsPerBeep(value: Int) {
+        _countsPerBeep.value = value
     }
 
     fun notifyUiTick(nowMillis: Long) {

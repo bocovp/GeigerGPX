@@ -23,6 +23,7 @@ object DeviceConfigManager {
     const val KEY_TWO_BEEP_TOL = "device_twoBeepTol"
     const val KEY_THREE_BEEP_TOL = "device_threeBeepTol"
     const val KEY_FOUR_BEEP_TOL = "device_fourBeepTol"
+    const val KEY_COUNTS_PER_BEEP = "device_countsPerBeep"
 
     data class Device(
         val name: String,
@@ -83,6 +84,11 @@ object DeviceConfigManager {
         currentDevice(prefs)?.let { return it.sensitivity }
         return prefs.getString(RadiationCalibration.KEY_SENSITIVITY, null)?.toDoubleOrNull()?.takeIf { it > 0.0 }
             ?: RadiationCalibration.DEFAULT_SENSITIVITY
+    }
+
+    fun countsPerBeepFromPrefs(prefs: SharedPreferences): Int {
+        currentDevice(prefs)?.let { return it.fallbackConfig.countsPerBeep }
+        return prefs.getString(KEY_COUNTS_PER_BEEP, null)?.toIntOrNull()?.takeIf { it > 0 } ?: 1
     }
 
     fun rateConfigFor(sampleRate: Int): GoertzelDetector.RateConfig {
@@ -161,6 +167,7 @@ object DeviceConfigManager {
             putDefaultString(this, KEY_TWO_BEEP_TOL, formatNumber(c.twoBeepTol), prefs, force)
             putDefaultString(this, KEY_THREE_BEEP_TOL, formatNumber(c.threeBeepTol), prefs, force)
             putDefaultString(this, KEY_FOUR_BEEP_TOL, formatNumber(c.fourBeepTol), prefs, force)
+            putDefaultString(this, KEY_COUNTS_PER_BEEP, formatInt(c.countsPerBeep), prefs, force)
         }
     }
 
@@ -187,7 +194,8 @@ object DeviceConfigManager {
             oneBeepTol = prefs.getString(KEY_ONE_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.01,
             twoBeepTol = prefs.getString(KEY_TWO_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.015,
             threeBeepTol = prefs.getString(KEY_THREE_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.015,
-            fourBeepTol = prefs.getString(KEY_FOUR_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.015
+            fourBeepTol = prefs.getString(KEY_FOUR_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.015,
+            countsPerBeep = prefs.getString(KEY_COUNTS_PER_BEEP, null)?.toIntOrNull()?.takeIf { it > 0 } ?: 1
         )
     }
 
@@ -283,7 +291,8 @@ object DeviceConfigManager {
             oneBeepTol = 0.01,
             twoBeepTol = 0.015,
             threeBeepTol = 0.015,
-            fourBeepTol = 0.015
+            fourBeepTol = 0.015,
+            countsPerBeep = 1
         )
         var config = base.copy(
             windowSize = pars["windowSize"]?.toIntOrNull()?.takeIf { it > 0 } ?: base.windowSize,
@@ -297,7 +306,8 @@ object DeviceConfigManager {
             oneBeepTol = pars["oneBeepTol"]?.toDoubleOrNull()?.takeIf { it > 0 } ?: base.oneBeepTol,
             twoBeepTol = pars["twoBeepTol"]?.toDoubleOrNull()?.takeIf { it > 0 } ?: base.twoBeepTol,
             threeBeepTol = pars["threeBeepTol"]?.toDoubleOrNull()?.takeIf { it > 0 } ?: base.threeBeepTol,
-            fourBeepTol = pars["fourBeepTol"]?.toDoubleOrNull()?.takeIf { it > 0 } ?: base.fourBeepTol
+            fourBeepTol = pars["fourBeepTol"]?.toDoubleOrNull()?.takeIf { it > 0 } ?: base.fourBeepTol,
+            countsPerBeep = pars["countsPerBeep"]?.toIntOrNull()?.takeIf { it > 0 } ?: base.countsPerBeep
         )
         if (sampleRate != null && config.windowSize > 0) {
             val binWidth = sampleRate.toFloat() / config.windowSize.toFloat()

@@ -8,7 +8,8 @@ class GoertzelDetector(
     private val sampleRate: Int = DEFAULT_SAMPLE_RATE
 ) {
 
-    var onBeep: (Float, Int) -> Unit = { _, _ -> }
+
+    var onBeep: (Float, Int, Long) -> Unit = { _, _, _ -> }
     var onWindowAnalyzed: ((main: Float, sideEnergy: Float) -> Unit)? = null
 
     // -------------------------------------------------------------------------
@@ -94,9 +95,11 @@ class GoertzelDetector(
         totalSamplesProcessed = 0L
     }
 
-    fun processSamples(samples: ShortArray) {
+    fun processSamples(samples: ShortArray, bufferStartNs: Long = 0L) {
         if (samples.isEmpty()) return
 
+
+        val leftoverAtStart = leftoverSamples
         ensureCapacity(leftoverSamples + samples.size)
         System.arraycopy(samples, 0, processingBuffer, leftoverSamples, samples.size)
 
@@ -135,7 +138,12 @@ class GoertzelDetector(
 
                 state == State.BEEP || state == State.DECAY -> {
                     val duration = (currentWindowGlobalSample - beepStartSample).toDouble() / sampleRate
-                    processBeep(duration, currentBeepMaxMain)
+                    val beepEndNs: Long = if (bufferStartNs != 0L) {
+                        bufferStartNs + (pos.toLong() - leftoverAtStart) * 1_000_000_000L / sampleRate
+                    } else {
+                        System.nanoTime()
+                    }
+                    processBeep(duration, currentBeepMaxMain, beepEndNs)
                     state = State.SILENCE
                     currentBeepMaxMain = 0f
                 }
@@ -193,7 +201,7 @@ class GoertzelDetector(
         processingBuffer = resized
     }
 
-    private fun processBeep(duration: Double, peakMain: Float) {
+    private fun processBeep(duration: Double, peakMain: Float, beepEndNs: Long) {
         val count = when (duration) {
             in oneBeepMin..oneBeepMax     -> 1
             in twoBeepMin..twoBeepMax     -> 2
@@ -204,7 +212,7 @@ class GoertzelDetector(
        // if (BuildConfig.DEBUG) {
             android.util.Log.d(TAG, "$count Duration ${"%.4f".format(java.util.Locale.US, duration)}\tPeak ${"%.2e".format(java.util.Locale.US, peakMain)}")
        // }
-        onBeep(peakMain, count)
+        onBeep(peakMain, count, beepEndNs)
     }
 
     private fun coeff(freq: Float): Float {
@@ -238,6 +246,7 @@ class GoertzelDetector(
         val oneBeepTol:   Double,
         val twoBeepTol:   Double,
         val threeBeepTol: Double,
-        val fourBeepTol:  Double
+        val fourBeepTol:  Double,
+        val countsPerBeep: Int // <-- Add this
     )
 }
