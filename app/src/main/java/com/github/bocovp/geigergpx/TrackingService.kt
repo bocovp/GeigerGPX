@@ -117,7 +117,10 @@ class TrackingService : Service() {
             "dose_rate_avg_timestamps_n",
             "alert_dose_rate",
             RadiationCalibration.KEY_SENSITIVITY,
-            "cps_to_usvh" -> loadTrackingPrefs()
+            "cps_to_usvh",
+            DeviceConfigManager.KEY_DEVICE_NAME,
+            DeviceConfigManager.KEY_COUNTS_PER_BEEP
+                -> loadTrackingPrefs()
         }
     }
 
