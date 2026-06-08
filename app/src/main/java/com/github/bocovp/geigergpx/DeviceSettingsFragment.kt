@@ -24,7 +24,8 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
         DeviceConfigManager.KEY_ONE_BEEP_TOL,
         DeviceConfigManager.KEY_TWO_BEEP_TOL,
         DeviceConfigManager.KEY_THREE_BEEP_TOL,
-        DeviceConfigManager.KEY_FOUR_BEEP_TOL
+        DeviceConfigManager.KEY_FOUR_BEEP_TOL,
+        DeviceConfigManager.KEY_COUNTS_PER_BEEP
     )
 
     private val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -42,7 +43,7 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
 
         category.addPreference(Preference(requireContext()).apply {
             key = DeviceConfigManager.KEY_DEVICE_NAME
-            title = "Device"
+            title = "Device (press to select)"
             setOnPreferenceClickListener {
                 showDeviceChooser()
                 true
@@ -55,6 +56,7 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
             title = "Beep detector"
             isEnabled = false
         })
+        addEdit(category, DeviceConfigManager.KEY_COUNTS_PER_BEEP, "Counts per beep", null, decimal = false)
         addEdit(category, DeviceConfigManager.KEY_FREQ_LOW, "Low frequency", "Hz", decimal = true)
         addEdit(category, DeviceConfigManager.KEY_FREQ_MAIN, "Main frequency", "Hz", decimal = true)
         addEdit(category, DeviceConfigManager.KEY_FREQ_HIGH, "High frequency", "Hz", decimal = true)
@@ -137,6 +139,7 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
         findPreference<Preference>("beep_detector")?.summary = DeviceConfigManager.detectorName(requireContext())
 
         setEditValue(RadiationCalibration.KEY_SENSITIVITY, DeviceConfigManager.formatNumber(device?.sensitivity ?: DeviceConfigManager.sensitivityFromPrefs(prefs)), custom)
+        setEditValue(DeviceConfigManager.KEY_COUNTS_PER_BEEP, DeviceConfigManager.formatInt(config.countsPerBeep), custom)
         setEditValue(DeviceConfigManager.KEY_FREQ_LOW, DeviceConfigManager.formatNumber(config.freqLow.toDouble()), custom)
         setEditValue(DeviceConfigManager.KEY_FREQ_MAIN, DeviceConfigManager.formatNumber(config.freqMain.toDouble()), custom)
         setEditValue(DeviceConfigManager.KEY_FREQ_HIGH, DeviceConfigManager.formatNumber(config.freqHigh.toDouble()), custom)
