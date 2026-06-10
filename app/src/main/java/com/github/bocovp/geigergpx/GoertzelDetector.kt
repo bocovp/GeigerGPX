@@ -61,17 +61,17 @@ class GoertzelDetector(
         coeffLow  = coeff(cfg.freqLow)
         coeffHigh = coeff(cfg.freqHigh)
 
-        oneBeepMin = cfg.duration - cfg.oneBeepTol
-        oneBeepMax = cfg.duration + cfg.oneBeepTol
+        oneBeepMin = if (cfg.oneBeepTol > 0.0) cfg.duration - cfg.oneBeepTol else Double.MAX_VALUE
+        oneBeepMax = if (cfg.oneBeepTol > 0.0) cfg.duration + cfg.oneBeepTol else Double.NEGATIVE_INFINITY
 
-        twoBeepMin = cfg.duration * 2 - cfg.twoBeepTol
-        twoBeepMax = cfg.duration * 2 + cfg.twoBeepTol
+        twoBeepMin = if (cfg.twoBeepTol > 0.0) cfg.duration * 2 - cfg.twoBeepTol else Double.MAX_VALUE
+        twoBeepMax = if (cfg.twoBeepTol > 0.0) cfg.duration * 2 + cfg.twoBeepTol else Double.NEGATIVE_INFINITY
 
-        threeBeepMin = cfg.duration * 3 - cfg.threeBeepTol
-        threeBeepMax = cfg.duration * 3 + cfg.threeBeepTol
+        threeBeepMin = if (cfg.threeBeepTol > 0.0) cfg.duration * 3 - cfg.threeBeepTol else Double.MAX_VALUE
+        threeBeepMax = if (cfg.threeBeepTol > 0.0) cfg.duration * 3 + cfg.threeBeepTol else Double.NEGATIVE_INFINITY
 
-        fourBeepMin = cfg.duration * 4 - cfg.fourBeepTol
-        fourBeepMax = cfg.duration * 4 + cfg.fourBeepTol
+        fourBeepMin = if (cfg.fourBeepTol > 0.0) cfg.duration * 4 - cfg.fourBeepTol else Double.MAX_VALUE
+        fourBeepMax = if (cfg.fourBeepTol > 0.0) cfg.duration * 4 + cfg.fourBeepTol else Double.NEGATIVE_INFINITY
 
         hann = FloatArray(windowSize) {
             (0.5 - 0.5 * cos(2.0 * PI * it / (windowSize - 1))).toFloat()
@@ -87,12 +87,16 @@ class GoertzelDetector(
     private var currentBeepMaxMain = 0f
     private var buffersProcessed = 0
 
+    private var dropoutWindows = 0
+    private val maxDropoutWindows = 2
+
     fun reset() {
         state = State.SILENCE
         beepStartSample = 0L
         currentBeepMaxMain = 0f
         leftoverSamples = 0
         totalSamplesProcessed = 0L
+        dropoutWindows = 0
     }
 
     fun processSamples(samples: ShortArray, bufferStartNs: Long = 0L) {
@@ -121,6 +125,7 @@ class GoertzelDetector(
 
             when {
                 detected -> {
+                    dropoutWindows = 0
                     if (state == State.SILENCE) {
                         state = State.BEEP
                         beepStartSample = currentWindowGlobalSample
@@ -131,21 +136,32 @@ class GoertzelDetector(
                 }
 
                 detectedWeak -> {
+                    dropoutWindows = 0
                     if (state == State.BEEP) {
                         state = State.DECAY
                     }
                 }
 
                 state == State.BEEP || state == State.DECAY -> {
-                    val duration = (currentWindowGlobalSample - beepStartSample).toDouble() / sampleRate
-                    val beepEndNs: Long = if (bufferStartNs != 0L) {
-                        bufferStartNs + (pos.toLong() - leftoverAtStart) * 1_000_000_000L / sampleRate
-                    } else {
-                        System.nanoTime()
+                    dropoutWindows++
+
+                    if (dropoutWindows > maxDropoutWindows) {
+                        // Signal has been gone too long. Kill the beep.
+                        // Subtract the dropout windows from the duration so we don't artificially lengthen it
+                        val actualEndSample = currentWindowGlobalSample - (dropoutWindows * stepSize)
+                        val duration = (actualEndSample - beepStartSample).toDouble() / sampleRate
+                        val beepEndNs: Long = if (bufferStartNs != 0L) {
+                            // Project back to the actual end of the sound
+                            val backstep = (dropoutWindows * stepSize).toLong()
+                            bufferStartNs + (pos.toLong() - leftoverAtStart - backstep) * 1_000_000_000L / sampleRate
+                        } else {
+                            System.nanoTime()
+                        }
+                        processBeep(duration, currentBeepMaxMain, beepEndNs)
+                        state = State.SILENCE
+                        currentBeepMaxMain = 0f
+                        dropoutWindows = 0
                     }
-                    processBeep(duration, currentBeepMaxMain, beepEndNs)
-                    state = State.SILENCE
-                    currentBeepMaxMain = 0f
                 }
             }
 
@@ -186,7 +202,7 @@ class GoertzelDetector(
         val main      = q1M * q1M + q2M * q2M - q1M * q2M * coeffMain
         val low       = q1L * q1L + q2L * q2L - q1L * q2L * coeffLow
         val high      = q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh
-        val sideEnergy = (low + high) / 2f
+        val sideEnergy = maxOf(low, high) // (low + high) / 2f
         return Pair(main, sideEnergy)
     }
 

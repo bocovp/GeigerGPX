@@ -192,9 +192,9 @@ object DeviceConfigManager {
             dominanceThreshold = prefs.getString(KEY_DOMINANCE_THRESHOLD, null)?.toFloatOrNull()?.takeIf { it > 0f } ?: 2.0f,
             dominanceThresholdEnd = prefs.getString(KEY_DOMINANCE_THRESHOLD_END, null)?.toFloatOrNull()?.takeIf { it > 0f } ?: 1.1f,
             oneBeepTol = prefs.getString(KEY_ONE_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.01,
-            twoBeepTol = prefs.getString(KEY_TWO_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.015,
-            threeBeepTol = prefs.getString(KEY_THREE_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.015,
-            fourBeepTol = prefs.getString(KEY_FOUR_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.015,
+            twoBeepTol = prefs.getString(KEY_TWO_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.0,
+            threeBeepTol = prefs.getString(KEY_THREE_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.0,
+            fourBeepTol = prefs.getString(KEY_FOUR_BEEP_TOL, null)?.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: 0.0,
             countsPerBeep = prefs.getString(KEY_COUNTS_PER_BEEP, null)?.toIntOrNull()?.takeIf { it in 1..1000 } ?: 1
         )
     }
@@ -288,10 +288,10 @@ object DeviceConfigManager {
             duration = 0.025,
             dominanceThreshold = 2.0f,
             dominanceThresholdEnd = 1.1f,
-            oneBeepTol = 0.01,
-            twoBeepTol = 0.015,
-            threeBeepTol = 0.015,
-            fourBeepTol = 0.015,
+            oneBeepTol   = 0.01,
+            twoBeepTol   = 0.0,
+            threeBeepTol = 0.0,
+            fourBeepTol  = 0.0,
             countsPerBeep = 1
         )
         var config = base.copy(
