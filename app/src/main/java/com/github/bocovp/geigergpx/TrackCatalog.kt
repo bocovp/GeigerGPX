@@ -11,6 +11,7 @@ import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
+import androidx.preference.PreferenceManager
 import kotlin.math.roundToLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -250,7 +251,7 @@ object TrackCatalog {
                         openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(it) }
                     }
                     if (parsed != null) {
-                        val updated = source.withPoints(parsed.points)
+                        val updated = source.copy(sensitivity = parsed.sensitivity).withPoints(parsed.points)
                         cacheMutex.withLock {
                             parsedTrackCache[source.sourceId] = updated
                             _tracks.value = parsedTrackCache.toMap()
@@ -323,6 +324,9 @@ object TrackCatalog {
     fun listTrackSubfolderNames(): List<String> = allSubfolders.value
 
     fun onTrackSaved(context: Context, relativePath: String, points: List<TrackPoint>) {
+        val sensitivity = RadiationCalibration.sensitivityFromPrefs(
+            PreferenceManager.getDefaultSharedPreferences(context)
+        )
         val appContext = context.applicationContext
         catalogScope.launch {
             rebuildMutex.withLock {
@@ -335,6 +339,7 @@ object TrackCatalog {
                         displayName = source.displayName,
                         folderName = source.folderName,
                         stats = stats,
+                        sensitivity = sensitivity,
                         pointCache = points
                     )
                     _tracks.value = parsedTrackCache.toMap()
@@ -350,7 +355,8 @@ object TrackCatalog {
         trackId: String,
         displayName: String,
         folderName: String?,
-        points: List<TrackPoint>
+        points: List<TrackPoint>,
+        sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
     ) {
         val appContext = context.applicationContext
         catalogScope.launch {
@@ -363,6 +369,7 @@ object TrackCatalog {
                         displayName = displayName,
                         folderName = folderName,
                         stats = stats,
+                        sensitivity = sensitivity,
                         pointCache = points
                     )
                     _tracks.value = parsedTrackCache.toMap()

@@ -382,7 +382,8 @@ class EditTrackActivity : AppCompatActivity() {
                             result.newTrackId,
                             result.newTrackTitle,
                             trackFolder,
-                            secondPart
+                            secondPart,
+                            trackSensitivity
                         )
                     }
                     EditableTrackStorage.overwriteTrack(
@@ -392,7 +393,7 @@ class EditTrackActivity : AppCompatActivity() {
                         edited = true,
                         sensitivityOverride = trackSensitivity
                     )
-                    TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints)
+                    TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints, trackSensitivity)
                     true
                 }
 
