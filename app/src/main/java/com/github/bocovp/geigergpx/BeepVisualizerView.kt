@@ -1,0 +1,86 @@
+package com.github.bocovp.geigergpx
+
+import android.content.Context
+import android.graphics.Canvas
+import androidx.core.content.ContextCompat
+import android.graphics.Paint
+import android.util.AttributeSet
+import android.view.View
+
+class BeepVisualizerView @JvmOverloads constructor(
+    context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
+) : View(context, attrs, defStyleAttr) {
+
+    companion object {
+        private const val DURATION_MS = 3000L
+        private const val MAX_BEEPS = 2000 // Circular buffer size
+    }
+
+    // Zero-allocation primitive arrays
+    private val beepTimes = LongArray(MAX_BEEPS)
+
+    private var head = 0
+    private var tail = 0
+    private var isAnimating = false
+
+    private val paint = Paint().apply {
+         color = ContextCompat.getColor(context, R.color.purple_500)
+        style = Paint.Style.FILL
+        isAntiAlias = true
+        alpha = 180 // Slight transparency for overlapping points
+    }
+
+    private val radius = 3.5f * resources.displayMetrics.density
+
+    fun addBeep(timeMillis: Long) {
+        val nextHead = (head + 1) % MAX_BEEPS
+        if (nextHead == tail) {
+            // Buffer full, drop oldest point to prevent overflow crash
+            tail = (tail + 1) % MAX_BEEPS
+        }
+
+        beepTimes[head] = timeMillis
+        head = nextHead
+
+        if (!isAnimating) {
+            isAnimating = true
+            postInvalidateOnAnimation()
+        }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+
+        if (head == tail) {
+            isAnimating = false
+            return
+        }
+
+        val now = android.os.SystemClock.elapsedRealtime()
+        val w = width.toFloat()
+        val h = height.toFloat()
+        var hasActiveBeeps = false
+
+        // Clean up expired beeps from the tail first
+        while (tail != head && (now - beepTimes[tail]) > DURATION_MS) {
+            tail = (tail + 1) % MAX_BEEPS
+        }
+        var i = tail
+        while (i != head) {
+            val age = (now - beepTimes[i]).coerceAtLeast(0L)
+            hasActiveBeeps = true
+            // Calculate X: starts at 'w' (right), ends at 0 (left)
+            val x = w - (age.toFloat() / DURATION_MS) * w
+            val y = h / 2.0f
+            canvas.drawCircle(x, y, radius, paint)
+            i = (i + 1) % MAX_BEEPS
+        }
+
+        // Only keep looping the animation if points are actively moving
+        if (hasActiveBeeps) {
+            postInvalidateOnAnimation()
+        } else {
+            isAnimating = false
+        }
+    }
+}
