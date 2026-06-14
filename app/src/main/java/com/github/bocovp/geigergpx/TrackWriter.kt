@@ -73,20 +73,12 @@ class TrackWriter {
         lastPointTotalBeeps = totalBeeps
     }
 
-
     private fun initializeAnchor(loc: Location, now: Long, totalBeeps: Int) = synchronized(lock) {
         lastWrittenLocation = Location(loc)
         lastWrittenTime = now
         coordinateAverager.reset()
         coordinateAverager.process(loc)
         lastPointTotalBeeps = totalBeeps
-    }
-
-    private fun movementStatsFor(loc: Location, now: Long): MovementStats = synchronized(lock) {
-        val lastLoc = requireNotNull(lastWrittenLocation) { "Anchor location missing" }
-        val distance = lastLoc.distanceTo(loc).toDouble()
-        val timeDeltaSec = kotlin.math.max(0.1, (now - lastWrittenTime) / 1000.0)
-        MovementStats(distance = distance, timeDeltaSec = timeDeltaSec)
     }
 
     private fun accumulateLocation(loc: Location) = synchronized(lock) {
@@ -141,12 +133,13 @@ class TrackWriter {
         // 3. Retroactive Fixes
         if (lastGoodPointIndex == -1 && writtenPointsInternal.isNotEmpty()) {
             // Scenario 2: First good point after dropping out at the very start
+            val size = writtenPointsInternal.size
             for (i in writtenPointsInternal.indices) {
                 val p = writtenPointsInternal[i]
                 if (p.badCoordinates) {
                     writtenPointsInternal[i] = p.copy(
                         latitude = loc.latitude,
-                        longitude = loc.longitude + p.longitude
+                        longitude = loc.longitude - 0.0001 * (size - i)
                     )
                 }
             }
