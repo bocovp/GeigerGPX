@@ -526,12 +526,16 @@ class TrackingService : Service() {
                         System.currentTimeMillis() / 1000.0
                     }
 
-                    if (visualizeBeeps) {//  prefs.getBoolean("visualize_beeps", false)
-                        // Emit events for the visualizer
-                        val wallMillis = (wallSeconds * 1000.0).toLong()
+                    if (visualizeBeeps) {// Emit events for beep visualizer
+                        val elapsedRealtimeMillis = if (beepEndNs > 0L) {
+                            android.os.SystemClock.elapsedRealtime() + ((beepEndNs - System.nanoTime()) / 1e6).toLong()
+                        } else {
+                            android.os.SystemClock.elapsedRealtime()
+                        }
+
                         repeat(beepCount) { i ->
                             val staggerOffsetMs = (beepCount - 1 - i) * 15L
-                            repo.emitBeepEvent(wallMillis - staggerOffsetMs)
+                            repo.emitBeepEvent(elapsedRealtimeMillis - staggerOffsetMs)
                         }
                     }
 

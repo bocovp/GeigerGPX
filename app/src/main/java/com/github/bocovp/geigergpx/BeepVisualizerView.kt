@@ -56,24 +56,23 @@ class BeepVisualizerView @JvmOverloads constructor(
             return
         }
 
-        val now = System.currentTimeMillis()
+        val now = android.os.SystemClock.elapsedRealtime()
         val w = width.toFloat()
         val h = height.toFloat()
         var hasActiveBeeps = false
 
+        // Clean up expired beeps from the tail first
+        while (tail != head && (now - beepTimes[tail]) > DURATION_MS) {
+            tail = (tail + 1) % MAX_BEEPS
+        }
         var i = tail
         while (i != head) {
             val age = (now - beepTimes[i]).coerceAtLeast(0L)
-            if (age > DURATION_MS) {
-                // Point expired, advance tail
-                tail = (i + 1) % MAX_BEEPS
-            } else {
-                hasActiveBeeps = true
-                // Calculate X: starts at 'w' (right), ends at 0 (left)
-                val x = w - (age.toFloat() / DURATION_MS) * w
-                val y = h / 2.0f
-                canvas.drawCircle(x, y, radius, paint)
-            }
+            hasActiveBeeps = true
+            // Calculate X: starts at 'w' (right), ends at 0 (left)
+            val x = w - (age.toFloat() / DURATION_MS) * w
+            val y = h / 2.0f
+            canvas.drawCircle(x, y, radius, paint)
             i = (i + 1) % MAX_BEEPS
         }
 
