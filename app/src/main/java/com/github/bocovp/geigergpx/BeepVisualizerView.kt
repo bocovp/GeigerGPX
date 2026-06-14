@@ -2,7 +2,7 @@ package com.github.bocovp.geigergpx
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
+import androidx.core.content.ContextCompat
 import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
@@ -24,7 +24,7 @@ class BeepVisualizerView @JvmOverloads constructor(
     private var isAnimating = false
 
     private val paint = Paint().apply {
-        color = Color.BLUE
+         color = ContextCompat.getColor(context, R.color.purple_500)
         style = Paint.Style.FILL
         isAntiAlias = true
         alpha = 180 // Slight transparency for overlapping points
