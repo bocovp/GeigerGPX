@@ -18,7 +18,6 @@ class BeepVisualizerView @JvmOverloads constructor(
 
     // Zero-allocation primitive arrays
     private val beepTimes = LongArray(MAX_BEEPS)
-    private val beepY = FloatArray(MAX_BEEPS)
 
     private var head = 0
     private var tail = 0
@@ -31,6 +30,8 @@ class BeepVisualizerView @JvmOverloads constructor(
         alpha = 180 // Slight transparency for overlapping points
     }
 
+    private val radius = 3.5f * resources.displayMetrics.density
+
     fun addBeep(timeMillis: Long) {
         val nextHead = (head + 1) % MAX_BEEPS
         if (nextHead == tail) {
@@ -39,8 +40,6 @@ class BeepVisualizerView @JvmOverloads constructor(
         }
 
         beepTimes[head] = timeMillis
-        // Assign a random Y-coordinate (0.0 to 1.0) to create a scintillator/waterfall effect
-        beepY[head] = 0.5f //Math.random().toFloat()
         head = nextHead
 
         if (!isAnimating) {
@@ -60,7 +59,6 @@ class BeepVisualizerView @JvmOverloads constructor(
         val now = System.currentTimeMillis()
         val w = width.toFloat()
         val h = height.toFloat()
-        val radius = 4f * resources.displayMetrics.density
         var hasActiveBeeps = false
 
         var i = tail
@@ -73,7 +71,7 @@ class BeepVisualizerView @JvmOverloads constructor(
                 hasActiveBeeps = true
                 // Calculate X: starts at 'w' (right), ends at 0 (left)
                 val x = w - (age.toFloat() / DURATION_MS) * w
-                val y = beepY[i] * h
+                val y = h / 2.0f
                 canvas.drawCircle(x, y, radius, paint)
             }
             i = (i + 1) % MAX_BEEPS
