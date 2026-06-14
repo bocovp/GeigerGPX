@@ -55,6 +55,7 @@ class TrackWriter {
     }
 
     private var lastGoodPointIndex: Int = -1
+    private val distanceResult = FloatArray(1)
 
     fun reset() = synchronized(lock) {
         startTimeMillis = 0L
@@ -109,12 +110,10 @@ class TrackWriter {
         } else {
             // Calculate distance from the LAST GOOD point, skipping dummy points
             val p = writtenPointsInternal[lastGoodPointIndex]
-            Location("temp").apply {
-                latitude = p.latitude
-                longitude = p.longitude
-            }.distanceTo(loc).toDouble()
+            Location.distanceBetween(p.latitude, p.longitude, loc.latitude, loc.longitude, distanceResult)
+            distanceResult[0].toDouble()
         }
-        
+
         val anchorTime = if (lastWrittenTime > 0L) lastWrittenTime else startTimeMillis
         val timeDeltaSec = kotlin.math.max(0.1, (now - anchorTime) / 1000.0)
         val movementStats = MovementStats(distance = distance, timeDeltaSec = timeDeltaSec)
