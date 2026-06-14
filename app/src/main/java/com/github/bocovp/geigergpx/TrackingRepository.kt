@@ -3,6 +3,10 @@ package com.github.bocovp.geigergpx
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.BufferOverflow
 
 /**
  * Shared app state for tracking/monitoring UI.
@@ -74,6 +78,16 @@ class TrackingRepository {
     val currentGpsLocation: StateFlow<GpsLocationSnapshot?> = _currentGpsLocation.asStateFlow()
     private val _uiTickMillis = MutableStateFlow(0L)
     val uiTickMillis: StateFlow<Long> = _uiTickMillis.asStateFlow()
+
+    private val _beepEvents = MutableSharedFlow<Long>(
+        extraBufferCapacity = 100,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val beepEvents: SharedFlow<Long> = _beepEvents.asSharedFlow()
+
+    fun emitBeepEvent(timestampMillis: Long) {
+        _beepEvents.tryEmit(timestampMillis)
+    }
 
     private val _countsPerBeep = MutableStateFlow(1)
     val countsPerBeep: StateFlow<Int> = _countsPerBeep.asStateFlow()

@@ -26,6 +26,7 @@ import android.content.IntentFilter
 import android.icu.util.Measure
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.TextView
@@ -53,6 +54,11 @@ class MainActivity : AppCompatActivity() {
     private var pendingRestoreAfterStartupFolderValidation = false
     private val statePendingStartupRestore = "state_pending_startup_restore"
 
+    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+        if (key == "visualize_beeps") {
+            binding.beepVisualizer.visibility = if (prefs.getBoolean("visualize_beeps", false)) View.VISIBLE else View.GONE
+        }
+    }
     private val trackSavedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != TrackingService.ACTION_TRACK_SAVED) return
@@ -193,6 +199,10 @@ class MainActivity : AppCompatActivity() {
             }
             updateCpsOrDoseLine(false)
         }
+
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        binding.beepVisualizer.visibility = if (prefs.getBoolean("visualize_beeps", false)) View.VISIBLE else View.GONE
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
 
         observeViewModel()
         requestPermissionsOnAppStart()
@@ -416,6 +426,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        PreferenceManager.getDefaultSharedPreferences(this)
+            .unregisterOnSharedPreferenceChangeListener(prefsListener)
+    }
+
     private fun refreshTrackDuration(seconds: Long) {
         binding.textDuration.text = "Duration: ${TrackingRepository.formatDuration(seconds)}"
     }
@@ -509,6 +525,13 @@ class MainActivity : AppCompatActivity() {
                         binding.buttonSavePoi.isEnabled = enabled
                         updateCpsOrDoseLine(false)
                         refreshMeasurementDurationFromTimer()
+                    }
+                }
+                launch {
+                    viewModel.beepEvents.collect { timestamp ->
+                        if (binding.beepVisualizer.visibility == View.VISIBLE) {
+                            binding.beepVisualizer.addBeep(timestamp)
+                        }
                     }
                 }
             }

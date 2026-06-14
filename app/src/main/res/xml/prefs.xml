@@ -26,6 +26,11 @@
             android:title="Use Bluetooth mic"
             android:defaultValue="false" />
 
+        <androidx.preference.SwitchPreferenceCompat
+            android:key="visualize_beeps"
+            android:title="Visualize beeps"
+            android:summary="Show a real-time particle waterfall on the main screen"
+            android:defaultValue="false" />
     </PreferenceCategory>
 
     <PreferenceCategory

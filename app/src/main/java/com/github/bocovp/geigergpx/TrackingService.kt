@@ -513,19 +513,27 @@ class TrackingService : Service() {
                     // 2. Update repository and alert systems using actualCounts
                     repo.incrementTotalCounts(actualCounts)
 
+                    // beepEndNs is CLOCK_MONOTONIC (same as System.nanoTime()).
+                    // Anchor it to wall-clock once, at callback time.
+                    val wallSeconds = if (beepEndNs > 0L) {
+                        System.currentTimeMillis() / 1000.0 + (beepEndNs - System.nanoTime()) / 1e9
+                    } else {
+                        System.currentTimeMillis() / 1000.0
+                    }
+
+                    // Emit events for the visualizer
+                    val wallMillis = (wallSeconds * 1000.0).toLong()
+                    repeat(beepCount) { i ->
+                        val staggerOffsetMs = (beepCount - 1 - i) * 15L
+                        repo.emitBeepEvent(wallMillis - staggerOffsetMs)
+                    }
+
                     val alertEvent = doseRateMeasurement.processBeep(actualCounts)
                     repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true) // ????????????????????
                     alertEvent?.let { dispatchDoseRateAlert(it) }
 
                     // 3. Feed the KDE with sub-millisecond precision and auto-spreading
                     if (trackWriter.isTracking()) {
-                        // beepEndNs is CLOCK_MONOTONIC (same as System.nanoTime()).
-                        // Anchor it to wall-clock once, at callback time.
-                        val wallSeconds = if (beepEndNs > 0L) {
-                            System.currentTimeMillis() / 1000.0 + (beepEndNs - System.nanoTime()) / 1e9
-                        } else {
-                            System.currentTimeMillis() / 1000.0
-                        }
                         kde?.addPoint(wallSeconds, actualCounts, spreadCounts = true)
                     }
                 }
