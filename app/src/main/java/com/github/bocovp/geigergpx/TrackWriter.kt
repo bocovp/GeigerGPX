@@ -100,17 +100,21 @@ class TrackWriter {
         }
 
         // 1. Calculate safe distance (ignoring dummy points)
-        val distance = if (lastGoodPointIndex == -1 && writtenPointsInternal.isNotEmpty()) {
-            0.0 // Do not calculate distance from (0,0)
-        } else if (lastGoodPointIndex != -1 && writtenPointsInternal.size - 1 > lastGoodPointIndex) {
+        val distance = if (lastGoodPointIndex == -1) {
+            if (writtenPointsInternal.isNotEmpty()) {
+                0.0 // Do not calculate distance from dummy points
+            } else {
+                lastWrittenLocation?.distanceTo(loc)?.toDouble() ?: 0.0
+            }
+        } else {
             // Calculate distance from the LAST GOOD point, skipping dummy points
             val p = writtenPointsInternal[lastGoodPointIndex]
-            val tempLoc = Location("temp").apply { latitude = p.latitude; longitude = p.longitude }
-            tempLoc.distanceTo(loc).toDouble()
-        } else {
-            lastWrittenLocation!!.distanceTo(loc).toDouble()
+            Location("temp").apply {
+                latitude = p.latitude
+                longitude = p.longitude
+            }.distanceTo(loc).toDouble()
         }
-
+        
         val anchorTime = if (lastWrittenTime > 0L) lastWrittenTime else startTimeMillis
         val timeDeltaSec = kotlin.math.max(0.1, (now - anchorTime) / 1000.0)
         val movementStats = MovementStats(distance = distance, timeDeltaSec = timeDeltaSec)
@@ -118,7 +122,7 @@ class TrackWriter {
         accumulateLocation(loc)
 
         // 2. Evaluate commit limits (bypass spacing for the first recovered point)
-        val bypassSpacing = (lastGoodPointIndex == -1 && writtenPointsInternal.isNotEmpty())
+        val bypassSpacing = writtenPointsInternal.isNotEmpty() && writtenPointsInternal.last().badCoordinates
         if (movementStats.distance < spacingM && !bypassSpacing) {
             return ProcessLocationResult()
         }
