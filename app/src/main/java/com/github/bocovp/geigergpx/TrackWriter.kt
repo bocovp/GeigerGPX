@@ -54,6 +54,9 @@ class TrackWriter {
         }
     }
 
+    private var lastGoodPointIndex: Int = -1
+    private val distanceResult = FloatArray(1)
+
     fun reset() = synchronized(lock) {
         startTimeMillis = 0L
         _totalDistance = 0.0
@@ -62,6 +65,7 @@ class TrackWriter {
         lastWrittenTime = 0L
         coordinateAverager.reset()
         lastPointTotalBeeps = 0
+        lastGoodPointIndex = -1
     }
 
     fun start(now: Long, totalBeeps: Int) = synchronized(lock) {
@@ -70,20 +74,12 @@ class TrackWriter {
         lastPointTotalBeeps = totalBeeps
     }
 
-
     private fun initializeAnchor(loc: Location, now: Long, totalBeeps: Int) = synchronized(lock) {
         lastWrittenLocation = Location(loc)
         lastWrittenTime = now
         coordinateAverager.reset()
         coordinateAverager.process(loc)
         lastPointTotalBeeps = totalBeeps
-    }
-
-    private fun movementStatsFor(loc: Location, now: Long): MovementStats = synchronized(lock) {
-        val lastLoc = requireNotNull(lastWrittenLocation) { "Anchor location missing" }
-        val distance = lastLoc.distanceTo(loc).toDouble()
-        val timeDeltaSec = kotlin.math.max(0.1, (now - lastWrittenTime) / 1000.0)
-        MovementStats(distance = distance, timeDeltaSec = timeDeltaSec)
     }
 
     private fun accumulateLocation(loc: Location) = synchronized(lock) {
@@ -99,14 +95,34 @@ class TrackWriter {
         maxTimeWithoutCountsS: Double,
         sensitivity: Double
     ): ProcessLocationResult = synchronized(lock) {
-        if (lastWrittenLocation == null) {
+        if (lastWrittenLocation == null && writtenPointsInternal.isEmpty()) {
             initializeAnchor(loc, now, totalBeeps)
             return ProcessLocationResult()
         }
 
-        val movementStats = movementStatsFor(loc, now)
+        // 1. Calculate safe distance (ignoring dummy points)
+        val distance = if (lastGoodPointIndex == -1) {
+            if (writtenPointsInternal.isNotEmpty()) {
+                0.0 // Do not calculate distance from dummy points
+            } else {
+                lastWrittenLocation?.distanceTo(loc)?.toDouble() ?: 0.0
+            }
+        } else {
+            // Calculate distance from the LAST GOOD point, skipping dummy points
+            val p = writtenPointsInternal[lastGoodPointIndex]
+            Location.distanceBetween(p.latitude, p.longitude, loc.latitude, loc.longitude, distanceResult)
+            distanceResult[0].toDouble()
+        }
+
+        val anchorTime = if (lastWrittenTime > 0L) lastWrittenTime else startTimeMillis
+        val timeDeltaSec = kotlin.math.max(0.1, (now - anchorTime) / 1000.0)
+        val movementStats = MovementStats(distance = distance, timeDeltaSec = timeDeltaSec)
+
         accumulateLocation(loc)
-        if (movementStats.distance < spacingM) {
+
+        // 2. Evaluate commit limits (bypass spacing for the first recovered point)
+        val bypassSpacing = writtenPointsInternal.isNotEmpty() && writtenPointsInternal.last().badCoordinates
+        if (movementStats.distance < spacingM && !bypassSpacing) {
             return ProcessLocationResult()
         }
 
@@ -117,8 +133,54 @@ class TrackWriter {
             return ProcessLocationResult()
         }
 
-        val snapshot = commitPoint(loc, now, movementStats, totalBeeps, sensitivity)
-        ProcessLocationResult(snapshot = snapshot)
+        // 3. Retroactive Fixes
+        if (lastGoodPointIndex == -1 && writtenPointsInternal.isNotEmpty()) {
+            // Scenario 2: First good point after dropping out at the very start
+            val size = writtenPointsInternal.size
+            for (i in writtenPointsInternal.indices) {
+                val p = writtenPointsInternal[i]
+                if (p.badCoordinates) {
+                    writtenPointsInternal[i] = p.copy(
+                        latitude = loc.latitude,
+                        longitude = loc.longitude - 0.0001 * (size - i)
+                    )
+                }
+            }
+        } else if (lastGoodPointIndex != -1 && writtenPointsInternal.size > lastGoodPointIndex + 1) {
+            // Scenario 3.2: Regained GPS after a gap; linearly interpolate
+            val idxStart = lastGoodPointIndex
+            val idxEnd = writtenPointsInternal.size
+            val pStart = writtenPointsInternal[idxStart]
+            val steps = idxEnd - idxStart
+
+            for (i in idxStart + 1 until idxEnd) {
+                val p = writtenPointsInternal[i]
+                if (p.badCoordinates) {
+                    val fraction = (i - idxStart).toDouble() / steps.toDouble()
+                    val interpLat = pStart.latitude + (loc.latitude - pStart.latitude) * fraction
+                    val interpLon = pStart.longitude + (loc.longitude - pStart.longitude) * fraction
+                    writtenPointsInternal[i] = p.copy(
+                        latitude = interpLat,
+                        longitude = interpLon
+                    )
+                }
+            }
+        }
+
+        // 4. Safely Commit
+        val snapshot = commitPointInternal(
+            loc = loc,
+            now = now,
+            movementStats = movementStats,
+            totalBeeps = totalBeeps,
+            badCoordinates = false,
+            sensitivity = sensitivity
+        )
+
+        // Update the anchor to the newly added valid point
+        lastGoodPointIndex = writtenPointsInternal.size - 1
+
+        return ProcessLocationResult(snapshot = snapshot)
     }
 
     private fun commitPoint(loc: Location, now: Long, movementStats: MovementStats, totalBeeps: Int, sensitivity: Double): List<TrackPoint> = synchronized(lock) {
@@ -142,19 +204,42 @@ class TrackWriter {
         sensitivity: Double
     ): ProcessLocationResult = synchronized(lock) {
         if (mode == GpsMode.ACTIVE) return ProcessLocationResult()
-        val lastLoc = lastWrittenLocation ?: return ProcessLocationResult()
 
-        val candidateLocation = when (mode) {
-            GpsMode.INACTIVE -> Location(lastLoc)
-            GpsMode.SPOOFING -> spoofedLocation?.let { Location(it) } ?: return ProcessLocationResult()
-            GpsMode.ACTIVE -> return ProcessLocationResult()
+        val fallbackLat: Double
+        val fallbackLon: Double
+
+        if (lastGoodPointIndex == -1) {
+            // Scenario 1: Beginning of the track without GPS
+            fallbackLat = 0.0
+            fallbackLon = 0.0001 * writtenPointsInternal.size
+        } else {
+            // Scenario 3.1: Lost GPS in the middle of the track
+            val lastGood = writtenPointsInternal[lastGoodPointIndex]
+            val n = writtenPointsInternal.size - lastGoodPointIndex
+            fallbackLat = lastGood.latitude
+            fallbackLon = lastGood.longitude + (0.0001 * n)
         }
 
-        val movementStats = movementStatsFor(candidateLocation, now)
+        val candidateLocation = when (mode) {
+            GpsMode.SPOOFING -> spoofedLocation?.let { Location(it) } ?: Location("fallback").apply {
+                latitude = fallbackLat
+                longitude = fallbackLon
+            }
+            else -> Location("fallback").apply {
+                latitude = fallbackLat
+                longitude = fallbackLon
+            }
+        }
+
+        val anchorTime = if (lastWrittenTime > 0L) lastWrittenTime else startTimeMillis
+        val timeDeltaSec = kotlin.math.max(0.1, (now - anchorTime) / 1000.0)
+        val movementStats = MovementStats(distance = 0.0, timeDeltaSec = timeDeltaSec)
+
         val currentBeeps = totalBeeps - lastPointTotalBeeps
         if (currentBeeps <= 0) {
             return ProcessLocationResult()
         }
+
         val timedOut = maxTimeWithoutCountsS > 0.0 && movementStats.timeDeltaSec >= maxTimeWithoutCountsS
         if (currentBeeps < minCountsPerPoint && !timedOut) {
             return ProcessLocationResult()
@@ -168,11 +253,12 @@ class TrackWriter {
             badCoordinates = true,
             sensitivity = sensitivity
         )
-        ProcessLocationResult(snapshot = snapshot)
+        return ProcessLocationResult(snapshot = snapshot)
     }
 
     fun secondsSinceLastWritten(now: Long): Double = synchronized(lock) {
-        if (lastWrittenTime <= 0L) 0.0 else kotlin.math.max(0.0, (now - lastWrittenTime) / 1000.0)
+        val anchorTime = if (lastWrittenTime > 0L) lastWrittenTime else startTimeMillis
+        if (anchorTime <= 0L) 0.0 else kotlin.math.max(0.0, (now - anchorTime) / 1000.0)
     }
 
     private fun commitPointInternal(
