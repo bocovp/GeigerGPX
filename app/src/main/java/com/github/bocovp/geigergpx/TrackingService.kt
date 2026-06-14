@@ -521,11 +521,13 @@ class TrackingService : Service() {
                         System.currentTimeMillis() / 1000.0
                     }
 
-                    // Emit events for the visualizer
-                    val wallMillis = (wallSeconds * 1000.0).toLong()
-                    repeat(beepCount) { i ->
-                        val staggerOffsetMs = (beepCount - 1 - i) * 15L
-                        repo.emitBeepEvent(wallMillis - staggerOffsetMs)
+                    if (prefs.getBoolean("visualize_beeps", false)) {
+                        // Emit events for the visualizer
+                        val wallMillis = (wallSeconds * 1000.0).toLong()
+                        repeat(beepCount) { i ->
+                            val staggerOffsetMs = (beepCount - 1 - i) * 15L
+                            repo.emitBeepEvent(wallMillis - staggerOffsetMs)
+                        }
                     }
 
                     val alertEvent = doseRateMeasurement.processBeep(actualCounts)
