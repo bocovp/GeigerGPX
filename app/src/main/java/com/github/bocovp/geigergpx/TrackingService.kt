@@ -115,6 +115,7 @@ class TrackingService : Service() {
             "max_time_without_counts_s",
             "max_time_without_gps_s",
             "dose_rate_avg_timestamps_n",
+            "visualize_beeps",
             "alert_dose_rate",
             RadiationCalibration.KEY_SENSITIVITY,
             "cps_to_usvh",
@@ -123,6 +124,8 @@ class TrackingService : Service() {
                 -> loadTrackingPrefs()
         }
     }
+
+    @Volatile private var visualizeBeeps: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -166,6 +169,8 @@ class TrackingService : Service() {
         sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
         val configuredAlertDoseRate = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
         alertDoseRate = if (configuredAlertDoseRate > 0.0) configuredAlertDoseRate else 0.0
+
+        visualizeBeeps = prefs.getBoolean("visualize_beeps", false)
 
         countsPerBeep = DeviceConfigManager.countsPerBeepFromPrefs(prefs)
         repo.updateCountsPerBeep(countsPerBeep)
@@ -521,7 +526,7 @@ class TrackingService : Service() {
                         System.currentTimeMillis() / 1000.0
                     }
 
-                    if (prefs.getBoolean("visualize_beeps", false)) {
+                    if (visualizeBeeps) {//  prefs.getBoolean("visualize_beeps", false)
                         // Emit events for the visualizer
                         val wallMillis = (wallSeconds * 1000.0).toLong()
                         repeat(beepCount) { i ->

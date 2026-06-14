@@ -12,7 +12,7 @@ class BeepVisualizerView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     companion object {
-        private const val DURATION_MS = 2000L
+        private const val DURATION_MS = 3000L
         private const val MAX_BEEPS = 2000 // Circular buffer size
     }
 
@@ -63,7 +63,7 @@ class BeepVisualizerView @JvmOverloads constructor(
 
         var i = tail
         while (i != head) {
-            val age = now - beepTimes[i]
+            val age = (now - beepTimes[i]).coerceAtLeast(0L)
             if (age > DURATION_MS) {
                 // Point expired, advance tail
                 tail = (i + 1) % MAX_BEEPS
