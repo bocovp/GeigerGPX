@@ -113,8 +113,8 @@ object GpxWriter {
         points: List<TrackPoint>,
         saveDoseRateInEle: Boolean,
         sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY,
-        edited: Boolean = false,
-        deviceName: String? = null
+        deviceName: String? = null,
+        edited: Boolean = false
     ) {
         val metadata = computeTrackMetadata(points, sensitivity)
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
