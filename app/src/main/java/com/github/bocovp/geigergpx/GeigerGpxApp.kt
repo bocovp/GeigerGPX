@@ -9,7 +9,8 @@ class GeigerGpxApp : Application() {
         val trackId: String?,
         val trackTitle: String?,
         val pointIndex: Int,
-        val point: TrackPoint
+        val point: TrackPoint,
+        val deviceName: String? = null
     )
 
     val trackingRepository: TrackingRepository by lazy { TrackingRepository() }

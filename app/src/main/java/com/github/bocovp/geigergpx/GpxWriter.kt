@@ -59,7 +59,9 @@ object GpxWriter {
         val fileName = defaultTimestampFileName()
         val result = writeTrackFile(context, points, fileName)
         if (result != null) {
-            TrackCatalog.onTrackSaved(context, fileName, points)
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val deviceName = DeviceConfigManager.currentDeviceName(prefs)
+            TrackCatalog.onTrackSaved(context, fileName, points, deviceName)
         }
         return result
     }
@@ -113,8 +115,8 @@ object GpxWriter {
         points: List<TrackPoint>,
         saveDoseRateInEle: Boolean,
         sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY,
-        edited: Boolean = false,
-        deviceName: String? = null
+        deviceName: String? = null,
+        edited: Boolean = false
     ) {
         val metadata = computeTrackMetadata(points, sensitivity)
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
@@ -187,6 +189,9 @@ object GpxWriter {
             builder.append("\t\t\t<rad:doserate>${"%.5f".format(Locale.US, poi.doseRate)}</rad:doserate>\n")
             builder.append("\t\t\t<rad:counts>${poi.counts}</rad:counts>\n")
             builder.append("\t\t\t<rad:seconds>${"%.3f".format(Locale.US, poi.seconds)}</rad:seconds>\n")
+            poi.deviceName?.takeIf { it.isNotBlank() }?.let {
+                builder.append("\t\t\t<rad:device>${escapeXml(it)}</rad:device>\n")
+            }
             builder.append("\t\t</extensions>\n")
             builder.append("\t</wpt>\n")
         }

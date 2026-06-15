@@ -22,19 +22,22 @@ object GpxReader {
         val counts: Long,
         val seconds: Double,
         val doseMuSv: Double?,
-        val sensitivity: Double?
+        val sensitivity: Double?,
+        val deviceName: String? = null
     )
 
     data class TrackWithStats(
         val points: List<TrackPoint>,
         val stats: TrackStats,
-        val sensitivity: Double
+        val sensitivity: Double,
+        val deviceName: String? = null
     )
 
     data class TrackWithMetadata(
         val points: List<TrackPoint>,
         val isEdited: Boolean,
-        val sensitivity: Double?
+        val sensitivity: Double?,
+        val deviceName: String? = null
     )
 
     private data class ParsedTrackData(
@@ -46,7 +49,7 @@ object GpxReader {
 
     fun readTrackWithMetadata(inputStream: InputStream): TrackWithMetadata? {
         val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false) ?: return null
-        return TrackWithMetadata(parsed.points, parsed.edited, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY)
+        return TrackWithMetadata(parsed.points, parsed.edited, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName)
     }
 
     fun readTrack(inputStream: InputStream): List<TrackPoint>? {
@@ -56,9 +59,8 @@ object GpxReader {
     }
 
     fun readTrackWithStats(inputStream: InputStream): TrackWithStats? {
-        val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false)
-            ?: return null
-        return TrackWithStats(parsed.points, parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY)
+        val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false) ?: return null
+        return TrackWithStats(parsed.points, parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName)
     }
 
     fun readTrackStats(inputStream: InputStream): TrackStats? {
@@ -68,9 +70,8 @@ object GpxReader {
     }
 
     fun readTrackStatsWithSensitivity(inputStream: InputStream): TrackWithStats? {
-        val parsed = readTrackInternal(inputStream, parsePoints = false, preferMetadataStats = true)
-            ?: return null
-        return TrackWithStats(emptyList(), parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY)
+        val parsed = readTrackInternal(inputStream, parsePoints = false, preferMetadataStats = true) ?: return null
+        return TrackWithStats(emptyList(), parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName)
     }
 
     fun readPois(xml: String): List<PoiEntry> {
@@ -120,6 +121,7 @@ object GpxReader {
             var metadataSeconds: Double? = null
             var metadataDose: Double? = null
             var metadataSensitivity: Double? = null
+            var metadataDeviceName: String? = null
 
             var metadataEdited = false
             var currentTag: String? = null
@@ -196,6 +198,7 @@ object GpxReader {
                                 "dose" -> metadataDose = value?.toDoubleOrNull()
                                 "sensitivity" -> metadataSensitivity = value?.toDoubleOrNull()?.takeIf { it > 0.0 }
                                 "cpsToUsvh", "cc" -> metadataSensitivity = value?.toDoubleOrNull()?.takeIf { it > 0.0 }?.let { 1.0 / it } // deprecated
+                                "device" -> metadataDeviceName = value
                                 "edited" -> metadataEdited = value.equals("true", ignoreCase = true)
                             }
                         }
@@ -254,7 +257,8 @@ object GpxReader {
                 metadataCounts,
                 metadataSeconds,
                 metadataDose,
-                metadataSensitivity
+                metadataSensitivity,
+                metadataDeviceName
             )
 
             if (parsePoints && points.isEmpty()) return null
@@ -285,7 +289,8 @@ object GpxReader {
         counts: Long?,
         seconds: Double?,
         dose: Double?,
-        sensitivity: Double?
+        sensitivity: Double?,
+        deviceName: String? = null
     ): TrackMetadata? {
         if (pointCount == null && distanceMeters == null && counts == null && seconds == null && dose == null && sensitivity == null) {
             return null
@@ -296,7 +301,8 @@ object GpxReader {
             counts = counts ?: 0L,
             seconds = seconds ?: 0.0,
             doseMuSv = dose,
-            sensitivity = sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY
+            sensitivity = sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY,
+            deviceName = deviceName
         )
     }
 
@@ -309,6 +315,7 @@ object GpxReader {
         var counts = 0
         var seconds = 0.0
         var name = ""
+        var deviceName: String? = null
         var insideWpt = false
         var currentTag: String? = null
         var currentNamespace: String? = null
@@ -327,6 +334,7 @@ object GpxReader {
                         counts = 0
                         seconds = 0.0
                         name = ""
+                        deviceName = null
                     }
                 }
 
@@ -344,6 +352,9 @@ object GpxReader {
                             currentNamespace == RAD_NAMESPACE && currentTag == "seconds" -> {
                                 seconds = parser.text?.trim()?.toDoubleOrNull() ?: 0.0
                             }
+                            currentNamespace == RAD_NAMESPACE && currentTag == "device" -> {
+                            deviceName = parser.text?.trim()
+                        }
                         }
                     }
                 }
@@ -360,7 +371,8 @@ object GpxReader {
                                 doseRate = doseRate,
                                 counts = counts,
                                 seconds = seconds,
-                                description = name.ifBlank { "POI" }
+                                description = name.ifBlank { "POI" },
+                                deviceName = deviceName
                             )
                         )
                         insideWpt = false

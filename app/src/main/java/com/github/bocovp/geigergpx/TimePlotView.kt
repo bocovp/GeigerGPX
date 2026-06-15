@@ -25,6 +25,10 @@ class TimePlotView @JvmOverloads constructor(
         private const val MAX_ZOOM_X = 30f
     }
 
+    var isInteracting = false
+        private set
+    var onInteractionEnded: (() -> Unit)? = null
+
     private val density = context.resources.displayMetrics.density
 
     private data class PlotSegment(
@@ -201,7 +205,7 @@ class TimePlotView @JvmOverloads constructor(
         updateZoomForLiveUpdate(newDuration = elapsedSeconds, isLiveUpdate = isLiveUpdate)
         updateXAxisUnit()
         maxDoseValue = (plotSegments.maxOfOrNull { maxOf(it.value, it.ciHigh) } ?: 1.0).coerceAtLeast(0.1)
-        if (recalculateVerticalAxis || (isLiveUpdate && maxDoseValue > verticalAxisMaxValue)) {
+        if (recalculateVerticalAxis || (isLiveUpdate && !isInteracting && maxDoseValue > verticalAxisMaxValue)) {
             verticalTickStep = chooseVerticalTickStep(maxDoseValue)
             verticalTickCount = ceil(maxDoseValue / verticalTickStep).toInt()
             verticalAxisMaxValue = verticalTickStep * verticalTickCount
@@ -249,7 +253,7 @@ class TimePlotView @JvmOverloads constructor(
 
         updateXAxisUnit()
         maxDoseValue = kernelSeries.maxOfOrNull { maxOf(it.mean, it.high) }?.coerceAtLeast(0.1) ?: 1.0
-        if (recalculateVerticalAxis || (isLiveUpdate && maxDoseValue > verticalAxisMaxValue)) {
+        if (recalculateVerticalAxis || (isLiveUpdate && !isInteracting && maxDoseValue > verticalAxisMaxValue)) {
             verticalTickStep = chooseVerticalTickStep(maxDoseValue)
             verticalTickCount = ceil(maxDoseValue / verticalTickStep).toInt()
             verticalAxisMaxValue = verticalTickStep * verticalTickCount
@@ -299,6 +303,7 @@ class TimePlotView @JvmOverloads constructor(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 longPressSelecting = false
+                isInteracting = true
             }
 
             MotionEvent.ACTION_MOVE -> {
@@ -308,7 +313,13 @@ class TimePlotView @JvmOverloads constructor(
                 }
             }
 
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> longPressSelecting = false
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                longPressSelecting = false
+                if (isInteracting) { // <-- Trigger callback on finger release
+                    isInteracting = false
+                    onInteractionEnded?.invoke()
+                }
+            }
         }
         val scaled = scaleDetector.onTouchEvent(event)
         val gestured = gestureDetector.onTouchEvent(event)
