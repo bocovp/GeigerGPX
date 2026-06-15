@@ -96,6 +96,8 @@ class TimePlotActivity : AppCompatActivity() {
     private var renderGeneration: Long = 0L
     private val appState: GeigerGpxApp by lazy { application as GeigerGpxApp }
 
+    private var trackDeviceName: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityTimePlotBinding.inflate(layoutInflater)
@@ -105,6 +107,10 @@ class TimePlotActivity : AppCompatActivity() {
 
         setupGeneralizationSlider()
         setupTrackSelector()
+
+        binding.timePlotView.onInteractionEnded = {
+            updatePlot(recalculateVerticalAxis = true)
+        }
 
         // Listen for view panning/zooming to fetch new KDE fragments
         binding.timePlotView.onVisibleRangeChanged = {
@@ -335,8 +341,12 @@ class TimePlotActivity : AppCompatActivity() {
             hint = "POI"
         }
 
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val deviceName = DeviceConfigManager.currentDeviceName(prefs)
+        val isCurrentTrack = selected.trackId == TrackCatalog.currentTrackId()
+        val deviceName = if (isCurrentTrack) {
+            DeviceConfigManager.currentDeviceName(PreferenceManager.getDefaultSharedPreferences(this))
+        } else {
+            selected.deviceName
+        }
 
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Add POI")
@@ -409,7 +419,8 @@ class TimePlotActivity : AppCompatActivity() {
                         trackId = trackId,
                         trackTitle = binding.trackNameField.text?.toString(),
                         pointIndex = selected.first + 1,
-                        point = selected.second
+                        point = selected.second,
+                        deviceName = trackDeviceName
                     )
                 )
             }
@@ -720,6 +731,7 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun loadTrackForPlot(trackId: String?): Boolean {
+        trackDeviceName = DeviceConfigManager.currentDeviceName(PreferenceManager.getDefaultSharedPreferences(this))
         selectedTrackIdForPlot = trackId
         val normalizedTrackId = trackId?.takeIf { it.isNotBlank() }
         if (normalizedTrackId == null || normalizedTrackId == TrackCatalog.currentTrackId()) {
@@ -742,6 +754,7 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun applyLoadedTrack(trackId: String, selectedTrack: TrackCatalog.TrackPlotData) {
+        trackDeviceName = selectedTrack.deviceName
         selectedTrackIdForPlot = trackId
         failedTrackIdsForPlot.remove(trackId)
         rememberTrackSelection(this, trackId)

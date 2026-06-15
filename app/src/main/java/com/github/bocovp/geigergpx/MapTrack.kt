@@ -4,5 +4,6 @@ data class MapTrack(
     val id: String,
     val title: String,
     val points: List<TrackPoint>,
-    val sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
+    val sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY,
+    val deviceName: String? = null
 )

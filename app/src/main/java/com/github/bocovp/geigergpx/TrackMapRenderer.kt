@@ -17,7 +17,8 @@ class TrackMapRenderer(
         val trackId: String,
         val point: TrackPoint,
         val trackTitle: String,
-        val pointIndex: Int
+        val pointIndex: Int,
+        val deviceName: String? = null
     )
     data class MapViewportState(
         val latitude: Double,
@@ -386,7 +387,8 @@ class TrackMapRenderer(
         trackId: String?,
         point: TrackPoint,
         trackTitle: String? = null,
-        pointIndex: Int? = null
+        pointIndex: Int? = null,
+        deviceName: String? = null
     ) {
         val resolvedTrack = lastRenderedTracks.firstOrNull { it.id == trackId }
             ?: lastRenderedTracks.firstOrNull { candidate ->
@@ -398,7 +400,8 @@ class TrackMapRenderer(
                 trackId = resolvedTrack.id,
                 point = point,
                 trackTitle = trackTitle ?: resolvedTrack.title,
-                pointIndex = resolvedIndex
+                pointIndex = resolvedIndex,
+                deviceName = deviceName
             )
         } else {
             null

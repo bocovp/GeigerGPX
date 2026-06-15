@@ -198,7 +198,8 @@ class MapActivity : AppCompatActivity() {
                             trackId = highlighted.trackId,
                             point = highlighted.point,
                             trackTitle = highlighted.trackTitle,
-                            pointIndex = highlighted.pointIndex
+                            pointIndex = highlighted.pointIndex,
+                            deviceName = highlighted.deviceName
                         )
                     }
                     if (wasHighlighted != trackMapRenderer.hasHighlightedPoint()) {
@@ -292,8 +293,12 @@ class MapActivity : AppCompatActivity() {
             hint = "POI"
         }
 
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val deviceName = DeviceConfigManager.currentDeviceName(prefs)
+        val isCurrentTrack = selected?.trackId == TrackCatalog.currentTrackId() || selected == null
+        val deviceName = if (isCurrentTrack) {
+            DeviceConfigManager.currentDeviceName(PreferenceManager.getDefaultSharedPreferences(this))
+        } else {
+            selected?.deviceName
+        }
 
         AlertDialog.Builder(this)
             .setTitle("Add POI")
@@ -322,7 +327,7 @@ class MapActivity : AppCompatActivity() {
                             PoiLibrary.addPoi(
                                 context = this@MapActivity,
                                 description = description.ifBlank { "Unknown" },
-                                timestampMillis = System.currentTimeMillis(),
+                                timestampMillis = (System.currentTimeMillis() / 1000L) * 1000L,
                                 latitude = current?.latitude ?: 0.0,
                                 longitude = current?.longitude ?: 0.0,
                                 doseRate = 0.0,
@@ -416,12 +421,23 @@ class MapActivity : AppCompatActivity() {
         // the old AtomicInteger sequence guard.
         refreshJob?.cancel()
 
+        val selectedTrackIds = selectedTrackIds()
+        val selectedFolders = selectedFolderIds()
+        val includeCurrentTrack = viewModel.isTracking.value
+
+        if (selectedTrackIds.isEmpty() && selectedFolders.isEmpty() && !includeCurrentTrack) {
+            // We have absolutely nothing to draw. Fast-fail and stop the blink.
+            binding.loadingLabel.setText(R.string.no_poi_in_library) // Or whatever your string resource is for "No track data"
+            binding.loadingLabel.visibility = View.VISIBLE
+            hasVisibleMapContent = false
+            return
+        }
+
         val showLoading = !hasLoadedMapTracks || TrackCatalog.isTrackCacheEmpty()
         binding.loadingLabel.visibility = if (showLoading) View.VISIBLE else View.GONE
 
         // Capture all main-thread state that the IO block needs.
         // StateFlow.value is thread-safe; read once here for a consistent refresh snapshot.
-        val includeCurrentTrack = viewModel.isTracking.value
 
         refreshJob = lifecycleScope.launch {
             try {

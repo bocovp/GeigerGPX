@@ -59,7 +59,9 @@ object GpxWriter {
         val fileName = defaultTimestampFileName()
         val result = writeTrackFile(context, points, fileName)
         if (result != null) {
-            TrackCatalog.onTrackSaved(context, fileName, points)
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val deviceName = DeviceConfigManager.currentDeviceName(prefs)
+            TrackCatalog.onTrackSaved(context, fileName, points, deviceName)
         }
         return result
     }
