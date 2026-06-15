@@ -85,6 +85,9 @@ class TrackingRepository {
     )
     val beepEvents: SharedFlow<Long> = _beepEvents.asSharedFlow()
 
+    val hasBeepObservers: Boolean
+        get() = _beepEvents.subscriptionCount.value > 0
+
     fun emitBeepEvent(timestampMillis: Long) {
         _beepEvents.tryEmit(timestampMillis)
     }

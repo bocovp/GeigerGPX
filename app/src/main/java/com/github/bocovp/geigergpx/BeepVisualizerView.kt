@@ -26,7 +26,9 @@ class BeepVisualizerView @JvmOverloads constructor(
     private val radius = 3.5f * resources.displayMetrics.density
 
     private val paint = Paint().apply {
-        color = ContextCompat.getColor(context, R.color.purple_500)
+        val typedValue = android.util.TypedValue()
+        context.theme.resolveAttribute(android.R.attr.colorPrimary, typedValue, true)
+        color = typedValue.data  // ContextCompat.getColor(context, R.color.purple_500)
         style = Paint.Style.STROKE
         strokeWidth = radius * 2f
         strokeCap = Paint.Cap.ROUND

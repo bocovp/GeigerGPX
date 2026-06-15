@@ -526,7 +526,7 @@ class TrackingService : Service() {
                         System.currentTimeMillis() / 1000.0
                     }
 
-                    if (visualizeBeeps) {// Emit events for beep visualizer
+                    if (visualizeBeeps && repo.hasBeepObservers) {// Emit events for beep visualizer
                         val elapsedRealtimeMillis = if (beepEndNs > 0L) {
                             android.os.SystemClock.elapsedRealtime() + ((beepEndNs - System.nanoTime()) / 1e6).toLong()
                         } else {
