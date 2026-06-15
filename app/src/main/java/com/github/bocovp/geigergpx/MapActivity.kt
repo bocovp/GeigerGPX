@@ -327,7 +327,7 @@ class MapActivity : AppCompatActivity() {
                             PoiLibrary.addPoi(
                                 context = this@MapActivity,
                                 description = description.ifBlank { "Unknown" },
-                                timestampMillis = (System.currentTimeMillis() / 1000L) * 1000L,
+                                timestampMillis = System.currentTimeMillis(),
                                 latitude = current?.latitude ?: 0.0,
                                 longitude = current?.longitude ?: 0.0,
                                 doseRate = 0.0,
