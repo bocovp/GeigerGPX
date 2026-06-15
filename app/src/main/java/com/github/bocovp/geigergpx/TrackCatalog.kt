@@ -509,7 +509,7 @@ object TrackCatalog {
         val cachedDeviceName = cachedTrack?.deviceName
 
         if (points != null && displayName != null) {
-            return TrackPlotData(id = trackId, title = displayName, points = points, sensitivity = cachedSensitivity)
+            return TrackPlotData(id = trackId, title = displayName, points = points, sensitivity = cachedSensitivity, deviceName = cachedDeviceName)
         }
 
         if (displayName == null) return null

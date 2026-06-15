@@ -401,7 +401,7 @@ class TrackMapRenderer(
                 point = point,
                 trackTitle = trackTitle ?: resolvedTrack.title,
                 pointIndex = resolvedIndex,
-                deviceName = deviceName
+                deviceName = deviceName ?: resolvedTrack.deviceName
             )
         } else {
             null
