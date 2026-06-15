@@ -334,6 +334,10 @@ class TimePlotActivity : AppCompatActivity() {
             setSelection(text.length)
             hint = "POI"
         }
+
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val deviceName = DeviceConfigManager.currentDeviceName(prefs)
+
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Add POI")
             .setMessage("Define POI name:")
@@ -351,7 +355,8 @@ class TimePlotActivity : AppCompatActivity() {
                             longitude = selected.point.longitude,
                             doseRate = selected.point.doseRate,
                             counts = selected.point.counts,
-                            seconds = selected.point.seconds
+                            seconds = selected.point.seconds,
+                            deviceName = deviceName
                         )
                     }
                     android.widget.Toast.makeText(this@TimePlotActivity, if (success) "POI saved" else "Unable to save POI", android.widget.Toast.LENGTH_SHORT).show()

@@ -291,6 +291,10 @@ class MapActivity : AppCompatActivity() {
             setSelection(text.length)
             hint = "POI"
         }
+
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val deviceName = DeviceConfigManager.currentDeviceName(prefs)
+
         AlertDialog.Builder(this)
             .setTitle("Add POI")
             .setMessage("Define POI name:")
@@ -311,7 +315,8 @@ class MapActivity : AppCompatActivity() {
                                 longitude = point.longitude,
                                 doseRate = point.doseRate,
                                 counts = point.counts,
-                                seconds = point.seconds
+                                seconds = point.seconds,
+                                deviceName = deviceName
                             )
                         } else {
                             PoiLibrary.addPoi(
@@ -322,7 +327,8 @@ class MapActivity : AppCompatActivity() {
                                 longitude = current?.longitude ?: 0.0,
                                 doseRate = 0.0,
                                 counts = 0,
-                                seconds = 0.0
+                                seconds = 0.0,
+                                deviceName = deviceName
                             )
                         }
                     }
