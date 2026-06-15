@@ -424,8 +424,9 @@ class MapActivity : AppCompatActivity() {
         val selectedTrackIds = selectedTrackIds()
         val selectedFolders = selectedFolderIds()
         val includeCurrentTrack = viewModel.isTracking.value
+        val selectedPoiIds = PoiLibrary.selectedPoiIds(this)
 
-        if (selectedTrackIds.isEmpty() && selectedFolders.isEmpty() && !includeCurrentTrack) {
+        if (selectedTrackIds.isEmpty() && selectedFolders.isEmpty() && !includeCurrentTrack && selectedPoiIds.isEmpty()) {
             // We have absolutely nothing to draw. Fast-fail and stop the blink.
             binding.loadingLabel.setText(R.string.no_poi_in_library) // Or whatever your string resource is for "No track data"
             binding.loadingLabel.visibility = View.VISIBLE

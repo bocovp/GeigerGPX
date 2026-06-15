@@ -526,7 +526,7 @@ object TrackCatalog {
             _tracks.value = parsedTrackCache.toMap()
         }
 
-        return TrackPlotData(id = trackId, title = displayName, points = parsed.points, sensitivity = parsed.sensitivity, deviceName = cachedDeviceName)
+        return TrackPlotData(id = trackId, title = displayName, points = parsed.points, sensitivity = parsed.sensitivity, deviceName = parsed.deviceName)
     }
     fun folderItemId(folderName: String): String = "folder:$folderName"
 
