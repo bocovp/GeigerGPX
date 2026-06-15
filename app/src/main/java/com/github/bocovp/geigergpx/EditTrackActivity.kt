@@ -43,6 +43,7 @@ class EditTrackActivity : AppCompatActivity() {
     private var hasEdits = false
     private var trackAlreadyEdited = false
     private var trackSensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
+    private var trackDeviceName: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -150,6 +151,7 @@ class EditTrackActivity : AppCompatActivity() {
             trackAlreadyEdited = loaded.isEdited
             trackSensitivity = loaded.sensitivity
                 ?: RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(this@EditTrackActivity))
+            trackDeviceName = loaded.deviceName
             fitMapToTrack()
             refreshUiState()
         }
@@ -375,7 +377,8 @@ class EditTrackActivity : AppCompatActivity() {
                             trackTitle,
                             trackFolder,
                             secondPart,
-                            trackSensitivity
+                            trackSensitivity,
+                            trackDeviceName
                         ) ?: return@withContext false
                         TrackCatalog.onTrackSavedById(
                             this@EditTrackActivity,
@@ -391,7 +394,8 @@ class EditTrackActivity : AppCompatActivity() {
                         trackId,
                         updatedPoints,
                         edited = true,
-                        sensitivityOverride = trackSensitivity
+                        sensitivityOverride = trackSensitivity,
+                        deviceNameOverride = trackDeviceName
                     )
                     TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints, trackSensitivity)
                     true

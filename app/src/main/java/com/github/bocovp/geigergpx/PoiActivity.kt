@@ -224,6 +224,11 @@ class PoiActivity : AppCompatActivity() {
             appendLine("Counts: ${poi.counts}")
             appendLine("Seconds: ${String.format(Locale.US, "%.3f", poi.seconds)}")
             append("Dose rate: ${formatDoseRateText(poi)}")
+
+            poi.deviceName?.takeIf { it.isNotBlank() }?.let {
+                appendLine()
+                append("Device: $it")
+            }
         }
     }
 

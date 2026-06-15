@@ -23,7 +23,8 @@ data class PoiEntry(
         (counts / seconds) / doseRate
     } else {
         RadiationCalibration.DEFAULT_SENSITIVITY
-    }
+    },
+    val deviceName: String? = null
 )
 
 fun buildPoiId(timestampMillis: Long, latitude: Double, longitude: Double): String {
@@ -78,9 +79,10 @@ object PoiLibrary {
         doseRate: Double,
         counts: Int,
         seconds: Double,
+        deviceName: String? = null,
         selected: Boolean = true
     ): Boolean {
-        return addPoiWithResult(context, description, timestampMillis, latitude, longitude, doseRate, counts, seconds, selected).success
+        return addPoiWithResult(context, description, timestampMillis, latitude, longitude, doseRate, counts, seconds, deviceName, selected).success
     }
 
     fun addPoiWithResult(
@@ -92,6 +94,7 @@ object PoiLibrary {
         doseRate: Double,
         counts: Int,
         seconds: Double,
+        deviceName: String? = null,
         selected: Boolean = true
     ): SaveResult {
         val poiId = buildPoiId(timestampMillis, latitude, longitude)
@@ -104,7 +107,8 @@ object PoiLibrary {
                 doseRate = doseRate,
                 counts = counts,
                 seconds = seconds,
-                description = description.ifBlank { "POI" }
+                description = description.ifBlank { "POI" },
+                deviceName = deviceName
             )
         }
         if (result.success && selected) {

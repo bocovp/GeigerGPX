@@ -553,7 +553,10 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Save POI") { _, _ ->
                 val description = input.text?.toString()?.trim().orEmpty()
                 val (counts, seconds) = getCurrentMeasurementCountsAndSeconds()
-                val sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this))
+
+                val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+                val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
+                val deviceName = DeviceConfigManager.currentDeviceName(prefs)
                 val doseRate = ConfidenceInterval(0.0, seconds, counts, false).scale(1.0 / sensitivity).mean
 //                  val doseRate = ConfidenceInterval(0.0, seconds, counts + 1).scale(1.0 / sensitivity).mean
                 val (latitude, longitude) = TrackingService.consumeMeasurementAverageCoordinates()
@@ -570,7 +573,8 @@ class MainActivity : AppCompatActivity() {
                                 longitude = longitude,
                                 doseRate = doseRate,
                                 counts = counts,
-                                seconds = seconds
+                                seconds = seconds,
+                                deviceName = deviceName
                             )
                         }
                         if (saveResult.success) {

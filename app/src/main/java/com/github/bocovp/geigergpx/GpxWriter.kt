@@ -187,6 +187,9 @@ object GpxWriter {
             builder.append("\t\t\t<rad:doserate>${"%.5f".format(Locale.US, poi.doseRate)}</rad:doserate>\n")
             builder.append("\t\t\t<rad:counts>${poi.counts}</rad:counts>\n")
             builder.append("\t\t\t<rad:seconds>${"%.3f".format(Locale.US, poi.seconds)}</rad:seconds>\n")
+            poi.deviceName?.takeIf { it.isNotBlank() }?.let {
+                builder.append("\t\t\t<rad:device>${escapeXml(it)}</rad:device>\n")
+            }
             builder.append("\t\t</extensions>\n")
             builder.append("\t</wpt>\n")
         }

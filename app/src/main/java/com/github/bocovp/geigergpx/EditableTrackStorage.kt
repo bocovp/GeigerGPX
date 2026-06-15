@@ -11,13 +11,13 @@ import java.io.OutputStream
 import androidx.core.net.toUri
 
 object EditableTrackStorage {
-    data class LoadResult(val points: List<TrackPoint>, val isEdited: Boolean, val sensitivity: Double?)
+    data class LoadResult(val points: List<TrackPoint>, val isEdited: Boolean, val sensitivity: Double?, val deviceName: String? = null)
     data class SplitResult(val newTrackId: String, val newTrackTitle: String)
 
     suspend fun loadTrack(context: Context, trackId: String): LoadResult? = withContext(Dispatchers.IO) {
         val input = openInputStream(context, trackId) ?: return@withContext null
         val loaded = GpxReader.readTrackWithMetadata(input) ?: return@withContext null
-        LoadResult(loaded.points, loaded.isEdited, loaded.sensitivity)
+        LoadResult(loaded.points, loaded.isEdited, loaded.sensitivity, loaded.deviceName)
     }
 
     suspend fun overwriteTrack(
@@ -25,16 +25,18 @@ object EditableTrackStorage {
         trackId: String,
         points: List<TrackPoint>,
         edited: Boolean = false,
-        sensitivityOverride: Double? = null
+        sensitivityOverride: Double? = null,
+        deviceNameOverride: String? = null
     ) = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
         val sensitivity = sensitivityOverride ?: RadiationCalibration.sensitivityFromPrefs(prefs)
+        val deviceName = deviceNameOverride ?: DeviceConfigManager.currentDeviceName(prefs)
 
         val output = openOutputStream(context, trackId) ?: return@withContext
         output.use { out ->
             out.bufferedWriter().use { writer ->
-                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, edited = edited)
+                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName, edited = edited)
             }
         }
     }
@@ -45,11 +47,13 @@ object EditableTrackStorage {
         sourceTitle: String,
         folderName: String?,
         points: List<TrackPoint>,
-        sensitivityOverride: Double? = null
+        sensitivityOverride: Double? = null,
+        deviceNameOverride: String? = null
     ): SplitResult? = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
         val sensitivity = sensitivityOverride ?: RadiationCalibration.sensitivityFromPrefs(prefs)
+        val deviceName = deviceNameOverride ?: DeviceConfigManager.currentDeviceName(prefs)
 
         val nextName = uniqueSplitFileName(context, sourceTitle, folderName)
         val uri = when {
@@ -59,7 +63,7 @@ object EditableTrackStorage {
                 val target = File(parentDir, nextName)
                 target.outputStream().use { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, edited = true)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName, edited = true)
                     }
                 }
                 Uri.fromFile(target)
@@ -71,7 +75,7 @@ object EditableTrackStorage {
                     relativePath = relativePath
                 ) { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, edited = true)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName, edited = true)
                     }
                 }
                 result.uri ?: return@withContext null
