@@ -23,14 +23,18 @@ class BeepVisualizerView @JvmOverloads constructor(
     private var tail = 0
     private var isAnimating = false
 
+    private val radius = 3.5f * resources.displayMetrics.density
+
     private val paint = Paint().apply {
-         color = ContextCompat.getColor(context, R.color.purple_500)
-        style = Paint.Style.FILL
+        color = ContextCompat.getColor(context, R.color.purple_500)
+        style = Paint.Style.STROKE
+        strokeWidth = radius * 2f
+        strokeCap = Paint.Cap.ROUND
         isAntiAlias = true
         alpha = 180 // Slight transparency for overlapping points
     }
 
-    private val radius = 3.5f * resources.displayMetrics.density
+    private val pointCoords = FloatArray(MAX_BEEPS * 2)
 
     fun addBeep(timeMillis: Long) {
         val nextHead = (head + 1) % MAX_BEEPS
@@ -66,14 +70,22 @@ class BeepVisualizerView @JvmOverloads constructor(
             tail = (tail + 1) % MAX_BEEPS
         }
         var i = tail
+        var pointCount = 0
         while (i != head) {
             val age = (now - beepTimes[i]).coerceAtLeast(0L)
             hasActiveBeeps = true
             // Calculate X: starts at 'w' (right), ends at 0 (left)
             val x = w - (age.toFloat() / DURATION_MS) * w
             val y = h / 2.0f
-            canvas.drawCircle(x, y, radius, paint)
+            pointCoords[pointCount * 2] = x
+            pointCoords[pointCount * 2 + 1] = y
+            pointCount++
+///            canvas.drawCircle(x, y, radius, paint)
             i = (i + 1) % MAX_BEEPS
+        }
+
+        if (pointCount > 0) {
+            canvas.drawPoints(pointCoords, 0, pointCount * 2, paint)
         }
 
         // Only keep looping the animation if points are actively moving

@@ -63,6 +63,6 @@ class  TrackingViewModel(app: Application) : AndroidViewModel(app) {
 
     val uiTickMillis: StateFlow<Long> = repo.uiTickMillis
     // Add this property inside TrackingViewModel
-    val beepEvents = (app as GeigerGpxApp).trackingRepository.beepEvents
+    val beepEvents = repo.beepEvents
 
 }
