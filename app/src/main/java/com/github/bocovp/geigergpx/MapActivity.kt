@@ -428,8 +428,7 @@ class MapActivity : AppCompatActivity() {
 
         if (selectedTrackIds.isEmpty() && selectedFolders.isEmpty() && !includeCurrentTrack && selectedPoiIds.isEmpty()) {
             // We have absolutely nothing to draw. Fast-fail and stop the blink.
-            binding.loadingLabel.setText(R.string.no_poi_in_library)
-            binding.loadingLabel.visibility = View.VISIBLE
+            binding.loadingLabel.visibility = View.GONE
             trackMapRenderer.renderTracks(
                 tracks = emptyList(),
                 pois = emptyList(),
