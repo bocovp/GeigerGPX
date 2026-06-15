@@ -97,6 +97,7 @@ object PoiLibrary {
         deviceName: String? = null,
         selected: Boolean = true
     ): SaveResult {
+        val timestampMillis = (timestampMillis / 1000L) * 1000L
         val poiId = buildPoiId(timestampMillis, latitude, longitude)
         val result = modifyPoiFile(context) { list ->
             list + PoiEntry(
