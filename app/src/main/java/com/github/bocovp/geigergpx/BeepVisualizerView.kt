@@ -2,7 +2,6 @@ package com.github.bocovp.geigergpx
 
 import android.content.Context
 import android.graphics.Canvas
-import androidx.core.content.ContextCompat
 import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
@@ -27,8 +26,9 @@ class BeepVisualizerView @JvmOverloads constructor(
 
     private val paint = Paint().apply {
         val typedValue = android.util.TypedValue()
-        context.theme.resolveAttribute(android.R.attr.colorPrimary, typedValue, true)
-        color = typedValue.data  // ContextCompat.getColor(context, R.color.purple_500)
+        val resolved = context.theme.resolveAttribute(android.R.attr.colorPrimary, typedValue, true)
+        color = if (resolved) typedValue.data else android.graphics.Color.GRAY
+        //color =  ContextCompat.getColor(context, R.color.purple_500)
         style = Paint.Style.STROKE
         strokeWidth = radius * 2f
         strokeCap = Paint.Cap.ROUND
@@ -82,7 +82,6 @@ class BeepVisualizerView @JvmOverloads constructor(
             pointCoords[pointCount * 2] = x
             pointCoords[pointCount * 2 + 1] = y
             pointCount++
-///            canvas.drawCircle(x, y, radius, paint)
             i = (i + 1) % MAX_BEEPS
         }
 
