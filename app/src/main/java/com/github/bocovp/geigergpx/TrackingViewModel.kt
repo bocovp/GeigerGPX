@@ -62,4 +62,6 @@ class  TrackingViewModel(app: Application) : AndroidViewModel(app) {
     val currentGpsLocation: StateFlow<TrackingRepository.GpsLocationSnapshot?> = repo.currentGpsLocation
 
     val uiTickMillis: StateFlow<Long> = repo.uiTickMillis
+
+    val beepEvents = repo.beepEvents
 }

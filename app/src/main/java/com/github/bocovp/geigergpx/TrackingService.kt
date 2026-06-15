@@ -115,6 +115,7 @@ class TrackingService : Service() {
             "max_time_without_counts_s",
             "max_time_without_gps_s",
             "dose_rate_avg_timestamps_n",
+            "visualize_beeps",
             "alert_dose_rate",
             RadiationCalibration.KEY_SENSITIVITY,
             "cps_to_usvh",
@@ -123,6 +124,8 @@ class TrackingService : Service() {
                 -> loadTrackingPrefs()
         }
     }
+
+    @Volatile private var visualizeBeeps: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -166,6 +169,8 @@ class TrackingService : Service() {
         sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
         val configuredAlertDoseRate = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
         alertDoseRate = if (configuredAlertDoseRate > 0.0) configuredAlertDoseRate else 0.0
+
+        visualizeBeeps = prefs.getBoolean("visualize_beeps", false)
 
         countsPerBeep = DeviceConfigManager.countsPerBeepFromPrefs(prefs)
         repo.updateCountsPerBeep(countsPerBeep)
@@ -513,19 +518,33 @@ class TrackingService : Service() {
                     // 2. Update repository and alert systems using actualCounts
                     repo.incrementTotalCounts(actualCounts)
 
+                    // beepEndNs is CLOCK_MONOTONIC (same as System.nanoTime()).
+                    // Anchor it to wall-clock once, at callback time.
+                    val wallSeconds = if (beepEndNs > 0L) {
+                        System.currentTimeMillis() / 1000.0 + (beepEndNs - System.nanoTime()) / 1e9
+                    } else {
+                        System.currentTimeMillis() / 1000.0
+                    }
+
+                    if (visualizeBeeps && repo.hasBeepObservers) {// Emit events for beep visualizer
+                        val elapsedRealtimeMillis = if (beepEndNs > 0L) {
+                            android.os.SystemClock.elapsedRealtime() + ((beepEndNs - System.nanoTime()) / 1e6).toLong()
+                        } else {
+                            android.os.SystemClock.elapsedRealtime()
+                        }
+
+                        repeat(beepCount) { i ->
+                            val staggerOffsetMs = (beepCount - 1 - i) * 15L
+                            repo.emitBeepEvent(elapsedRealtimeMillis - staggerOffsetMs)
+                        }
+                    }
+
                     val alertEvent = doseRateMeasurement.processBeep(actualCounts)
                     repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true) // ????????????????????
                     alertEvent?.let { dispatchDoseRateAlert(it) }
 
                     // 3. Feed the KDE with sub-millisecond precision and auto-spreading
                     if (trackWriter.isTracking()) {
-                        // beepEndNs is CLOCK_MONOTONIC (same as System.nanoTime()).
-                        // Anchor it to wall-clock once, at callback time.
-                        val wallSeconds = if (beepEndNs > 0L) {
-                            System.currentTimeMillis() / 1000.0 + (beepEndNs - System.nanoTime()) / 1e9
-                        } else {
-                            System.currentTimeMillis() / 1000.0
-                        }
                         kde?.addPoint(wallSeconds, actualCounts, spreadCounts = true)
                     }
                 }
