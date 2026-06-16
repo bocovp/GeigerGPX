@@ -172,7 +172,7 @@ class TrackingService : Service() {
 
         visualizeBeeps = prefs.getBoolean("visualize_beeps", false)
 
-        countsPerBeep = DeviceConfigManager.countsPerBeepFromPrefs(prefs)
+        countsPerBeep = DeviceConfigManager.rateConfigFor(48000).countsPerBeep //???? Check this
         repo.updateCountsPerBeep(countsPerBeep)
 
         val allowedSizes = setOf(5, 10, 20, 50, 100)
