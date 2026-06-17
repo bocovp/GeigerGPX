@@ -98,6 +98,7 @@ object DeviceConfigManager {
     }
 
     fun currentDevice(context: Context): Device? {
+        ensureInitialized(context)
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val name = currentDeviceName(prefs)
         return try {
@@ -225,7 +226,7 @@ object DeviceConfigManager {
             }
 
             val updatedSensitivity = if (key == RadiationCalibration.KEY_SENSITIVITY) {
-                value.toDoubleOrNull() ?: current.sensitivity
+                value.toDoubleOrNull()?.takeIf { it > 0.0 } ?: current.sensitivity
             } else current.sensitivity
 
             val updatedDevice = current.copy(sensitivity = updatedSensitivity, fallbackConfig = updatedConfig)
@@ -437,8 +438,8 @@ object DeviceConfigManager {
         fallback: DeviceConfig,
         sampleRate: Int
     ): GoertzelDetector.RateConfig {
-        val windowSamples = pars["windowSamples"]?.toIntOrNull()?.takeIf { it > 0 } ?: (fallback.windowSize * sampleRate).roundToInt().coerceAtLeast(3)
-        val stepSamples = pars["stepSamples"]?.toIntOrNull()?.takeIf { it > 0 } ?: (fallback.stepSize * sampleRate).roundToInt().coerceAtLeast(1)
+        val windowSamples = pars["windowSamples"]?.toIntOrNull()?.takeIf { it >= 3 } ?: (fallback.windowSize * sampleRate).roundToInt().coerceAtLeast(3)
+        val stepSamples = pars["stepSamples"]?.toIntOrNull()?.takeIf { it >= 1 } ?: (fallback.stepSize * sampleRate).roundToInt().coerceAtLeast(1)
 
         var freqLow = fallback.freqLow
         var freqMain = fallback.freqMain
