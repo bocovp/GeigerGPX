@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<devices>e
+<devices>
     <device name="RADEX RD1008">
         <sensitivity>10</sensitivity>
         <detector type="Goertzel">
