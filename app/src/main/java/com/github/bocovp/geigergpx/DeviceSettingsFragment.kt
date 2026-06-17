@@ -46,6 +46,12 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
         super.onPause()
     }
 
+    private fun isTrackingActive(): Boolean {
+        val app = requireActivity().application as GeigerGpxApp
+        return app.trackingRepository.isTracking.value || app.trackingRepository.measurementModeEnabled.value
+    }
+
+
     private fun getUnitFor(key: String): String {
         return when (key) {
             RadiationCalibration.KEY_SENSITIVITY -> "cps per μSv/h"
@@ -95,6 +101,10 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
     private fun setupInteractions() {
         val choosePref = findPreference<Preference>("choose_device")
         choosePref?.setOnPreferenceClickListener {
+            if (isTrackingActive()) {
+                Toast.makeText(requireContext(), "Cannot change device while tracking or measuring", Toast.LENGTH_SHORT).show()
+                return@setOnPreferenceClickListener true
+            }
             parentFragmentManager.beginTransaction()
                 .replace(R.id.settingsContainer, DeviceListFragment())
                 .addToBackStack(null)
@@ -104,6 +114,10 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
 
         val renamePref = findPreference<Preference>("device_name_pref")
         renamePref?.setOnPreferenceClickListener {
+            if (isTrackingActive()) {
+                Toast.makeText(requireContext(), "Cannot rename device while tracking or measuring", Toast.LENGTH_SHORT).show()
+                return@setOnPreferenceClickListener true
+            }
             val device = DeviceConfigManager.currentDevice(requireContext()) ?: return@setOnPreferenceClickListener true
             if (!device.isCustom) return@setOnPreferenceClickListener true
 
@@ -150,6 +164,16 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
         preferenceKeys.forEach { key ->
             val pref = findPreference<Preference>(key)
             if (pref is EditTextPreference) {
+
+                pref.setOnPreferenceClickListener {
+                    if (isTrackingActive()) {
+                        Toast.makeText(requireContext(), "Cannot edit parameters while tracking or measuring", Toast.LENGTH_SHORT).show()
+                        true // Consume the click
+                    } else {
+                        false // Allow the dialog to open
+                    }
+                }
+
                 pref.isPersistent = false // We handle persistence manually via XML
                 pref.setOnBindEditTextListener { editText ->
                     val isDecimal = key != DeviceConfigManager.KEY_COUNTS_PER_BEEP
