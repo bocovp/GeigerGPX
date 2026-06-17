@@ -109,7 +109,8 @@ object DeviceConfigManager {
 
     fun sensitivityFromPrefs(prefs: SharedPreferences): Double {
         return currentDeviceName(prefs).let { name ->
-            parsedDevices.firstOrNull { it.name == name }?.sensitivity
+            synchronized(lock){
+            parsedDevices}.firstOrNull { it.name == name }?.sensitivity
         } ?: RadiationCalibration.DEFAULT_SENSITIVITY
     }
 
@@ -123,8 +124,8 @@ object DeviceConfigManager {
         // Dynamic fallback conversion from Seconds -> Samples
         val fb = device.fallbackConfig
         return GoertzelDetector.RateConfig(
-            windowSamples = (fb.windowSize * sampleRate).roundToInt(),
-            stepSamples = (fb.stepSize * sampleRate).roundToInt(),
+            windowSamples = (fb.windowSize * sampleRate).roundToInt().coerceAtLeast(3),
+            stepSamples = (fb.stepSize * sampleRate).roundToInt().coerceAtLeast(1),
             freqMain = fb.freqMain,
             freqLow = fb.freqLow,
             freqHigh = fb.freqHigh,
@@ -184,7 +185,7 @@ object DeviceConfigManager {
         synchronized(lock) {
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val currentName = currentDeviceName(prefs)
-            if (currentName.equals(newName, ignoreCase = true)) return true
+            if (currentName == newName) return true
             if (parsedDevices.any { it.name.equals(newName, ignoreCase = true)  && it.name != currentName}) return false
 
             val current = parsedDevices.firstOrNull { it.name == currentName } ?: return false
@@ -267,6 +268,10 @@ object DeviceConfigManager {
             }
         } catch (e: Exception) {
             android.util.Log.e("DeviceConfigManager", "Failed to save custom devices", e)
+        } finally {
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
         }
     }
 
@@ -429,8 +434,8 @@ object DeviceConfigManager {
         fallback: DeviceConfig,
         sampleRate: Int
     ): GoertzelDetector.RateConfig {
-        val windowSamples = pars["windowSamples"]?.toIntOrNull()?.takeIf { it > 0 } ?: (fallback.windowSize * sampleRate).roundToInt()
-        val stepSamples = pars["stepSamples"]?.toIntOrNull()?.takeIf { it > 0 } ?: (fallback.stepSize * sampleRate).roundToInt()
+        val windowSamples = pars["windowSamples"]?.toIntOrNull()?.takeIf { it > 0 } ?: (fallback.windowSize * sampleRate).roundToInt().coerceAtLeast(3)
+        val stepSamples = pars["stepSamples"]?.toIntOrNull()?.takeIf { it > 0 } ?: (fallback.stepSize * sampleRate).roundToInt().coerceAtLeast(1)
 
         var freqLow = fallback.freqLow
         var freqMain = fallback.freqMain
