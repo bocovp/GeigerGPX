@@ -238,7 +238,7 @@ object DeviceConfigManager {
         val xml = StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<devices>\n")
         customDevices.forEach { dev ->
             val c = dev.fallbackConfig
-            xml.append("\t<device name=\"${dev.name.replace("\"", "&quot;").replace("<", "&lt;")}\">\n")
+            xml.append("\t<device name=\"${dev.name.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;").replace("'", "&apos;")}\">\n")
             xml.append("\t\t<sensitivity>${dev.sensitivity}</sensitivity>\n")
             xml.append("\t\t<detector type=\"Goertzel\">\n")
             xml.append("\t\t\t<par name=\"countsPerBeep\">${c.countsPerBeep}</par>\n")

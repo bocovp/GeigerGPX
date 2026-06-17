@@ -105,7 +105,7 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
             val color = if (device.name == currentActiveName)
                 androidx.core.content.ContextCompat.getColor(requireContext(), R.color.status_working)
             else
-                androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.tab_indicator_text)
+                androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.darker_gray)
 
             holder.title.setTextColor(color)
         }

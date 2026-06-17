@@ -147,10 +147,8 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
                             (preference as EditTextPreference).text = updatedValue
                             preference.summary = formattedSummary
                         }
-                        true
-                    } else {
-                        false
                     }
+                    false
                 }
             }
         }
