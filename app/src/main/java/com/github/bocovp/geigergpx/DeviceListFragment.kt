@@ -50,6 +50,7 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
     private fun showNewNameDialog(baseName: String) {
         val input = EditText(requireContext()).apply {
             hint = "New device name"
+            isSingleLine = true
         }
         val padding = (16 * resources.displayMetrics.density).toInt()
         val container = android.widget.FrameLayout(requireContext()).apply {

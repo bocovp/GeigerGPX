@@ -166,6 +166,7 @@ object DeviceConfigManager {
 
     fun cloneDevice(context: Context, baseDeviceName: String, newName: String): Boolean {
         synchronized(lock) {
+            if (newName.isBlank()) return false
             if (parsedDevices.any { it.name.equals(newName, ignoreCase = true) }) return false
             val base = parsedDevices.firstOrNull { it.name == baseDeviceName } ?: return false
             val newDevice = Device(
@@ -184,6 +185,7 @@ object DeviceConfigManager {
 
     fun renameActiveDevice(context: Context, newName: String): Boolean {
         synchronized(lock) {
+            if (newName.isBlank()) return false
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val currentName = currentDeviceName(prefs)
             if (currentName == newName) return true

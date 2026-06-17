@@ -166,12 +166,12 @@ class TrackingService : Service() {
         minCountsPerPoint = prefs.getString("min_counts_per_point", "0")?.toIntOrNull() ?: 0
         maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")?.toDoubleOrNull() ?: 1.0
         maxTimeWithoutGpsS = prefs.getString("max_time_without_gps_s", "60")?.toDoubleOrNull() ?: 60.0
-        sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
         val configuredAlertDoseRate = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
         alertDoseRate = if (configuredAlertDoseRate > 0.0) configuredAlertDoseRate else 0.0
 
         visualizeBeeps = prefs.getBoolean("visualize_beeps", false)
 
+        sensitivity = DeviceConfigManager.currentDevice(this)?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY
         countsPerBeep = DeviceConfigManager.currentDevice(this)?.fallbackConfig?.countsPerBeep ?: 1
         repo.updateCountsPerBeep(countsPerBeep)
 

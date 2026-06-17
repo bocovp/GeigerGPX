@@ -112,6 +112,7 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
             val input = EditText(requireContext()).apply {
                 setText(device.name)
                 setSelection(text.length)
+                isSingleLine = true
             }
             val padding = (16 * resources.displayMetrics.density).toInt()
             val container = android.widget.FrameLayout(requireContext()).apply {
