@@ -189,7 +189,7 @@ object DeviceConfigManager {
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val currentName = currentDeviceName(prefs)
             if (currentName == newName) return true
-            if (parsedDevices.any { it.name.equals(newName, ignoreCase = true)  && it.name != currentName}) return false
+            if (parsedDevices.any { it.name.equals(newName, ignoreCase = true) && !it.name.equals(currentName, ignoreCase = true) }) return false
 
             val current = parsedDevices.firstOrNull { it.name == currentName } ?: return false
             if (!current.isCustom) return false

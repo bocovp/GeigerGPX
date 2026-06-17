@@ -72,6 +72,7 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
 
         val renamePref = findPreference<Preference>("device_name_pref")
         renamePref?.summary = device.name
+        renamePref?.isEnabled = isCustom
 
         preferenceKeys.forEach { key ->
             val value = DeviceConfigManager.getPropertyValue(device, key)
@@ -104,10 +105,7 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
         val renamePref = findPreference<Preference>("device_name_pref")
         renamePref?.setOnPreferenceClickListener {
             val device = DeviceConfigManager.currentDevice(requireContext()) ?: return@setOnPreferenceClickListener true
-            if (!device.isCustom) {
-                Toast.makeText(requireContext(), "Built-in devices cannot be renamed", Toast.LENGTH_SHORT).show()
-                return@setOnPreferenceClickListener true
-            }
+            if (!device.isCustom) return@setOnPreferenceClickListener true
 
             val input = EditText(requireContext()).apply {
                 setText(device.name)
