@@ -105,17 +105,22 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
         renamePref?.setOnPreferenceClickListener {
             val device = DeviceConfigManager.currentDevice(requireContext()) ?: return@setOnPreferenceClickListener true
             if (!device.isCustom) {
-                Toast.makeText(context, "Built-in devices cannot be renamed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "Built-in devices cannot be renamed", Toast.LENGTH_SHORT).show()
                 return@setOnPreferenceClickListener true
             }
 
-            val input = EditText(requireContext())
-            input.setText(device.name)
-            input.setSelection(input.text.length)
-
+            val input = EditText(requireContext()).apply {
+                setText(device.name)
+                setSelection(text.length)
+            }
+            val padding = (16 * resources.displayMetrics.density).toInt()
+            val container = android.widget.FrameLayout(requireContext()).apply {
+                setPadding(padding, padding, padding, padding)
+                addView(input)
+            }
             val dialog = AlertDialog.Builder(requireContext())
                 .setTitle("Rename device")
-                .setView(input)
+                .setView(container)
                 .setPositiveButton("Save", null)
                 .setNegativeButton("Cancel", null)
                 .create()

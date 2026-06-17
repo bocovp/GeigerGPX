@@ -48,12 +48,17 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
     }
 
     private fun showNewNameDialog(baseName: String) {
-        val input = EditText(requireContext())
-        input.hint = "New device name"
-
+        val input = EditText(requireContext()).apply {
+            hint = "New device name"
+        }
+        val padding = (16 * resources.displayMetrics.density).toInt()
+        val container = android.widget.FrameLayout(requireContext()).apply {
+            setPadding(padding, padding, padding, padding)
+            addView(input)
+        }
         val dialog = AlertDialog.Builder(requireContext())
             .setTitle("Enter name for new device")
-            .setView(input)
+            .setView(container)
             .setPositiveButton("Create", null)
             .setNegativeButton("Cancel", null)
             .create()
@@ -90,8 +95,9 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
 
             init {
                 view.setOnClickListener {
-                    if (adapterPosition != RecyclerView.NO_POSITION) {
-                        onSelect(devices[adapterPosition])
+                    val position = bindingAdapterPosition
+                    if (position != RecyclerView.NO_POSITION) {
+                        onSelect(devices[position])
                     }
                 }
             }

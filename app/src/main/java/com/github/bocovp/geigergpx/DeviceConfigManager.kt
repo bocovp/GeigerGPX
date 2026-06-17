@@ -208,19 +208,19 @@ object DeviceConfigManager {
 
             val c = current.fallbackConfig
             val updatedConfig = when (key) {
-                KEY_FREQ_LOW -> c.copy(freqLow = value.toFloatOrNull() ?: c.freqLow)
-                KEY_FREQ_MAIN -> c.copy(freqMain = value.toFloatOrNull() ?: c.freqMain)
-                KEY_FREQ_HIGH -> c.copy(freqHigh = value.toFloatOrNull() ?: c.freqHigh)
-                KEY_DURATION -> c.copy(duration = value.toDoubleOrNull() ?: c.duration)
-                KEY_DOMINANCE_THRESHOLD -> c.copy(dominanceThreshold = value.toFloatOrNull() ?: c.dominanceThreshold)
-                KEY_DOMINANCE_THRESHOLD_END -> c.copy(dominanceThresholdEnd = value.toFloatOrNull() ?: c.dominanceThresholdEnd)
-                KEY_WINDOW_SIZE -> c.copy(windowSize = value.toDoubleOrNull() ?: c.windowSize)
-                KEY_STEP_SIZE -> c.copy(stepSize = value.toDoubleOrNull() ?: c.stepSize)
-                KEY_ONE_BEEP_TOL -> c.copy(oneBeepTol = value.toDoubleOrNull() ?: c.oneBeepTol)
-                KEY_TWO_BEEP_TOL -> c.copy(twoBeepTol = value.toDoubleOrNull() ?: c.twoBeepTol)
-                KEY_THREE_BEEP_TOL -> c.copy(threeBeepTol = value.toDoubleOrNull() ?: c.threeBeepTol)
-                KEY_FOUR_BEEP_TOL -> c.copy(fourBeepTol = value.toDoubleOrNull() ?: c.fourBeepTol)
-                KEY_COUNTS_PER_BEEP -> c.copy(countsPerBeep = value.toIntOrNull() ?: c.countsPerBeep)
+                KEY_FREQ_LOW -> c.copy(freqLow = value.toFloatOrNull()?.takeIf { it > 0f }  ?: c.freqLow)
+                KEY_FREQ_MAIN -> c.copy(freqMain = value.toFloatOrNull()?.takeIf { it > 0f }  ?: c.freqMain)
+                KEY_FREQ_HIGH -> c.copy(freqHigh = value.toFloatOrNull()?.takeIf { it > 0f }  ?: c.freqHigh)
+                KEY_DURATION -> c.copy(duration = value.toDoubleOrNull()?.takeIf { it > 0.0 }  ?: c.duration)
+                KEY_DOMINANCE_THRESHOLD -> c.copy(dominanceThreshold = value.toFloatOrNull()?.takeIf { it > 0f }  ?: c.dominanceThreshold)
+                KEY_DOMINANCE_THRESHOLD_END -> c.copy(dominanceThresholdEnd = value.toFloatOrNull()?.takeIf { it > 0f }  ?: c.dominanceThresholdEnd)
+                KEY_WINDOW_SIZE -> c.copy(windowSize = value.toDoubleOrNull()?.takeIf { it > 0f }  ?: c.windowSize)
+                KEY_STEP_SIZE -> c.copy(stepSize = value.toDoubleOrNull()?.takeIf { it > 0f }  ?: c.stepSize)
+                KEY_ONE_BEEP_TOL -> c.copy(oneBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0f }  ?: c.oneBeepTol)
+                KEY_TWO_BEEP_TOL -> c.copy(twoBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0f } ?: c.twoBeepTol)
+                KEY_THREE_BEEP_TOL -> c.copy(threeBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0f } ?: c.threeBeepTol)
+                KEY_FOUR_BEEP_TOL -> c.copy(fourBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0f } ?: c.fourBeepTol)
+                KEY_COUNTS_PER_BEEP -> c.copy(countsPerBeep = value.toIntOrNull()?.takeIf { it in 1..1000 } ?: c.countsPerBeep)
                 else -> c
             }
 
@@ -231,6 +231,10 @@ object DeviceConfigManager {
             val updatedDevice = current.copy(sensitivity = updatedSensitivity, fallbackConfig = updatedConfig)
             parsedDevices = parsedDevices.map { if (it.name == currentName) updatedDevice else it }
             saveCustomDevices(context)
+            PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putString(KEY_DEVICE_NAME, currentName)
+                .apply()
         }
     }
 
