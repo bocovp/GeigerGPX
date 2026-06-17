@@ -113,22 +113,33 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
             input.setText(device.name)
             input.setSelection(input.text.length)
 
-            AlertDialog.Builder(requireContext())
+            val dialog = AlertDialog.Builder(requireContext())
                 .setTitle("Rename device")
                 .setView(input)
-                .setPositiveButton("Save") { _, _ ->
-                    val newName = input.text.toString().trim()
-                    if (newName.isNotEmpty() && newName != device.name) {
-                        val success = DeviceConfigManager.renameActiveDevice(requireContext(), newName)
-                        if (success) {
-                            refreshUi()
-                        } else {
-                            Toast.makeText(requireContext(), "Name already exists", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
+                .setPositiveButton("Save", null)
                 .setNegativeButton("Cancel", null)
-                .show()
+                .create()
+
+            dialog.show()
+
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val newName = input.text.toString().trim()
+                if (newName.isEmpty()) {
+                    input.error = "Name cannot be empty"
+                    return@setOnClickListener
+                }
+                if (newName == device.name) {
+                    dialog.dismiss()
+                    return@setOnClickListener
+                }
+                val success = DeviceConfigManager.renameActiveDevice(requireContext(), newName)
+                if (success) {
+                    refreshUi()
+                    dialog.dismiss()
+                } else {
+                    input.error = "Name already exists"
+                }
+            }
             true
         }
 
@@ -136,6 +147,14 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
             val pref = findPreference<Preference>(key)
             if (pref is EditTextPreference) {
                 pref.isPersistent = false // We handle persistence manually via XML
+                pref.setOnBindEditTextListener { editText ->
+                    val isDecimal = key != DeviceConfigManager.KEY_COUNTS_PER_BEEP
+                    val isSigned = key == RadiationCalibration.KEY_SENSITIVITY
+                    var inputType = android.text.InputType.TYPE_CLASS_NUMBER
+                    if (isDecimal) inputType = inputType or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    if (isSigned) inputType = inputType or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
+                    editText.inputType = inputType
+                }
                 pref.setOnPreferenceChangeListener { preference, newValue ->
                     val device = DeviceConfigManager.currentDevice(requireContext())
                     if (device != null && device.isCustom) {

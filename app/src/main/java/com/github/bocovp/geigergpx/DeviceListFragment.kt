@@ -51,23 +51,31 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
         val input = EditText(requireContext())
         input.hint = "New device name"
 
-        AlertDialog.Builder(requireContext())
+        val dialog = AlertDialog.Builder(requireContext())
             .setTitle("Enter name for new device")
             .setView(input)
-            .setPositiveButton("Create") { _, _ ->
-                val newName = input.text.toString().trim()
-                if (newName.isEmpty()) return@setPositiveButton
-
-                val success = DeviceConfigManager.cloneDevice(requireContext(), baseName, newName)
-                if (success) {
-                    Toast.makeText(requireContext(), "Device created and selected", Toast.LENGTH_SHORT).show()
-                    parentFragmentManager.popBackStack()
-                } else {
-                    Toast.makeText(requireContext(), "Device name already exists", Toast.LENGTH_SHORT).show()
-                }
-            }
+            .setPositiveButton("Create", null)
             .setNegativeButton("Cancel", null)
-            .show()
+            .create()
+
+        dialog.show()
+
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val newName = input.text.toString().trim()
+            if (newName.isEmpty()) {
+                input.error = "Name cannot be empty"
+                return@setOnClickListener
+            }
+
+            val success = DeviceConfigManager.cloneDevice(requireContext(), baseName, newName)
+            if (success) {
+                Toast.makeText(requireContext(), "Device created and selected", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+                parentFragmentManager.popBackStack()
+            } else {
+                input.error = "Device name already exists"
+            }
+        }
     }
 
     private inner class DeviceAdapter(
@@ -102,10 +110,11 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
             val activeStr = if (device.name == currentActiveName) " • ACTIVE" else ""
             holder.subtitle.text = "$typeStr$activeStr"
 
+            val context = holder.itemView.context
             val color = if (device.name == currentActiveName)
-                androidx.core.content.ContextCompat.getColor(requireContext(), R.color.status_working)
+                androidx.core.content.ContextCompat.getColor(context, R.color.status_working)
             else
-                androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.darker_gray)
+                androidx.core.content.ContextCompat.getColor(context, android.R.color.darker_gray)
 
             holder.title.setTextColor(color)
         }

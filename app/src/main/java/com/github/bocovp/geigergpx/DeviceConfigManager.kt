@@ -258,7 +258,16 @@ object DeviceConfigManager {
             xml.append("\t</device>\n")
         }
         xml.append("</devices>\n")
-        File(context.filesDir, "custom_devices.xml").writeText(xml.toString())
+        val tempFile = File(context.filesDir, "custom_devices.xml.tmp")
+        try {
+            tempFile.writeText(xml.toString())
+            val targetFile = File(context.filesDir, "custom_devices.xml")
+            if (!tempFile.renameTo(targetFile)) {
+                android.util.Log.e("DeviceConfigManager", "Failed to rename temp file to custom_devices.xml")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("DeviceConfigManager", "Failed to save custom devices", e)
+        }
     }
 
     fun getPropertyValue(device: Device, key: String): String {
