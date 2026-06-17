@@ -18,8 +18,8 @@ class GoertzelDetector(
     // vals (Kotlin allows val assignment in init for properties declared without
     // an initializer).
     // -------------------------------------------------------------------------
-    private val windowSize: Int
-    private val stepSize:   Int
+    private val windowSamples: Int
+    private val stepSamples:   Int
 
     private val freqMain:   Float
     private val freqLow:    Float
@@ -48,8 +48,8 @@ class GoertzelDetector(
     init {
         // Rate-dependent parameters are resolved from the currently selected device.
         val cfg    = DeviceConfigManager.rateConfigFor(sampleRate)
-        windowSize = cfg.windowSize
-        stepSize   = cfg.stepSize
+        windowSamples = cfg.windowSamples
+        stepSamples = cfg.stepSamples
         freqMain   = cfg.freqMain
         freqLow    = cfg.freqLow
         freqHigh   = cfg.freqHigh
@@ -73,10 +73,10 @@ class GoertzelDetector(
         fourBeepMin = if (cfg.fourBeepTol > 0.0) cfg.duration * 4 - cfg.fourBeepTol else Double.MAX_VALUE
         fourBeepMax = if (cfg.fourBeepTol > 0.0) cfg.duration * 4 + cfg.fourBeepTol else Double.NEGATIVE_INFINITY
 
-        hann = FloatArray(windowSize) {
-            (0.5 - 0.5 * cos(2.0 * PI * it / (windowSize - 1))).toFloat()
+        hann = FloatArray(windowSamples) {
+            (0.5 - 0.5 * cos(2.0 * PI * it / (windowSamples - 1))).toFloat()
         }
-        processingBuffer = ShortArray(windowSize * 4)
+        processingBuffer = ShortArray(windowSamples * 4)
     }
 
     private var leftoverSamples = 0
@@ -110,7 +110,7 @@ class GoertzelDetector(
         val totalInBuffer = leftoverSamples + samples.size
         var pos = 0
 
-        while (pos + windowSize <= totalInBuffer) {
+        while (pos + windowSamples <= totalInBuffer) {
             val currentWindowGlobalSample = totalSamplesProcessed + pos
             val (main, sideEnergy) = computeWindowEnergies(pos)
             onWindowAnalyzed?.invoke(main, sideEnergy)
@@ -148,11 +148,11 @@ class GoertzelDetector(
                     if (dropoutWindows > maxDropoutWindows) {
                         // Signal has been gone too long. Kill the beep.
                         // Subtract the dropout windows from the duration so we don't artificially lengthen it
-                        val actualEndSample = currentWindowGlobalSample - (dropoutWindows * stepSize)
+                        val actualEndSample = currentWindowGlobalSample - (dropoutWindows * stepSamples)
                         val duration = (actualEndSample - beepStartSample).toDouble() / sampleRate
                         val beepEndNs: Long = if (bufferStartNs != 0L) {
                             // Project back to the actual end of the sound
-                            val backstep = (dropoutWindows * stepSize).toLong()
+                            val backstep = (dropoutWindows * stepSamples).toLong()
                             bufferStartNs + (pos.toLong() - leftoverAtStart - backstep) * 1_000_000_000L / sampleRate
                         } else {
                             System.nanoTime()
@@ -165,7 +165,7 @@ class GoertzelDetector(
                 }
             }
 
-            pos += stepSize
+            pos += stepSamples
         }
 
         leftoverSamples = totalInBuffer - pos
@@ -186,7 +186,7 @@ class GoertzelDetector(
         var q1L = 0f; var q2L = 0f
         var q1H = 0f; var q2H = 0f
 
-        for (i in 0 until windowSize) {
+        for (i in 0 until windowSamples) {
             val s = processingBuffer[pos + i].toFloat() * hann[i]
 
             val q0M = coeffMain * q1M - q2M + s
@@ -242,8 +242,8 @@ class GoertzelDetector(
         private const val TAG = "GoertzelDetector"
 
         const val DEFAULT_SAMPLE_RATE = 48000
-        const val DEFAULT_WINDOW_SIZE = 205
-        const val DEFAULT_STEP_SIZE   = 32
+        const val DEFAULT_WINDOW_SAMPLES = 205
+        const val DEFAULT_STEP_SAMPLES   = 32
 
         const val  BEEP_DURATION = 0.025
         const val DEFAULT_DOMINANCE_THRESHOLD     = 2.0f
@@ -251,8 +251,8 @@ class GoertzelDetector(
     }
 
     data class RateConfig(
-        val windowSize:   Int,
-        val stepSize:     Int,
+        val windowSamples:   Int,
+        val stepSamples:     Int,
         val freqMain:     Float,
         val freqLow:      Float,
         val freqHigh:     Float,
@@ -263,6 +263,6 @@ class GoertzelDetector(
         val twoBeepTol:   Double,
         val threeBeepTol: Double,
         val fourBeepTol:  Double,
-        val countsPerBeep: Int // <-- Add this
+        val countsPerBeep: Int
     )
 }

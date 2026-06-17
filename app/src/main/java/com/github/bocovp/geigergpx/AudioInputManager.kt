@@ -409,7 +409,7 @@ class AudioInputManager(
 
         if (minBuffer <= 0) return null
 
-        val bufferSize = maxOf(minBuffer, WINDOW_SIZE * WINDOWS_IN_BUFFER)
+        val bufferSize = maxOf(minBuffer, WINDOW_SAMPLES * WINDOWS_IN_BUFFER)
         val ar = AudioRecord(
             audioSource, rate,
             AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
@@ -594,13 +594,13 @@ class AudioInputManager(
 
     companion object {
         private const val TAG = "AudioBeepDetector"
-        private const val WINDOW_SIZE = GoertzelDetector.DEFAULT_WINDOW_SIZE
+        private const val WINDOW_SAMPLES = GoertzelDetector.DEFAULT_WINDOW_SAMPLES
         private const val WINDOWS_IN_BUFFER = 64
         private const val ZERO_BUFFER_LIMIT = 20
         private val SCO_SAMPLE_RATES = intArrayOf(16000, 8000)
         private const val BASE_MAG = 1e6f
-        const val DEFAULT_MAG_THRESHOLD = BASE_MAG * WINDOW_SIZE
-        const val DEFAULT_BLUETOOTH_MAG_THRESHOLD = BASE_MAG * WINDOW_SIZE
+        const val DEFAULT_MAG_THRESHOLD = BASE_MAG * WINDOW_SAMPLES
+        const val DEFAULT_BLUETOOTH_MAG_THRESHOLD = BASE_MAG * WINDOW_SAMPLES
         const val AUDIO_STATUS_WAITING = 0
         const val AUDIO_STATUS_WORKING = 1
         const val AUDIO_STATUS_ERROR   = 2

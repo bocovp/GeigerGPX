@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <Preference
+        android:key="choose_device"
+        android:title="Choose device" />
+
+    <Preference
+        android:key="device_name_pref"
+        android:title="Device name" />
+
+    <EditTextPreference
+        android:key="sensitivity"
+        android:title="Sensitivity" />
+
+    <Preference
+        android:key="beep_detector"
+        android:title="Beep detector"
+        android:summary="Goertzel detector"
+        android:enabled="false" />
+
+    <EditTextPreference
+        android:key="device_countsPerBeep"
+        android:title="Counts per beep" />
+
+    <EditTextPreference
+        android:key="device_freqLow"
+        android:title="Low frequency" />
+
+    <EditTextPreference
+        android:key="device_freqMain"
+        android:title="Main frequency" />
+
+    <EditTextPreference
+        android:key="device_freqHigh"
+        android:title="High frequency" />
+
+    <EditTextPreference
+        android:key="device_duration"
+        android:title="Beep duration" />
+
+    <EditTextPreference
+        android:key="device_dominanceThreshold"
+        android:title="Dominance threshold" />
+
+    <EditTextPreference
+        android:key="device_dominanceThresholdEnd"
+        android:title="Dominance threshold fade-out" />
+
+    <EditTextPreference
+        android:key="device_windowSize"
+        android:title="Window size" />
+
+    <EditTextPreference
+        android:key="device_stepSize"
+        android:title="Step size" />
+
+    <EditTextPreference
+        android:key="device_oneBeepTol"
+        android:title="Single beep duration tolerance" />
+
+    <EditTextPreference
+        android:key="device_twoBeepTol"
+        android:title="Double beep duration tolerance" />
+
+    <EditTextPreference
+        android:key="device_threeBeepTol"
+        android:title="Triple beep duration tolerance" />
+
+    <EditTextPreference
+        android:key="device_fourBeepTol"
+        android:title="Quad beep duration tolerance" />
+
+</PreferenceScreen>

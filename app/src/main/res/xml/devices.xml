@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<devices>e
+<devices>
     <device name="RADEX RD1008">
         <sensitivity>10</sensitivity>
         <detector type="Goertzel">
@@ -11,8 +11,8 @@
             <par name="dominanceThreshold">2.0</par>
             <par name="dominanceThresholdEnd">1.1</par>
 
-            <par name="windowSize">205</par>
-            <par name="stepSize">32</par>
+            <par name="windowSize">0.00427</par>
+            <par name="stepSize">0.000667</par>
             <par name="oneBeepTol">0.01</par>
             <par name="twoBeepTol">0.015</par>
             <par name="threeBeepTol">0.015</par>
@@ -20,8 +20,8 @@
 
             <parameterSet>
                 <par name="sampleRate">48000</par>
-                <par name="windowSize">205</par>
-                <par name="stepSize">32</par>
+                <par name="windowSamples">205</par>
+                <par name="stepSamples">32</par>
                 <par name="binLow">13</par>
                 <par name="binMain">14</par>
                 <par name="binHigh">15</par>
@@ -30,8 +30,8 @@
 
             <parameterSet>
                 <par name="sampleRate">44100</par>
-                <par name="windowSize">175</par>
-                <par name="stepSize">32</par>
+                <par name="windowSamples">175</par>
+                <par name="stepSamples">32</par>
                 <par name="binLow">12</par>
                 <par name="binMain">13</par>
                 <par name="binHigh">14</par>
@@ -39,8 +39,8 @@
 
             <parameterSet>
                 <par name="sampleRate">16000</par>
-                <par name="windowSize">83</par>
-                <par name="stepSize">12</par>
+                <par name="windowSamples">83</par>
+                <par name="stepSamples">12</par>
                 <par name="binLow">16</par>
                 <par name="binMain">17</par>
                 <par name="binHigh">18</par>
@@ -48,8 +48,8 @@
 
             <parameterSet>
                 <par name="sampleRate">8000</par>
-                <par name="windowSize">61</par>
-                <par name="stepSize">6</par>
+                <par name="windowSamples">61</par>
+                <par name="stepSamples">6</par>
                 <par name="binLow">23</par>
                 <par name="binMain">25</par>
                 <par name="binHigh">27</par>
@@ -72,13 +72,13 @@
 
             <par name="oneBeepTol">0.004</par>
 
-            <par name="windowSize">204</par>
-            <par name="stepSize">32</par>
+            <par name="windowSize">0.00425</par>
+            <par name="stepSize">0.000667</par>
 
             <parameterSet>
                 <par name="sampleRate">48000</par>
-                <par name="windowSize">204</par>
-                <par name="stepSize">32</par>
+                <par name="windowSamples">204</par>
+                <par name="stepSamples">32</par>
                 <par name="binLow">9</par>
                 <par name="binMain">13</par>
                 <par name="binHigh">19</par>
