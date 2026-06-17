@@ -10,10 +10,6 @@ import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 object DeviceConfigManager {
     const val KEY_DEVICE_NAME = "device_name"
@@ -60,16 +56,10 @@ object DeviceConfigManager {
     private val lock = Any()
     private var appContext: Context? = null
     private var parsedDevices: List<Device> = emptyList()
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     fun init(context: Context, @XmlRes xmlRes: Int = R.xml.devices) {
         synchronized(lock) {
-            if (appContext != null) return // Prevent double-initialization
             appContext = context.applicationContext
-        }
-
-        // Offload parsing to IO thread
-        scope.launch {
             val builtIn = try {
                 parseDevices(context.applicationContext, xmlRes)
             } catch (e: Exception) {
@@ -87,10 +77,8 @@ object DeviceConfigManager {
                 }
             } else emptyList()
 
-            synchronized(lock) {
-                parsedDevices = builtIn + custom
-                ensurePreferences(context.applicationContext)
-            }
+            parsedDevices = builtIn + custom
+            ensurePreferences(context.applicationContext)
         }
     }
 
@@ -252,7 +240,7 @@ object DeviceConfigManager {
     }
 
     private fun saveCustomDevices(context: Context) {
-        val customDevices = synchronized(lock) { parsedDevices.filter { it.isCustom } }
+        val customDevices = parsedDevices.filter { it.isCustom }
         val xml = StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<devices>\n")
         customDevices.forEach { dev ->
             val c = dev.fallbackConfig
@@ -276,23 +264,18 @@ object DeviceConfigManager {
             xml.append("\t</device>\n")
         }
         xml.append("</devices>\n")
-        val xmlString = xml.toString()
-
-        // Fire and forget the disk write on the background thread
-        scope.launch {
-            val targetFile = File(context.filesDir, "custom_devices.xml")
-            val atomicFile = androidx.core.util.AtomicFile(targetFile)
-            var stream: java.io.FileOutputStream? = null
-            try {
-                stream = atomicFile.startWrite()
-                stream.write(xml.toString().toByteArray(Charsets.UTF_8))
-                atomicFile.finishWrite(stream)
-            } catch (e: Exception) {
-                if (stream != null) {
-                    atomicFile.failWrite(stream)
-                }
-                android.util.Log.e("DeviceConfigManager", "Failed to save custom devices", e)
+        val targetFile = File(context.filesDir, "custom_devices.xml")
+        val atomicFile = androidx.core.util.AtomicFile(targetFile)
+        var stream: java.io.FileOutputStream? = null
+        try {
+            stream = atomicFile.startWrite()
+            stream.write(xml.toString().toByteArray(Charsets.UTF_8))
+            atomicFile.finishWrite(stream)
+        } catch (e: Exception) {
+            if (stream != null) {
+                atomicFile.failWrite(stream)
             }
+            android.util.Log.e("DeviceConfigManager", "Failed to save custom devices", e)
         }
     }
 
