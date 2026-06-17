@@ -81,7 +81,11 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
             val subtitle: TextView = view.findViewById(R.id.textDeviceType)
 
             init {
-                view.setOnClickListener { onSelect(devices[adapterPosition]) }
+                view.setOnClickListener {
+                    if (adapterPosition != RecyclerView.NO_POSITION) {
+                        onSelect(devices[adapterPosition])
+                    }
+                }
             }
         }
 
@@ -99,9 +103,9 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
             holder.subtitle.text = "$typeStr$activeStr"
 
             val color = if (device.name == currentActiveName)
-                requireContext().getColor(R.color.status_working)
+                androidx.core.content.ContextCompat.getColor(requireContext(), R.color.status_working)
             else
-                requireContext().getColor(android.R.color.tab_indicator_text)
+                androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.tab_indicator_text)
 
             holder.title.setTextColor(color)
         }

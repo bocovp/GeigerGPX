@@ -159,7 +159,7 @@ object DeviceConfigManager {
 
     fun selectDevice(context: Context, name: String) {
         ensureInitialized(context)
-        PreferenceManager.getDefaultSharedPreferences(context).edit().putString(KEY_DEVICE_NAME, name).commit()
+        PreferenceManager.getDefaultSharedPreferences(context).edit().putString(KEY_DEVICE_NAME, name).apply()
     }
 
     fun cloneDevice(context: Context, baseDeviceName: String, newName: String): Boolean {
@@ -185,7 +185,7 @@ object DeviceConfigManager {
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val currentName = currentDeviceName(prefs)
             if (currentName.equals(newName, ignoreCase = true)) return true
-            if (parsedDevices.any { it.name.equals(newName, ignoreCase = true) }) return false
+            if (parsedDevices.any { it.name.equals(newName, ignoreCase = true)  && it.name != currentName}) return false
 
             val current = parsedDevices.firstOrNull { it.name == currentName } ?: return false
             if (!current.isCustom) return false

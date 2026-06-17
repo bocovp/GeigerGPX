@@ -17,7 +17,7 @@
             <par name="twoBeepTol">0.015</par>
             <par name="threeBeepTol">0.015</par>
             <par name="fourBeepTol">0.015</par>
-W
+
             <parameterSet>
                 <par name="sampleRate">48000</par>
                 <par name="windowSamples">205</par>

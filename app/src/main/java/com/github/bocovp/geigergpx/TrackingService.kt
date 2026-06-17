@@ -172,7 +172,7 @@ class TrackingService : Service() {
 
         visualizeBeeps = prefs.getBoolean("visualize_beeps", false)
 
-        countsPerBeep = DeviceConfigManager.rateConfigFor(48000).countsPerBeep //???? Check this
+        countsPerBeep = DeviceConfigManager.rateConfigFor(48000).countsPerBeep
         repo.updateCountsPerBeep(countsPerBeep)
 
         val allowedSizes = setOf(5, 10, 20, 50, 100)
@@ -540,7 +540,7 @@ class TrackingService : Service() {
                     }
 
                     val alertEvent = doseRateMeasurement.processBeep(actualCounts)
-                    repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true) // ????????????????????
+                    repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true)
                     alertEvent?.let { dispatchDoseRateAlert(it) }
 
                     // 3. Feed the KDE with sub-millisecond precision and auto-spreading

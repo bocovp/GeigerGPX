@@ -42,8 +42,8 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
     }
 
     override fun onPause() {
-        super.onPause()
         preferenceManager.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(listener)
+        super.onPause()
     }
 
     private fun getUnitFor(key: String): String {
@@ -140,13 +140,13 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
                     val device = DeviceConfigManager.currentDevice(requireContext())
                     if (device != null && device.isCustom) {
                         DeviceConfigManager.updateActiveDeviceProperty(requireContext(), key, newValue.toString())
-                        val updatedValue = DeviceConfigManager.getPropertyValue(DeviceConfigManager.currentDevice(requireContext())!!, key)
-
-                        val unit = getUnitFor(key)
-                        val formattedSummary = if (unit.isNotEmpty()) "$updatedValue $unit" else updatedValue
-
-                        (preference as EditTextPreference).text = updatedValue
-                        preference.summary = formattedSummary
+                        DeviceConfigManager.currentDevice(requireContext())?.let { updatedDevice ->
+                            val updatedValue = DeviceConfigManager.getPropertyValue(updatedDevice, key)
+                            val unit = getUnitFor(key)
+                            val formattedSummary = if (unit.isNotEmpty()) "$updatedValue $unit" else updatedValue
+                            (preference as EditTextPreference).text = updatedValue
+                            preference.summary = formattedSummary
+                        }
                         true
                     } else {
                         false
