@@ -109,9 +109,9 @@ object DeviceConfigManager {
 
     fun sensitivityFromPrefs(prefs: SharedPreferences): Double {
         return currentDeviceName(prefs).let { name ->
-            synchronized(lock){
-            parsedDevices}.firstOrNull { it.name == name }?.sensitivity
-        } ?: RadiationCalibration.DEFAULT_SENSITIVITY
+            synchronized(lock) {
+                parsedDevices.firstOrNull { it.name == name }?.sensitivity
+            }} ?: RadiationCalibration.DEFAULT_SENSITIVITY
     }
 
     fun rateConfigFor(sampleRate: Int): GoertzelDetector.RateConfig {
@@ -142,8 +142,8 @@ object DeviceConfigManager {
 
     private fun defaultConfig(sampleRate: Int): GoertzelDetector.RateConfig {
         return GoertzelDetector.RateConfig(
-            windowSamples = (0.00427 * sampleRate).roundToInt(),
-            stepSamples = (0.000667 * sampleRate).roundToInt(),
+            windowSamples = (0.00427 * sampleRate).roundToInt().coerceAtLeast(3),
+            stepSamples = (0.000667 * sampleRate).roundToInt().coerceAtLeast(1),
             freqMain = 3276.8f,
             freqLow = 3076.8f,
             freqHigh = 3476.8f,
