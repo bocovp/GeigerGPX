@@ -214,12 +214,12 @@ object DeviceConfigManager {
                 KEY_DURATION -> c.copy(duration = value.toDoubleOrNull()?.takeIf { it > 0.0 }  ?: c.duration)
                 KEY_DOMINANCE_THRESHOLD -> c.copy(dominanceThreshold = value.toFloatOrNull()?.takeIf { it > 0f }  ?: c.dominanceThreshold)
                 KEY_DOMINANCE_THRESHOLD_END -> c.copy(dominanceThresholdEnd = value.toFloatOrNull()?.takeIf { it > 0f }  ?: c.dominanceThresholdEnd)
-                KEY_WINDOW_SIZE -> c.copy(windowSize = value.toDoubleOrNull()?.takeIf { it > 0f }  ?: c.windowSize)
-                KEY_STEP_SIZE -> c.copy(stepSize = value.toDoubleOrNull()?.takeIf { it > 0f }  ?: c.stepSize)
-                KEY_ONE_BEEP_TOL -> c.copy(oneBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0f }  ?: c.oneBeepTol)
-                KEY_TWO_BEEP_TOL -> c.copy(twoBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0f } ?: c.twoBeepTol)
-                KEY_THREE_BEEP_TOL -> c.copy(threeBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0f } ?: c.threeBeepTol)
-                KEY_FOUR_BEEP_TOL -> c.copy(fourBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0f } ?: c.fourBeepTol)
+                KEY_WINDOW_SIZE -> c.copy(windowSize = value.toDoubleOrNull()?.takeIf { it > 0.0 }  ?: c.windowSize)
+                KEY_STEP_SIZE -> c.copy(stepSize = value.toDoubleOrNull()?.takeIf { it > 0.0 }  ?: c.stepSize)
+                KEY_ONE_BEEP_TOL -> c.copy(oneBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0.0 }  ?: c.oneBeepTol)
+                KEY_TWO_BEEP_TOL -> c.copy(twoBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: c.twoBeepTol)
+                KEY_THREE_BEEP_TOL -> c.copy(threeBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: c.threeBeepTol)
+                KEY_FOUR_BEEP_TOL -> c.copy(fourBeepTol = value.toDoubleOrNull()?.takeIf { it >= 0.0 } ?: c.fourBeepTol)
                 KEY_COUNTS_PER_BEEP -> c.copy(countsPerBeep = value.toIntOrNull()?.takeIf { it in 1..1000 } ?: c.countsPerBeep)
                 else -> c
             }
@@ -263,19 +263,18 @@ object DeviceConfigManager {
             xml.append("\t</device>\n")
         }
         xml.append("</devices>\n")
-        val tempFile = File(context.filesDir, "custom_devices.xml.tmp")
+        val targetFile = File(context.filesDir, "custom_devices.xml")
+        val atomicFile = androidx.core.util.AtomicFile(targetFile)
+        var stream: java.io.FileOutputStream? = null
         try {
-            tempFile.writeText(xml.toString())
-            val targetFile = File(context.filesDir, "custom_devices.xml")
-            if (!tempFile.renameTo(targetFile)) {
-                android.util.Log.e("DeviceConfigManager", "Failed to rename temp file to custom_devices.xml")
-            }
+            stream = atomicFile.startWrite()
+            stream.write(xml.toString().toByteArray(Charsets.UTF_8))
+            atomicFile.finishWrite(stream)
         } catch (e: Exception) {
-            android.util.Log.e("DeviceConfigManager", "Failed to save custom devices", e)
-        } finally {
-            if (tempFile.exists()) {
-                tempFile.delete()
+            if (stream != null) {
+                atomicFile.failWrite(stream)
             }
+            android.util.Log.e("DeviceConfigManager", "Failed to save custom devices", e)
         }
     }
 

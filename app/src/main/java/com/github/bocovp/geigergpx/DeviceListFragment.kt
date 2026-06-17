@@ -63,24 +63,25 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
             .setNegativeButton("Cancel", null)
             .create()
 
-        dialog.show()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val newName = input.text.toString().trim()
+                if (newName.isEmpty()) {
+                    input.error = "Name cannot be empty"
+                    return@setOnClickListener
+                }
 
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val newName = input.text.toString().trim()
-            if (newName.isEmpty()) {
-                input.error = "Name cannot be empty"
-                return@setOnClickListener
-            }
-
-            val success = DeviceConfigManager.cloneDevice(requireContext(), baseName, newName)
-            if (success) {
-                Toast.makeText(requireContext(), "Device created and selected", Toast.LENGTH_SHORT).show()
-                dialog.dismiss()
-                parentFragmentManager.popBackStack()
-            } else {
-                input.error = "Device name already exists"
+                val success = DeviceConfigManager.cloneDevice(requireContext(), baseName, newName)
+                if (success) {
+                    Toast.makeText(requireContext(), "Device created and selected", Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
+                    parentFragmentManager.popBackStack()
+                } else {
+                    input.error = "Device name already exists"
+                }
             }
         }
+        dialog.show()
     }
 
     private inner class DeviceAdapter(

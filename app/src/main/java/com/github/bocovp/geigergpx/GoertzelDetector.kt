@@ -48,8 +48,8 @@ class GoertzelDetector(
     init {
         // Rate-dependent parameters are resolved from the currently selected device.
         val cfg    = DeviceConfigManager.rateConfigFor(sampleRate)
-        this@GoertzelDetector.windowSamples = cfg.windowSamples
-        this@GoertzelDetector.stepSamples = cfg.stepSamples
+        windowSamples = cfg.windowSamples
+        stepSamples = cfg.stepSamples
         freqMain   = cfg.freqMain
         freqLow    = cfg.freqLow
         freqHigh   = cfg.freqHigh
@@ -73,10 +73,10 @@ class GoertzelDetector(
         fourBeepMin = if (cfg.fourBeepTol > 0.0) cfg.duration * 4 - cfg.fourBeepTol else Double.MAX_VALUE
         fourBeepMax = if (cfg.fourBeepTol > 0.0) cfg.duration * 4 + cfg.fourBeepTol else Double.NEGATIVE_INFINITY
 
-        hann = FloatArray(this@GoertzelDetector.windowSamples) {
-            (0.5 - 0.5 * cos(2.0 * PI * it / (this@GoertzelDetector.windowSamples - 1))).toFloat()
+        hann = FloatArray(windowSamples) {
+            (0.5 - 0.5 * cos(2.0 * PI * it / (windowSamples - 1))).toFloat()
         }
-        processingBuffer = ShortArray(this@GoertzelDetector.windowSamples * 4)
+        processingBuffer = ShortArray(windowSamples * 4)
     }
 
     private var leftoverSamples = 0
@@ -110,7 +110,7 @@ class GoertzelDetector(
         val totalInBuffer = leftoverSamples + samples.size
         var pos = 0
 
-        while (pos + this@GoertzelDetector.windowSamples <= totalInBuffer) {
+        while (pos + windowSamples <= totalInBuffer) {
             val currentWindowGlobalSample = totalSamplesProcessed + pos
             val (main, sideEnergy) = computeWindowEnergies(pos)
             onWindowAnalyzed?.invoke(main, sideEnergy)
@@ -148,11 +148,11 @@ class GoertzelDetector(
                     if (dropoutWindows > maxDropoutWindows) {
                         // Signal has been gone too long. Kill the beep.
                         // Subtract the dropout windows from the duration so we don't artificially lengthen it
-                        val actualEndSample = currentWindowGlobalSample - (dropoutWindows * this@GoertzelDetector.stepSamples)
+                        val actualEndSample = currentWindowGlobalSample - (dropoutWindows * stepSamples)
                         val duration = (actualEndSample - beepStartSample).toDouble() / sampleRate
                         val beepEndNs: Long = if (bufferStartNs != 0L) {
                             // Project back to the actual end of the sound
-                            val backstep = (dropoutWindows * this@GoertzelDetector.stepSamples).toLong()
+                            val backstep = (dropoutWindows * stepSamples).toLong()
                             bufferStartNs + (pos.toLong() - leftoverAtStart - backstep) * 1_000_000_000L / sampleRate
                         } else {
                             System.nanoTime()
@@ -165,7 +165,7 @@ class GoertzelDetector(
                 }
             }
 
-            pos += this@GoertzelDetector.stepSamples
+            pos += stepSamples
         }
 
         leftoverSamples = totalInBuffer - pos
@@ -186,7 +186,7 @@ class GoertzelDetector(
         var q1L = 0f; var q2L = 0f
         var q1H = 0f; var q2H = 0f
 
-        for (i in 0 until this@GoertzelDetector.windowSamples) {
+        for (i in 0 until windowSamples) {
             val s = processingBuffer[pos + i].toFloat() * hann[i]
 
             val q0M = coeffMain * q1M - q2M + s
