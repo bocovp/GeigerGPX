@@ -94,6 +94,7 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
             val title: TextView = view.findViewById(R.id.textDeviceName)
             val subtitle: TextView = view.findViewById(R.id.textDeviceType)
+            val icon: android.widget.ImageView = view.findViewById(R.id.imageDeviceIcon)
 
             init {
                 view.setOnClickListener {
@@ -125,6 +126,16 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
                 androidx.core.content.ContextCompat.getColor(context, android.R.color.darker_gray)
 
             holder.title.setTextColor(color)
+
+            if (device.name == "RADEX RD1008") {
+                holder.icon.setImageResource(R.drawable.rd1008_24)
+                holder.icon.visibility = View.VISIBLE
+            } else if (device.name == "RADEX RD1224Si") {
+                holder.icon.setImageResource(R.drawable.rd1224si_24)
+                holder.icon.visibility = View.VISIBLE
+            } else {
+                holder.icon.visibility = View.INVISIBLE
+            }
         }
 
         override fun getItemCount() = devices.size
