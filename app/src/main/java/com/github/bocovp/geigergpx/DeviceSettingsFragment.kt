@@ -74,7 +74,6 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
         val isCustom = device.isCustom
 
         val choosePref = findPreference<Preference>("choose_device")
-        choosePref?.summary = if (isCustom) "Custom Device" else "Built-in Device"
 
         val renamePref = findPreference<Preference>("device_name_pref")
         renamePref?.summary = device.name
