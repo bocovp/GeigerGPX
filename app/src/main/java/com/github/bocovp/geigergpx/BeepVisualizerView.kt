@@ -11,7 +11,7 @@ class BeepVisualizerView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     companion object {
-        private const val DURATION_MS = 3000L
+        private const val DURATION_MS = 30000L
         private const val BIN_COUNT = 3
         private val offsets = intArrayOf(0, 1, -1)
         private const val MAX_BEEPS = 2000 // Circular buffer size
@@ -21,7 +21,7 @@ class BeepVisualizerView @JvmOverloads constructor(
     private val beepTimes = LongArray(MAX_BEEPS)
 
     private val binTimes = LongArray(BIN_COUNT)
-    private val yPos = FloatArray(MAX_BEEPS)
+    private val yOffsets = FloatArray(MAX_BEEPS)
 
     private var head = 0
     private var tail = 0
@@ -50,15 +50,27 @@ class BeepVisualizerView @JvmOverloads constructor(
             tail = (tail + 1) % MAX_BEEPS
         }
 
-        beepTimes[head] = timeMillis
-
-        var i = 0
-        while ((i < BIN_COUNT) && (intervalToDist(timeMillis-binTimes[i]) < 3.0f * radius)) {
-            i++
+        var maxDist = 0.0f
+        var bestInd = 0
+        for (i in 0 until BIN_COUNT) {
+            if (binTimes[i] == 0L) {
+                bestInd = i
+                break
+            }
+            val curDist = intervalToDist((timeMillis-binTimes[i]).coerceAtLeast(0L))
+            if (curDist >= 3.0f * radius) {
+                bestInd = i
+                break
+            }
+            if (curDist > maxDist) {
+                maxDist = curDist
+                bestInd = i
+            }
         }
-        i %= BIN_COUNT
-        binTimes[i] = timeMillis
-        yPos[head] = height.toFloat() / 2.0f + 3.0f * radius * offsets[i].toFloat()
+
+        binTimes[bestInd] = timeMillis
+        beepTimes[head] = timeMillis
+        yOffsets[head] = 3.0f * radius * offsets[bestInd].toFloat()
 
         head = nextHead
 
@@ -97,7 +109,7 @@ class BeepVisualizerView @JvmOverloads constructor(
             hasActiveBeeps = true
             // Calculate X: starts at 'w' (right), ends at 0 (left)
             val x = w - dist
-            val y = yPos[i]
+            val y = height.toFloat() / 2.0f + yOffsets[i]
             pointCoords[pointCount * 2] = x
             pointCoords[pointCount * 2 + 1] = y
             pointCount++
