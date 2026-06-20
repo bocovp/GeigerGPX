@@ -12,11 +12,16 @@ class BeepVisualizerView @JvmOverloads constructor(
 
     companion object {
         private const val DURATION_MS = 3000L
+        private const val BIN_COUNT = 3
+        private val offsets = intArrayOf(0, 1, -1)
         private const val MAX_BEEPS = 2000 // Circular buffer size
     }
 
     // Zero-allocation primitive arrays
     private val beepTimes = LongArray(MAX_BEEPS)
+
+    private val binTimes = LongArray(BIN_COUNT)
+    private val yOffsets = FloatArray(MAX_BEEPS)
 
     private var head = 0
     private var tail = 0
@@ -45,13 +50,38 @@ class BeepVisualizerView @JvmOverloads constructor(
             tail = (tail + 1) % MAX_BEEPS
         }
 
+        var maxDist = 0.0f
+        var bestInd = 0
+        for (i in 0 until BIN_COUNT) {
+            if (binTimes[i] == 0L) {
+                bestInd = i
+                break
+            }
+            val curDist = intervalToDist((timeMillis-binTimes[i]).coerceAtLeast(0L))
+            if (curDist >= 3.0f * radius) {
+                bestInd = i
+                break
+            }
+            if (curDist > maxDist) {
+                maxDist = curDist
+                bestInd = i
+            }
+        }
+
+        binTimes[bestInd] = timeMillis
         beepTimes[head] = timeMillis
+        yOffsets[head] = 3.0f * radius * offsets[bestInd].toFloat()
+
         head = nextHead
 
         if (!isAnimating) {
             isAnimating = true
             postInvalidateOnAnimation()
         }
+    }
+
+    private fun intervalToDist (interval: Long): Float{
+        return (interval.toFloat() / DURATION_MS) * width.toFloat()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -65,6 +95,7 @@ class BeepVisualizerView @JvmOverloads constructor(
         val now = android.os.SystemClock.elapsedRealtime()
         val w = width.toFloat()
         val h = height.toFloat()
+        val hHalf = h / 2.0f
         var hasActiveBeeps = false
 
         // Clean up expired beeps from the tail first
@@ -75,10 +106,11 @@ class BeepVisualizerView @JvmOverloads constructor(
         var pointCount = 0
         while (i != head) {
             val age = (now - beepTimes[i]).coerceAtLeast(0L)
+            val dist = intervalToDist(age)
             hasActiveBeeps = true
             // Calculate X: starts at 'w' (right), ends at 0 (left)
-            val x = w - (age.toFloat() / DURATION_MS) * w
-            val y = h / 2.0f
+            val x = w - dist
+            val y = hHalf + yOffsets[i]
             pointCoords[pointCount * 2] = x
             pointCoords[pointCount * 2 + 1] = y
             pointCount++
