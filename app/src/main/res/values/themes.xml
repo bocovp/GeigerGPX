@@ -12,7 +12,7 @@
 
         <item name="actionOverflowMenuStyle">@style/OverflowMenuBelow</item>
         <item name="popupMenuStyle">@style/GeigerGpx.PopupMenu</item>
-        <item name="android:popupBackground">@drawable/popup_bg</item>
+        <item name="listPopupWindowStyle">@style/GeigerGpx.ListPopupWindow</item>
     </style>
 
     <style name="Widget.GeigerGpx.Toolbar.Small" parent="Widget.Material3.Toolbar">
@@ -27,6 +27,10 @@
     </style>
 
     <style name="GeigerGpx.PopupMenu" parent="Widget.Material3.PopupMenu">
+        <item name="android:popupBackground">@drawable/popup_bg</item>
+    </style>
+
+    <style name="GeigerGpx.ListPopupWindow" parent="Widget.AppCompat.ListPopupWindow">
         <item name="android:popupBackground">@drawable/popup_bg</item>
     </style>
 
