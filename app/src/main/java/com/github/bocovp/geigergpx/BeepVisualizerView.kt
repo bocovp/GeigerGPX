@@ -11,7 +11,7 @@ class BeepVisualizerView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     companion object {
-        private const val DURATION_MS = 30000L
+        private const val DURATION_MS = 3000L
         private const val BIN_COUNT = 3
         private val offsets = intArrayOf(0, 1, -1)
         private const val MAX_BEEPS = 2000 // Circular buffer size
@@ -80,7 +80,7 @@ class BeepVisualizerView @JvmOverloads constructor(
         }
     }
 
-    fun intervalToDist (interval : Long) : Float{
+    private fun intervalToDist (interval: Long): Float{
         return (interval.toFloat() / DURATION_MS) * width.toFloat()
     }
 
@@ -95,6 +95,7 @@ class BeepVisualizerView @JvmOverloads constructor(
         val now = android.os.SystemClock.elapsedRealtime()
         val w = width.toFloat()
         val h = height.toFloat()
+        val hHalf = h / 2.0f
         var hasActiveBeeps = false
 
         // Clean up expired beeps from the tail first
@@ -109,7 +110,7 @@ class BeepVisualizerView @JvmOverloads constructor(
             hasActiveBeeps = true
             // Calculate X: starts at 'w' (right), ends at 0 (left)
             val x = w - dist
-            val y = height.toFloat() / 2.0f + yOffsets[i]
+            val y = hHalf + yOffsets[i]
             pointCoords[pointCount * 2] = x
             pointCoords[pointCount * 2 + 1] = y
             pointCount++
