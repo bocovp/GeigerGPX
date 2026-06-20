@@ -85,15 +85,34 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
         }
     }
 
+    private fun formatValue(key: String, value: String): String {
+        val bd = try {
+            java.math.BigDecimal(value)
+        } catch (e: Exception) {
+            return value
+        }
+        return when (key) {
+            DeviceConfigManager.KEY_FREQ_LOW,
+            DeviceConfigManager.KEY_FREQ_MAIN,
+            DeviceConfigManager.KEY_FREQ_HIGH -> {
+                String.format(java.util.Locale.US, "%.1f", bd.toDouble())
+            }
+            else -> {
+                bd.stripTrailingZeros().toPlainString()
+            }
+        }
+    }
+
     private fun setEditValue(key: String, value: String, enabled: Boolean) {
         val pref = findPreference<EditTextPreference>(key) ?: return
         pref.isEnabled = enabled
 
+        val updatedValue = formatValue(key, value)
         val unit = getUnitFor(key)
         // Format places the dimension safely after the value
-        val formattedSummary = if (unit.isNotEmpty()) "$value $unit" else value
+        val formattedSummary = if (unit.isNotEmpty()) "$updatedValue $unit" else updatedValue
 
-        pref.text = value
+        pref.text = updatedValue
         pref.summary = formattedSummary
     }
 
@@ -187,7 +206,8 @@ class DeviceSettingsFragment : PreferenceFragmentCompat() {
                     if (device != null && device.isCustom) {
                         DeviceConfigManager.updateActiveDeviceProperty(requireContext(), key, newValue.toString())
                         DeviceConfigManager.currentDevice(requireContext())?.let { updatedDevice ->
-                            val updatedValue = DeviceConfigManager.getPropertyValue(updatedDevice, key)
+                            val rawValue = DeviceConfigManager.getPropertyValue(updatedDevice, key)
+                            val updatedValue = formatValue(key, rawValue)
                             val unit = getUnitFor(key)
                             val formattedSummary = if (unit.isNotEmpty()) "$updatedValue $unit" else updatedValue
                             (preference as EditTextPreference).text = updatedValue

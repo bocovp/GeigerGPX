@@ -60,7 +60,7 @@
 
         <Preference
             android:key="gpx_folder_picker"
-            android:title="Choose save folder"
+            android:title="Save folder (press to change)"
             android:summary="Not set (uses app folder)" />
 
         <EditTextPreference

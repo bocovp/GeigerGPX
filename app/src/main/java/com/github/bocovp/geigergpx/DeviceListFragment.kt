@@ -44,6 +44,7 @@ class DeviceListFragment : Fragment(R.layout.fragment_device_list) {
                 val baseName = deviceNames[which]
                 showNewNameDialog(baseName)
             }
+            .setNegativeButton("Cancel", null)
             .show()
     }
 
