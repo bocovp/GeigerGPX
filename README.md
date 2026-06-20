@@ -1,11 +1,13 @@
 # GeigerGPX
 
-GeigerGPX is an Android application for simultaneous recording GPS track and dose-rate information obtained from **RADEX RD1008** (РАДЭКС РД1008) Geiger counter.
-No modification to the radiometer is required; signals are recorded via the microphone. Simply switch RD1008 into "search" mode, reset the threshold, and turn on the sound.
+GeigerGPX is an Android application for simultaneous recording GPS track and dose-rate information obtained from a Geiger counter.
+Currently **RADEX RD1008** (РАДЭКС РД1008) and **RADEX RD1224Si** are suppoerted.
+No modification to the radiometer is required; signals are recorded via the microphone. Simply switch RD1008 into "search" mode, reset the threshold, and turn on the sound;
+for RD1224Si, turn on "quantum sound".
 
 ## Current capabilities
 
-- **Audio pulse detection:** Pulse detection uses three Goertzel filters (the main tuned at 3276.8 Hz and a pair of witnesses at ±234 Hz) plus a pulse duration filter. The parameters are tailored to RD1008 (not tested on other counters).
+- **Audio pulse detection:** Pulse detection uses three Goertzel filters: the main one (tuned at 3276.8 Hz for RD1008) and a pair of witnesses; plus a pulse duration filter.
 - **GPS track recording with dose overlay:** The application records position and superimposes dose rate data on the same track timeline.
 - **Export tracks to GPX files:** Tracks are saved in GPX format with custom extensions for dose rate; other GPX applications can open tracks, but will not display the dose rate information.
 - **Dose-aware map analysis:** Recorded tracks can be analyzed on a map as either color-graded lines or a heat map built from multiple selected tracks.
@@ -16,7 +18,7 @@ No modification to the radiometer is required; signals are recorded via the micr
 - **Dose rate plots:** For recorded tracks the application provides a dose rate plot with a manually adjustable averaging window (fixed-duration window or Epanechnikov kernel estimator).
 - **Track editing:** One can crop beginning/end of the track, cut track into two, or mark some points as "bad" so they aren't shown on the map.
 - **Experimental Bluetooth audio input:** Audio capture from Bluetooth headsets is supported as an experimental feature, but it is way less stable and provides lower quality as compared to built-in microphone capture.
-- **High-rate limitation warning:** At high dose rates, RD-1008 may not emit all pulses audibly, so phone-side estimates can be biased low.
+- **High-rate limitation warning:** At high dose rates, dosimeter may not emit all pulses audibly, so phone-side estimates can be biased low.
 
 ## Screenshots
 
