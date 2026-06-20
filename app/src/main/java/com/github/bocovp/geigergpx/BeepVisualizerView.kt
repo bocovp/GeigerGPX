@@ -12,11 +12,16 @@ class BeepVisualizerView @JvmOverloads constructor(
 
     companion object {
         private const val DURATION_MS = 3000L
+        private const val BIN_COUNT = 3
+        private val offsets = intArrayOf(0, 1, -1)
         private const val MAX_BEEPS = 2000 // Circular buffer size
     }
 
     // Zero-allocation primitive arrays
     private val beepTimes = LongArray(MAX_BEEPS)
+
+    private val binTimes = LongArray(BIN_COUNT)
+    private val yPos = FloatArray(MAX_BEEPS)
 
     private var head = 0
     private var tail = 0
@@ -46,12 +51,25 @@ class BeepVisualizerView @JvmOverloads constructor(
         }
 
         beepTimes[head] = timeMillis
+
+        var i = 0
+        while ((i < BIN_COUNT) && (intervalToDist(timeMillis-binTimes[i]) < 3.0f * radius)) {
+            i++
+        }
+        i %= BIN_COUNT
+        binTimes[i] = timeMillis
+        yPos[head] = height.toFloat() / 2.0f + 3.0f * radius * offsets[i].toFloat()
+
         head = nextHead
 
         if (!isAnimating) {
             isAnimating = true
             postInvalidateOnAnimation()
         }
+    }
+
+    fun intervalToDist (interval : Long) : Float{
+        return (interval.toFloat() / DURATION_MS) * width.toFloat()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -75,10 +93,11 @@ class BeepVisualizerView @JvmOverloads constructor(
         var pointCount = 0
         while (i != head) {
             val age = (now - beepTimes[i]).coerceAtLeast(0L)
+            val dist = intervalToDist(age)
             hasActiveBeeps = true
             // Calculate X: starts at 'w' (right), ends at 0 (left)
-            val x = w - (age.toFloat() / DURATION_MS) * w
-            val y = h / 2.0f
+            val x = w - dist
+            val y = yPos[i]
             pointCoords[pointCount * 2] = x
             pointCoords[pointCount * 2 + 1] = y
             pointCount++

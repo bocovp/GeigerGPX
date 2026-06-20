@@ -213,7 +213,7 @@
     <com.github.bocovp.geigergpx.BeepVisualizerView
         android:id="@+id/beepVisualizer"
         android:layout_width="0dp"
-        android:layout_height="64dp"
+        android:layout_height="32dp"
         android:layout_marginBottom="8dp"
         android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@id/bottomNavigation"
