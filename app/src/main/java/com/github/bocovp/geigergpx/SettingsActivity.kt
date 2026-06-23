@@ -153,7 +153,7 @@ class SettingsActivity : ComponentActivity() {
 
     @Composable
     private fun MainSettings(refresh: Int, onDevice: () -> Unit, onRefresh: () -> Unit) {
-        val context = LocalContext.current;
+        val context = LocalContext.current
         val prefs = remember { PreferenceManager.getDefaultSharedPreferences(context) }
         val folderLauncher =
             rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -161,15 +161,29 @@ class SettingsActivity : ComponentActivity() {
                     context.contentResolver.takePersistableUriPermission(
                         uri,
                         Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    ); prefs.edit {
+                    )
+                    prefs.edit {
                         putString(
                             SettingsKeys.KEY_GPX_TREE_URI,
                             uri.toString()
                         )
-                    }; onRefresh()
+                    }
+                    onRefresh()
                 }
             }
+
+        val currentDeviceName = remember(refresh) { DeviceConfigManager.currentDeviceName(prefs) }
+        val thresholdSummaryVal = remember(refresh) { thresholdSummary(false) }
+        val thresholdSubtitleVal = remember(refresh) { thresholdSubtitle(false) }
+        val btThresholdSummaryVal = remember(refresh) { thresholdSummary(true) }
+        val btThresholdSubtitleVal = remember(refresh) { thresholdSubtitle(true) }
+        val useBtMic = remember(refresh) { prefs.getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false) }
+        val visualizeBeeps = remember(refresh) { prefs.getBoolean("visualize_beeps", false) }
+        val doseRateAvg = remember(refresh) { prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10" }
+        val (alertVal, alertSub) = remember(refresh) { getAlertStrings(prefs) }
+
         key(refresh) {
+
             LazyColumn(
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(28.dp)
@@ -178,49 +192,56 @@ class SettingsActivity : ComponentActivity() {
                     Section("Signal detection") {
                         SettingsRow(
                             "Dosimeter",
-                            DeviceConfigManager.currentDeviceName(prefs),
+                            currentDeviceName,
                             onClick = onDevice
                         )
                         SettingsRow(
                             "Threshold",
-                            thresholdSummary(false),
-                            thresholdSubtitle(false),
+                            thresholdSummaryVal,
+                            thresholdSubtitleVal,
                             onClick = { startCalibration(false, onRefresh) },
-                            onLongClick = { showManualThresholdDialog(false, onRefresh) })
+                            onLongClick = { showManualThresholdDialog(false, onRefresh) }
+                        )
                         SettingsRow(
                             "Bluetooth threshold",
-                            thresholdSummary(true),
-                            thresholdSubtitle(true),
+                            btThresholdSummaryVal,
+                            btThresholdSubtitleVal,
                             onClick = {
-                                if (!AudioInputManager.isBluetoothMicAvailable(context)) toast("Bluetooth microphone not available.") else startCalibration(
-                                    true,
-                                    onRefresh
-                                )
+                                if (!AudioInputManager.isBluetoothMicAvailable(context)) {
+                                    toast("Bluetooth microphone not available.")
+                                } else {
+                                    startCalibration(true, onRefresh)
+                                }
                             },
-                            onLongClick = { showManualThresholdDialog(true, onRefresh) })
+                            onLongClick = { showManualThresholdDialog(true, onRefresh) }
+                        )
                         SwitchRow(
                             "Use Bluetooth mic",
-                            prefs.getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)
+                            useBtMic
                         ) {
                             prefs.edit {
                                 putBoolean(
                                     SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE,
                                     it
                                 )
-                            }; onRefresh()
+                            }
+                            onRefresh()
                         }
                         SwitchRow(
                             "Visualize beeps",
-                            prefs.getBoolean("visualize_beeps", false),
+                            visualizeBeeps,
                             "Show a real-time particle waterfall on the main screen"
-                        ) { prefs.edit { putBoolean("visualize_beeps", it) }; onRefresh() }
+                        ) {
+                            prefs.edit { putBoolean("visualize_beeps", it) }
+                            onRefresh()
+                        }
                     }
                 }
                 item {
                     Section("Dose rate measurement") {
                         ChoiceRow(
                             "Counts for dose rate averaging",
-                            prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10",
+                            doseRateAvg,
                             listOf("5", "10", "20", "50", "100")
                         ) {
                             prefs.edit {
@@ -228,16 +249,21 @@ class SettingsActivity : ComponentActivity() {
                                     "dose_rate_avg_timestamps_n",
                                     it
                                 )
-                            }; onRefresh()
+                            }
+                            onRefresh()
                         }
 
-                        val (alertVal, alertSub) = getAlertStrings(prefs)
                         SettingsRow(
                             title = "Alert at dose rate",
                             value = alertVal,
                             subtitle = alertSub,
                             onClick = {
-                                showEditDialog("Alert at dose rate", prefs.getString("alert_dose_rate", "0") ?: "0", decimal = true, signed = false) {
+                                showEditDialog(
+                                    "Alert at dose rate",
+                                    prefs.getString("alert_dose_rate", "0") ?: "0",
+                                    decimal = true,
+                                    signed = false
+                                ) {
                                     prefs.edit { putString("alert_dose_rate", it) }
                                     onRefresh()
                                 }
@@ -257,7 +283,7 @@ class SettingsActivity : ComponentActivity() {
                             ),
                             "Press to change",
                             onClick = { folderLauncher.launch(null) })
-                        editPref(
+                        EditPref(
                             "GPS Spoofing detection speed",
                             "max_speed_kmh",
                             "30000.0",
@@ -266,7 +292,7 @@ class SettingsActivity : ComponentActivity() {
                             refresh,
                             onRefresh
                         )
-                        editPref(
+                        EditPref(
                             "Min distance between points",
                             "point_spacing_m",
                             "10.0",
@@ -275,7 +301,7 @@ class SettingsActivity : ComponentActivity() {
                             refresh,
                             onRefresh
                         )
-                        editPref(
+                        EditPref(
                             "Min counts per point",
                             "min_counts_per_point",
                             "10",
@@ -284,7 +310,7 @@ class SettingsActivity : ComponentActivity() {
                             refresh,
                             onRefresh
                         )
-                        editPref(
+                        EditPref(
                             "Max time without counts",
                             "max_time_without_counts_s",
                             "10",
@@ -293,7 +319,7 @@ class SettingsActivity : ComponentActivity() {
                             refresh,
                             onRefresh
                         )
-                        editPref(
+                        EditPref(
                             "Max time without GPS",
                             "max_time_without_gps_s",
                             "60",
@@ -314,7 +340,7 @@ class SettingsActivity : ComponentActivity() {
 
     @Composable
     private fun DeviceSettings(refresh: Int, onChoose: () -> Unit, onRefresh: () -> Unit) {
-        val context = LocalContext.current;
+        val context = LocalContext.current
         val device = remember(refresh) { DeviceConfigManager.currentDevice(context) } ?: return
         val active =
             (application as GeigerGpxApp).trackingRepository.let { it.isTracking.value || it.measurementModeEnabled.value }
@@ -343,7 +369,7 @@ class SettingsActivity : ComponentActivity() {
                                 onRefresh
                             )
                         })
-                    deviceParam(
+                    DeviceParam(
                         "Sensitivity",
                         RadiationCalibration.KEY_SENSITIVITY,
                         DeviceConfigManager.getPropertyValue(
@@ -355,7 +381,7 @@ class SettingsActivity : ComponentActivity() {
                         onRefresh
                     )
                     SettingsRow("Beep detector", "Goertzel detector", enabled = false)
-                    deviceParam(
+                    DeviceParam(
                         "Counts per beep",
                         DeviceConfigManager.KEY_COUNTS_PER_BEEP,
                         DeviceConfigManager.getPropertyValue(
@@ -366,7 +392,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "Low frequency",
                         DeviceConfigManager.KEY_FREQ_LOW,
                         DeviceConfigManager.getPropertyValue(
@@ -377,7 +403,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "Main frequency",
                         DeviceConfigManager.KEY_FREQ_MAIN,
                         DeviceConfigManager.getPropertyValue(
@@ -388,7 +414,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "High frequency",
                         DeviceConfigManager.KEY_FREQ_HIGH,
                         DeviceConfigManager.getPropertyValue(
@@ -399,7 +425,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "Beep duration",
                         DeviceConfigManager.KEY_DURATION,
                         DeviceConfigManager.getPropertyValue(
@@ -410,7 +436,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "Dominance threshold",
                         DeviceConfigManager.KEY_DOMINANCE_THRESHOLD,
                         DeviceConfigManager.getPropertyValue(
@@ -421,7 +447,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "Dominance threshold fade-out",
                         DeviceConfigManager.KEY_DOMINANCE_THRESHOLD_END,
                         DeviceConfigManager.getPropertyValue(
@@ -432,7 +458,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "Window size",
                         DeviceConfigManager.KEY_WINDOW_SIZE,
                         DeviceConfigManager.getPropertyValue(
@@ -443,7 +469,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "Step size",
                         DeviceConfigManager.KEY_STEP_SIZE,
                         DeviceConfigManager.getPropertyValue(
@@ -454,7 +480,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "Single beep duration tolerance",
                         DeviceConfigManager.KEY_ONE_BEEP_TOL,
                         DeviceConfigManager.getPropertyValue(
@@ -465,7 +491,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "Double beep duration tolerance",
                         DeviceConfigManager.KEY_TWO_BEEP_TOL,
                         DeviceConfigManager.getPropertyValue(
@@ -476,7 +502,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "Triple beep duration tolerance",
                         DeviceConfigManager.KEY_THREE_BEEP_TOL,
                         DeviceConfigManager.getPropertyValue(
@@ -487,7 +513,7 @@ class SettingsActivity : ComponentActivity() {
                         active,
                         onRefresh
                     )
-                    deviceParam(
+                    DeviceParam(
                         "Quad beep duration tolerance",
                         DeviceConfigManager.KEY_FOUR_BEEP_TOL,
                         DeviceConfigManager.getPropertyValue(
@@ -511,7 +537,7 @@ class SettingsActivity : ComponentActivity() {
 
         LazyColumn(contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp)) {
-            items(devices) { d ->
+            items(devices, key = { d -> d.name }) { d ->
                 ElevatedCard(
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
@@ -602,12 +628,14 @@ class SettingsActivity : ComponentActivity() {
                         title,
                         style = MaterialTheme.typography.titleMedium,
                         color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-                    ); if (subtitle != null) Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                }; if (value != null) Text(
+                    )
+                    if (subtitle != null) Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (value != null) Text(
                 value,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -634,11 +662,13 @@ class SettingsActivity : ComponentActivity() {
                 Text(
                     title,
                     style = MaterialTheme.typography.titleMedium
-                ); if (subtitle != null) Text(
-                subtitle,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            }; Switch(checked, onCheckedChange)
+                )
+                if (subtitle != null) Text(
+                    subtitle,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(checked, onCheckedChange)
         }
     }
 
@@ -649,19 +679,21 @@ class SettingsActivity : ComponentActivity() {
         choices: List<String>,
         onChoice: (String) -> Unit
     ) {
-        var open by remember { mutableStateOf(false) }; Box {
+        var open by remember { mutableStateOf(false) }
+        Box {
             SettingsRow(
                 title,
                 value,
-                onClick = { open = true }); DropdownMenu(
+                onClick = { open = true })
+            DropdownMenu(
             open,
             onDismissRequest = { open = false }) {
-            choices.forEach {
-                DropdownMenuItem(
-                    text = { Text(it) },
-                    onClick = { open = false; onChoice(it) })
+                choices.forEach {
+                    DropdownMenuItem(
+                        text = { Text(it) },
+                        onClick = { open = false; onChoice(it) })
+                }
             }
-        }
         }
     }
 
@@ -680,7 +712,7 @@ class SettingsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun editPref(
+    private fun EditPref(
         title: String,
         key: String,
         default: String,
@@ -705,7 +737,7 @@ class SettingsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun deviceParam(
+    private fun DeviceParam(
         title: String,
         key: String,
         value: String,
@@ -735,9 +767,12 @@ class SettingsActivity : ComponentActivity() {
         onSave: (String) -> Unit
     ) {
         val input = EditText(this).apply {
-            setText(value); setSelection(text.length); isSingleLine = true; inputType =
-            InputType.TYPE_CLASS_NUMBER or (if (decimal) InputType.TYPE_NUMBER_FLAG_DECIMAL else 0) or (if (signed) InputType.TYPE_NUMBER_FLAG_SIGNED else 0)
-        }; trackDialog(
+            setText(value)
+            setSelection(text.length)
+            isSingleLine = true
+            inputType = InputType.TYPE_CLASS_NUMBER or (if (decimal) InputType.TYPE_NUMBER_FLAG_DECIMAL else 0) or (if (signed) InputType.TYPE_NUMBER_FLAG_SIGNED else 0)
+        }
+        trackDialog(
             AlertDialog.Builder(this).setTitle(title).setView(input)
                 .setPositiveButton("Save") { _, _ -> onSave(input.text.toString().trim()) }
                 .setNegativeButton("Cancel", null).create()
@@ -755,8 +790,9 @@ class SettingsActivity : ComponentActivity() {
     private fun toDb(intensity: Float) = 10.0 * log10(intensity.toDouble() / 100.0)
     private fun thresholdSummary(bluetooth: Boolean): String {
         val v = PreferenceManager.getDefaultSharedPreferences(this)
-            .getFloat(thresholdKey(bluetooth), Float.NaN);
-        val threshold = if (v.isNaN()) defaultThreshold(bluetooth) else v; return "%.2f dB".format(
+            .getFloat(thresholdKey(bluetooth), Float.NaN)
+        val threshold = if (v.isNaN()) defaultThreshold(bluetooth) else v
+        return "%.2f dB".format(
             java.util.Locale.US,
             toDb(threshold)
         )
@@ -766,7 +802,8 @@ class SettingsActivity : ComponentActivity() {
         val v = PreferenceManager.getDefaultSharedPreferences(this).getFloat(
             thresholdKey(bluetooth),
             Float.NaN
-        ); return if (v.isNaN()) "Uncalibrated" else "Press to calibrate"
+        )
+        return if (v.isNaN()) "Uncalibrated" else "Press to calibrate"
     }
 
     private fun startCalibration(bluetooth: Boolean, onRefresh: () -> Unit) {
@@ -833,27 +870,32 @@ class SettingsActivity : ComponentActivity() {
 
     private fun fromDb(value: Float) = 10.0.pow(value / 10.0) * 100.0
     private fun showManualThresholdDialog(bluetooth: Boolean, onRefresh: () -> Unit) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        val key = thresholdKey(bluetooth);
-        val current = prefs.getFloat(key, Float.NaN);
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val key = thresholdKey(bluetooth)
+        val current = prefs.getFloat(key, Float.NaN)
         val input = EditText(this).apply {
             inputType =
-                InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED; hint =
-            "e.g. 42.1"; if (!current.isNaN()) {
-            setText("%.2f".format(java.util.Locale.US, toDb(current))); setSelection(text.length)
+                InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
+            hint = "e.g. 42.1"; if (!current.isNaN()) {
+                setText("%.2f".format(java.util.Locale.US, toDb(current)))
+                setSelection(text.length)
+            }
         }
-        }; trackDialog(
+        trackDialog(
             AlertDialog.Builder(this).setTitle("Set threshold manually")
                 .setMessage("Enter a positive threshold value.").setView(input)
                 .setPositiveButton("Save") { _, _ ->
                     val value = input.text.toString().trim()
-                        .toFloatOrNull(); if (value != null && value > 0f && value.isFinite()) {
-                    prefs.edit {
-                        putFloat(
-                            key,
-                            fromDb(value).toFloat()
-                        )
-                    }; onRefresh(); toast("Threshold updated.")
+                        .toFloatOrNull()
+                    if (value != null && value > 0f && value.isFinite()) {
+                        prefs.edit {
+                            putFloat(
+                                key,
+                                fromDb(value).toFloat()
+                            )
+                        }
+                        onRefresh()
+                        toast("Threshold updated.")
                 } else {
                     toast("Invalid threshold value.")
                 }
@@ -862,24 +904,36 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun renameDevice(device: DeviceConfigManager.Device, onRefresh: () -> Unit) {
-        if (!device.isCustom) return;
+        if (!device.isCustom) return
         val input = EditText(this).apply {
-            setText(device.name); setSelection(text.length); isSingleLine = true
-        }; AlertDialog.Builder(this).setTitle("Rename device").setView(input)
+            setText(device.name)
+            setSelection(text.length)
+            isSingleLine = true
+        }
+        AlertDialog.Builder(this).setTitle("Rename device").setView(input)
             .setPositiveButton("Save", null).setNegativeButton("Cancel", null).create()
             .also { dialog ->
                 dialog.setOnShowListener {
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                        val name = input.text.toString().trim(); if (name.isEmpty()) input.error =
-                        "Name cannot be empty" else if (DeviceConfigManager.renameActiveDevice(
-                            this,
-                            name
-                        )
-                    ) {
-                        dialog.dismiss(); onRefresh()
-                    } else input.error = "Name already exists"
+                        val name = input.text.toString().trim()
+                        if (name.isEmpty()) {
+                            input.error = "Name cannot be empty"
+                            return@setOnClickListener
+                        }
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            val success = DeviceConfigManager.renameActiveDevice(this@SettingsActivity, name)
+                            withContext(Dispatchers.Main) {
+                                if (success) {
+                                    dialog.dismiss()
+                                    onRefresh()
+                                } else {
+                                    input.error = "Name already exists"
+                                }
+                            }
+                        }
                     }
-                }; trackDialog(dialog)
+                }
+                trackDialog(dialog)
             }
     }
 
@@ -888,9 +942,14 @@ class SettingsActivity : ComponentActivity() {
             .setTitle("Delete device")
             .setMessage("Are you sure you want to delete '$name'?")
             .setPositiveButton("Delete") { _, _ ->
-                if (DeviceConfigManager.deleteDevice(this, name)) {
-                    toast("Device deleted")
-                    onRefresh()
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val success = DeviceConfigManager.deleteDevice(this@SettingsActivity, name)
+                    if (success) {
+                        withContext(Dispatchers.Main) {
+                            toast("Device deleted")
+                            onRefresh()
+                        }
+                    }
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -898,41 +957,61 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun showCloneDialog(done: () -> Unit) {
-        val names = DeviceConfigManager.devices(this).map { it.name }.toTypedArray(); trackDialog(
+        val names = DeviceConfigManager.devices(this).map { it.name }.toTypedArray()
+        trackDialog(
             AlertDialog.Builder(this).setTitle("Choose base device to copy from")
                 .setItems(names) { _, which ->
                     val input = EditText(this).apply {
-                        hint = "New device name"; isSingleLine = true
-                    }; AlertDialog.Builder(this).setTitle("Enter name for new device")
+                        hint = "New device name"
+                        isSingleLine = true
+                    }
+                    AlertDialog.Builder(this).setTitle("Enter name for new device")
                     .setView(input).setPositiveButton("Create", null)
                     .setNegativeButton("Cancel", null).create().also { d ->
-                    d.setOnShowListener {
-                        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                            val n = input.text.toString().trim(); if (n.isEmpty()) input.error =
-                            "Name cannot be empty" else if (DeviceConfigManager.cloneDevice(
-                                this,
-                                names[which],
-                                n
-                            )
-                        ) {
-                            toast("Device created and selected"); d.dismiss(); done()
-                        } else input.error = "Device name already exists"
+                        d.setOnShowListener {
+                            d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                                val n = input.text.toString().trim()
+                                if (n.isEmpty()) {
+                                    input.error = "Name cannot be empty"
+                                    return@setOnClickListener
+                                }
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    val success = DeviceConfigManager.cloneDevice(
+                                        this@SettingsActivity,
+                                        names[which],
+                                        n
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        if (success) {
+                                            toast("Device created and selected")
+                                            d.dismiss()
+                                            done()
+                                        } else {
+                                            input.error = "Device name already exists"
+                                        }
+                                    }
+                                }
+                            }
                         }
-                    }; trackDialog(d)
-                }
+                    }
                 }.setNegativeButton("Cancel", null).create()
         )
     }
 
     private fun deviceIconRes(name: String): Int? = when (name) {
-        "RADEX RD1008" -> R.drawable.rd1008_24; "RADEX RD1224Si" -> R.drawable.rd1224si_24; else -> null
+        "RADEX RD1008" -> R.drawable.rd1008_24
+        "RADEX RD1224Si" -> R.drawable.rd1224si_24
+        else -> null
     }
 
     private fun formatDeviceSummary(key: String, value: String): String {
         val unit = when (key) {
-            RadiationCalibration.KEY_SENSITIVITY -> "cps per μSv/h"; DeviceConfigManager.KEY_FREQ_LOW, DeviceConfigManager.KEY_FREQ_MAIN, DeviceConfigManager.KEY_FREQ_HIGH -> "Hz"; DeviceConfigManager.KEY_DURATION, DeviceConfigManager.KEY_WINDOW_SIZE, DeviceConfigManager.KEY_STEP_SIZE, DeviceConfigManager.KEY_ONE_BEEP_TOL, DeviceConfigManager.KEY_TWO_BEEP_TOL, DeviceConfigManager.KEY_THREE_BEEP_TOL, DeviceConfigManager.KEY_FOUR_BEEP_TOL -> "s"; else -> ""
-        };
-        val v = formatValue(key, value); return if (unit.isEmpty()) v else "$v $unit"
+            RadiationCalibration.KEY_SENSITIVITY -> "cps per μSv/h"
+            DeviceConfigManager.KEY_FREQ_LOW, DeviceConfigManager.KEY_FREQ_MAIN, DeviceConfigManager.KEY_FREQ_HIGH -> "Hz"
+            DeviceConfigManager.KEY_DURATION, DeviceConfigManager.KEY_WINDOW_SIZE, DeviceConfigManager.KEY_STEP_SIZE, DeviceConfigManager.KEY_ONE_BEEP_TOL, DeviceConfigManager.KEY_TWO_BEEP_TOL, DeviceConfigManager.KEY_THREE_BEEP_TOL, DeviceConfigManager.KEY_FOUR_BEEP_TOL -> "s" else -> ""
+        }
+        val v = formatValue(key, value)
+        return if (unit.isEmpty()) v else "$v $unit"
     }
 
     private fun formatValue(key: String, value: String): String {
@@ -940,7 +1019,8 @@ class SettingsActivity : ComponentActivity() {
             java.math.BigDecimal(value)
         } catch (_: Exception) {
             return value
-        }; return if (key == DeviceConfigManager.KEY_FREQ_LOW || key == DeviceConfigManager.KEY_FREQ_MAIN || key == DeviceConfigManager.KEY_FREQ_HIGH) "%.1f".format(
+        }
+        return if (key == DeviceConfigManager.KEY_FREQ_LOW || key == DeviceConfigManager.KEY_FREQ_MAIN || key == DeviceConfigManager.KEY_FREQ_HIGH) "%.1f".format(
             java.util.Locale.US,
             bd.toDouble()
         ) else bd.stripTrailingZeros().toPlainString()
@@ -948,29 +1028,37 @@ class SettingsActivity : ComponentActivity() {
 
     @Composable
     private fun rememberFolderSummary(uriString: String?): String {
-        val context = LocalContext.current;
-        var summary by remember(uriString) { mutableStateOf("Loading...") }; LaunchedEffect(
+        val context = LocalContext.current
+        var summary by remember(uriString) { mutableStateOf("Loading...") }
+        LaunchedEffect(
             uriString
         ) {
             if (uriString.isNullOrBlank()) {
-                summary = "App folder"; return@LaunchedEffect
-            }; summary = withContext(Dispatchers.IO) {
-            try {
-                val uri = uriString.toUri(); DocumentFile.fromTreeUri(context, uri)?.name
-                    ?: uriString
-            } catch (_: Exception) {
-                uriString
+                summary = "App folder"
+                return@LaunchedEffect
+            }
+            summary = withContext(Dispatchers.IO) {
+                try {
+                    val uri = uriString.toUri()
+                    DocumentFile.fromTreeUri(context, uri)?.name
+                        ?: uriString
+                } catch (_: Exception) {
+                    uriString
+                }
             }
         }
-        }; return summary
+        return summary
     }
 
     private fun trackDialog(dialog: AlertDialog) {
-        activeDialogs.add(dialog); dialog.setOnDismissListener { activeDialogs.remove(dialog) }; if (!isFinishing && !isDestroyed) dialog.show()
+        activeDialogs.add(dialog)
+        dialog.setOnDismissListener { activeDialogs.remove(dialog) }
+        if (!isFinishing && !isDestroyed) dialog.show()
     }
 
     private fun dismissActiveDialogs() {
         activeDialogs.toList()
-            .forEach { dialog -> if (dialog.isShowing) dialog.dismiss() }; activeDialogs.clear()
+            .forEach { dialog -> if (dialog.isShowing) dialog.dismiss() }
+        activeDialogs.clear()
     }
 }
