@@ -189,7 +189,50 @@ class SettingsActivity : ComponentActivity() {
     private fun defaultThreshold(bluetooth: Boolean) = if (bluetooth) AudioInputManager.DEFAULT_BLUETOOTH_MAG_THRESHOLD else AudioInputManager.DEFAULT_MAG_THRESHOLD
     private fun toDb(intensity: Float) = 10.0 * log10(intensity.toDouble() / 100.0)
     private fun thresholdSummary(bluetooth: Boolean): String { val v = PreferenceManager.getDefaultSharedPreferences(this).getFloat(thresholdKey(bluetooth), Float.NaN); return if (v.isNaN()) "Uncalibrated (%.2f dB)".format(java.util.Locale.US, toDb(defaultThreshold(bluetooth))) else "Current threshold: %.2f dB".format(java.util.Locale.US, toDb(v)) }
-    private fun startCalibration(bluetooth: Boolean, onRefresh: () -> Unit) { val dialog = AlertDialog.Builder(this).setTitle(if (bluetooth) "Calibration (bluetooth)" else "Calibration").setMessage("Estimating signal level...").setNegativeButton("Cancel") { d, _ -> calibrationDetector?.stop(); calibrationDetector = null; d.dismiss() }.setCancelable(false).create(); dialog.show(); calibrationDetector = CalibrationSession(this, bluetooth, thresholdKey(bluetooth), defaultThreshold(bluetooth), onAudioStatus = { status, error -> lifecycleScope.launch { if (error != AudioInputManager.AUDIO_STATUS_WORKING) dialog.setMessage(status) } }, onProgress = { phase, current, total -> lifecycleScope.launch { if (phase == 2) dialog.setMessage("Calibrating... $current/$total") } }, onFinished = { lifecycleScope.launch { calibrationDetector = null; dialog.dismiss(); onRefresh(); toast("Calibration finished.") } }); calibrationDetector?.start() }
+    private fun startCalibration(bluetooth: Boolean, onRefresh: () -> Unit) {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(if (bluetooth) "Calibration (bluetooth)" else "Calibration")
+            .setMessage("Estimating signal level...")
+            .setNegativeButton("Cancel") { d, _ ->
+                calibrationDetector?.stop()
+                calibrationDetector = null
+                d.dismiss()
+            }
+            .setCancelable(false)
+            .create()
+
+        dialog.show()
+
+        calibrationDetector = CalibrationSession(
+            context = this,
+            onProgress = { phase, current, total ->
+                lifecycleScope.launch {
+                    if (phase == 2) {
+                        dialog.setMessage("Calibrating... $current/$total")
+                    }
+                }
+            },
+            onFinished = {
+                lifecycleScope.launch {
+                    calibrationDetector = null
+                    dialog.dismiss()
+                    onRefresh()
+                    toast("Calibration finished.")
+                }
+            },
+            onAudioStatus = { status, error ->
+                lifecycleScope.launch {
+                    if (error != AudioInputManager.AUDIO_STATUS_WORKING) {
+                        dialog.setMessage(status)
+                    }
+                }
+            },
+            useBluetoothMicIfAvailable = bluetooth,
+            thresholdPreferenceKey = thresholdKey(bluetooth),
+            fallbackThreshold = defaultThreshold(bluetooth)
+        )
+        calibrationDetector?.start()
+    }
     private fun alertSummary(): String { val prefs = PreferenceManager.getDefaultSharedPreferences(this); val alert = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0; if (alert <= 0.0) return "Not set"; val avg = prefs.getString("dose_rate_avg_timestamps_n", "10")?.toIntOrNull() ?: 10; val sens = RadiationCalibration.sensitivityFromPrefs(prefs); val rate = ConfidenceInterval.getFalseAlarmRate(alert, avg, sens); val unit = if (sens == 1.0) "cps" else "μSv/h"; return "%.2f %s      False alarms: %.1f / hour".format(java.util.Locale.US, alert, unit, rate) }
     private fun folderSummary(): String { val uri = PreferenceManager.getDefaultSharedPreferences(this).getString(SettingsKeys.KEY_GPX_TREE_URI, null) ?: return "Not set (uses app folder)"; return try { DocumentFile.fromTreeUri(this, uri.toUri())?.name ?: uri } catch (_: Exception) { uri } }
     private fun fromDb(value: Float) = 10.0.pow(value / 10.0) * 100.0
