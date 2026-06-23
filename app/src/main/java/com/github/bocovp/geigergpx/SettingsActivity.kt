@@ -106,44 +106,49 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
-    @Composable private fun MainSettings(@Suppress("UNUSED_PARAMETER") refresh: Int, onDevice: () -> Unit, onRefresh: () -> Unit) {
+    @Composable private fun MainSettings(refresh: Int, onDevice: () -> Unit, onRefresh: () -> Unit) {
         val context = LocalContext.current; val prefs = remember { PreferenceManager.getDefaultSharedPreferences(context) }
         val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION); prefs.edit { putString(SettingsKeys.KEY_GPX_TREE_URI, uri.toString()) }; onRefresh() }
         }
-        LazyColumn(contentPadding = PaddingValues(horizontal = 24.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            item { Section("Signal detection") {
-                SettingsRow("Dosimeter", DeviceConfigManager.currentDeviceName(prefs), onClick = onDevice)
-                SettingsRow("Threshold", thresholdSummary(false), "Press to calibrate • long-press to set manually", onClick = { startCalibration(false, onRefresh) }, onLongClick = { showManualThresholdDialog(false, onRefresh) })
-                SettingsRow("Bluetooth threshold", thresholdSummary(true), "Press to calibrate • long-press to set manually", onClick = { if (!AudioInputManager.isBluetoothMicAvailable(context)) toast("Bluetooth microphone not available.") else startCalibration(true, onRefresh) }, onLongClick = { showManualThresholdDialog(true, onRefresh) })
-                SwitchRow("Use Bluetooth mic", prefs.getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)) { prefs.edit { putBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, it) }; onRefresh() }
-                SwitchRow("Visualize beeps", prefs.getBoolean("visualize_beeps", false), "Show a real-time particle waterfall on the main screen") { prefs.edit { putBoolean("visualize_beeps", it) }; onRefresh() }
-            } }
-            item { Section("Dose rate measurement") {
-                ChoiceRow("Counts for dose rate averaging", prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10", listOf("5", "10", "20", "50", "100")) { prefs.edit { putString("dose_rate_avg_timestamps_n", it) }; onRefresh() }
-                EditRow("Alert at dose rate", alertSummary(), prefs.getString("alert_dose_rate", "0") ?: "0", decimal = true) { prefs.edit { putString("alert_dose_rate", it) }; onRefresh() }
-            } }
-            item { Section("Track recording") {
-                SettingsRow("Save folder", rememberFolderSummary(prefs.getString(SettingsKeys.KEY_GPX_TREE_URI, null)), "Press to change", onClick = { folderLauncher.launch(null) })
-                editPref("GPS Spoofing detection speed", "max_speed_kmh", "30000.0", "km/h", true, onRefresh)
-                editPref("Min distance between points", "point_spacing_m", "10.0", "m", true, onRefresh)
-                editPref("Min counts per point", "min_counts_per_point", "10", null, false, onRefresh)
-                editPref("Max time without counts", "max_time_without_counts_s", "10", "s", true, onRefresh)
-                editPref("Max time without GPS", "max_time_without_gps_s", "60", "s", true, onRefresh)
-                SwitchRow("Also save dose rate in <ele> tag", prefs.getBoolean("save_dose_rate_in_ele", false)) { prefs.edit { putBoolean("save_dose_rate_in_ele", it) }; onRefresh() }
-            } }
+        key(refresh) {
+            LazyColumn(contentPadding = PaddingValues(horizontal = 24.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                item { Section("Signal detection") {
+                    SettingsRow("Dosimeter", DeviceConfigManager.currentDeviceName(prefs), onClick = onDevice)
+                    SettingsRow("Threshold", thresholdSummary(false), thresholdSubtitle(false), onClick = { startCalibration(false, onRefresh) }, onLongClick = { showManualThresholdDialog(false, onRefresh) })
+                    SettingsRow("Bluetooth threshold", thresholdSummary(true), thresholdSubtitle(true), onClick = { if (!AudioInputManager.isBluetoothMicAvailable(context)) toast("Bluetooth microphone not available.") else startCalibration(true, onRefresh) }, onLongClick = { showManualThresholdDialog(true, onRefresh) })
+                    SwitchRow("Use Bluetooth mic", prefs.getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)) { prefs.edit { putBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, it) }; onRefresh() }
+                    SwitchRow("Visualize beeps", prefs.getBoolean("visualize_beeps", false), "Show a real-time particle waterfall on the main screen") { prefs.edit { putBoolean("visualize_beeps", it) }; onRefresh() }
+                } }
+                item { Section("Dose rate measurement") {
+                    ChoiceRow("Counts for dose rate averaging", prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10", listOf("5", "10", "20", "50", "100")) { prefs.edit { putString("dose_rate_avg_timestamps_n", it) }; onRefresh() }
+                    EditRow("Alert at dose rate", alertSummary(), prefs.getString("alert_dose_rate", "0") ?: "0", decimal = true) { prefs.edit { putString("alert_dose_rate", it) }; onRefresh() }
+                } }
+                item { Section("Track recording") {
+                    SettingsRow("Save folder", rememberFolderSummary(prefs.getString(SettingsKeys.KEY_GPX_TREE_URI, null)), "Press to change", onClick = { folderLauncher.launch(null) })
+                    editPref("GPS Spoofing detection speed", "max_speed_kmh", "30000.0", "km/h", true, refresh, onRefresh)
+                    editPref("Min distance between points", "point_spacing_m", "10.0", "m", true, refresh, onRefresh)
+                    editPref("Min counts per point", "min_counts_per_point", "10", null, false, refresh, onRefresh)
+                    editPref("Max time without counts", "max_time_without_counts_s", "10", "s", true, refresh, onRefresh)
+                    editPref("Max time without GPS", "max_time_without_gps_s", "60", "s", true, refresh, onRefresh)
+                    SwitchRow("Also save dose rate in <ele> tag", prefs.getBoolean("save_dose_rate_in_ele", false)) { prefs.edit { putBoolean("save_dose_rate_in_ele", it) }; onRefresh() }
+                } }
+            }
         }
     }
 
-    @Composable private fun DeviceSettings(@Suppress("UNUSED_PARAMETER") refresh: Int, onChoose: () -> Unit, onRefresh: () -> Unit) {
-        val context = LocalContext.current; val device = DeviceConfigManager.currentDevice(context) ?: return
+    @Composable private fun DeviceSettings(refresh: Int, onChoose: () -> Unit, onRefresh: () -> Unit) {
+        val context = LocalContext.current; val device = remember(refresh) { DeviceConfigManager.currentDevice(context) } ?: return
         val active = (application as GeigerGpxApp).trackingRepository.let { it.isTracking.value || it.measurementModeEnabled.value }
         LazyColumn(contentPadding = PaddingValues(horizontal = 24.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            item { Section("Device") {
-                SettingsRow("Change device", device.name, onClick = { if (active) toast("Cannot change device while tracking or measuring") else onChoose() })
-                SettingsRow("Device name", device.name, if (device.isCustom) "Custom" else "Built-in", enabled = device.isCustom, onClick = { if (active) toast("Cannot rename device while tracking or measuring") else renameDevice(device, onRefresh) })
-            } }
+            item {
+                Button(
+                    onClick = { if (active) toast("Cannot change device while tracking or measuring") else onChoose() },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                ) { Text("Change device") }
+            }
             item { Section("Current device parameters") {
+                SettingsRow("Device name", device.name, if (device.isCustom) "Custom" else "Built-in", enabled = device.isCustom, onClick = { if (active) toast("Cannot rename device while tracking or measuring") else renameDevice(device, onRefresh) })
                 deviceParam("Sensitivity", RadiationCalibration.KEY_SENSITIVITY, DeviceConfigManager.getPropertyValue(device, RadiationCalibration.KEY_SENSITIVITY), device.isCustom, active, onRefresh)
                 SettingsRow("Beep detector", "Goertzel detector", enabled = false)
                 deviceParam("Counts per beep", DeviceConfigManager.KEY_COUNTS_PER_BEEP, DeviceConfigManager.getPropertyValue(device, DeviceConfigManager.KEY_COUNTS_PER_BEEP), device.isCustom, active, onRefresh)
@@ -186,7 +191,7 @@ class SettingsActivity : ComponentActivity() {
     @Composable private fun SwitchRow(title: String, checked: Boolean, subtitle: String? = null, onCheckedChange: (Boolean) -> Unit) { Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.titleMedium); if (subtitle != null) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked, onCheckedChange) } }
     @Composable private fun ChoiceRow(title: String, value: String, choices: List<String>, onChoice: (String) -> Unit) { var open by remember { mutableStateOf(false) }; Box { SettingsRow(title, value, onClick = { open = true }); DropdownMenu(open, onDismissRequest = { open = false }) { choices.forEach { DropdownMenuItem(text = { Text(it) }, onClick = { open = false; onChoice(it) }) } } } }
     @Composable private fun EditRow(title: String, summary: String, default: String, decimal: Boolean, onSave: (String) -> Unit) { SettingsRow(title, summary, onClick = { showEditDialog(title, default, decimal, false, onSave) }) }
-    @Composable private fun editPref(title: String, key: String, default: String, unit: String?, decimal: Boolean, onRefresh: () -> Unit) { val context = LocalContext.current; val prefs = remember { PreferenceManager.getDefaultSharedPreferences(context) }; val value = prefs.getString(key, default) ?: default; SettingsRow(title, if (unit == null) value else "$value $unit", onClick = { showEditDialog(title, value, decimal, false) { prefs.edit { putString(key, it) }; onRefresh() } }) }
+    @Composable private fun editPref(title: String, key: String, default: String, unit: String?, decimal: Boolean, refresh: Int, onRefresh: () -> Unit) { val context = LocalContext.current; val prefs = remember { PreferenceManager.getDefaultSharedPreferences(context) }; val value = remember(refresh, key) { prefs.getString(key, default) ?: default }; SettingsRow(title, if (unit == null) value else "$value $unit", onClick = { showEditDialog(title, value, decimal, false) { prefs.edit { putString(key, it) }; onRefresh() } }) }
     @Composable private fun deviceParam(title: String, key: String, value: String, isCustom: Boolean, trackingActive: Boolean, onRefresh: () -> Unit) { SettingsRow(title, formatDeviceSummary(key, value), enabled = isCustom, onClick = { if (trackingActive) toast("Cannot edit parameters while tracking or measuring") else showEditDialog(title, formatValue(key, value), key != DeviceConfigManager.KEY_COUNTS_PER_BEEP, key == RadiationCalibration.KEY_SENSITIVITY) { DeviceConfigManager.updateActiveDeviceProperty(this, key, it); onRefresh() } }) }
 
     private fun showEditDialog(title: String, value: String, decimal: Boolean, signed: Boolean, onSave: (String) -> Unit) { val input = EditText(this).apply { setText(value); setSelection(text.length); isSingleLine = true; inputType = InputType.TYPE_CLASS_NUMBER or (if (decimal) InputType.TYPE_NUMBER_FLAG_DECIMAL else 0) or (if (signed) InputType.TYPE_NUMBER_FLAG_SIGNED else 0) }; trackDialog(AlertDialog.Builder(this).setTitle(title).setView(input).setPositiveButton("Save") { _, _ -> onSave(input.text.toString().trim()) }.setNegativeButton("Cancel", null).create()) }
@@ -195,7 +200,8 @@ class SettingsActivity : ComponentActivity() {
     private fun thresholdKey(bluetooth: Boolean) = if (bluetooth) SettingsKeys.KEY_BLUETOOTH_AUDIO_THRESHOLD else SettingsKeys.KEY_AUDIO_THRESHOLD
     private fun defaultThreshold(bluetooth: Boolean) = if (bluetooth) AudioInputManager.DEFAULT_BLUETOOTH_MAG_THRESHOLD else AudioInputManager.DEFAULT_MAG_THRESHOLD
     private fun toDb(intensity: Float) = 10.0 * log10(intensity.toDouble() / 100.0)
-    private fun thresholdSummary(bluetooth: Boolean): String { val v = PreferenceManager.getDefaultSharedPreferences(this).getFloat(thresholdKey(bluetooth), Float.NaN); return if (v.isNaN()) "Uncalibrated (%.2f dB)".format(java.util.Locale.US, toDb(defaultThreshold(bluetooth))) else "Current threshold: %.2f dB".format(java.util.Locale.US, toDb(v)) }
+    private fun thresholdSummary(bluetooth: Boolean): String { val v = PreferenceManager.getDefaultSharedPreferences(this).getFloat(thresholdKey(bluetooth), Float.NaN); val threshold = if (v.isNaN()) defaultThreshold(bluetooth) else v; return "%.2f dB".format(java.util.Locale.US, toDb(threshold)) }
+    private fun thresholdSubtitle(bluetooth: Boolean): String { val v = PreferenceManager.getDefaultSharedPreferences(this).getFloat(thresholdKey(bluetooth), Float.NaN); return if (v.isNaN()) "Uncalibrated" else "Press to calibrate" }
     private fun startCalibration(bluetooth: Boolean, onRefresh: () -> Unit) {
         val dialog = AlertDialog.Builder(this)
             .setTitle(if (bluetooth) "Calibration (bluetooth)" else "Calibration")
