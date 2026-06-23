@@ -135,23 +135,6 @@ class SettingsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun Header(title: String, onBack: () -> Unit) {
-        Column(Modifier.padding(horizontal = 24.dp, vertical = 18.dp)) {
-            FilledTonalIconButton(
-                onClick = onBack,
-                modifier = Modifier.size(56.dp)
-            ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, null) }
-            Spacer(Modifier.height(26.dp))
-            Text(
-                title,
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(Modifier.height(26.dp))
-        }
-    }
-
-    @Composable
     private fun MainSettings(refresh: Int, onDevice: () -> Unit, onRefresh: () -> Unit) {
         val context = LocalContext.current
         val prefs = remember { PreferenceManager.getDefaultSharedPreferences(context) }
@@ -629,17 +612,21 @@ class SettingsActivity : ComponentActivity() {
                         style = MaterialTheme.typography.titleMedium,
                         color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (subtitle != null) Text(
-                        subtitle,
+                    if (subtitle != null) {
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (value != null) {
+                    Text(
+                        value,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (value != null) Text(
-                value,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             }
         }
     }
@@ -684,31 +671,20 @@ class SettingsActivity : ComponentActivity() {
             SettingsRow(
                 title,
                 value,
-                onClick = { open = true })
+                onClick = { open = true }
+            )
             DropdownMenu(
-            open,
-            onDismissRequest = { open = false }) {
+                open,
+                onDismissRequest = { open = false }
+            ) {
                 choices.forEach {
                     DropdownMenuItem(
                         text = { Text(it) },
-                        onClick = { open = false; onChoice(it) })
+                        onClick = { open = false; onChoice(it) }
+                    )
                 }
             }
         }
-    }
-
-    @Composable
-    private fun EditRow(
-        title: String,
-        summary: String,
-        default: String,
-        decimal: Boolean,
-        onSave: (String) -> Unit
-    ) {
-        SettingsRow(
-            title,
-            summary,
-            onClick = { showEditDialog(title, default, decimal, false, onSave) })
     }
 
     @Composable
@@ -755,8 +731,16 @@ class SettingsActivity : ComponentActivity() {
                     formatValue(key, value),
                     key != DeviceConfigManager.KEY_COUNTS_PER_BEEP,
                     key == RadiationCalibration.KEY_SENSITIVITY
-                ) { DeviceConfigManager.updateActiveDeviceProperty(this, key, it); onRefresh() }
-            })
+                ) { newValue ->
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        DeviceConfigManager.updateActiveDeviceProperty(this@SettingsActivity, key, newValue)
+                        withContext(Dispatchers.Main) {
+                            onRefresh()
+                        }
+                    }
+                }
+            }
+        )
     }
 
     private fun showEditDialog(
