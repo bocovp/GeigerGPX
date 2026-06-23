@@ -470,4 +470,21 @@ object DeviceConfigManager {
             countsPerBeep = fallback.countsPerBeep
         )
     }
+
+    fun deleteDevice(context: Context, name: String): Boolean {
+        synchronized(lock) {
+            val current = parsedDevices.firstOrNull { it.name == name } ?: return false
+            if (!current.isCustom) return false
+
+            parsedDevices = parsedDevices.filter { it.name != name }
+            saveCustomDevices(context)
+
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            if (currentDeviceName(prefs) == name) {
+                val fallbackName = parsedDevices.firstOrNull()?.name ?: "Unknown"
+                selectDevice(context, fallbackName)
+            }
+            return true
+        }
+    }
 }

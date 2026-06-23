@@ -552,7 +552,7 @@ class TracksActivity : AppCompatActivity() {
 
     private fun currentTrackDirectoryUri(): Uri? {
         val treeUri = PreferenceManager.getDefaultSharedPreferences(this)
-            .getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+            .getString(SettingsKeys.KEY_GPX_TREE_URI, null)
             ?.takeIf { it.isNotBlank() }
             ?: return null
         return treeUri.toUri()

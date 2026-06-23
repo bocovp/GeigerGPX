@@ -31,8 +31,8 @@ class CalibrationSession(
     private val onFinished: (threshold: Float?) -> Unit,
     private val onAudioStatus: (status: String, errorCode: Int) -> Unit = { _, _ -> },
     private val useBluetoothMicIfAvailable: Boolean = PreferenceManager.getDefaultSharedPreferences(context)
-        .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, true),
-    private val thresholdPreferenceKey: String = SettingsFragment.KEY_AUDIO_THRESHOLD,
+        .getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false),
+    private val thresholdPreferenceKey: String = SettingsKeys.KEY_AUDIO_THRESHOLD,
     private val fallbackThreshold: Float = AudioInputManager.DEFAULT_MAG_THRESHOLD,
     private val stageOneDurationSeconds: Int = 5,
     private val totalBeepCount: Int = 10

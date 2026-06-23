@@ -649,7 +649,7 @@ class AudioInputManager(
         }
 
         fun storedThreshold(context: Context, bluetooth: Boolean): Float {
-            val key = if (bluetooth) SettingsFragment.KEY_BLUETOOTH_AUDIO_THRESHOLD else SettingsFragment.KEY_AUDIO_THRESHOLD
+            val key = if (bluetooth) SettingsKeys.KEY_BLUETOOTH_AUDIO_THRESHOLD else SettingsKeys.KEY_AUDIO_THRESHOLD
             val stored = PreferenceManager.getDefaultSharedPreferences(context).getFloat(key, Float.NaN)
             return if (!stored.isNaN() && stored > 0f) stored
             else if (bluetooth) DEFAULT_BLUETOOTH_MAG_THRESHOLD else DEFAULT_MAG_THRESHOLD
@@ -662,7 +662,7 @@ class AudioInputManager(
          */
         private fun useBluetoothMicIfAvailable(context: Context): Boolean {
             return PreferenceManager.getDefaultSharedPreferences(context)
-                .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)
+                .getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)
         }
     }
 }
