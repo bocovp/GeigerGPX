@@ -122,11 +122,11 @@ class SettingsActivity : ComponentActivity() {
                     }
                 ) { padding ->
                     // 4. Content container (LazyColumns will now drive the collapsing toolbar)
-                    Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                         when (page) {
-                            SettingsPage.Main -> MainSettings(refresh, onDevice = { page = SettingsPage.Device }, onRefresh = { refresh++ })
-                            SettingsPage.Device -> DeviceSettings(refresh, onChoose = { page = SettingsPage.ChooseDevice }, onRefresh = { refresh++ })
-                            SettingsPage.ChooseDevice -> ChooseDevice(refresh, onSelected = { page = SettingsPage.Device; refresh++ }, onRefresh = { refresh++ })
+                            SettingsPage.Main -> MainSettings(padding,refresh, onDevice = { page = SettingsPage.Device }, onRefresh = { refresh++ })
+                            SettingsPage.Device -> DeviceSettings(padding,refresh, onChoose = { page = SettingsPage.ChooseDevice }, onRefresh = { refresh++ })
+                            SettingsPage.ChooseDevice -> ChooseDevice(padding,refresh, onSelected = { page = SettingsPage.Device; refresh++ }, onRefresh = { refresh++ })
                         }
                     }
                 }
@@ -135,7 +135,7 @@ class SettingsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun MainSettings(refresh: Int, onDevice: () -> Unit, onRefresh: () -> Unit) {
+    private fun MainSettings(padding: PaddingValues, refresh: Int, onDevice: () -> Unit, onRefresh: () -> Unit) {
         val context = LocalContext.current
         val prefs = remember { PreferenceManager.getDefaultSharedPreferences(context) }
         val folderLauncher =
@@ -166,7 +166,12 @@ class SettingsActivity : ComponentActivity() {
         val (alertVal, alertSub) = remember(refresh) { getAlertStrings(prefs) }
 
         LazyColumn(
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(
+                top = padding.calculateTopPadding() + 16.dp,
+                bottom = padding.calculateBottomPadding() + 16.dp,
+                start = 24.dp,
+                end = 24.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(28.dp)
         ) {
             item {
@@ -319,7 +324,7 @@ class SettingsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun DeviceSettings(refresh: Int, onChoose: () -> Unit, onRefresh: () -> Unit) {
+    private fun DeviceSettings(padding: PaddingValues, refresh: Int, onChoose: () -> Unit, onRefresh: () -> Unit) {
         val context = LocalContext.current
         val device = remember(refresh) { DeviceConfigManager.currentDevice(context) } ?: return
 
@@ -328,7 +333,12 @@ class SettingsActivity : ComponentActivity() {
         val active = isTracking || measurementModeEnabled
 
         LazyColumn(
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(
+                top = padding.calculateTopPadding() + 16.dp,
+                bottom = padding.calculateBottomPadding() + 16.dp,
+                start = 24.dp,
+                end = 24.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(28.dp)
         ) {
             item {
@@ -513,12 +523,17 @@ class SettingsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun ChooseDevice(refresh: Int, onSelected: () -> Unit, onRefresh: () -> Unit) {
+    private fun ChooseDevice(padding: PaddingValues, refresh: Int, onSelected: () -> Unit, onRefresh: () -> Unit) {
         val context = LocalContext.current
         val devices = remember(refresh) { DeviceConfigManager.devices(context) }
         val current = remember(refresh) { DeviceConfigManager.currentDevice(context)?.name }
 
-        LazyColumn(contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+        LazyColumn(contentPadding = PaddingValues(
+            top = padding.calculateTopPadding() + 16.dp,
+            bottom = padding.calculateBottomPadding() + 16.dp,
+            start = 24.dp,
+            end = 24.dp
+        ),
             verticalArrangement = Arrangement.spacedBy(28.dp)) {
             items(devices, key = { d -> d.name }) { d ->
                 ElevatedCard(
@@ -873,16 +888,13 @@ class SettingsActivity : ComponentActivity() {
                         .toFloatOrNull()
                     if (value != null && value > 0f && value.isFinite()) {
                         prefs.edit {
-                            putFloat(
-                                key,
-                                fromDb(value).toFloat()
-                            )
+                            putFloat(key,fromDb(value).toFloat())
                         }
                         onRefresh()
                         toast("Threshold updated.")
-                } else {
-                    toast("Invalid threshold value.")
-                }
+                    } else {
+                        toast("Invalid threshold value.")
+                    }
                 }.setNegativeButton("Cancel", null).create()
         )
     }
@@ -943,42 +955,49 @@ class SettingsActivity : ComponentActivity() {
     private fun showCloneDialog(done: () -> Unit) {
         val names = DeviceConfigManager.devices(this).map { it.name }.toTypedArray()
         trackDialog(
-            AlertDialog.Builder(this).setTitle("Choose base device to copy from")
+            AlertDialog.Builder(this)
+                .setTitle("Choose base device to copy from")
                 .setItems(names) { _, which ->
                     val input = EditText(this).apply {
                         hint = "New device name"
                         isSingleLine = true
                     }
-                    AlertDialog.Builder(this).setTitle("Enter name for new device")
-                    .setView(input).setPositiveButton("Create", null)
-                    .setNegativeButton("Cancel", null).create().also { d ->
-                        d.setOnShowListener {
-                            d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                                val n = input.text.toString().trim()
-                                if (n.isEmpty()) {
-                                    input.error = "Name cannot be empty"
-                                    return@setOnClickListener
-                                }
-                                lifecycleScope.launch(Dispatchers.IO) {
-                                    val success = DeviceConfigManager.cloneDevice(
-                                        this@SettingsActivity,
-                                        names[which],
-                                        n
-                                    )
-                                    withContext(Dispatchers.Main) {
-                                        if (success) {
-                                            toast("Device created and selected")
-                                            d.dismiss()
-                                            done()
-                                        } else {
-                                            input.error = "Device name already exists"
-                                        }
+                    val d = AlertDialog.Builder(this)
+                        .setTitle("Enter name for new device")
+                        .setView(input)
+                        .setPositiveButton("Create", null)
+                        .setNegativeButton("Cancel", null)
+                        .create()
+
+                    d.setOnShowListener {
+                        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                            val n = input.text.toString().trim()
+                            if (n.isEmpty()) {
+                                input.error = "Name cannot be empty"
+                                return@setOnClickListener
+                            }
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                val success = DeviceConfigManager.cloneDevice(
+                                    this@SettingsActivity,
+                                    names[which],
+                                    n
+                                )
+                                withContext(Dispatchers.Main) {
+                                    if (success) {
+                                        toast("Device created and selected")
+                                        d.dismiss()
+                                        done()
+                                    } else {
+                                        input.error = "Device name already exists"
                                     }
                                 }
                             }
                         }
                     }
-                }.setNegativeButton("Cancel", null).create()
+                    trackDialog(d)
+                }
+                .setNegativeButton("Cancel", null)
+                .create()
         )
     }
 
