@@ -61,8 +61,10 @@ class SettingsActivity : ComponentActivity() {
         val context = LocalContext.current
         val prefs = remember { PreferenceManager.getDefaultSharedPreferences(context) }
         var refresh by remember { mutableIntStateOf(0) }
-        DisposableEffect(prefs) {
-            val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> refresh++ }
+        val listener = remember {
+            android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> refresh++ }
+        }
+        DisposableEffect(prefs, listener) {
             prefs.registerOnSharedPreferenceChangeListener(listener)
             onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
         }
@@ -116,7 +118,7 @@ class SettingsActivity : ComponentActivity() {
             } }
             item { Section("Dose rate measurement") {
                 ChoiceRow("Counts for dose rate averaging", prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10", listOf("5", "10", "20", "50", "100")) { prefs.edit { putString("dose_rate_avg_timestamps_n", it) }; onRefresh() }
-                EditRow("Alert at dose rate", alertSummary(), "0", decimal = true) { prefs.edit { putString("alert_dose_rate", it) }; onRefresh() }
+                EditRow("Alert at dose rate", alertSummary(), prefs.getString("alert_dose_rate", "0") ?: "0", decimal = true) { prefs.edit { putString("alert_dose_rate", it) }; onRefresh() }
             } }
             item { Section("Track recording") {
                 SettingsRow("Save folder", folderSummary(), "Press to change", onClick = { folderLauncher.launch(null) })
