@@ -88,7 +88,7 @@ class MainActivity : AppCompatActivity() {
             contentResolver.takePersistableUriPermission(uri, flags)
             PreferenceManager.getDefaultSharedPreferences(this)
                 .edit {
-                    putString(SettingsFragment.KEY_GPX_TREE_URI, uri.toString())
+                    putString(SettingsKeys.KEY_GPX_TREE_URI, uri.toString())
                 }
         }
         // Stop tracking regardless of whether a folder was chosen or cancelled
@@ -103,7 +103,7 @@ class MainActivity : AppCompatActivity() {
             contentResolver.takePersistableUriPermission(uri, flags)
             PreferenceManager.getDefaultSharedPreferences(this)
                 .edit {
-                    putString(SettingsFragment.KEY_GPX_TREE_URI, uri.toString())
+                    putString(SettingsKeys.KEY_GPX_TREE_URI, uri.toString())
                 }
         } else {
             FileStorageManager.clearConfiguredTreeUri(this)
@@ -142,7 +142,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.buttonStop.setOnClickListener {
             val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-            val treeUri = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+            val treeUri = prefs.getString(SettingsKeys.KEY_GPX_TREE_URI, null)
             if (treeUri.isNullOrBlank()) {
                 AlertDialog.Builder(this)
                     .setTitle("Choose save folder")
@@ -216,7 +216,7 @@ class MainActivity : AppCompatActivity() {
     private fun validateConfiguredSaveFolderAtStartup(onValidationComplete: () -> Unit) {
         lifecycleScope.launch {
             val prefs = PreferenceManager.getDefaultSharedPreferences(this@MainActivity)
-            val treeUriString = prefs.getString(SettingsFragment.KEY_GPX_TREE_URI, null)
+            val treeUriString = prefs.getString(SettingsKeys.KEY_GPX_TREE_URI, null)
             val (defaultFolderError, isValidFolder, canWrite) = withContext(Dispatchers.IO) {
                 val probeError = FileStorageManager.getDefaultFolderWriteProbeError(this@MainActivity)
                 if (treeUriString.isNullOrBlank()) {
@@ -768,7 +768,7 @@ class MainActivity : AppCompatActivity() {
             needed += Manifest.permission.RECORD_AUDIO
         }
         val bluetoothMicPreferred = PreferenceManager.getDefaultSharedPreferences(this)
-            .getBoolean(SettingsFragment.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)
+            .getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false)
         if (bluetoothMicPreferred &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)

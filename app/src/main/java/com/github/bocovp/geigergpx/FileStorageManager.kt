@@ -25,7 +25,7 @@ import androidx.core.net.toUri
  */
 object FileStorageManager {
 
-    private const val PREFS_KEY_GPX_TREE_URI = SettingsFragment.KEY_GPX_TREE_URI
+    private const val PREFS_KEY_GPX_TREE_URI = SettingsKeys.KEY_GPX_TREE_URI
     private const val DEFAULT_GPX_MIME = "application/gpx+xml"
     private const val DEFAULT_TEXT_MIME = "text/plain"
     private const val PERMISSION_PROBE_FILE_NAME = ".geigergpx-write-test.tmp"
