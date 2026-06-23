@@ -165,157 +165,154 @@ class SettingsActivity : ComponentActivity() {
         val doseRateAvg = remember(refresh) { prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10" }
         val (alertVal, alertSub) = remember(refresh) { getAlertStrings(prefs) }
 
-        key(refresh) {
-
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(28.dp)
-            ) {
-                item {
-                    Section("Signal detection") {
-                        SettingsRow(
-                            "Dosimeter",
-                            currentDeviceName,
-                            onClick = onDevice
-                        )
-                        SettingsRow(
-                            "Threshold",
-                            thresholdSummaryVal,
-                            thresholdSubtitleVal,
-                            onClick = { startCalibration(false, onRefresh) },
-                            onLongClick = { showManualThresholdDialog(false, onRefresh) }
-                        )
-                        SettingsRow(
-                            "Bluetooth threshold",
-                            btThresholdSummaryVal,
-                            btThresholdSubtitleVal,
-                            onClick = {
-                                if (!AudioInputManager.isBluetoothMicAvailable(context)) {
-                                    toast("Bluetooth microphone not available.")
-                                } else {
-                                    startCalibration(true, onRefresh)
-                                }
-                            },
-                            onLongClick = { showManualThresholdDialog(true, onRefresh) }
-                        )
-                        SwitchRow(
-                            "Use Bluetooth mic",
-                            useBtMic
-                        ) {
-                            prefs.edit {
-                                putBoolean(
-                                    SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE,
-                                    it
-                                )
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(28.dp)
+        ) {
+            item {
+                Section("Signal detection") {
+                    SettingsRow(
+                        "Dosimeter",
+                        currentDeviceName,
+                        onClick = onDevice
+                    )
+                    SettingsRow(
+                        "Threshold",
+                        thresholdSummaryVal,
+                        thresholdSubtitleVal,
+                        onClick = { startCalibration(false, onRefresh) },
+                        onLongClick = { showManualThresholdDialog(false, onRefresh) }
+                    )
+                    SettingsRow(
+                        "Bluetooth threshold",
+                        btThresholdSummaryVal,
+                        btThresholdSubtitleVal,
+                        onClick = {
+                            if (!AudioInputManager.isBluetoothMicAvailable(context)) {
+                                toast("Bluetooth microphone not available.")
+                            } else {
+                                startCalibration(true, onRefresh)
                             }
-                            onRefresh()
+                        },
+                        onLongClick = { showManualThresholdDialog(true, onRefresh) }
+                    )
+                    SwitchRow(
+                        "Use Bluetooth mic",
+                        useBtMic
+                    ) {
+                        prefs.edit {
+                            putBoolean(
+                                SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE,
+                                it
+                            )
                         }
-                        SwitchRow(
-                            "Visualize beeps",
-                            visualizeBeeps,
-                            "Show a real-time particle waterfall on the main screen"
-                        ) {
-                            prefs.edit { putBoolean("visualize_beeps", it) }
-                            onRefresh()
-                        }
+                        onRefresh()
+                    }
+                    SwitchRow(
+                        "Visualize beeps",
+                        visualizeBeeps,
+                        "Show a real-time particle waterfall on the main screen"
+                    ) {
+                        prefs.edit { putBoolean("visualize_beeps", it) }
+                        onRefresh()
                     }
                 }
-                item {
-                    Section("Dose rate measurement") {
-                        ChoiceRow(
-                            "Counts for dose rate averaging",
-                            doseRateAvg,
-                            listOf("5", "10", "20", "50", "100")
-                        ) {
-                            prefs.edit {
-                                putString(
-                                    "dose_rate_avg_timestamps_n",
-                                    it
-                                )
-                            }
-                            onRefresh()
+            }
+            item {
+                Section("Dose rate measurement") {
+                    ChoiceRow(
+                        "Counts for dose rate averaging",
+                        doseRateAvg,
+                        listOf("5", "10", "20", "50", "100")
+                    ) {
+                        prefs.edit {
+                            putString(
+                                "dose_rate_avg_timestamps_n",
+                                it
+                            )
                         }
+                        onRefresh()
+                    }
 
-                        SettingsRow(
-                            title = "Alert at dose rate",
-                            value = alertVal,
-                            subtitle = alertSub,
-                            onClick = {
-                                showEditDialog(
-                                    "Alert at dose rate",
-                                    prefs.getString("alert_dose_rate", "0") ?: "0",
-                                    decimal = true,
-                                    signed = false
-                                ) {
-                                    prefs.edit { putString("alert_dose_rate", it) }
-                                    onRefresh()
-                                }
+                    SettingsRow(
+                        title = "Alert at dose rate",
+                        value = alertVal,
+                        subtitle = alertSub,
+                        onClick = {
+                            showEditDialog(
+                                "Alert at dose rate",
+                                prefs.getString("alert_dose_rate", "0") ?: "0",
+                                decimal = true,
+                                signed = false
+                            ) {
+                                prefs.edit { putString("alert_dose_rate", it) }
+                                onRefresh()
                             }
-                        )
-                    }
+                        }
+                    )
                 }
-                item {
-                    Section("Track recording") {
-                        SettingsRow(
-                            "Save folder",
-                            rememberFolderSummary(
-                                prefs.getString(
-                                    SettingsKeys.KEY_GPX_TREE_URI,
-                                    null
-                                )
-                            ),
-                            "Press to change",
-                            onClick = { folderLauncher.launch(null) })
-                        EditPref(
-                            "GPS Spoofing detection speed",
-                            "max_speed_kmh",
-                            "30000.0",
-                            "km/h",
-                            true,
-                            refresh,
-                            onRefresh
-                        )
-                        EditPref(
-                            "Min distance between points",
-                            "point_spacing_m",
-                            "10.0",
-                            "m",
-                            true,
-                            refresh,
-                            onRefresh
-                        )
-                        EditPref(
-                            "Min counts per point",
-                            "min_counts_per_point",
-                            "10",
-                            null,
-                            false,
-                            refresh,
-                            onRefresh
-                        )
-                        EditPref(
-                            "Max time without counts",
-                            "max_time_without_counts_s",
-                            "10",
-                            "s",
-                            true,
-                            refresh,
-                            onRefresh
-                        )
-                        EditPref(
-                            "Max time without GPS",
-                            "max_time_without_gps_s",
-                            "60",
-                            "s",
-                            true,
-                            refresh,
-                            onRefresh
-                        )
-                        SwitchRow(
-                            "Also save dose rate in <ele> tag",
-                            prefs.getBoolean("save_dose_rate_in_ele", false)
-                        ) { prefs.edit { putBoolean("save_dose_rate_in_ele", it) }; onRefresh() }
-                    }
+            }
+            item {
+                Section("Track recording") {
+                    SettingsRow(
+                        "Save folder",
+                        rememberFolderSummary(
+                            prefs.getString(
+                                SettingsKeys.KEY_GPX_TREE_URI,
+                                null
+                            )
+                        ),
+                        "Press to change",
+                        onClick = { folderLauncher.launch(null) })
+                    EditPref(
+                        "GPS Spoofing detection speed",
+                        "max_speed_kmh",
+                        "30000.0",
+                        "km/h",
+                        true,
+                        refresh,
+                        onRefresh
+                    )
+                    EditPref(
+                        "Min distance between points",
+                        "point_spacing_m",
+                        "10.0",
+                        "m",
+                        true,
+                        refresh,
+                        onRefresh
+                    )
+                    EditPref(
+                        "Min counts per point",
+                        "min_counts_per_point",
+                        "10",
+                        null,
+                        false,
+                        refresh,
+                        onRefresh
+                    )
+                    EditPref(
+                        "Max time without counts",
+                        "max_time_without_counts_s",
+                        "10",
+                        "s",
+                        true,
+                        refresh,
+                        onRefresh
+                    )
+                    EditPref(
+                        "Max time without GPS",
+                        "max_time_without_gps_s",
+                        "60",
+                        "s",
+                        true,
+                        refresh,
+                        onRefresh
+                    )
+                    SwitchRow(
+                        "Also save dose rate in <ele> tag",
+                        prefs.getBoolean("save_dose_rate_in_ele", false)
+                    ) { prefs.edit { putBoolean("save_dose_rate_in_ele", it) }; onRefresh() }
                 }
             }
         }
@@ -325,8 +322,11 @@ class SettingsActivity : ComponentActivity() {
     private fun DeviceSettings(refresh: Int, onChoose: () -> Unit, onRefresh: () -> Unit) {
         val context = LocalContext.current
         val device = remember(refresh) { DeviceConfigManager.currentDevice(context) } ?: return
-        val active =
-            (application as GeigerGpxApp).trackingRepository.let { it.isTracking.value || it.measurementModeEnabled.value }
+
+        val isTracking by (application as GeigerGpxApp).trackingRepository.isTracking.collectAsState()
+        val measurementModeEnabled by (application as GeigerGpxApp).trackingRepository.measurementModeEnabled.collectAsState()
+        val active = isTracking || measurementModeEnabled
+
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp)
