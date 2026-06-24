@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <style name="Theme.GeigerGpx" parent="Theme.Material3.Light.NoActionBar">
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorOnPrimary">@color/white</item>
-        <item name="colorSecondary">@color/secondary</item>
-        <item name="colorOnSecondary">@color/white</item>
+    <style name="Theme.GeigerGpx" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/primary_dark</item>
+        <item name="colorOnPrimary">@color/dark_on_primary</item>
+        <item name="colorSecondary">@color/secondary_dark</item>
+        <item name="colorOnSecondary">@color/dark_on_primary</item>
         <item name="android:statusBarColor" tools:targetApi="l">?attr/colorSurfaceContainer</item>
         <item name="toolbarStyle">@style/Widget.GeigerGpx.Toolbar.Small</item>
         <item name="materialButtonStyle">@style/Widget.Material3.Button</item>
@@ -14,6 +14,7 @@
         <item name="popupMenuStyle">@style/GeigerGpx.PopupMenu</item>
         <item name="listPopupWindowStyle">@style/GeigerGpx.ListPopupWindow</item>
     </style>
+
 
     <style name="Widget.GeigerGpx.Toolbar.Small" parent="Widget.Material3.Toolbar">
         <item name="android:minHeight">56dp</item>

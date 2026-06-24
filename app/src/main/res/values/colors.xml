@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Brighter cyan/blue-ish palette -->
+    <!-- Brighter cyan/blue-ish palette
     <color name="purple_500">#03A9F4</color>
     <color name="purple_700">#0288D1</color>
-    <color name="teal_200">#40C4FF</color>
+    <color name="teal_200">#40C4FF</color> -->
+
+    <color name="primary">#005FB0</color>
+    <color name="primary_dark">#AAC7FF</color>
+    <color name="secondary">#565F71</color>
+    <color name="secondary_dark">#BEC6DC</color>
+    <color name="dark_on_primary">#003062</color>
+
     <color name="status_waiting">#808080</color>
     <color name="status_working">#2E7D32</color>
     <color name="status_spoofing">#C62828</color>

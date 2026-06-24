@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.rounded.Delete
 import androidx.core.content.edit
 import androidx.core.net.toUri
@@ -92,7 +93,38 @@ class SettingsActivity : ComponentActivity() {
         // 1. Define the collapsing scroll behavior
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-        val colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
+        val myCustomLightScheme = remember { lightColorScheme(
+            primary = Color(0xFF005FB0),     // Deep Blue instead of purple
+            onPrimary = Color.White,
+            secondary = Color(0xFF565F71),   // Cool Gray instead of slate purple
+            surfaceVariant = Color(0xFFE0E2EC), // Light gray card backgrounds
+            primaryContainer = Color(0xFFD6E3FF),
+            onPrimaryContainer = Color(0xFF001B3E),
+            inversePrimary = Color(0xFFAAC7FF),
+            background = Color(0xFFFEF7FF),       // Clean light page backdrop
+            surface = Color(0xFFFEF7FF),          // Surface backing
+            onSurface = Color(0xFF1D1B20),         // Dark text/icon color
+            onSurfaceVariant = Color(0xFF49454F),  // Inactive toggle color
+            outline = Color(0xFF79747E)
+        )}
+
+        val myCustomDarkScheme = remember {darkColorScheme(
+            primary = Color(0xFFAAC7FF),     // Bright Blue for contrast on dark backgrounds
+            onPrimary = Color(0xFF003062),
+            secondary = Color(0xFFBEC6DC),   // Light Gray for readability
+            surfaceVariant = Color(0xFF43474E), // Dark gray card backgrounds
+            primaryContainer = Color(0xFF004787),
+            onPrimaryContainer = Color(0xFFD6E3FF),
+            inversePrimary = Color(0xFF005FB0),
+            background = Color(0xFF141218),       // Deep dark page backdrop
+            surface = Color(0xFF141218),          // Surface backing
+            onSurface = Color(0xFFE6E1E5),         // Light text/icon color
+            onSurfaceVariant = Color(0xFFCAC4D0),  // Inactive dark toggle color
+            outline = Color(0xFF938F99)            // Dark toggle boundary line
+        )}
+
+        val colorScheme = if (isSystemInDarkTheme()) myCustomDarkScheme else myCustomLightScheme
+
         MaterialTheme(colorScheme = colorScheme) {
             Surface(color = MaterialTheme.colorScheme.background) {
                 Scaffold(
@@ -346,7 +378,7 @@ class SettingsActivity : ComponentActivity() {
                     onClick = { if (active) toast("Cannot change device while tracking or measuring") else onChoose() },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 56.dp)
+                        .heightIn(min = 32.dp)
                 ) { Text("Change device") }
             }
             item {

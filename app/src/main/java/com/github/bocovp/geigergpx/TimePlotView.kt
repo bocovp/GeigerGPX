@@ -75,6 +75,7 @@ class TimePlotView @JvmOverloads constructor(
         color = Color.rgb(25, 118, 210)
         style = Paint.Style.FILL
     }
+
     // Add this for the white outline
     private val selectedPointStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
