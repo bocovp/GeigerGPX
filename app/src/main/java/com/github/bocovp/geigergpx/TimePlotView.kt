@@ -17,6 +17,8 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
 
+import androidx.core.content.res.use
+
 class TimePlotView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
@@ -62,7 +64,8 @@ class TimePlotView @JvmOverloads constructor(
         textSize = 15.232f * density
     }
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(25, 118, 210)
+        // color = Color.rgb(25, 118, 210)
+        color = android.graphics.Color.rgb(25, 118, 210)
         strokeWidth = 2.176f * density
         style = Paint.Style.STROKE
     }
@@ -72,9 +75,12 @@ class TimePlotView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
     private val selectedPointPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(25, 118, 210)
+        //color = Color.rgb(25, 118, 210)
+        color = android.graphics.Color.rgb(25, 118, 210)
         style = Paint.Style.FILL
     }
+
+
     // Add this for the white outline
     private val selectedPointStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE

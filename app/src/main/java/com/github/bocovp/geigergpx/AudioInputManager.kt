@@ -43,6 +43,7 @@ class AudioInputManager(
     private var communicationDeviceSetByDetector = false
     private var bluetoothMicRoutingActive = false
     private var preferredInputDevice: AudioDeviceInfo? = null
+    private var activeWorkingStatusString = "Working"
     @Volatile private var lastPublishedAudioStatus: String? = null
     private var audioFocusRequest: Any? = null // Holds the API 26+ AudioFocusRequest
 
@@ -399,21 +400,39 @@ class AudioInputManager(
     }
 
     private fun createAudioRecord(): Triple<AudioRecord, Int, Int>? {
-        val audioSource = if (bluetoothMicRoutingActive) {
+        val am = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val audioSource = if (useBluetoothMicIfAvailable) {//2026-06-24 (bluetoothMicRoutingActive)
             MediaRecorder.AudioSource.VOICE_COMMUNICATION
         } else {
+          //  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+           //     MediaRecorder.AudioSource.UNPROCESSED
+          //  else
+          //      MediaRecorder.AudioSource.VOICE_RECOGNITION
             MediaRecorder.AudioSource.MIC
         }
         val rate = resolveSampleRate()
-        val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
 
-        if (minBuffer <= 0) return null
+        // 1. Get minimum hardware buffer (returns bytes, so divide by 2 for 16-bit Short samples)
+        val minBufferBytes = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        if (minBufferBytes <= 0) return null
+        val minBufferSamples = minBufferBytes / 2
 
-        val bufferSize = maxOf(minBuffer, WINDOW_SAMPLES * WINDOWS_IN_BUFFER)
+        // 2. Calculate Burst-Aligned buffer (~200ms)
+        val framesPerBurstStr = am?.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER)
+        val framesPerBurst = framesPerBurstStr?.toIntOrNull() ?: 256
+
+        val targetSamples = 0.2 * rate
+        // Round to the nearest whole burst multiplier, ensuring it's at least 1
+        val multiplier = kotlin.math.round(targetSamples / framesPerBurst).toInt().coerceAtLeast(1)
+        val burstAlignedSamples = multiplier * framesPerBurst
+
+        // 3. Ensure we meet the absolute minimum hardware requirement
+        val bufferSamples = maxOf(minBufferSamples, burstAlignedSamples)
+
         val ar = AudioRecord(
             audioSource, rate,
             AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-            bufferSize * 2
+            bufferSamples * 2 // Convert samples back to bytes for the AudioRecord constructor
         )
 
         if (ar.state != AudioRecord.STATE_INITIALIZED) {
@@ -432,7 +451,7 @@ class AudioInputManager(
             }
         }
 
-        return Triple(ar, bufferSize, rate)
+        return Triple(ar, bufferSamples, rate)
     }
 
     fun stop() {
@@ -576,13 +595,29 @@ class AudioInputManager(
                 device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
     }
 
+    private fun isExternalMic(device: AudioDeviceInfo?): Boolean {
+        if (device == null) return false
+        return device.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                device.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+                device.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                device.type == AudioDeviceInfo.TYPE_USB_ACCESSORY ||
+                device.type == AudioDeviceInfo.TYPE_LINE_ANALOG
+    }
+
     private fun updateRoutingAndPublishWorkingStatus(device: AudioDeviceInfo?) {
-        bluetoothMicRoutingActive = if (device != null) isBluetoothInputDevice(device) else bluetoothMicRoutingActive
-        publishAudioStatus(if (bluetoothMicRoutingActive) "Working (bluetooth)" else "Working", AUDIO_STATUS_WORKING)
+        if (device != null) {
+            bluetoothMicRoutingActive = isBluetoothInputDevice(device)
+            activeWorkingStatusString = when {
+                bluetoothMicRoutingActive -> "Working (bluetooth)"
+                isExternalMic(device) -> "Working (external mic)"
+                else -> "Working"
+            }
+        }
+        publishAudioStatus(activeWorkingStatusString, AUDIO_STATUS_WORKING)
     }
 
     private fun publishWorkingStatus() {
-        publishAudioStatus(if (bluetoothMicRoutingActive) "Working (bluetooth)" else "Working", AUDIO_STATUS_WORKING)
+        publishAudioStatus(activeWorkingStatusString, AUDIO_STATUS_WORKING)
     }
 
     private fun publishAudioStatus(status: String, errorCode: Int) {
@@ -595,7 +630,6 @@ class AudioInputManager(
     companion object {
         private const val TAG = "AudioBeepDetector"
         private const val WINDOW_SAMPLES = GoertzelDetector.DEFAULT_WINDOW_SAMPLES
-        private const val WINDOWS_IN_BUFFER = 64
         private const val ZERO_BUFFER_LIMIT = 20
         private val SCO_SAMPLE_RATES = intArrayOf(16000, 8000)
         private const val BASE_MAG = 1e6f
