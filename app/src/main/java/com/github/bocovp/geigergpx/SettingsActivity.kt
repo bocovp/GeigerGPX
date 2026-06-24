@@ -93,7 +93,7 @@ class SettingsActivity : ComponentActivity() {
         // 1. Define the collapsing scroll behavior
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-        val myCustomLightScheme = lightColorScheme(
+        val myCustomLightScheme = remember { lightColorScheme(
             primary = Color(0xFF005FB0),     // Deep Blue instead of purple
             onPrimary = Color.White,
             secondary = Color(0xFF565F71),   // Cool Gray instead of slate purple
@@ -106,9 +106,9 @@ class SettingsActivity : ComponentActivity() {
             onSurface = Color(0xFF1D1B20),         // Dark text/icon color
             onSurfaceVariant = Color(0xFF49454F),  // Inactive toggle color
             outline = Color(0xFF79747E)
-        )
+        )}
 
-        val myCustomDarkScheme = darkColorScheme(
+        val myCustomDarkScheme = remember {darkColorScheme(
             primary = Color(0xFFAAC7FF),     // Bright Blue for contrast on dark backgrounds
             onPrimary = Color(0xFF003062),
             secondary = Color(0xFFBEC6DC),   // Light Gray for readability
@@ -121,7 +121,7 @@ class SettingsActivity : ComponentActivity() {
             onSurface = Color(0xFFE6E1E5),         // Light text/icon color
             onSurfaceVariant = Color(0xFFCAC4D0),  // Inactive dark toggle color
             outline = Color(0xFF938F99)            // Dark toggle boundary line
-        )
+        )}
 
         val colorScheme = if (isSystemInDarkTheme()) myCustomDarkScheme else myCustomLightScheme
 

@@ -419,7 +419,7 @@ class AudioInputManager(
 
         // 2. Calculate Burst-Aligned buffer (~200ms)
         val framesPerBurstStr = am?.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER)
-        val framesPerBurst = framesPerBurstStr?.toIntOrNull() ?: 256
+        val framesPerBurst = framesPerBurstStr?.toIntOrNull()?.coerceAtLeast(1) ?: 256
 
         val targetSamples = 0.2 * rate
         // Round to the nearest whole burst multiplier, ensuring it's at least 1
