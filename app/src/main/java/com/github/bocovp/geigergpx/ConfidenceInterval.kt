@@ -1,7 +1,6 @@
 package com.github.bocovp.geigergpx
 
 import java.util.Locale
-import java.util.function.DoubleUnaryOperator
 import kotlin.math.absoluteValue
 import kotlin.math.exp
 import kotlin.math.max
@@ -61,9 +60,9 @@ class ConfidenceInterval {
             bgDoseRate: Double = 0.10
         ): Double {
             // Have to work in cps here!
-            val sensitivity = sensitivity.coerceAtLeast(0.01);
-            val lambda = bgDoseRate * sensitivity // background cps
-            val A = alertDoseRate * sensitivity // Alert cps
+            val coercedSensitivity  = sensitivity.coerceAtLeast(0.01);
+            val lambda = bgDoseRate * coercedSensitivity  // background cps
+            val A = alertDoseRate * coercedSensitivity  // Alert cps
             val K = avgCounts
             val T = 3600.0 // 1 hour
             return g(A/lambda, K) * A * T
