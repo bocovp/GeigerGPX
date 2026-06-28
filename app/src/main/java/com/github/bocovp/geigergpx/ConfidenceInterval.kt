@@ -1,6 +1,7 @@
 package com.github.bocovp.geigergpx
 
 import java.util.Locale
+import java.util.function.DoubleUnaryOperator
 import kotlin.math.absoluteValue
 import kotlin.math.exp
 import kotlin.math.max
@@ -11,6 +12,18 @@ import kotlin.math.sqrt
 class ConfidenceInterval {
     companion object {
 
+        private val CHI2_L = floatArrayOf(
+            0.0f    , 0.0506356f, 0.484419f, 1.23734f, 2.17973f,  3.24697f,
+            4.40379f, 5.62873f  , 6.90766f , 8.23075f, 9.59078f, 10.9823f
+        )
+
+        // Table[Quantile[ChiSquareDistribution[2 n], 1-alpha/2], {n, 0,11}] /. alpha->1-0.95
+        private val CHI2_R = floatArrayOf(
+            0.0f    , 7.37776f, 11.1433f, 14.4494f, 17.5345f, 20.4832f,
+            23.3367f, 26.1189f, 28.8454f, 31.5264f, 34.1696f, 36.7807f
+        )
+
+        private val Z_95 = 1.95996f // Normal distribution quantile for conf. P = 0.95
         private val g_5 = doubleArrayOf(
             0.082994, 0.085757, 0.084824, 0.081208, 0.076622, 0.071227, 0.065179, 0.059155, 0.053707, 0.048457,
             0.043629, 0.039236, 0.035053, 0.031524, 0.028300, 0.025409, 0.022878, 0.020471, 0.018504, 0.016591,
@@ -43,13 +56,15 @@ class ConfidenceInterval {
 
         fun getFalseAlarmRate(
             alertDoseRate: Double,
-            avgTimestamps: Int,
-            sensitivity: Double
+            avgCounts: Int,
+            sensitivity: Double,
+            bgDoseRate: Double = 0.10
         ): Double {
             // Have to work in cps here!
-            val lambda = 1.0 // background cps
+            val sensitivity = sensitivity.coerceAtLeast(0.01);
+            val lambda = bgDoseRate * sensitivity // background cps
             val A = alertDoseRate * sensitivity // Alert cps
-            val K = avgTimestamps
+            val K = avgCounts
             val T = 3600.0 // 1 hour
             return g(A/lambda, K) * A * T
         }
@@ -60,7 +75,7 @@ class ConfidenceInterval {
          * K: number of consecutive events
          * T: total time range
          */
-        fun g(aOverLambda: Double, K: Int): Double {
+        private fun g(aOverLambda: Double, K: Int): Double {
             val ind = ((aOverLambda-1)*10).roundToInt().coerceAtLeast(0)
             return when (K) {
                 5   -> if (ind <= 100) g_5  [ind] else 0.0
@@ -70,6 +85,10 @@ class ConfidenceInterval {
                 100 -> if (ind <= 10 ) g_100[ind] else 0.0
                 else -> 0.0
             }
+        }
+
+        fun relativeErrPercent(counts: Int): Double? {
+            return if (counts <= 1) null else 100.0 * Z_95 / sqrt((counts - 1).toDouble())
         }
     }
 
@@ -86,18 +105,7 @@ class ConfidenceInterval {
     val sampleCount: Int
 
     // Table[Quantile[ChiSquareDistribution[2 n], alpha/2], {n, 0,11}] /. alpha->1-0.95
-    private val CHI2_L = floatArrayOf(
-        0.0f    , 0.0506356f, 0.484419f, 1.23734f, 2.17973f,  3.24697f,
-        4.40379f, 5.62873f  , 6.90766f , 8.23075f, 9.59078f, 10.9823f
-    )
 
-    // Table[Quantile[ChiSquareDistribution[2 n], 1-alpha/2], {n, 0,11}] /. alpha->1-0.95
-    private val CHI2_R = floatArrayOf(
-        0.0f    , 7.37776f, 11.1433f, 14.4494f, 17.5345f, 20.4832f,
-        23.3367f, 26.1189f, 28.8454f, 31.5264f, 34.1696f, 36.7807f
-    )
-
-    private val Z_95 = 1.95996f // Normal distribution quantile for conf. P = 0.95
 
     fun chi2(n: Int, z: Float): Float {
         // z is normalQuantile(p)

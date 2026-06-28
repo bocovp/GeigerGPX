@@ -195,6 +195,7 @@ class SettingsActivity : ComponentActivity() {
         val useBtMic = remember(refresh) { prefs.getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false) }
         val visualizeBeeps = remember(refresh) { prefs.getBoolean("visualize_beeps", false) }
         val doseRateAvg = remember(refresh) { prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10" }
+        val relativeErr = remember(refresh) { gerRelativeErrString(prefs)}
         val (alertVal, alertSub) = remember(refresh) { getAlertStrings(prefs) }
 
         LazyColumn(
@@ -260,6 +261,7 @@ class SettingsActivity : ComponentActivity() {
                     ChoiceRow(
                         "Counts for dose rate averaging",
                         doseRateAvg,
+                        subtitle = relativeErr,
                         listOf("5", "10", "20", "50", "100")
                     ) {
                         prefs.edit {
@@ -710,6 +712,7 @@ class SettingsActivity : ComponentActivity() {
     private fun ChoiceRow(
         title: String,
         value: String,
+        subtitle: String,
         choices: List<String>,
         onChoice: (String) -> Unit
     ) {
@@ -718,6 +721,7 @@ class SettingsActivity : ComponentActivity() {
             SettingsRow(
                 title,
                 value,
+                subtitle = subtitle,
                 onClick = { open = true }
             )
             DropdownMenu(
@@ -880,6 +884,16 @@ class SettingsActivity : ComponentActivity() {
             fallbackThreshold = defaultThreshold(bluetooth)
         )
         calibrationDetector?.start()
+    }
+
+    private fun  gerRelativeErrString(prefs: android.content.SharedPreferences): String {
+        val avg = prefs.getString("dose_rate_avg_timestamps_n", "10")?.toIntOrNull() ?: 10
+        val err = ConfidenceInterval.relativeErrPercent(avg)
+        return if (err != null) {
+            "Relative error: %.0f%%".format(java.util.Locale.US, err)
+        } else {
+            ""
+        }
     }
 
     private fun getAlertStrings(prefs: android.content.SharedPreferences): Pair<String, String?> {
