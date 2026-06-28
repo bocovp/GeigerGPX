@@ -62,6 +62,7 @@ class ConfidenceInterval {
             // Have to work in cps here!
             val coercedSensitivity  = sensitivity.coerceAtLeast(0.01);
             val lambda = bgDoseRate * coercedSensitivity  // background cps
+            if (lambda <= 0.0) return 0.0
             val A = alertDoseRate * coercedSensitivity  // Alert cps
             val K = avgCounts
             val T = 3600.0 // 1 hour
