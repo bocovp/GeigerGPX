@@ -11,6 +11,7 @@ import kotlin.math.sqrt
 class ConfidenceInterval {
     companion object {
 
+        // Table[Quantile[ChiSquareDistribution[2 n], alpha/2], {n, 0,11}] /. alpha->1-0.95
         private val CHI2_L = floatArrayOf(
             0.0f    , 0.0506356f, 0.484419f, 1.23734f, 2.17973f,  3.24697f,
             4.40379f, 5.62873f  , 6.90766f , 8.23075f, 9.59078f, 10.9823f
@@ -59,10 +60,12 @@ class ConfidenceInterval {
             sensitivity: Double,
             bgDoseRate: Double = 0.10
         ): Double {
+            if (alertDoseRate.isNaN() || alertDoseRate <= 0.0) return 0.0
             // Have to work in cps here!
             val coercedSensitivity  = sensitivity.coerceAtLeast(0.01);
+            if (coercedSensitivity.isNaN()) return 0.0
             val lambda = bgDoseRate * coercedSensitivity  // background cps
-            if (lambda <= 0.0) return 0.0
+            if (lambda.isNaN() || lambda <= 0.0) return 0.0
             val A = alertDoseRate * coercedSensitivity  // Alert cps
             val K = avgCounts
             val T = 3600.0 // 1 hour
@@ -104,7 +107,6 @@ class ConfidenceInterval {
     val highBound: Double
     val sampleCount: Int
 
-    // Table[Quantile[ChiSquareDistribution[2 n], alpha/2], {n, 0,11}] /. alpha->1-0.95
 
 
     fun chi2(n: Int, z: Float): Float {
