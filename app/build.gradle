@@ -26,9 +26,9 @@ android {
         // 7 - 1.4.0
         // 8 - 1.5.0
         // 9 - 1.5.1
-        // 9 - 1.5.2
+        // 10 - 1.5.2
 
-        versionCode 9
+        versionCode 10
         versionName "1.5.2"
     }
 
