@@ -196,6 +196,13 @@ class SettingsActivity : ComponentActivity() {
         val visualizeBeeps = remember(refresh) { prefs.getBoolean("visualize_beeps", false) }
         val doseRateAvg = remember(refresh) { prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10" }
         val relativeErr = remember(refresh) { getRelativeErrString(prefs)}
+        val sensitivity = remember(refresh) { RadiationCalibration.sensitivityFromPrefs(prefs) }
+        val doseRateFormatting = remember(refresh) { DoseRateFormatting.normalizePrefsForSensitivity(prefs, sensitivity) }
+        val doseRateFormattingChoices = remember(refresh) {
+            DoseRateFormatting.values()
+                .filter { sensitivity != 1.0 || !it.isDoseRate }
+                .map { it.preferenceLabel }
+        }
         val (alertVal, alertSub) = remember(refresh) { getAlertStrings(prefs) }
 
         LazyColumn(
@@ -270,6 +277,18 @@ class SettingsActivity : ComponentActivity() {
                                 it
                             )
                         }
+                        onRefresh()
+                    }
+
+                    ChoiceRow(
+                        "Dose rate formatting",
+                        doseRateFormatting.sampleValue,
+                        subtitle = doseRateFormatting.preferenceLabel,
+                        doseRateFormattingChoices
+                    ) {
+                        val selected = DoseRateFormatting.fromLabel(it) ?: doseRateFormatting
+                        val normalized = DoseRateFormatting.validForSensitivity(selected, sensitivity)
+                        prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, normalized.preferenceLabel) }
                         onRefresh()
                     }
 

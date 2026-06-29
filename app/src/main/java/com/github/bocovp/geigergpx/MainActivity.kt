@@ -47,7 +47,7 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var latestCpsSnapshot = TrackingRepository.CpsSnapshot()
     private var isMeasurementModeEnabled: Boolean = false
-    private var doseRateDisplayMode: ConfidenceInterval.DisplayMode = ConfidenceInterval.DisplayMode.PLUS_MINUS
+    private var doseRateFormatting: DoseRateFormatting = DoseRateFormatting.ABSOLUTE_USV
     private var keepScreenOnEnabled: Boolean = false
     private var openSavedTrackPlotAfterStop = false
     private var trackSavedReceiverRegistered = false
@@ -57,6 +57,10 @@ class MainActivity : AppCompatActivity() {
     private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
         if (key == "visualize_beeps") {
             binding.beepVisualizer.visibility = if (prefs.getBoolean("visualize_beeps", false)) View.VISIBLE else View.GONE
+        }
+        if (key == SettingsKeys.KEY_DOSE_RATE_FORMATTING) {
+            doseRateFormatting = DoseRateFormatting.fromPrefs(prefs)
+            updateCpsOrDoseLine(false)
         }
     }
     private val trackSavedReceiver = object : BroadcastReceiver() {
@@ -192,15 +196,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.textCps.setOnClickListener {
-            doseRateDisplayMode = when (doseRateDisplayMode) {
-                ConfidenceInterval.DisplayMode.INTERVAL -> ConfidenceInterval.DisplayMode.PLUS_MINUS
-                ConfidenceInterval.DisplayMode.PLUS_MINUS -> ConfidenceInterval.DisplayMode.INTERVAL
-                ConfidenceInterval.DisplayMode.AUTO -> ConfidenceInterval.DisplayMode.PLUS_MINUS
-            }
+            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+            val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
+            doseRateFormatting = DoseRateFormatting.validForSensitivity(doseRateFormatting.nextSameUnit(), sensitivity)
+            prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, doseRateFormatting.preferenceLabel) }
             updateCpsOrDoseLine(false)
         }
 
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        doseRateFormatting = DoseRateFormatting.normalizePrefsForSensitivity(prefs, RadiationCalibration.sensitivityFromPrefs(prefs))
         binding.beepVisualizer.visibility = if (prefs.getBoolean("visualize_beeps", false)) View.VISIBLE else View.GONE
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
 
@@ -664,12 +668,18 @@ class MainActivity : AppCompatActivity() {
         }
         binding.textCps.setTextColor(ContextCompat.getColor(this, doseColor))
 
-        if (sensitivity == 1.0) {
-            val cpsText = ci.toText(decimalDigits, doseRateDisplayMode)
-            binding.textCps.text = "CPS: $cpsText"
+        doseRateFormatting = DoseRateFormatting.normalizePrefsForSensitivity(prefs, sensitivity)
+        val formatted = DoseRateFormatting.format(
+            ci = ci,
+            counts = ci.sampleCount,
+            sensitivity = sensitivity,
+            decimalDigits = decimalDigits,
+            formatting = doseRateFormatting
+        )
+        binding.textCps.text = if (doseRateFormatting.isDoseRate) {
+            "Dose rate: $formatted"
         } else {
-            val doseRateText = ci.scale(inverseSensitivity).toText(decimalDigits, doseRateDisplayMode)
-            binding.textCps.text = "Dose rate: $doseRateText μSv/h"
+            "CPS: $formatted"
         }
     }
 
