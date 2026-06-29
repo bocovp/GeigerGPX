@@ -56,7 +56,8 @@ enum class DoseRateFormatting(
             return normalized
         }
 
-        fun format(ci: ConfidenceInterval, counts: Int, sensitivity: Double, decimalDigits: Int, formatting: DoseRateFormatting): String {
+        fun format(ci: ConfidenceInterval, sensitivity: Double, decimalDigits: Int, formatting: DoseRateFormatting): String {
+            val counts = ci.sampleCount
             if (counts < 2) return "0 ${formatting.unit}"
 
             val scaled = if (formatting.isDoseRate) {

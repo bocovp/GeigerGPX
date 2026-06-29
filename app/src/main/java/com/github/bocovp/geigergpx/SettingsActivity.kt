@@ -206,7 +206,7 @@ class SettingsActivity : ComponentActivity() {
                 DoseRateFormatting.normalizePrefsForSensitivity(prefs, sensitivity)
             }
         }
-        val doseRateFormattingChoices = remember(refresh) {
+        val doseRateFormattingChoices = remember(refresh, sensitivity) {
             DoseRateFormatting.values()
                 .filter { (sensitivity != 1.0 && sensitivity > 0.0) || !it.isDoseRate }
                 .map { it.preferenceLabel }

@@ -59,7 +59,8 @@ class MainActivity : AppCompatActivity() {
             binding.beepVisualizer.visibility = if (prefs.getBoolean("visualize_beeps", false)) View.VISIBLE else View.GONE
         }
         if (key == SettingsKeys.KEY_DOSE_RATE_FORMATTING) {
-            doseRateFormatting = DoseRateFormatting.fromPrefs(prefs)
+            val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
+            doseRateFormatting = DoseRateFormatting.validForSensitivity(DoseRateFormatting.fromPrefs(prefs), sensitivity)
             updateCpsOrDoseLine(false)
         }
     }
@@ -669,7 +670,6 @@ class MainActivity : AppCompatActivity() {
 
         val formatted = DoseRateFormatting.format(
             ci = ci,
-            counts = ci.sampleCount,
             sensitivity = sensitivity,
             decimalDigits = decimalDigits,
             formatting = doseRateFormatting
