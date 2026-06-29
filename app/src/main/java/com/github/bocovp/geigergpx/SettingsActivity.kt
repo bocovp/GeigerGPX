@@ -208,7 +208,7 @@ class SettingsActivity : ComponentActivity() {
         }
         val doseRateFormattingChoices = remember(refresh) {
             DoseRateFormatting.values()
-                .filter { sensitivity != 1.0 || !it.isDoseRate }
+                .filter { (sensitivity != 1.0 && sensitivity > 0.0) || !it.isDoseRate }
                 .map { it.preferenceLabel }
         }
         val (alertVal, alertSub) = remember(refresh) { getAlertStrings(prefs) }

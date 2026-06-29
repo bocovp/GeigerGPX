@@ -45,7 +45,7 @@ enum class DoseRateFormatting(
             fromLabel(prefs.getString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, null)) ?: ABSOLUTE_USV
 
         fun validForSensitivity(formatting: DoseRateFormatting, sensitivity: Double): DoseRateFormatting =
-            if (sensitivity == 1.0) formatting.correspondingCps() else formatting
+            if (sensitivity == 1.0 || sensitivity <= 0.0) formatting.correspondingCps() else formatting
 
         fun normalizePrefsForSensitivity(prefs: SharedPreferences, sensitivity: Double): DoseRateFormatting {
             val current = fromPrefs(prefs)
@@ -59,7 +59,10 @@ enum class DoseRateFormatting(
         fun format(ci: ConfidenceInterval, counts: Int, sensitivity: Double, decimalDigits: Int, formatting: DoseRateFormatting): String {
             if (counts < 2) return "0 ${formatting.unit}"
 
-            val scaled = if (formatting.isDoseRate) ci.scale(1.0 / sensitivity) else ci
+            val scaled = if (formatting.isDoseRate) {
+                val factor = if (sensitivity > 0.0) 1.0 / sensitivity else 0.0
+                ci.scale(factor)
+            } else ci
             return when {
                 formatting.isInterval -> "${scaled.toIntervalText(decimalDigits)} ${formatting.unit}"
                 formatting.isRelative -> {
