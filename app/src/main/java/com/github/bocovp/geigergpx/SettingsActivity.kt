@@ -202,9 +202,7 @@ class SettingsActivity : ComponentActivity() {
             DoseRateFormatting.validForSensitivity(storedDoseRateFormatting, sensitivity)
         }
         LaunchedEffect(sensitivity) {
-            withContext(Dispatchers.IO) {
-                DoseRateFormatting.normalizePrefsForSensitivity(prefs, sensitivity)
-            }
+            DoseRateFormatting.normalizePrefsForSensitivity(prefs, sensitivity)
         }
         val doseRateFormattingChoices = remember(refresh, sensitivity) {
             DoseRateFormatting.values()
