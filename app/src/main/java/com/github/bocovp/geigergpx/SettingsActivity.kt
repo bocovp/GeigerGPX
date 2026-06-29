@@ -197,7 +197,15 @@ class SettingsActivity : ComponentActivity() {
         val doseRateAvg = remember(refresh) { prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10" }
         val relativeErr = remember(refresh) { getRelativeErrString(prefs)}
         val sensitivity = remember(refresh) { RadiationCalibration.sensitivityFromPrefs(prefs) }
-        val doseRateFormatting = remember(refresh) { DoseRateFormatting.normalizePrefsForSensitivity(prefs, sensitivity) }
+        val storedDoseRateFormatting = remember(refresh) { DoseRateFormatting.fromPrefs(prefs) }
+        val doseRateFormatting = remember(refresh, sensitivity) {
+            DoseRateFormatting.validForSensitivity(storedDoseRateFormatting, sensitivity)
+        }
+        LaunchedEffect(sensitivity) {
+            withContext(Dispatchers.IO) {
+                DoseRateFormatting.normalizePrefsForSensitivity(prefs, sensitivity)
+            }
+        }
         val doseRateFormattingChoices = remember(refresh) {
             DoseRateFormatting.values()
                 .filter { sensitivity != 1.0 || !it.isDoseRate }

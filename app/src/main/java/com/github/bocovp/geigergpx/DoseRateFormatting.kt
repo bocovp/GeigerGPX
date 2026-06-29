@@ -57,6 +57,8 @@ enum class DoseRateFormatting(
         }
 
         fun format(ci: ConfidenceInterval, counts: Int, sensitivity: Double, decimalDigits: Int, formatting: DoseRateFormatting): String {
+            if (counts < 2) return "0 ${formatting.unit}"
+
             val scaled = if (formatting.isDoseRate) ci.scale(1.0 / sensitivity) else ci
             return when {
                 formatting.isInterval -> "${scaled.toIntervalText(decimalDigits)} ${formatting.unit}"
