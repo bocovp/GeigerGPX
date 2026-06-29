@@ -95,12 +95,6 @@ class ConfidenceInterval {
         }
     }
 
-    enum class DisplayMode {
-        AUTO,
-        INTERVAL,
-        PLUS_MINUS
-    }
-
     val mean: Double
     val delta: Double
     val lowBound: Double
@@ -190,22 +184,26 @@ class ConfidenceInterval {
         highBound = mean + delta + gamma
     }
 
-    fun toText(decimalDigits: Int, displayMode: DisplayMode = DisplayMode.AUTO): String {
+    fun toText(decimalDigits: Int): String {
+        return if (sampleCount <= 9) {
+            toIntervalText(decimalDigits)
+        } else {
+            toPlusMinusText(decimalDigits)
+        }
+    }
+
+    fun toIntervalText(decimalDigits: Int): String {
         if (sampleCount < 2) {
             return "0" // revise?
         }
+        return String.format(Locale.US, "%.${decimalDigits}f … %.${decimalDigits}f", lowBound, highBound)
+    }
 
-        val useInterval = when (displayMode) {
-            DisplayMode.AUTO -> sampleCount <= 9
-            DisplayMode.INTERVAL -> true
-            DisplayMode.PLUS_MINUS -> false
+    fun toPlusMinusText(decimalDigits: Int): String {
+        if (sampleCount < 2) {
+            return "0" // revise?
         }
-
-        return if (useInterval) {
-            String.format(Locale.US, "%.${decimalDigits}f … %.${decimalDigits}f", lowBound, highBound)
-        } else {
-            String.format(Locale.US, "%.${decimalDigits}f ± %.${decimalDigits}f", mean, delta)
-        }
+        return String.format(Locale.US, "%.${decimalDigits}f ± %.${decimalDigits}f", mean, delta)
     }
 
     fun scale(factor: Double): ConfidenceInterval = ConfidenceInterval(
