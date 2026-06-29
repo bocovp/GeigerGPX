@@ -37,9 +37,10 @@ enum class DoseRateFormatting(
     }
 
     companion object {
-        val allLabels: List<String> = values().map { it.preferenceLabel }
+        private val VALUES = values()
+        val allLabels: List<String> = VALUES.map { it.preferenceLabel }
 
-        fun fromLabel(label: String?): DoseRateFormatting? = values().firstOrNull { it.preferenceLabel == label }
+        fun fromLabel(label: String?): DoseRateFormatting? = VALUES.firstOrNull { it.preferenceLabel == label }
         fun fromPrefs(prefs: SharedPreferences): DoseRateFormatting =
             fromLabel(prefs.getString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, null)) ?: ABSOLUTE_USV
 
@@ -47,8 +48,9 @@ enum class DoseRateFormatting(
             if (sensitivity == 1.0) formatting.correspondingCps() else formatting
 
         fun normalizePrefsForSensitivity(prefs: SharedPreferences, sensitivity: Double): DoseRateFormatting {
-            val normalized = validForSensitivity(fromPrefs(prefs), sensitivity)
-            if (normalized != fromPrefs(prefs)) {
+            val current = fromPrefs(prefs)
+            val normalized = validForSensitivity(current, sensitivity)
+            if (normalized != current) {
                 prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, normalized.preferenceLabel) }
             }
             return normalized

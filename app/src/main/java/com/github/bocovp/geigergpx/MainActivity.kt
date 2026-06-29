@@ -198,9 +198,8 @@ class MainActivity : AppCompatActivity() {
         binding.textCps.setOnClickListener {
             val prefs = PreferenceManager.getDefaultSharedPreferences(this)
             val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
-            doseRateFormatting = DoseRateFormatting.validForSensitivity(doseRateFormatting.nextSameUnit(), sensitivity)
-            prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, doseRateFormatting.preferenceLabel) }
-            updateCpsOrDoseLine(false)
+            val nextFormatting = DoseRateFormatting.validForSensitivity(doseRateFormatting.nextSameUnit(), sensitivity)
+            prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, nextFormatting.preferenceLabel) }
         }
 
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
@@ -668,7 +667,6 @@ class MainActivity : AppCompatActivity() {
         }
         binding.textCps.setTextColor(ContextCompat.getColor(this, doseColor))
 
-        doseRateFormatting = DoseRateFormatting.normalizePrefsForSensitivity(prefs, sensitivity)
         val formatted = DoseRateFormatting.format(
             ci = ci,
             counts = ci.sampleCount,
