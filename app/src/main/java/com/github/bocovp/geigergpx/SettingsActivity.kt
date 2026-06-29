@@ -369,7 +369,7 @@ class SettingsActivity : ComponentActivity() {
                     EditPref(
                         "Max time without GPS",
                         "max_time_without_gps_s",
-                        "60",
+                        "30",
                         "s",
                         true,
                         refresh,

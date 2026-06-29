@@ -23,7 +23,7 @@ class ConfidenceInterval {
             23.3367f, 26.1189f, 28.8454f, 31.5264f, 34.1696f, 36.7807f
         )
 
-        private val Z_95 = 1.95996f // Normal distribution quantile for conf. P = 0.95
+        private const val Z_95 = 1.95996f // Normal distribution quantile for conf. P = 0.95
         private val g_5 = doubleArrayOf(
             0.082994, 0.085757, 0.084824, 0.081208, 0.076622, 0.071227, 0.065179, 0.059155, 0.053707, 0.048457,
             0.043629, 0.039236, 0.035053, 0.031524, 0.028300, 0.025409, 0.022878, 0.020471, 0.018504, 0.016591,
