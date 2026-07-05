@@ -10,9 +10,9 @@ import androidx.core.content.edit
 /**
  * Orchestrates the two-stage calibration process.
  *
- * Stage 1 — silence listening (default 5 s):
+ * Stage 1 — rough threshold estimation  (default 5 s):
  *   Runs a GoertzelDetector with threshold = 0 to find the loudest dominant
- *   signal present in the environment. This establishes the threshold for stage 2.
+ *   signal present in the environment. This establishes the rough signal threshold for stage 2.
  *
  * Stage 2 — beep counting:
  *   Runs a GoertzelDetector calibrated from the stage 1 result and collects
@@ -32,7 +32,7 @@ class CalibrationSession(
     private val onAudioStatus: (status: String, errorCode: Int) -> Unit = { _, _ -> },
     private val useBluetoothMicIfAvailable: Boolean = PreferenceManager.getDefaultSharedPreferences(context)
         .getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false),
-    private val thresholdPreferenceKey: String = SettingsKeys.KEY_AUDIO_THRESHOLD,
+    private val thresholdPreferenceKey: String = if (useBluetoothMicIfAvailable) SettingsKeys.KEY_BLUETOOTH_AUDIO_THRESHOLD else SettingsKeys.KEY_AUDIO_THRESHOLD,
     private val fallbackThreshold: Float = AudioInputManager.DEFAULT_MAG_THRESHOLD,
     private val stageOneDurationSeconds: Int = 5,
     private val totalBeepCount: Int = 10
