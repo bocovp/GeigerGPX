@@ -13,6 +13,21 @@ class GoertzelDetector(
     var onWindowAnalyzed: ((main: Float, sideEnergy: Float) -> Unit)? = null
     var onCalibrationWindowAnalyzed: ((main: Float, low: Float, high: Float, timestampNs: Long) -> Unit)? = null
 
+    private val batchSize = 25
+    private var batchIndex = 0
+
+    // 2. Pre-allocate primitive arrays to hold the bunch
+    private val mainBatch = FloatArray(batchSize)
+    private val lowBatch = FloatArray(batchSize)
+    private val highBatch = FloatArray(batchSize)
+    private val timeBatch = LongArray(batchSize)
+
+    // 3. Update the callback signature to accept arrays
+    var onCalibrationBatchAnalyzed: ((main: FloatArray, low: FloatArray, high: FloatArray, timeNs: LongArray, count: Int) -> Unit)? = null
+
+
+
+
     // -------------------------------------------------------------------------
     // Rate-derived configuration — set in init via configFor().
     // windowSize, stepSize, freqLow, freqHigh are declared as lateinit-style
@@ -42,6 +57,8 @@ class GoertzelDetector(
     private val fourBeepMax: Double
     private val dominanceThreshold: Float
     private val dominanceThresholdEnd: Float
+
+
 
 
     private val magThresholdEnd = magThreshold / 2f
@@ -103,7 +120,6 @@ class GoertzelDetector(
     fun processSamples(samples: ShortArray, bufferStartNs: Long = 0L) {
         if (samples.isEmpty()) return
 
-
         val leftoverAtStart = leftoverSamples
         ensureCapacity(leftoverSamples + samples.size)
         System.arraycopy(samples, 0, processingBuffer, leftoverSamples, samples.size)
@@ -118,6 +134,18 @@ class GoertzelDetector(
             val sideEnergy = energies.sideEnergy
             onWindowAnalyzed?.invoke(main, sideEnergy)
             onCalibrationWindowAnalyzed?.invoke(main, energies.low, energies.high, windowTimestampNs(bufferStartNs, pos, leftoverAtStart))
+
+            mainBatch[batchIndex] = energies.main
+            lowBatch[batchIndex] = energies.low
+            highBatch[batchIndex] = energies.high
+            timeBatch[batchIndex] = windowTimestampNs(bufferStartNs, pos, leftoverAtStart)
+            batchIndex++
+
+// When the bunch is full, send it to the UI and reset
+            if (batchIndex >= batchSize) {
+                onCalibrationBatchAnalyzed?.invoke(mainBatch, lowBatch, highBatch, timeBatch, batchSize)
+                batchIndex = 0
+            }
 
             var detected     = false
             var detectedWeak = false
@@ -203,11 +231,11 @@ class GoertzelDetector(
             q2H = q1H; q1H = q0H
         }
 
-        val main      = q1M * q1M + q2M * q2M - q1M * q2M * coeffMain
-        val low       = q1L * q1L + q2L * q2L - q1L * q2L * coeffLow
-        val high      = q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh
-        val sideEnergy = maxOf(low, high) // (low + high) / 2f
-        return WindowEnergies(main, low, high, sideEnergy)
+        currentEnergies.main       = q1M * q1M + q2M * q2M - q1M * q2M * coeffMain
+        currentEnergies.low        = q1L * q1L + q2L * q2L - q1L * q2L * coeffLow
+        currentEnergies.high       = q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh
+        currentEnergies.sideEnergy = maxOf(currentEnergies.low, currentEnergies.high) // (low + high) / 2f
+        return currentEnergies
     }
 
     private fun windowTimestampNs(bufferStartNs: Long, pos: Int, leftoverAtStart: Int): Long {
@@ -248,7 +276,13 @@ class GoertzelDetector(
         return 2.0f * cos(omega).toFloat()
     }
 
-    private data class WindowEnergies(val main: Float, val low: Float, val high: Float, val sideEnergy: Float)
+    private class WindowEnergies(
+        var main: Float= 0f,
+        var low: Float= 0f,
+        var high: Float= 0f,
+        var sideEnergy: Float= 0f)
+
+    private val currentEnergies = WindowEnergies()
 
     private enum class State { SILENCE, DECAY, BEEP }
 

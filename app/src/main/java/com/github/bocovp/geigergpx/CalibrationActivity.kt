@@ -64,7 +64,7 @@ class CalibrationActivity : AppCompatActivity() {
         }
         root.addView(auto, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
-        plot.onThresholdSelected = { threshold -> saveThreshold(threshold, updateInput = true) }
+        plot.onThresholdSelected = { threshold, isFinished -> saveThreshold(threshold, updateInput = true, persist = isFinished) }
     }
 
     private fun startPlotting() {
@@ -74,7 +74,11 @@ class CalibrationActivity : AppCompatActivity() {
             bluetoothMagThreshold = currentThreshold(),
             useBluetoothMicIfAvailable = bluetooth,
             onBeep = { _, _, _ -> },
-            onAudioStatus = { text, _ -> runOnUiThread { status.text = text } },
+            onAudioStatus = { text, _ -> runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    status.text = text
+                }
+            } },
             onRecordingStarted = { sampleRate ->
                 val detector = GoertzelDetector(currentThreshold(), sampleRate).apply {
                     onCalibrationWindowAnalyzed = { main, low, high, timestampNs ->
@@ -95,16 +99,26 @@ class CalibrationActivity : AppCompatActivity() {
         status.text = "Estimating signal level..."
         calibrationSession = CalibrationSession(
             context = this,
-            onProgress = { phase, current, total -> runOnUiThread { status.text = if (phase == 2) "Calibrating... $current/$total" else "Estimating signal level..." } },
+            onProgress = { phase, current, total -> runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    status.text = if (phase == 2) "Calibrating... $current/$total" else "Estimating signal level..."
+                }
+            } },
             onFinished = { threshold ->
                 runOnUiThread {
-                    calibrationSession = null
-                    threshold?.let { saveThreshold(it, updateInput = true) }
-                    Toast.makeText(this, "Calibration finished.", Toast.LENGTH_SHORT).show()
-                    startPlotting()
+                    if (!isFinishing && !isDestroyed) {
+                        calibrationSession = null
+                        threshold?.let { saveThreshold(it, updateInput = true) }
+                        Toast.makeText(this, "Calibration finished.", Toast.LENGTH_SHORT).show()
+                        startPlotting()
+                    }
                 }
             },
-            onAudioStatus = { text, _ -> runOnUiThread { status.text = text } },
+            onAudioStatus = { text, _ -> runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    status.text = text
+                }
+            } },
             useBluetoothMicIfAvailable = bluetooth,
             thresholdPreferenceKey = thresholdKey(),
             fallbackThreshold = defaultThreshold()
