@@ -231,7 +231,7 @@ class SettingsActivity : ComponentActivity() {
                         "Threshold",
                         thresholdSummaryVal,
                         thresholdSubtitleVal,
-                        onClick = { startCalibration(false, onRefresh) },
+                        onClick = { startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, false)) },
                         onLongClick = { showManualThresholdDialog(false, onRefresh) }
                     )
                     SettingsRow(
@@ -242,7 +242,7 @@ class SettingsActivity : ComponentActivity() {
                             if (!AudioInputManager.isBluetoothMicAvailable(context)) {
                                 toast("Bluetooth microphone not available.")
                             } else {
-                                startCalibration(true, onRefresh)
+                                startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, true))
                             }
                         },
                         onLongClick = { showManualThresholdDialog(true, onRefresh) }

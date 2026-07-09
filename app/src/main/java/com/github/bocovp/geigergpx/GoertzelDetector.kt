@@ -11,6 +11,7 @@ class GoertzelDetector(
 
     var onBeep: (Float, Int, Long) -> Unit = { _, _, _ -> }
     var onWindowAnalyzed: ((main: Float, sideEnergy: Float) -> Unit)? = null
+    var onCalibrationWindowAnalyzed: ((main: Float, low: Float, high: Float, timestampNs: Long) -> Unit)? = null
 
     // -------------------------------------------------------------------------
     // Rate-derived configuration — set in init via configFor().
@@ -112,8 +113,11 @@ class GoertzelDetector(
 
         while (pos + windowSamples <= totalInBuffer) {
             val currentWindowGlobalSample = totalSamplesProcessed + pos
-            val (main, sideEnergy) = computeWindowEnergies(pos)
+            val energies = computeWindowEnergies(pos)
+            val main = energies.main
+            val sideEnergy = energies.sideEnergy
             onWindowAnalyzed?.invoke(main, sideEnergy)
+            onCalibrationWindowAnalyzed?.invoke(main, energies.low, energies.high, windowTimestampNs(bufferStartNs, pos, leftoverAtStart))
 
             var detected     = false
             var detectedWeak = false
@@ -181,7 +185,7 @@ class GoertzelDetector(
         //}
     }
 
-    private fun computeWindowEnergies(pos: Int): Pair<Float, Float> {
+    private fun computeWindowEnergies(pos: Int): WindowEnergies {
         var q1M = 0f; var q2M = 0f
         var q1L = 0f; var q2L = 0f
         var q1H = 0f; var q2H = 0f
@@ -203,7 +207,15 @@ class GoertzelDetector(
         val low       = q1L * q1L + q2L * q2L - q1L * q2L * coeffLow
         val high      = q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh
         val sideEnergy = maxOf(low, high) // (low + high) / 2f
-        return Pair(main, sideEnergy)
+        return WindowEnergies(main, low, high, sideEnergy)
+    }
+
+    private fun windowTimestampNs(bufferStartNs: Long, pos: Int, leftoverAtStart: Int): Long {
+        return if (bufferStartNs != 0L) {
+            bufferStartNs + (pos.toLong() - leftoverAtStart) * 1_000_000_000L / sampleRate
+        } else {
+            System.nanoTime()
+        }
     }
 
     private fun ensureCapacity(required: Int) {
@@ -235,6 +247,8 @@ class GoertzelDetector(
         val omega = 2.0 * PI * freq / sampleRate
         return 2.0f * cos(omega).toFloat()
     }
+
+    private data class WindowEnergies(val main: Float, val low: Float, val high: Float, val sideEnergy: Float)
 
     private enum class State { SILENCE, DECAY, BEEP }
 
