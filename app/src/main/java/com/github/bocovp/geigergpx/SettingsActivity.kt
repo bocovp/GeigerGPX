@@ -54,7 +54,6 @@ private enum class SettingsPage(val title: String) {
 }
 
 class SettingsActivity : ComponentActivity() {
-    private var calibrationDetector: CalibrationSession? = null
     private val activeDialogs = mutableSetOf<AlertDialog>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,8 +62,6 @@ class SettingsActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        calibrationDetector?.stop()
-        calibrationDetector = null
         dismissActiveDialogs()
         super.onDestroy()
     }
@@ -231,8 +228,7 @@ class SettingsActivity : ComponentActivity() {
                         "Threshold",
                         thresholdSummaryVal,
                         thresholdSubtitleVal,
-                        onClick = { startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, false)) },
-                        onLongClick = { showManualThresholdDialog(false, onRefresh) }
+                        onClick = { startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, false)) }
                     )
                     SettingsRow(
                         "Bluetooth threshold",
@@ -244,8 +240,7 @@ class SettingsActivity : ComponentActivity() {
                             } else {
                                 startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, true))
                             }
-                        },
-                        onLongClick = { showManualThresholdDialog(true, onRefresh) }
+                        }
                     )
                     SwitchRow(
                         "Use Bluetooth mic",
@@ -866,51 +861,6 @@ class SettingsActivity : ComponentActivity() {
         return if (v.isNaN()) "Uncalibrated" else "Press to calibrate"
     }
 
-    private fun startCalibration(bluetooth: Boolean, onRefresh: () -> Unit) {
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(if (bluetooth) "Calibration (bluetooth)" else "Calibration")
-            .setMessage("Estimating signal level...")
-            .setNegativeButton("Cancel") { d, _ ->
-                calibrationDetector?.stop()
-                calibrationDetector = null
-                d.dismiss()
-            }
-            .setCancelable(false)
-            .create()
-
-        trackDialog(dialog)
-
-        calibrationDetector = CalibrationSession(
-            context = this,
-            onProgress = { phase, current, total ->
-                lifecycleScope.launch {
-                    if (phase == 2) {
-                        dialog.setMessage("Calibrating... $current/$total")
-                    }
-                }
-            },
-            onFinished = {
-                lifecycleScope.launch {
-                    calibrationDetector = null
-                    dialog.dismiss()
-                    onRefresh()
-                    toast("Calibration finished.")
-                }
-            },
-            onAudioStatus = { status, error ->
-                lifecycleScope.launch {
-                    if (error != AudioInputManager.AUDIO_STATUS_WORKING) {
-                        dialog.setMessage(status)
-                    }
-                }
-            },
-            useBluetoothMicIfAvailable = bluetooth,
-            thresholdPreferenceKey = thresholdKey(bluetooth),
-            fallbackThreshold = defaultThreshold(bluetooth)
-        )
-        calibrationDetector?.start()
-    }
-
     private fun  getRelativeErrString(prefs: android.content.SharedPreferences): String? {
         val avg = prefs.getString("dose_rate_avg_timestamps_n", "10")?.toIntOrNull() ?: 10
         val err = ConfidenceInterval.relativeErrPercent(avg) ?: return null
@@ -935,36 +885,6 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun fromDb(value: Float) = 10.0.pow(value / 10.0) * 100.0
-    private fun showManualThresholdDialog(bluetooth: Boolean, onRefresh: () -> Unit) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val key = thresholdKey(bluetooth)
-        val current = prefs.getFloat(key, Float.NaN)
-        val input = EditText(this).apply {
-            inputType =
-                InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
-            hint = "e.g. 42.1"; if (!current.isNaN()) {
-                setText("%.2f".format(java.util.Locale.US, toDb(current)))
-                setSelection(text.length)
-            }
-        }
-        trackDialog(
-            AlertDialog.Builder(this).setTitle("Set threshold manually")
-                .setMessage("Enter a positive threshold value.").setView(input)
-                .setPositiveButton("Save") { _, _ ->
-                    val value = input.text.toString().trim()
-                        .toFloatOrNull()
-                    if (value != null && value > 0f && value.isFinite()) {
-                        prefs.edit {
-                            putFloat(key,fromDb(value).toFloat())
-                        }
-                        onRefresh()
-                        toast("Threshold updated.")
-                    } else {
-                        toast("Invalid threshold value.")
-                    }
-                }.setNegativeButton("Cancel", null).create()
-        )
-    }
 
     private fun renameDevice(device: DeviceConfigManager.Device, onRefresh: () -> Unit) {
         if (!device.isCustom) return

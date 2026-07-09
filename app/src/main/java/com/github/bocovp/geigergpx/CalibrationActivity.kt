@@ -73,7 +73,7 @@ class CalibrationActivity : AppCompatActivity() {
             magThreshold = currentThreshold(),
             bluetoothMagThreshold = currentThreshold(),
             useBluetoothMicIfAvailable = bluetooth,
-            onBeep = { _, _, _ -> },
+            onBeep = { _, _, timeNs -> plot.addBeep(timeNs) },
             onAudioStatus = { text, _ -> runOnUiThread {
                 if (!isFinishing && !isDestroyed) {
                     status.text = text
@@ -81,8 +81,8 @@ class CalibrationActivity : AppCompatActivity() {
             } },
             onRecordingStarted = { sampleRate ->
                 val detector = GoertzelDetector(currentThreshold(), sampleRate).apply {
-                    onCalibrationWindowAnalyzed = { main, low, high, timestampNs ->
-                        plot.addSample(main, low, high, timestampNs)
+                    onCalibrationBatchAnalyzed = { mains, lows, highs, timesNs, count ->
+                        plot.addSamples(mains, lows, highs, timesNs, count)
                     }
                 }
                 audioInputDetector = detector
@@ -119,6 +119,10 @@ class CalibrationActivity : AppCompatActivity() {
                     status.text = text
                 }
             } },
+            onBatchAnalyzed = { mains, lows, highs, timesNs, count ->
+                plot.addSamples(mains, lows, highs, timesNs, count)
+            },
+            onBeep = { timeNs -> plot.addBeep(timeNs) },
             useBluetoothMicIfAvailable = bluetooth,
             thresholdPreferenceKey = thresholdKey(),
             fallbackThreshold = defaultThreshold()
@@ -136,6 +140,7 @@ class CalibrationActivity : AppCompatActivity() {
         if (threshold <= 0f || !threshold.isFinite()) return
         if (persist) prefs.edit { putFloat(thresholdKey(), threshold) }
         plot.setThresholdMagnitude(threshold)
+        audioInputDetector?.setThreshold(threshold)
         if (updateInput) thresholdInput.setText("%.2f".format(java.util.Locale.US, toDb(threshold)))
     }
 

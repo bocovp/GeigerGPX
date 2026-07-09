@@ -30,6 +30,8 @@ class CalibrationSession(
     private val onProgress: (phase: Int, current: Int, total: Int) -> Unit,
     private val onFinished: (threshold: Float?) -> Unit,
     private val onAudioStatus: (status: String, errorCode: Int) -> Unit = { _, _ -> },
+    private val onBatchAnalyzed: ((mains: FloatArray, lows: FloatArray, highs: FloatArray, timesNs: LongArray, count: Int) -> Unit)? = null,
+    private val onBeep: ((Long) -> Unit)? = null,
     private val useBluetoothMicIfAvailable: Boolean = PreferenceManager.getDefaultSharedPreferences(context)
         .getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false),
     private val thresholdPreferenceKey: String = if (useBluetoothMicIfAvailable) SettingsKeys.KEY_BLUETOOTH_AUDIO_THRESHOLD else SettingsKeys.KEY_AUDIO_THRESHOLD,
@@ -90,7 +92,8 @@ class CalibrationSession(
             magThreshold = 0f,
             sampleRate   = sampleRate
         ).apply {
-            onWindowAnalyzed = { main, sideEnergy ->
+            onCalibrationBatchAnalyzed = onBatchAnalyzed // ADD THIS LINE
+             onWindowAnalyzed = { main, sideEnergy ->
                 if (sideEnergy > 0f
                     && main > GoertzelDetector.DEFAULT_DOMINANCE_THRESHOLD * sideEnergy) {
                     if (main > stageOneMaxMain) stageOneMaxMain = main
@@ -141,7 +144,9 @@ class CalibrationSession(
             magThreshold = baseThreshold,
             sampleRate   = actualSampleRate
         ).apply {
-            onBeep = { peakMain, _, _ ->
+            onCalibrationBatchAnalyzed = onBatchAnalyzed
+            onBeep = { peakMain, _, timeNs ->
+                this@CalibrationSession.onBeep?.invoke(timeNs)
                 if (peakMain.isFinite() && peaks.size < totalBeepCount) {
                     peaks.add(peakMain)
                     onProgress(2, peaks.size, totalBeepCount)

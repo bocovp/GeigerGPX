@@ -34,6 +34,8 @@ class CalibrationPlotView @JvmOverloads constructor(
     private val highPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(239, 108, 0); strokeWidth = 1.4f * density; style = Paint.Style.STROKE }
     private val thresholdPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(211, 47, 47); strokeWidth = 1.6f * density; style = Paint.Style.STROKE }
 
+    private val beeps = ArrayDeque<Long>()
+    private val beepPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.RED; style = Paint.Style.FILL }
     private val left = 44f * density
     private val right = 12f * density
     private val top = 12f * density
@@ -44,6 +46,11 @@ class CalibrationPlotView @JvmOverloads constructor(
         invalidate()
     }
 
+    fun addBeep(timestampNs: Long) {
+        synchronized(pointsLock) { beeps.addLast(timestampNs) }
+        postInvalidateOnAnimation()
+    }
+
     fun addSample(main: Float, low: Float, high: Float, timestampNs: Long) {
         if (startNs == 0L) startNs = timestampNs
         val t = (timestampNs - startNs).toDouble() / 1_000_000_000.0
@@ -52,6 +59,28 @@ class CalibrationPlotView @JvmOverloads constructor(
             points.addLast(Point(t, toDb(main), toDb(low), toDb(high)))
             while (points.isNotEmpty() && points.first().t < minT) {
                 points.removeFirst()
+            }
+        }
+        postInvalidateOnAnimation()
+    }
+
+    fun addSamples(mains: FloatArray, lows: FloatArray, highs: FloatArray, timesNs: LongArray, count: Int) {
+        if (count == 0) return
+        if (startNs == 0L) startNs = timesNs[0]
+
+        synchronized(pointsLock) {
+            for (i in 0 until count) {
+                val t = (timesNs[i] - startNs).toDouble() / 1_000_000_000.0
+                points.addLast(Point(t, toDb(mains[i]), toDb(lows[i]), toDb(highs[i])))
+            }
+
+            val minT = points.last().t - windowSeconds
+            while (points.isNotEmpty() && points.first().t < minT) {
+                points.removeFirst()
+            }
+            val minNs = startNs + (minT * 1_000_000_000.0).toLong()
+            while (beeps.isNotEmpty() && beeps.first() < minNs) {
+                beeps.removeFirst()
             }
         }
         postInvalidateOnAnimation()
@@ -87,6 +116,14 @@ class CalibrationPlotView @JvmOverloads constructor(
         drawSeries(canvas, pointsSnapshot, minT, w, h, lowPaint) { it.lowDb }
         drawSeries(canvas, pointsSnapshot, minT, w, h, highPaint) { it.highDb }
         drawSeries(canvas, pointsSnapshot, minT, w, h, mainPaint) { it.mainDb }
+
+        val beepRadius = 4f * density
+        val beepsSnapshot = synchronized(pointsLock) { beeps.toList() }
+        beepsSnapshot.forEach { timestampNs ->
+            val t = (timestampNs - startNs).toDouble() / 1_000_000_000.0
+            val x = left + (((t - minT) / windowSeconds).toFloat().coerceIn(0f, 1f) * w)
+            canvas.drawCircle(x, top + beepRadius, beepRadius, beepPaint)
+        }
     }
 
     private inline fun drawSeries(canvas: Canvas, points: List<Point>, minT: Double, w: Float, h: Float, paint: Paint, selector: (Point) -> Float) {

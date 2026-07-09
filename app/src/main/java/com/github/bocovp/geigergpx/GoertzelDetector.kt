@@ -4,14 +4,13 @@ import kotlin.math.PI
 import kotlin.math.cos
 
 class GoertzelDetector(
-    private val magThreshold: Float,
+    var magThreshold: Float,
     private val sampleRate: Int = DEFAULT_SAMPLE_RATE
 ) {
 
 
     var onBeep: (Float, Int, Long) -> Unit = { _, _, _ -> }
     var onWindowAnalyzed: ((main: Float, sideEnergy: Float) -> Unit)? = null
-    var onCalibrationWindowAnalyzed: ((main: Float, low: Float, high: Float, timestampNs: Long) -> Unit)? = null
 
     private val batchSize = 25
     private var batchIndex = 0
@@ -57,11 +56,13 @@ class GoertzelDetector(
     private val fourBeepMax: Double
     private val dominanceThreshold: Float
     private val dominanceThresholdEnd: Float
+    
+    private var magThresholdEnd = magThreshold / 2f
 
-
-
-
-    private val magThresholdEnd = magThreshold / 2f
+    fun setThreshold(value: Float) {
+        magThreshold = value
+        magThresholdEnd = value / 2f
+    }
 
     init {
         // Rate-dependent parameters are resolved from the currently selected device.
@@ -133,7 +134,6 @@ class GoertzelDetector(
             val main = energies.main
             val sideEnergy = energies.sideEnergy
             onWindowAnalyzed?.invoke(main, sideEnergy)
-            onCalibrationWindowAnalyzed?.invoke(main, energies.low, energies.high, windowTimestampNs(bufferStartNs, pos, leftoverAtStart))
 
             mainBatch[batchIndex] = energies.main
             lowBatch[batchIndex] = energies.low
