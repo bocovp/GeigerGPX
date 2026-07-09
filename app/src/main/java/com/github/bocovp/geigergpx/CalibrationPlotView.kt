@@ -21,7 +21,7 @@ class CalibrationPlotView @JvmOverloads constructor(
     private val density = resources.displayMetrics.density
     private val windowSeconds = 3.0
     private val maxDb = 140f
-    private var startNs: Long = 0L
+    @Volatile private var startNs: Long = 0L
     private var thresholdDb: Float = 0f
 
     var onThresholdSelected: ((Float, Boolean) -> Unit)? = null
@@ -92,41 +92,42 @@ class CalibrationPlotView @JvmOverloads constructor(
         val h = height - top - bottom
         if (w <= 0f || h <= 0f) return
 
-        val pointsSnapshot = synchronized(pointsLock) { points.toList() }
+        synchronized(pointsLock) {
 
-        // Use the snapshot for all drawing calculations to prevent concurrent modifications
-        val now = pointsSnapshot.lastOrNull()?.t ?: 0.0
-        val minT = (now - windowSeconds).coerceAtLeast(0.0)
+            // Use the snapshot for all drawing calculations to prevent concurrent modifications
+            val now = points.lastOrNull()?.t ?: 0.0
+            val minT = (now - windowSeconds).coerceAtLeast(0.0)
 
 
-        canvas.drawLine(left, top, left, top + h, axisPaint)
-        canvas.drawLine(left, top + h, left + w, top + h, axisPaint)
-        for (i in 0..4) {
-            val y = top + h - h * i / 4f
-            val db = maxDb * i / 4f
-            canvas.drawLine(left, y, left + w, y, gridPaint)
-            canvas.drawText("%.0f".format(db), 4f * density, y + 4f * density, textPaint)
-        }
-        canvas.drawText("dB", 4f * density, top + 10f * density, textPaint)
+            canvas.drawLine(left, top, left, top + h, axisPaint)
+            canvas.drawLine(left, top + h, left + w, top + h, axisPaint)
+            for (i in 0..4) {
+                val y = top + h - h * i / 4f
+                val db = maxDb * i / 4f
+                canvas.drawLine(left, y, left + w, y, gridPaint)
+                canvas.drawText("%.0f".format(db), 4f * density, y + 4f * density, textPaint)
+            }
+            canvas.drawText("dB", 4f * density, top + 10f * density, textPaint)
 
-        val ty = yFor(thresholdDb, h)
-        canvas.drawLine(left, ty, left + w, ty, thresholdPaint)
-        canvas.drawText("threshold %.1f dB".format(thresholdDb), left + 6f * density, ty - 4f * density, textPaint)
+            val ty = yFor(thresholdDb, h)
+            canvas.drawLine(left, ty, left + w, ty, thresholdPaint)
+            canvas.drawText("threshold %.1f dB".format(thresholdDb), left + 6f * density, ty - 4f * density, textPaint)
 
-        drawSeries(canvas, pointsSnapshot, minT, w, h, lowPaint) { it.lowDb }
-        drawSeries(canvas, pointsSnapshot, minT, w, h, highPaint) { it.highDb }
-        drawSeries(canvas, pointsSnapshot, minT, w, h, mainPaint) { it.mainDb }
+            drawSeries(canvas, points, minT, w, h, lowPaint) { it.lowDb }
+            drawSeries(canvas, points, minT, w, h, highPaint) { it.highDb }
+            drawSeries(canvas, points, minT, w, h, mainPaint) { it.mainDb }
 
-        val beepRadius = 4f * density
-        val beepsSnapshot = synchronized(pointsLock) { beeps.toList() }
-        beepsSnapshot.forEach { timestampNs ->
-            val t = (timestampNs - startNs).toDouble() / 1_000_000_000.0
-            val x = left + (((t - minT) / windowSeconds).toFloat().coerceIn(0f, 1f) * w)
-            canvas.drawCircle(x, top + beepRadius, beepRadius, beepPaint)
+            val beepRadius = 4f * density
+            val beepsSnapshot = synchronized(pointsLock) { beeps.toList() }
+            beepsSnapshot.forEach { timestampNs ->
+                val t = (timestampNs - startNs).toDouble() / 1_000_000_000.0
+                val x = left + (((t - minT) / windowSeconds).toFloat().coerceIn(0f, 1f) * w)
+                canvas.drawCircle(x, top + beepRadius, beepRadius, beepPaint)
+            }
         }
     }
 
-    private inline fun drawSeries(canvas: Canvas, points: List<Point>, minT: Double, w: Float, h: Float, paint: Paint, selector: (Point) -> Float) {
+    private inline fun drawSeries(canvas: Canvas, points: Iterable<Point>, minT: Double, w: Float, h: Float, paint: Paint, selector: (Point) -> Float) {
         var lastX = 0f; var lastY = 0f; var haveLast = false
         points.forEach { point ->
             val x = left + (((point.t - minT) / windowSeconds).toFloat().coerceIn(0f, 1f) * w)

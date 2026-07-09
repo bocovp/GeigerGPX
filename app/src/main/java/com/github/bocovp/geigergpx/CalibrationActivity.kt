@@ -21,6 +21,8 @@ class CalibrationActivity : AppCompatActivity() {
     private lateinit var plot: CalibrationPlotView
     private lateinit var thresholdInput: EditText
     private lateinit var status: TextView
+
+    private lateinit var autoButton: MaterialButton
     private var bluetooth = false
     private val prefs by lazy { PreferenceManager.getDefaultSharedPreferences(this) }
 
@@ -33,8 +35,12 @@ class CalibrationActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        audioInput?.stop()
-        calibrationSession?.stop()
+        val input = audioInput
+        val session = calibrationSession
+        kotlin.concurrent.thread(name = "CalibrationCleanup") {
+            input?.stop()
+            session?.stop()
+        }
         super.onDestroy()
     }
 
@@ -58,11 +64,28 @@ class CalibrationActivity : AppCompatActivity() {
             setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) saveThresholdFromInput() }
         }
         root.addView(thresholdInput, LinearLayout.LayoutParams(-1, -2))
-        val auto = MaterialButton(this).apply {
-            text = "Autocalibrate"
-            setOnClickListener { runAutocalibration() }
+        val buttonContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(24, 16, 24, 16)
         }
-        root.addView(auto, LinearLayout.LayoutParams(-1, -2))
+
+        autoButton = MaterialButton(this).apply {
+            text = "Autocalibrate"
+            layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 8 }
+            setOnClickListener {
+                if (calibrationSession == null) runAutocalibration() else cancelAutocalibration()
+            }
+        }
+        buttonContainer.addView(autoButton)
+
+        val doneButton = MaterialButton(this).apply {
+            text = "Done"
+            layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = 8 }
+            setOnClickListener { finish() }
+        }
+        buttonContainer.addView(doneButton)
+
+        root.addView(buttonContainer, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
         plot.onThresholdSelected = { threshold, isFinished -> saveThreshold(threshold, updateInput = true, persist = isFinished) }
     }
@@ -94,39 +117,63 @@ class CalibrationActivity : AppCompatActivity() {
     @Volatile private var audioInputDetector: GoertzelDetector? = null
 
     private fun runAutocalibration() {
-        audioInput?.stop()
+        autoButton.text = "Cancel"
+
+        val input = audioInput
         audioInput = null
-        status.text = "Estimating signal level..."
-        calibrationSession = CalibrationSession(
-            context = this,
-            onProgress = { phase, current, total -> runOnUiThread {
-                if (!isFinishing && !isDestroyed) {
-                    status.text = if (phase == 2) "Calibrating... $current/$total" else "Estimating signal level..."
-                }
-            } },
-            onFinished = { threshold ->
-                runOnUiThread {
-                    if (!isFinishing && !isDestroyed) {
-                        calibrationSession = null
-                        threshold?.let { saveThreshold(it, updateInput = true) }
-                        Toast.makeText(this, "Calibration finished.", Toast.LENGTH_SHORT).show()
-                        startPlotting()
-                    }
-                }
-            },
-            onAudioStatus = { text, _ -> runOnUiThread {
-                if (!isFinishing && !isDestroyed) {
-                    status.text = text
-                }
-            } },
-            onBatchAnalyzed = { mains, lows, highs, timesNs, count ->
-                plot.addSamples(mains, lows, highs, timesNs, count)
-            },
-            onBeep = { timeNs -> plot.addBeep(timeNs) },
-            useBluetoothMicIfAvailable = bluetooth,
-            thresholdPreferenceKey = thresholdKey(),
-            fallbackThreshold = defaultThreshold()
-        ).also { it.start() }
+        status.text = "Stopping audio..."
+
+        kotlin.concurrent.thread(name = "StopAudioAndCalibrate") {
+            input?.stop()
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+
+                status.text = "Estimating signal level..."
+                calibrationSession = CalibrationSession(
+                    context = this,
+                    onProgress = { phase, current, total ->
+                        runOnUiThread {
+                            if (!isFinishing && !isDestroyed) {
+                                status.text = if (phase == 2) "Calibrating... $current/$total" else "Estimating signal level..."
+                            }
+                        }
+                    },
+                    onFinished = { threshold ->
+                        runOnUiThread {
+                            if (!isFinishing && !isDestroyed) {
+                                calibrationSession = null
+                                autoButton.text = "Autocalibrate"
+                                threshold?.let { saveThreshold(it, updateInput = true) }
+                                Toast.makeText(this, "Calibration finished.", Toast.LENGTH_SHORT).show()
+                                startPlotting()
+                            }
+                        }
+                    },
+                    onAudioStatus = { text, _ ->
+                        runOnUiThread {
+                            if (!isFinishing && !isDestroyed) {
+                                status.text = text
+                            }
+                        }
+                    },
+                    onBatchAnalyzed = { mains, lows, highs, timesNs, count ->
+                        plot.addSamples(mains, lows, highs, timesNs, count)
+                    },
+                    onBeep = { timeNs -> plot.addBeep(timeNs) },
+                    useBluetoothMicIfAvailable = bluetooth,
+                    thresholdPreferenceKey = thresholdKey(),
+                    fallbackThreshold = defaultThreshold()
+                ).also { it.start() }
+            }
+        }
+    }
+
+    private fun cancelAutocalibration() {
+        calibrationSession?.stop()
+        calibrationSession = null
+        autoButton.text = "Autocalibrate"
+        status.text = "Calibration cancelled."
+        startPlotting()
     }
 
     private fun loadThreshold() = saveThreshold(currentThreshold(), updateInput = true, persist = false)

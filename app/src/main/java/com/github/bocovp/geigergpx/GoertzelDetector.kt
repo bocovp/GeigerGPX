@@ -4,7 +4,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 
 class GoertzelDetector(
-    var magThreshold: Float,
+    @Volatile var magThreshold: Float,
     private val sampleRate: Int = DEFAULT_SAMPLE_RATE
 ) {
 
@@ -56,8 +56,8 @@ class GoertzelDetector(
     private val fourBeepMax: Double
     private val dominanceThreshold: Float
     private val dominanceThresholdEnd: Float
-    
-    private var magThresholdEnd = magThreshold / 2f
+
+    @Volatile private var magThresholdEnd = magThreshold / 2f
 
     fun setThreshold(value: Float) {
         magThreshold = value
