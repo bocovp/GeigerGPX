@@ -118,16 +118,14 @@ class CalibrationActivity : AppCompatActivity() {
                 }
             } },
             onRecordingStarted = { sampleRate ->
-                runOnUiThread {
-                    if (!isFinishing && !isDestroyed) {
-                        val detector = GoertzelDetector(currentThreshold(), sampleRate).apply {
-                            onCalibrationBatchAnalyzed = { mains, lows, highs, timesNs, count ->
-                                plot.addSamples(mains, lows, highs, timesNs, count)
-                            }
-                            onBeep = { _, count, timeNs -> if (count > 0) plot.addBeep(timeNs) }
+                if (!isFinishing && !isDestroyed) {
+                    val detector = GoertzelDetector(currentThreshold(), sampleRate).apply {
+                        onCalibrationBatchAnalyzed = { mains, lows, highs, timesNs, count ->
+                            plot.addSamples(mains, lows, highs, timesNs, count)
                         }
-                        audioInputDetector = detector
+                        onBeep = { _, count, timeNs -> if (count > 0) plot.addBeep(timeNs) }
                     }
+                    audioInputDetector = detector
                 }
             },
             onRawAudio = { samples, bufferStartNs -> audioInputDetector?.processSamples(samples, bufferStartNs) }
@@ -156,7 +154,7 @@ class CalibrationActivity : AppCompatActivity() {
                 autoButton.text = "Cancel"
                 status.text = "Estimating signal level..."
                 calibrationSession = CalibrationSession(
-                    context = this,
+                    context = applicationContext,
                     onProgress = { phase, current, total ->
                         runOnUiThread {
                             if (!isFinishing && !isDestroyed) {
@@ -226,7 +224,7 @@ class CalibrationActivity : AppCompatActivity() {
     private fun loadThreshold() = saveThreshold(currentThreshold(), updateInput = true, persist = false)
 
     private fun saveThresholdFromInput() {
-        val db = thresholdInput.text.toString().trim().toFloatOrNull() ?: return
+        val db = thresholdInput.text.toString().trim().toFloatOrNull()
         if (db != null && db.isFinite() && db >= 0f && db <= 140f) {
             saveThreshold(fromDb(db), updateInput = false)
         } else {
