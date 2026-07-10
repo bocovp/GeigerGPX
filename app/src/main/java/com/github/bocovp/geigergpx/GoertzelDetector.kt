@@ -135,16 +135,18 @@ class GoertzelDetector(
             val sideEnergy = energies.sideEnergy
             onWindowAnalyzed?.invoke(main, sideEnergy)
 
-            mainBatch[batchIndex] = energies.main
-            lowBatch[batchIndex] = energies.low
-            highBatch[batchIndex] = energies.high
-            timeBatch[batchIndex] = windowTimestampNs(bufferStartNs, pos, leftoverAtStart)
-            batchIndex++
+            if (onCalibrationBatchAnalyzed != null) {
+                mainBatch[batchIndex] = energies.main
+                lowBatch[batchIndex] = energies.low
+                highBatch[batchIndex] = energies.high
+                timeBatch[batchIndex] = windowTimestampNs(bufferStartNs, pos, leftoverAtStart)
+                batchIndex++
 
-// When the bunch is full, send it to the UI and reset
-            if (batchIndex >= batchSize) {
-                onCalibrationBatchAnalyzed?.invoke(mainBatch, lowBatch, highBatch, timeBatch, batchSize)
-                batchIndex = 0
+                // When the bunch is full, send it to the UI and reset
+                if (batchIndex >= batchSize) {
+                    onCalibrationBatchAnalyzed?.invoke(mainBatch, lowBatch, highBatch, timeBatch, batchSize)
+                    batchIndex = 0
+                }
             }
 
             var detected     = false

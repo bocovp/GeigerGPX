@@ -107,6 +107,7 @@ class CalibrationActivity : AppCompatActivity() {
                     onCalibrationBatchAnalyzed = { mains, lows, highs, timesNs, count ->
                         plot.addSamples(mains, lows, highs, timesNs, count)
                     }
+                    onBeep = { _, _, timeNs -> plot.addBeep(timeNs) }
                 }
                 audioInputDetector = detector
             },
@@ -117,7 +118,8 @@ class CalibrationActivity : AppCompatActivity() {
     @Volatile private var audioInputDetector: GoertzelDetector? = null
 
     private fun runAutocalibration() {
-        autoButton.text = "Cancel"
+        autoButton.isEnabled = false
+        autoButton.text = "Starting..."
 
         val input = audioInput
         audioInput = null
@@ -128,6 +130,8 @@ class CalibrationActivity : AppCompatActivity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
 
+                autoButton.isEnabled = true
+                autoButton.text = "Cancel"
                 status.text = "Estimating signal level..."
                 calibrationSession = CalibrationSession(
                     context = this,
