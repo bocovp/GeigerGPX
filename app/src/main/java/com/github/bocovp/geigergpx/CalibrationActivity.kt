@@ -35,8 +35,11 @@ class CalibrationActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        audioInputDetector = null
         val input = audioInput
         val session = calibrationSession
+        audioInput = null
+        calibrationSession = null
         kotlin.concurrent.thread(name = "CalibrationCleanup") {
             input?.stop()
             session?.stop()
@@ -63,7 +66,11 @@ class CalibrationActivity : AppCompatActivity() {
             setOnEditorActionListener { _, _, _ -> saveThresholdFromInput(); false }
             setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) saveThresholdFromInput() }
         }
-        root.addView(thresholdInput, LinearLayout.LayoutParams(-1, -2))
+        val inputParams = LinearLayout.LayoutParams(-1, -2).apply {
+            val margin = (24 * resources.displayMetrics.density).toInt()
+            setMargins(margin, 0, margin, 0)
+        }
+        root.addView(thresholdInput, inputParams)
         val buttonContainer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(24, 16, 24, 16)
@@ -165,9 +172,15 @@ class CalibrationActivity : AppCompatActivity() {
                         }
                     },
                     onBatchAnalyzed = { mains, lows, highs, timesNs, count ->
-                        plot.addSamples(mains, lows, highs, timesNs, count)
+                        if (!isDestroyed && !isFinishing) {
+                            plot.addSamples(mains, lows, highs, timesNs, count)
+                        }
                     },
-                    onBeep = { timeNs -> plot.addBeep(timeNs) },
+                    onBeep = { timeNs ->
+                        if (!isDestroyed && !isFinishing) {
+                            plot.addBeep(timeNs)
+                        }
+                    },
                     useBluetoothMicIfAvailable = bluetooth,
                     thresholdPreferenceKey = thresholdKey(),
                     fallbackThreshold = defaultThreshold()

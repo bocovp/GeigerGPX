@@ -22,7 +22,7 @@ class GoertzelDetector(
     private val timeBatch = LongArray(batchSize)
 
     // 3. Update the callback signature to accept arrays
-    var onCalibrationBatchAnalyzed: ((main: FloatArray, low: FloatArray, high: FloatArray, timeNs: LongArray, count: Int) -> Unit)? = null
+    @Volatile var onCalibrationBatchAnalyzed: ((main: FloatArray, low: FloatArray, high: FloatArray, timeNs: LongArray, count: Int) -> Unit)? = null
 
 
 

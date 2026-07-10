@@ -131,14 +131,21 @@ class CalibrationPlotView @JvmOverloads constructor(
     }
 
     private inline fun drawSeries(canvas: Canvas, points: ArrayDeque<Point>, minT: Double, w: Float, h: Float, paint: Paint, selector: (Point) -> Float) {
-        var lastX = 0f; var lastY = 0f; var haveLast = false
+        if (points.isEmpty()) return
+        val path = android.graphics.Path()
+        var first = true
         for (i in 0 until points.size) {
             val point = points[i]
             val x = left + (((point.t - minT) / windowSeconds).toFloat().coerceIn(0f, 1f) * w)
             val y = yFor(selector(point), h)
-            if (haveLast) canvas.drawLine(lastX, lastY, x, y, paint)
-            lastX = x; lastY = y; haveLast = true
+            if (first) {
+                path.moveTo(x, y)
+                first = false
+            } else {
+                path.lineTo(x, y)
+            }
         }
+        canvas.drawPath(path, paint)
     }
 
     private fun yFor(db: Float, h: Float) = top + h - (db.coerceIn(0f, maxDb) / maxDb) * h
