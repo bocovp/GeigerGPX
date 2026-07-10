@@ -55,8 +55,9 @@ class CalibrationActivity : AppCompatActivity() {
             setNavigationOnClickListener { finish() }
         }
         root.addView(toolbar, LinearLayout.LayoutParams(-1, -2))
+        val density = resources.displayMetrics.density
         status = TextView(this).apply {
-            setPadding(24, 8, 24, 8);
+            setPadding((24 * density).toInt(), (8 * density).toInt(), (24 * density).toInt(), (8 * density).toInt())
             text = "Starting audio..."
         }
         root.addView(status, LinearLayout.LayoutParams(-1, -2))
@@ -76,7 +77,7 @@ class CalibrationActivity : AppCompatActivity() {
         root.addView(thresholdInput, inputParams)
         val buttonContainer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(24, 16, 24, 16)
+            setPadding((24 * density).toInt(), (16 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
         }
 
         autoButton = MaterialButton(this).apply {
