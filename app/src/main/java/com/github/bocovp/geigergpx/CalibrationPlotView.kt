@@ -53,19 +53,6 @@ class CalibrationPlotView @JvmOverloads constructor(
         postInvalidateOnAnimation()
     }
 
-    fun addSample(main: Float, low: Float, high: Float, timestampNs: Long) {
-        if (startNs == 0L) startNs = timestampNs
-        val t = (timestampNs - startNs).toDouble() / 1_000_000_000.0
-        val minT = t - windowSeconds
-        synchronized(pointsLock) {
-            points.addLast(Point(t, toDb(main), toDb(low), toDb(high)))
-            while (points.isNotEmpty() && points.first().t < minT) {
-                points.removeFirst()
-            }
-        }
-        postInvalidateOnAnimation()
-    }
-
     fun addSamples(mains: FloatArray, lows: FloatArray, highs: FloatArray, timesNs: LongArray, count: Int) {
         if (count == 0) return
         if (startNs == 0L) startNs = timesNs[0]
@@ -130,25 +117,32 @@ class CalibrationPlotView @JvmOverloads constructor(
         }
     }
 
+    private val seriesPath = android.graphics.Path()
+
     private inline fun drawSeries(canvas: Canvas, points: ArrayDeque<Point>, minT: Double, w: Float, h: Float, paint: Paint, selector: (Point) -> Float) {
         if (points.isEmpty()) return
-        val path = android.graphics.Path()
+        seriesPath.reset()
         var first = true
         for (i in 0 until points.size) {
             val point = points[i]
             val x = left + (((point.t - minT) / windowSeconds).toFloat().coerceIn(0f, 1f) * w)
             val y = yFor(selector(point), h)
             if (first) {
-                path.moveTo(x, y)
+                seriesPath.moveTo(x, y)
                 first = false
             } else {
-                path.lineTo(x, y)
+                seriesPath.lineTo(x, y)
             }
         }
-        canvas.drawPath(path, paint)
+        canvas.drawPath(seriesPath, paint)
     }
 
     private fun yFor(db: Float, h: Float) = top + h - (db.coerceIn(0f, maxDb) / maxDb) * h
+
+    override fun performClick(): Boolean {
+        if (super.performClick()) return true
+        return true
+    }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!isEnabled) return false
@@ -160,6 +154,9 @@ class CalibrationPlotView @JvmOverloads constructor(
                     thresholdDb = db
                     thresholdText = "threshold %.1f dB".format(java.util.Locale.US, db)
                     val isFinished = event.actionMasked == MotionEvent.ACTION_UP
+                    if (isFinished) {
+                        performClick()
+                    }
                     onThresholdSelected?.invoke(fromDb(db), isFinished)
                     invalidate()
                 }

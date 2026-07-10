@@ -21,10 +21,12 @@ class GoertzelDetector(
     private val highBatch = FloatArray(batchSize)
     private val timeBatch = LongArray(batchSize)
 
-    // 3. Update the callback signature to accept arrays
+    /**
+     * Callback invoked when a batch of calibration windows is analyzed.
+     * Note: The array arguments are pre-allocated and reused across invocations.
+     * Implementations must copy the data if they need to persist it beyond the callback scope.
+     */
     @Volatile var onCalibrationBatchAnalyzed: ((main: FloatArray, low: FloatArray, high: FloatArray, timeNs: LongArray, count: Int) -> Unit)? = null
-
-
 
 
     // -------------------------------------------------------------------------

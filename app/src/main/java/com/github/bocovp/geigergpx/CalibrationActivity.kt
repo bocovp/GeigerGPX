@@ -55,7 +55,10 @@ class CalibrationActivity : AppCompatActivity() {
             setNavigationOnClickListener { finish() }
         }
         root.addView(toolbar, LinearLayout.LayoutParams(-1, -2))
-        status = TextView(this).apply { setPadding(24, 8, 24, 8); text = "Starting audio..." }
+        status = TextView(this).apply {
+            setPadding(24, 8, 24, 8);
+            text = "Starting audio..."
+        }
         root.addView(status, LinearLayout.LayoutParams(-1, -2))
         plot = CalibrationPlotView(this)
         root.addView(plot, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -110,13 +113,15 @@ class CalibrationActivity : AppCompatActivity() {
                 }
             } },
             onRecordingStarted = { sampleRate ->
-                val detector = GoertzelDetector(currentThreshold(), sampleRate).apply {
-                    onCalibrationBatchAnalyzed = { mains, lows, highs, timesNs, count ->
-                        plot.addSamples(mains, lows, highs, timesNs, count)
+                if (!isFinishing && !isDestroyed) {
+                    val detector = GoertzelDetector(currentThreshold(), sampleRate).apply {
+                        onCalibrationBatchAnalyzed = { mains, lows, highs, timesNs, count ->
+                            plot.addSamples(mains, lows, highs, timesNs, count)
+                        }
+                        onBeep = { _, count, timeNs -> if (count > 0) plot.addBeep(timeNs) }
                     }
-                    onBeep = { _, count, timeNs -> if (count > 0) plot.addBeep(timeNs) }
+                    audioInputDetector = detector
                 }
-                audioInputDetector = detector
             },
             onRawAudio = { samples, bufferStartNs -> audioInputDetector?.processSamples(samples, bufferStartNs) }
         ).also { it.start() }
