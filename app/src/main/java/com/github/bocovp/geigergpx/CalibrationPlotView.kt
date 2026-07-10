@@ -115,8 +115,8 @@ class CalibrationPlotView @JvmOverloads constructor(
             canvas.drawText(thresholdText, left + 6f * density, ty - 4f * density, textPaint)
 
             drawSeries(canvas, points, minT, w, h, mainPaint) { it.mainDb }
-            drawSeries(canvas, points, minT, w, h, lowPaint) { it.lowDb }
-            drawSeries(canvas, points, minT, w, h, highPaint) { it.highDb }
+            //drawSeries(canvas, points, minT, w, h, lowPaint) { it.lowDb }
+            //drawSeries(canvas, points, minT, w, h, highPaint) { it.highDb }
 
             if (startNs != 0L) {
                 val beepRadius = 4f * density
