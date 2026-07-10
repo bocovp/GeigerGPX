@@ -118,11 +118,13 @@ class CalibrationPlotView @JvmOverloads constructor(
             drawSeries(canvas, points, minT, w, h, highPaint) { it.highDb }
             drawSeries(canvas, points, minT, w, h, mainPaint) { it.mainDb }
 
-            val beepRadius = 4f * density
-            beeps.forEach { timestampNs ->
-                val t = (timestampNs - startNs).toDouble() / 1_000_000_000.0
-                val x = left + (((t - minT) / windowSeconds).toFloat().coerceIn(0f, 1f) * w)
-                canvas.drawCircle(x, top + beepRadius, beepRadius, beepPaint)
+            if (startNs != 0L) {
+                val beepRadius = 4f * density
+                beeps.forEach { timestampNs ->
+                    val t = (timestampNs - startNs).toDouble() / 1_000_000_000.0
+                    val x = left + (((t - minT) / windowSeconds).toFloat().coerceIn(0f, 1f) * w)
+                    canvas.drawCircle(x, top + beepRadius, beepRadius, beepPaint)
+                }
             }
         }
     }
@@ -140,6 +142,7 @@ class CalibrationPlotView @JvmOverloads constructor(
     private fun yFor(db: Float, h: Float) = top + h - (db.coerceIn(0f, maxDb) / maxDb) * h
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!isEnabled) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP -> {
                 val h = height - top - bottom

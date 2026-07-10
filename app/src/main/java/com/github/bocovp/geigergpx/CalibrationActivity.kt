@@ -120,6 +120,8 @@ class CalibrationActivity : AppCompatActivity() {
     private fun runAutocalibration() {
         autoButton.isEnabled = false
         autoButton.text = "Starting..."
+        thresholdInput.isEnabled = false
+        plot.isEnabled = false
 
         val input = audioInput
         audioInput = null
@@ -147,6 +149,8 @@ class CalibrationActivity : AppCompatActivity() {
                             if (!isFinishing && !isDestroyed) {
                                 calibrationSession = null
                                 autoButton.text = "Autocalibrate"
+                                thresholdInput.isEnabled = true
+                                plot.isEnabled = true
                                 threshold?.let { saveThreshold(it, updateInput = true) }
                                 Toast.makeText(this, "Calibration finished.", Toast.LENGTH_SHORT).show()
                                 startPlotting()
@@ -173,11 +177,24 @@ class CalibrationActivity : AppCompatActivity() {
     }
 
     private fun cancelAutocalibration() {
-        calibrationSession?.stop()
+        autoButton.isEnabled = false
+        autoButton.text = "Stopping..."
+        val session = calibrationSession
         calibrationSession = null
-        autoButton.text = "Autocalibrate"
-        status.text = "Calibration cancelled."
-        startPlotting()
+        status.text = "Cancelling calibration..."
+        kotlin.concurrent.thread(name = "CancelCalibration") {
+            session?.stop()
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    autoButton.isEnabled = true
+                    autoButton.text = "Autocalibrate"
+                    thresholdInput.isEnabled = true
+                    plot.isEnabled = true
+                    status.text = "Calibration cancelled."
+                    startPlotting()
+                }
+            }
+        }
     }
 
     private fun loadThreshold() = saveThreshold(currentThreshold(), updateInput = true, persist = false)
