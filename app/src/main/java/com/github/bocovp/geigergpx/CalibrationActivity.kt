@@ -107,7 +107,8 @@ class CalibrationActivity : AppCompatActivity() {
                     onCalibrationBatchAnalyzed = { mains, lows, highs, timesNs, count ->
                         plot.addSamples(mains, lows, highs, timesNs, count)
                     }
-                    onBeep = { _, count, timeNs -> if (count > 0) plot.addBeep(timeNs) }                }
+                    onBeep = { _, count, timeNs -> if (count > 0) plot.addBeep(timeNs) }
+                }
                 audioInputDetector = detector
             },
             onRawAudio = { samples, bufferStartNs -> audioInputDetector?.processSamples(samples, bufferStartNs) }
@@ -200,7 +201,7 @@ class CalibrationActivity : AppCompatActivity() {
 
     private fun saveThresholdFromInput() {
         val db = thresholdInput.text.toString().trim().toFloatOrNull() ?: return
-        if (db.isFinite()) saveThreshold(fromDb(db), updateInput = false)
+        if (db.isFinite() && db >= 0f)  saveThreshold(fromDb(db), updateInput = false)
     }
 
     private fun saveThreshold(threshold: Float, updateInput: Boolean, persist: Boolean = true) {
@@ -208,7 +209,12 @@ class CalibrationActivity : AppCompatActivity() {
         if (persist) prefs.edit { putFloat(thresholdKey(), threshold) }
         plot.setThresholdMagnitude(threshold)
         audioInputDetector?.setThreshold(threshold)
-        if (updateInput) thresholdInput.setText("%.2f".format(java.util.Locale.US, toDb(threshold)))
+        if (updateInput) {
+            val formatted = "%.2f".format(java.util.Locale.US, toDb(threshold))
+            if (thresholdInput.text.toString() != formatted) {
+                thresholdInput.setText(formatted)
+            }
+        }
     }
 
     private fun currentThreshold(): Float {

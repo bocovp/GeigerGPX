@@ -135,7 +135,8 @@ class GoertzelDetector(
             val sideEnergy = energies.sideEnergy
             onWindowAnalyzed?.invoke(main, sideEnergy)
 
-            if (onCalibrationBatchAnalyzed != null) {
+            val callback = onCalibrationBatchAnalyzed
+            if (callback != null) {
                 mainBatch[batchIndex] = energies.main
                 lowBatch[batchIndex] = energies.low
                 highBatch[batchIndex] = energies.high
@@ -144,7 +145,7 @@ class GoertzelDetector(
 
                 // When the bunch is full, send it to the UI and reset
                 if (batchIndex >= batchSize) {
-                    onCalibrationBatchAnalyzed?.invoke(mainBatch, lowBatch, highBatch, timeBatch, batchSize)
+                    callback.invoke(mainBatch, lowBatch, highBatch, timeBatch, batchSize)
                     batchIndex = 0
                 }
             }

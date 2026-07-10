@@ -92,7 +92,7 @@ class CalibrationSession(
             magThreshold = 0f,
             sampleRate   = sampleRate
         ).apply {
-            onCalibrationBatchAnalyzed = onBatchAnalyzed // ADD THIS LINE
+            onCalibrationBatchAnalyzed = onBatchAnalyzed
              onWindowAnalyzed = { main, sideEnergy ->
                 if (sideEnergy > 0f
                     && main > GoertzelDetector.DEFAULT_DOMINANCE_THRESHOLD * sideEnergy) {
