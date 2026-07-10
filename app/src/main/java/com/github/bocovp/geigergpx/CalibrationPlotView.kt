@@ -64,9 +64,10 @@ class CalibrationPlotView @JvmOverloads constructor(
 
     fun addSamples(mains: FloatArray, lows: FloatArray, highs: FloatArray, timesNs: LongArray, count: Int) {
         if (count == 0) return
-        if (startNs == 0L) startNs = timesNs[0]
 
         synchronized(pointsLock) {
+            if (startNs == 0L) startNs = timesNs[0]
+
             for (i in 0 until count) {
                 val t = (timesNs[i] - startNs).toDouble() / 1_000_000_000.0
                 points.addLast(Point(t, toDb(mains[i]), toDb(lows[i]), toDb(highs[i])))

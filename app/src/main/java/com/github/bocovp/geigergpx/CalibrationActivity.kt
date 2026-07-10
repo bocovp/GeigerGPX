@@ -227,7 +227,11 @@ class CalibrationActivity : AppCompatActivity() {
 
     private fun saveThresholdFromInput() {
         val db = thresholdInput.text.toString().trim().toFloatOrNull() ?: return
-        if (db.isFinite() && db >= 0f)  saveThreshold(fromDb(db), updateInput = false)
+        if (db != null && db.isFinite() && db >= 0f && db <= 140f) {
+            saveThreshold(fromDb(db), updateInput = false)
+        } else {
+            loadThreshold()
+        }
     }
 
     private fun saveThreshold(threshold: Float, updateInput: Boolean, persist: Boolean = true) {
