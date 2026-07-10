@@ -53,6 +53,15 @@ class CalibrationPlotView @JvmOverloads constructor(
         postInvalidateOnAnimation()
     }
 
+    fun clear() {
+        synchronized(pointsLock) {
+            points.clear()
+            beeps.clear()
+            startNs = 0L
+        }
+        postInvalidateOnAnimation()
+    }
+
     fun addSamples(mains: FloatArray, lows: FloatArray, highs: FloatArray, timesNs: LongArray, count: Int) {
         if (count == 0) return
         if (startNs == 0L) startNs = timesNs[0]

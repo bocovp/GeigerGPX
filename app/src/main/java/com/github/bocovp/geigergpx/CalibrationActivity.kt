@@ -51,7 +51,10 @@ class CalibrationActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val toolbar = MaterialToolbar(this).apply {
             title = if (bluetooth) "Bluetooth calibration" else "Calibration"
-            setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+            val typedValue = android.util.TypedValue()
+            theme.resolveAttribute(androidx.appcompat.R.attr.homeAsUpIndicator, typedValue, true)
+            setNavigationIcon(typedValue.resourceId)
+
             setNavigationOnClickListener { finish() }
         }
         root.addView(toolbar, LinearLayout.LayoutParams(-1, -2))
@@ -102,6 +105,7 @@ class CalibrationActivity : AppCompatActivity() {
     }
 
     private fun startPlotting() {
+        plot.clear()
         audioInput = AudioInputManager(
             context = applicationContext,
             magThreshold = currentThreshold(),
@@ -114,14 +118,16 @@ class CalibrationActivity : AppCompatActivity() {
                 }
             } },
             onRecordingStarted = { sampleRate ->
-                if (!isFinishing && !isDestroyed) {
-                    val detector = GoertzelDetector(currentThreshold(), sampleRate).apply {
-                        onCalibrationBatchAnalyzed = { mains, lows, highs, timesNs, count ->
-                            plot.addSamples(mains, lows, highs, timesNs, count)
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed) {
+                        val detector = GoertzelDetector(currentThreshold(), sampleRate).apply {
+                            onCalibrationBatchAnalyzed = { mains, lows, highs, timesNs, count ->
+                                plot.addSamples(mains, lows, highs, timesNs, count)
+                            }
+                            onBeep = { _, count, timeNs -> if (count > 0) plot.addBeep(timeNs) }
                         }
-                        onBeep = { _, count, timeNs -> if (count > 0) plot.addBeep(timeNs) }
+                        audioInputDetector = detector
                     }
-                    audioInputDetector = detector
                 }
             },
             onRawAudio = { samples, bufferStartNs -> audioInputDetector?.processSamples(samples, bufferStartNs) }
@@ -135,6 +141,7 @@ class CalibrationActivity : AppCompatActivity() {
         autoButton.text = "Starting..."
         thresholdInput.isEnabled = false
         plot.isEnabled = false
+        plot.clear()
 
         val input = audioInput
         audioInput = null
