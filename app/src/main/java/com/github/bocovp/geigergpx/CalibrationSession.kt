@@ -145,13 +145,15 @@ class CalibrationSession(
             sampleRate   = actualSampleRate
         ).apply {
             onCalibrationBatchAnalyzed = onBatchAnalyzed
-            onBeep = { peakMain, _, timeNs ->
-                this@CalibrationSession.onBeep?.invoke(timeNs)
-                if (peakMain.isFinite() && peaks.size < totalBeepCount) {
-                    peaks.add(peakMain)
-                    onProgress(2, peaks.size, totalBeepCount)
-                    if (peaks.size == totalBeepCount) {
-                        finishCalibration()
+            onBeep = { peakMain, count, timeNs ->
+                if (count > 0) {
+                    this@CalibrationSession.onBeep?.invoke(timeNs)
+                    if (peakMain.isFinite() && peaks.size < totalBeepCount) {
+                        peaks.add(peakMain)
+                        onProgress(2, peaks.size, totalBeepCount)
+                        if (peaks.size == totalBeepCount) {
+                            finishCalibration()
+                        }
                     }
                 }
             }

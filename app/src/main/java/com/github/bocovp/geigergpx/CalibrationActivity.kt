@@ -96,7 +96,7 @@ class CalibrationActivity : AppCompatActivity() {
             magThreshold = currentThreshold(),
             bluetoothMagThreshold = currentThreshold(),
             useBluetoothMicIfAvailable = bluetooth,
-            onBeep = { _, _, timeNs -> plot.addBeep(timeNs) },
+            onBeep = { _, count, timeNs -> if (count > 0) plot.addBeep(timeNs) },
             onAudioStatus = { text, _ -> runOnUiThread {
                 if (!isFinishing && !isDestroyed) {
                     status.text = text
@@ -107,8 +107,7 @@ class CalibrationActivity : AppCompatActivity() {
                     onCalibrationBatchAnalyzed = { mains, lows, highs, timesNs, count ->
                         plot.addSamples(mains, lows, highs, timesNs, count)
                     }
-                    onBeep = { _, _, timeNs -> plot.addBeep(timeNs) }
-                }
+                    onBeep = { _, count, timeNs -> if (count > 0) plot.addBeep(timeNs) }                }
                 audioInputDetector = detector
             },
             onRawAudio = { samples, bufferStartNs -> audioInputDetector?.processSamples(samples, bufferStartNs) }
