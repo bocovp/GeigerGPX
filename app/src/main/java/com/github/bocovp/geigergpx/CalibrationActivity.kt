@@ -34,6 +34,11 @@ class CalibrationActivity : AppCompatActivity() {
         startPlotting()
     }
 
+    override fun onPause() {
+        saveThresholdFromInput()
+        super.onPause()
+    }
+
     override fun onDestroy() {
         audioInputDetector = null
         val input = audioInput
@@ -170,7 +175,7 @@ class CalibrationActivity : AppCompatActivity() {
                                 thresholdInput.isEnabled = true
                                 plot.isEnabled = true
                                 threshold?.let { saveThreshold(it, updateInput = true) }
-                                Toast.makeText(this, "Calibration finished.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(applicationContext, "Calibration finished.", Toast.LENGTH_SHORT).show()
                                 startPlotting()
                             }
                         }

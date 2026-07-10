@@ -138,7 +138,7 @@ class CalibrationSession(
     private fun transitionToStageTwo() {
         stageOneDetector?.onWindowAnalyzed = null
 
-        val baseThreshold = (stageOneMaxMain / 2.5f).takeIf { it > 0f } ?: fallbackThreshold
+        val baseThreshold = (stageOneMaxMain / 1000f).takeIf { it > 0f } ?: fallbackThreshold // 2.5f
 
         stageTwoDetector = GoertzelDetector(
             magThreshold = baseThreshold,
@@ -164,7 +164,7 @@ class CalibrationSession(
 
     private fun finishCalibration() {
         val median         = peaks.sorted()[totalBeepCount / 2]
-        val raw            = minOf(median / 2.5f, 1e10f)
+        val raw            = minOf(median / 400f, 1e10f) // 2.5f
         val finalThreshold = if (raw > 0f) raw else fallbackThreshold
 
         PreferenceManager.getDefaultSharedPreferences(context)
