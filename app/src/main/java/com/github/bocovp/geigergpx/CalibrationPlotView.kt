@@ -30,10 +30,10 @@ class CalibrationPlotView @JvmOverloads constructor(
     private val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.GRAY; strokeWidth = density }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(70, 128, 128, 128); strokeWidth = density }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.GRAY; textSize = 12f * density }
-    private val mainPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(25, 118, 210); strokeWidth = 2f * density; style = Paint.Style.STROKE }
-    private val lowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(46, 125, 50); strokeWidth = 1.4f * density; style = Paint.Style.STROKE }
-    private val highPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(239, 108, 0); strokeWidth = 1.4f * density; style = Paint.Style.STROKE }
-    private val thresholdPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(211, 47, 47); strokeWidth = 1.6f * density; style = Paint.Style.STROKE }
+    private val mainPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(25, 118, 210); strokeWidth = 0.75f * density; style = Paint.Style.STROKE }
+    private val lowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(46, 125, 50); strokeWidth = 0.5f * density; style = Paint.Style.STROKE }
+    private val highPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(239, 108, 0); strokeWidth = 0.5f * density; style = Paint.Style.STROKE }
+    private val thresholdPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(211, 47, 47); strokeWidth = 1.25f * density; style = Paint.Style.STROKE }
 
     private val beeps = ArrayDeque<Long>()
     private val beepPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.RED; style = Paint.Style.FILL }
@@ -114,13 +114,14 @@ class CalibrationPlotView @JvmOverloads constructor(
             canvas.drawLine(left, ty, left + w, ty, thresholdPaint)
             canvas.drawText(thresholdText, left + 6f * density, ty - 4f * density, textPaint)
 
+            drawSeries(canvas, points, minT, w, h, mainPaint) { it.mainDb }
             drawSeries(canvas, points, minT, w, h, lowPaint) { it.lowDb }
             drawSeries(canvas, points, minT, w, h, highPaint) { it.highDb }
-            drawSeries(canvas, points, minT, w, h, mainPaint) { it.mainDb }
 
             if (startNs != 0L) {
                 val beepRadius = 4f * density
-                beeps.forEach { timestampNs ->
+                for (i in 0 until beeps.size) {
+                    val timestampNs = beeps[i]
                     val t = (timestampNs - startNs).toDouble() / 1_000_000_000.0
                     val x = left + (((t - minT) / windowSeconds).toFloat().coerceIn(0f, 1f) * w)
                     canvas.drawCircle(x, top + beepRadius, beepRadius, beepPaint)
@@ -129,9 +130,10 @@ class CalibrationPlotView @JvmOverloads constructor(
         }
     }
 
-    private inline fun drawSeries(canvas: Canvas, points: Iterable<Point>, minT: Double, w: Float, h: Float, paint: Paint, selector: (Point) -> Float) {
+    private inline fun drawSeries(canvas: Canvas, points: ArrayDeque<Point>, minT: Double, w: Float, h: Float, paint: Paint, selector: (Point) -> Float) {
         var lastX = 0f; var lastY = 0f; var haveLast = false
-        points.forEach { point ->
+        for (i in 0 until points.size) {
+            val point = points[i]
             val x = left + (((point.t - minT) / windowSeconds).toFloat().coerceIn(0f, 1f) * w)
             val y = yFor(selector(point), h)
             if (haveLast) canvas.drawLine(lastX, lastY, x, y, paint)
