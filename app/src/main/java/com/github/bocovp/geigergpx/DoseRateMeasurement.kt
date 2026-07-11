@@ -85,8 +85,12 @@ class DoseRateMeasurement(
     fun processBeep(beepCount: Int, nowProvider: () -> Long = System::currentTimeMillis): AlertEvent? {
         if (beepCount <= 0) return null
         return synchronized(mainCpsLock) {
-            repeat(beepCount) {
-                val beepTime = nowProvider()
+            val now = nowProvider()
+            val startT = newestMainCpsTimestamp() ?: now
+            val step = if (beepCount > 1 && startT < now) (now - startT) / beepCount else 0L
+
+            for (i in 1..beepCount) {
+                val beepTime = startT + i * step
                 mainCpsBeepTimes[mainCpsBeepNextIndex] = beepTime
                 mainCpsBeepNextIndex = (mainCpsBeepNextIndex + 1) % windowSize
                 if (mainCpsBeepCount < windowSize) {
