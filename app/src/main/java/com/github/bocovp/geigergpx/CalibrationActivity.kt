@@ -34,7 +34,6 @@ class CalibrationActivity : AppCompatActivity() {
         bluetooth = intent.getBooleanExtra(EXTRA_BLUETOOTH, false)
         if (savedInstanceState != null) {
             keepScreenOnEnabled = savedInstanceState.getBoolean("keep_screen_on", false)
-            applyKeepScreenOnFlag()
         }
         buildUi()
         loadThreshold()

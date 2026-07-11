@@ -125,7 +125,6 @@ class MainActivity : AppCompatActivity() {
             savedInstanceState?.getBoolean(statePendingStartupRestore, false) ?: false
         if (savedInstanceState != null) {
             keepScreenOnEnabled = savedInstanceState.getBoolean("keep_screen_on", false)
-            applyKeepScreenOnFlag()
         }
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)

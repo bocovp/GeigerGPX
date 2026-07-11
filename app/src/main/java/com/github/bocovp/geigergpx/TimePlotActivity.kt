@@ -102,7 +102,6 @@ class TimePlotActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) {
             keepScreenOnEnabled = savedInstanceState.getBoolean("keep_screen_on", false)
-            applyKeepScreenOnFlag()
         }
         binding = ActivityTimePlotBinding.inflate(layoutInflater)
         setContentView(binding.root)
