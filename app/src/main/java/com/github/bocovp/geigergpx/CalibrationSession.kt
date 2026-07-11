@@ -30,6 +30,8 @@ class CalibrationSession(
     private val onProgress: (phase: Int, current: Int, total: Int) -> Unit,
     private val onFinished: (threshold: Float?) -> Unit,
     private val onAudioStatus: (status: String, errorCode: Int) -> Unit = { _, _ -> },
+    private val onBatchAnalyzed: ((mains: FloatArray, lows: FloatArray, highs: FloatArray, timesNs: LongArray, count: Int) -> Unit)? = null,
+    private val onBeep: ((Long) -> Unit)? = null,
     private val useBluetoothMicIfAvailable: Boolean = PreferenceManager.getDefaultSharedPreferences(context)
         .getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false),
     private val thresholdPreferenceKey: String = if (useBluetoothMicIfAvailable) SettingsKeys.KEY_BLUETOOTH_AUDIO_THRESHOLD else SettingsKeys.KEY_AUDIO_THRESHOLD,
@@ -90,7 +92,8 @@ class CalibrationSession(
             magThreshold = 0f,
             sampleRate   = sampleRate
         ).apply {
-            onWindowAnalyzed = { main, sideEnergy ->
+            onCalibrationBatchAnalyzed = onBatchAnalyzed
+             onWindowAnalyzed = { main, sideEnergy ->
                 if (sideEnergy > 0f
                     && main > GoertzelDetector.DEFAULT_DOMINANCE_THRESHOLD * sideEnergy) {
                     if (main > stageOneMaxMain) stageOneMaxMain = main
@@ -135,18 +138,22 @@ class CalibrationSession(
     private fun transitionToStageTwo() {
         stageOneDetector?.onWindowAnalyzed = null
 
-        val baseThreshold = (stageOneMaxMain / 2.5f).takeIf { it > 0f } ?: fallbackThreshold
+        val baseThreshold = (stageOneMaxMain / 1000f).takeIf { it > 0f } ?: fallbackThreshold // 2.5f
 
         stageTwoDetector = GoertzelDetector(
             magThreshold = baseThreshold,
             sampleRate   = actualSampleRate
         ).apply {
-            onBeep = { peakMain, _, _ ->
-                if (peakMain.isFinite() && peaks.size < totalBeepCount) {
-                    peaks.add(peakMain)
-                    onProgress(2, peaks.size, totalBeepCount)
-                    if (peaks.size == totalBeepCount) {
-                        finishCalibration()
+            onCalibrationBatchAnalyzed = onBatchAnalyzed
+            onBeep = { peakMain, count, timeNs ->
+                if (count > 0) {
+                    this@CalibrationSession.onBeep?.invoke(timeNs)
+                    if (peakMain.isFinite() && peaks.size < totalBeepCount) {
+                        peaks.add(peakMain)
+                        onProgress(2, peaks.size, totalBeepCount)
+                        if (peaks.size == totalBeepCount) {
+                            finishCalibration()
+                        }
                     }
                 }
             }
@@ -157,7 +164,7 @@ class CalibrationSession(
 
     private fun finishCalibration() {
         val median         = peaks.sorted()[totalBeepCount / 2]
-        val raw            = minOf(median / 2.5f, 1e10f)
+        val raw            = minOf(median / 400f, 1e10f) // 2.5f
         val finalThreshold = if (raw > 0f) raw else fallbackThreshold
 
         PreferenceManager.getDefaultSharedPreferences(context)

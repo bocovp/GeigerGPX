@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
@@ -54,7 +56,6 @@ private enum class SettingsPage(val title: String) {
 }
 
 class SettingsActivity : ComponentActivity() {
-    private var calibrationDetector: CalibrationSession? = null
     private val activeDialogs = mutableSetOf<AlertDialog>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,8 +64,6 @@ class SettingsActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        calibrationDetector?.stop()
-        calibrationDetector = null
         dismissActiveDialogs()
         super.onDestroy()
     }
@@ -211,173 +210,168 @@ class SettingsActivity : ComponentActivity() {
         }
         val (alertVal, alertSub) = remember(refresh) { getAlertStrings(prefs) }
 
-        LazyColumn(
-            contentPadding = PaddingValues(
-                top = padding.calculateTopPadding() + 16.dp,
-                bottom = padding.calculateBottomPadding() + 16.dp,
-                start = 24.dp,
-                end = 24.dp
-            ),
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    top = padding.calculateTopPadding() + 16.dp,
+                    bottom = padding.calculateBottomPadding() + 16.dp,
+                    start = 24.dp,
+                    end = 24.dp
+                ),
             verticalArrangement = Arrangement.spacedBy(28.dp)
         ) {
-            item {
-                Section("Signal detection") {
-                    SettingsRow(
-                        "Dosimeter",
-                        currentDeviceName,
-                        onClick = onDevice
-                    )
-                    SettingsRow(
-                        "Threshold",
-                        thresholdSummaryVal,
-                        thresholdSubtitleVal,
-                        onClick = { startCalibration(false, onRefresh) },
-                        onLongClick = { showManualThresholdDialog(false, onRefresh) }
-                    )
-                    SettingsRow(
-                        "Bluetooth threshold",
-                        btThresholdSummaryVal,
-                        btThresholdSubtitleVal,
-                        onClick = {
-                            if (!AudioInputManager.isBluetoothMicAvailable(context)) {
-                                toast("Bluetooth microphone not available.")
-                            } else {
-                                startCalibration(true, onRefresh)
-                            }
-                        },
-                        onLongClick = { showManualThresholdDialog(true, onRefresh) }
-                    )
-                    SwitchRow(
-                        "Use Bluetooth mic",
-                        useBtMic
-                    ) {
-                        prefs.edit {
-                            putBoolean(
-                                SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE,
-                                it
-                            )
+            Section("Signal detection") {
+                SettingsRow(
+                    "Dosimeter",
+                    currentDeviceName,
+                    onClick = onDevice
+                )
+                SettingsRow(
+                    "Threshold",
+                    thresholdSummaryVal,
+                    thresholdSubtitleVal,
+                    onClick = { startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, false)) }
+                )
+                SettingsRow(
+                    "Bluetooth threshold",
+                    btThresholdSummaryVal,
+                    btThresholdSubtitleVal,
+                    onClick = {
+                        if (!AudioInputManager.isBluetoothMicAvailable(context)) {
+                            toast("Bluetooth microphone not available.")
+                        } else {
+                            startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, true))
                         }
-                        onRefresh()
                     }
-                    SwitchRow(
-                        "Visualize beeps",
-                        visualizeBeeps,
-                        "Show a real-time particle waterfall on the main screen"
-                    ) {
-                        prefs.edit { putBoolean("visualize_beeps", it) }
-                        onRefresh()
+                )
+                SwitchRow(
+                    "Use Bluetooth mic",
+                    useBtMic
+                ) {
+                    prefs.edit {
+                        putBoolean(
+                            SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE,
+                            it
+                        )
                     }
+                    onRefresh()
+                }
+                SwitchRow(
+                    "Visualize beeps",
+                    visualizeBeeps,
+                    "Show a real-time particle waterfall on the main screen"
+                ) {
+                    prefs.edit { putBoolean("visualize_beeps", it) }
+                    onRefresh()
                 }
             }
-            item {
-                Section("Dose rate measurement") {
-                    ChoiceRow(
-                        "Counts for dose rate averaging",
-                        doseRateAvg,
-                        subtitle = relativeErr,
-                        listOf("5", "10", "20", "50", "100")
-                    ) {
-                        prefs.edit {
-                            putString(
-                                "dose_rate_avg_timestamps_n",
-                                it
-                            )
-                        }
-                        onRefresh()
+            Section("Dose rate measurement") {
+                ChoiceRow(
+                    "Counts for dose rate averaging",
+                    doseRateAvg,
+                    subtitle = relativeErr,
+                    listOf("5", "10", "20", "50", "100")
+                ) {
+                    prefs.edit {
+                        putString(
+                            "dose_rate_avg_timestamps_n",
+                            it
+                        )
                     }
-
-                    ChoiceRow(
-                        "Dose rate formatting",
-                        doseRateFormatting.sampleValue,
-                        subtitle = doseRateFormatting.preferenceLabel,
-                        doseRateFormattingChoices
-                    ) {
-                        val selected = DoseRateFormatting.fromLabel(it) ?: doseRateFormatting
-                        val normalized = DoseRateFormatting.validForSensitivity(selected, sensitivity)
-                        prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, normalized.preferenceLabel) }
-                        onRefresh()
-                    }
-
-                    SettingsRow(
-                        title = "Alert at dose rate",
-                        value = alertVal,
-                        subtitle = alertSub,
-                        onClick = {
-                            showEditDialog(
-                                "Alert at dose rate",
-                                prefs.getString("alert_dose_rate", "0") ?: "0",
-                                decimal = true,
-                                signed = false
-                            ) {
-                                prefs.edit { putString("alert_dose_rate", it) }
-                                onRefresh()
-                            }
-                        }
-                    )
+                    onRefresh()
                 }
+
+                ChoiceRow(
+                    "Dose rate formatting",
+                    doseRateFormatting.sampleValue,
+                    subtitle = doseRateFormatting.preferenceLabel,
+                    doseRateFormattingChoices
+                ) {
+                    val selected = DoseRateFormatting.fromLabel(it) ?: doseRateFormatting
+                    val normalized = DoseRateFormatting.validForSensitivity(selected, sensitivity)
+                    prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, normalized.preferenceLabel) }
+                    onRefresh()
+                }
+
+                SettingsRow(
+                    title = "Alert at dose rate",
+                    value = alertVal,
+                    subtitle = alertSub,
+                    onClick = {
+                        showEditDialog(
+                            "Alert at dose rate",
+                            prefs.getString("alert_dose_rate", "0") ?: "0",
+                            decimal = true,
+                            signed = false
+                        ) {
+                            prefs.edit { putString("alert_dose_rate", it) }
+                            onRefresh()
+                        }
+                    }
+                )
             }
-            item {
-                Section("Track recording") {
-                    SettingsRow(
-                        "Save folder",
-                        rememberFolderSummary(
-                            prefs.getString(
-                                SettingsKeys.KEY_GPX_TREE_URI,
-                                null
-                            )
-                        ),
-                        "Press to change",
-                        onClick = { folderLauncher.launch(null) })
-                    EditPref(
-                        "GPS Spoofing detection speed",
-                        "max_speed_kmh",
-                        "30000.0",
-                        "km/h",
-                        true,
-                        refresh,
-                        onRefresh
-                    )
-                    EditPref(
-                        "Min distance between points",
-                        "point_spacing_m",
-                        "10.0",
-                        "m",
-                        true,
-                        refresh,
-                        onRefresh
-                    )
-                    EditPref(
-                        "Min counts per point",
-                        "min_counts_per_point",
-                        "10",
-                        null,
-                        false,
-                        refresh,
-                        onRefresh
-                    )
-                    EditPref(
-                        "Max time without counts",
-                        "max_time_without_counts_s",
-                        "10",
-                        "s",
-                        true,
-                        refresh,
-                        onRefresh
-                    )
-                    EditPref(
-                        "Max time without GPS",
-                        "max_time_without_gps_s",
-                        "30",
-                        "s",
-                        true,
-                        refresh,
-                        onRefresh
-                    )
-                    SwitchRow(
-                        "Also save dose rate in <ele> tag",
-                        prefs.getBoolean("save_dose_rate_in_ele", false)
-                    ) { prefs.edit { putBoolean("save_dose_rate_in_ele", it) }; onRefresh() }
-                }
+            Section("Track recording") {
+                SettingsRow(
+                    "Save folder",
+                    rememberFolderSummary(
+                        prefs.getString(
+                            SettingsKeys.KEY_GPX_TREE_URI,
+                            null
+                        )
+                    ),
+                    "Press to change",
+                    onClick = { folderLauncher.launch(null) })
+                EditPref(
+                    "GPS Spoofing detection speed",
+                    "max_speed_kmh",
+                    "30000.0",
+                    "km/h",
+                    true,
+                    refresh,
+                    onRefresh
+                )
+                EditPref(
+                    "Min distance between points",
+                    "point_spacing_m",
+                    "10.0",
+                    "m",
+                    true,
+                    refresh,
+                    onRefresh
+                )
+                EditPref(
+                    "Min counts per point",
+                    "min_counts_per_point",
+                    "10",
+                    null,
+                    false,
+                    refresh,
+                    onRefresh
+                )
+                EditPref(
+                    "Max time without counts",
+                    "max_time_without_counts_s",
+                    "10",
+                    "s",
+                    true,
+                    refresh,
+                    onRefresh
+                )
+                EditPref(
+                    "Max time without GPS",
+                    "max_time_without_gps_s",
+                    "30",
+                    "s",
+                    true,
+                    refresh,
+                    onRefresh
+                )
+                SwitchRow(
+                    "Also save dose rate in <ele> tag",
+                    prefs.getBoolean("save_dose_rate_in_ele", false)
+                ) { prefs.edit { putBoolean("save_dose_rate_in_ele", it) }; onRefresh() }
             }
         }
     }
@@ -391,192 +385,191 @@ class SettingsActivity : ComponentActivity() {
         val measurementModeEnabled by (application as GeigerGpxApp).trackingRepository.measurementModeEnabled.collectAsState()
         val active = isTracking || measurementModeEnabled
 
-        LazyColumn(
-            contentPadding = PaddingValues(
-                top = padding.calculateTopPadding() + 16.dp,
-                bottom = padding.calculateBottomPadding() + 16.dp,
-                start = 24.dp,
-                end = 24.dp
-            ),
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    top = padding.calculateTopPadding() + 16.dp,
+                    bottom = padding.calculateBottomPadding() + 16.dp,
+                    start = 24.dp,
+                    end = 24.dp
+                ),
             verticalArrangement = Arrangement.spacedBy(28.dp)
         ) {
-            item {
-                Button(
-                    onClick = { if (active) toast("Cannot change device while tracking or measuring") else onChoose() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 32.dp)
-                ) { Text("Change device") }
-            }
-            item {
-                Section("Current device parameters") {
-                    SettingsRow(
-                        "Device name",
-                        device.name,
-                        if (device.isCustom) "Custom" else "Built-in",
-                        enabled = device.isCustom,
-                        onClick = {
-                            if (active) toast("Cannot rename device while tracking or measuring") else renameDevice(
-                                device,
-                                onRefresh
-                            )
-                        })
-                    DeviceParam(
-                        "Sensitivity",
-                        RadiationCalibration.KEY_SENSITIVITY,
-                        DeviceConfigManager.getPropertyValue(
+            Button(
+                onClick = { if (active) toast("Cannot change device while tracking or measuring") else onChoose() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 32.dp)
+            ) { Text("Change device") }
+            Section("Current device parameters") {
+                SettingsRow(
+                    "Device name",
+                    device.name,
+                    if (device.isCustom) "Custom" else "Built-in",
+                    enabled = device.isCustom,
+                    onClick = {
+                        if (active) toast("Cannot rename device while tracking or measuring") else renameDevice(
                             device,
-                            RadiationCalibration.KEY_SENSITIVITY
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    SettingsRow("Beep detector", "Goertzel detector", enabled = false)
-                    DeviceParam(
-                        "Counts per beep",
-                        DeviceConfigManager.KEY_COUNTS_PER_BEEP,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_COUNTS_PER_BEEP
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "Low frequency",
-                        DeviceConfigManager.KEY_FREQ_LOW,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_FREQ_LOW
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "Main frequency",
-                        DeviceConfigManager.KEY_FREQ_MAIN,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_FREQ_MAIN
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "High frequency",
-                        DeviceConfigManager.KEY_FREQ_HIGH,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_FREQ_HIGH
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "Beep duration",
-                        DeviceConfigManager.KEY_DURATION,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_DURATION
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "Dominance threshold",
-                        DeviceConfigManager.KEY_DOMINANCE_THRESHOLD,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_DOMINANCE_THRESHOLD
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "Dominance threshold fade-out",
-                        DeviceConfigManager.KEY_DOMINANCE_THRESHOLD_END,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_DOMINANCE_THRESHOLD_END
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "Window size",
-                        DeviceConfigManager.KEY_WINDOW_SIZE,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_WINDOW_SIZE
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "Step size",
-                        DeviceConfigManager.KEY_STEP_SIZE,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_STEP_SIZE
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "Single beep duration tolerance",
-                        DeviceConfigManager.KEY_ONE_BEEP_TOL,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_ONE_BEEP_TOL
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "Double beep duration tolerance",
-                        DeviceConfigManager.KEY_TWO_BEEP_TOL,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_TWO_BEEP_TOL
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "Triple beep duration tolerance",
-                        DeviceConfigManager.KEY_THREE_BEEP_TOL,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_THREE_BEEP_TOL
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                    DeviceParam(
-                        "Quad beep duration tolerance",
-                        DeviceConfigManager.KEY_FOUR_BEEP_TOL,
-                        DeviceConfigManager.getPropertyValue(
-                            device,
-                            DeviceConfigManager.KEY_FOUR_BEEP_TOL
-                        ),
-                        device.isCustom,
-                        active,
-                        onRefresh
-                    )
-                }
+                            onRefresh
+                        )
+                    })
+                DeviceParam(
+                    "Sensitivity",
+                    RadiationCalibration.KEY_SENSITIVITY,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        RadiationCalibration.KEY_SENSITIVITY
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                SettingsRow("Beep detector", "Goertzel detector", enabled = false)
+                DeviceParam(
+                    "Counts per beep",
+                    DeviceConfigManager.KEY_COUNTS_PER_BEEP,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_COUNTS_PER_BEEP
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "Low frequency",
+                    DeviceConfigManager.KEY_FREQ_LOW,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_FREQ_LOW
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "Main frequency",
+                    DeviceConfigManager.KEY_FREQ_MAIN,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_FREQ_MAIN
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "High frequency",
+                    DeviceConfigManager.KEY_FREQ_HIGH,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_FREQ_HIGH
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "Beep duration",
+                    DeviceConfigManager.KEY_DURATION,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_DURATION
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "Dominance threshold",
+                    DeviceConfigManager.KEY_DOMINANCE_THRESHOLD,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_DOMINANCE_THRESHOLD
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "Dominance threshold fade-out",
+                    DeviceConfigManager.KEY_DOMINANCE_THRESHOLD_END,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_DOMINANCE_THRESHOLD_END
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "Window size",
+                    DeviceConfigManager.KEY_WINDOW_SIZE,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_WINDOW_SIZE
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "Step size",
+                    DeviceConfigManager.KEY_STEP_SIZE,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_STEP_SIZE
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "Single beep duration tolerance",
+                    DeviceConfigManager.KEY_ONE_BEEP_TOL,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_ONE_BEEP_TOL
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "Double beep duration tolerance",
+                    DeviceConfigManager.KEY_TWO_BEEP_TOL,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_TWO_BEEP_TOL
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "Triple beep duration tolerance",
+                    DeviceConfigManager.KEY_THREE_BEEP_TOL,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_THREE_BEEP_TOL
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
+                DeviceParam(
+                    "Quad beep duration tolerance",
+                    DeviceConfigManager.KEY_FOUR_BEEP_TOL,
+                    DeviceConfigManager.getPropertyValue(
+                        device,
+                        DeviceConfigManager.KEY_FOUR_BEEP_TOL
+                    ),
+                    device.isCustom,
+                    active,
+                    onRefresh
+                )
             }
         }
     }
@@ -866,51 +859,6 @@ class SettingsActivity : ComponentActivity() {
         return if (v.isNaN()) "Uncalibrated" else "Press to calibrate"
     }
 
-    private fun startCalibration(bluetooth: Boolean, onRefresh: () -> Unit) {
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(if (bluetooth) "Calibration (bluetooth)" else "Calibration")
-            .setMessage("Estimating signal level...")
-            .setNegativeButton("Cancel") { d, _ ->
-                calibrationDetector?.stop()
-                calibrationDetector = null
-                d.dismiss()
-            }
-            .setCancelable(false)
-            .create()
-
-        trackDialog(dialog)
-
-        calibrationDetector = CalibrationSession(
-            context = this,
-            onProgress = { phase, current, total ->
-                lifecycleScope.launch {
-                    if (phase == 2) {
-                        dialog.setMessage("Calibrating... $current/$total")
-                    }
-                }
-            },
-            onFinished = {
-                lifecycleScope.launch {
-                    calibrationDetector = null
-                    dialog.dismiss()
-                    onRefresh()
-                    toast("Calibration finished.")
-                }
-            },
-            onAudioStatus = { status, error ->
-                lifecycleScope.launch {
-                    if (error != AudioInputManager.AUDIO_STATUS_WORKING) {
-                        dialog.setMessage(status)
-                    }
-                }
-            },
-            useBluetoothMicIfAvailable = bluetooth,
-            thresholdPreferenceKey = thresholdKey(bluetooth),
-            fallbackThreshold = defaultThreshold(bluetooth)
-        )
-        calibrationDetector?.start()
-    }
-
     private fun  getRelativeErrString(prefs: android.content.SharedPreferences): String? {
         val avg = prefs.getString("dose_rate_avg_timestamps_n", "10")?.toIntOrNull() ?: 10
         val err = ConfidenceInterval.relativeErrPercent(avg) ?: return null
@@ -935,36 +883,6 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun fromDb(value: Float) = 10.0.pow(value / 10.0) * 100.0
-    private fun showManualThresholdDialog(bluetooth: Boolean, onRefresh: () -> Unit) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val key = thresholdKey(bluetooth)
-        val current = prefs.getFloat(key, Float.NaN)
-        val input = EditText(this).apply {
-            inputType =
-                InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
-            hint = "e.g. 42.1"; if (!current.isNaN()) {
-                setText("%.2f".format(java.util.Locale.US, toDb(current)))
-                setSelection(text.length)
-            }
-        }
-        trackDialog(
-            AlertDialog.Builder(this).setTitle("Set threshold manually")
-                .setMessage("Enter a positive threshold value.").setView(input)
-                .setPositiveButton("Save") { _, _ ->
-                    val value = input.text.toString().trim()
-                        .toFloatOrNull()
-                    if (value != null && value > 0f && value.isFinite()) {
-                        prefs.edit {
-                            putFloat(key,fromDb(value).toFloat())
-                        }
-                        onRefresh()
-                        toast("Threshold updated.")
-                    } else {
-                        toast("Invalid threshold value.")
-                    }
-                }.setNegativeButton("Cancel", null).create()
-        )
-    }
 
     private fun renameDevice(device: DeviceConfigManager.Device, onRefresh: () -> Unit) {
         if (!device.isCustom) return

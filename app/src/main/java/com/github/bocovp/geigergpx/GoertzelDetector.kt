@@ -4,13 +4,30 @@ import kotlin.math.PI
 import kotlin.math.cos
 
 class GoertzelDetector(
-    private val magThreshold: Float,
+    @Volatile var magThreshold: Float,
     private val sampleRate: Int = DEFAULT_SAMPLE_RATE
 ) {
 
 
     var onBeep: (Float, Int, Long) -> Unit = { _, _, _ -> }
     var onWindowAnalyzed: ((main: Float, sideEnergy: Float) -> Unit)? = null
+
+    private val batchSize = 25
+    private var batchIndex = 0
+
+    // 2. Pre-allocate primitive arrays to hold the bunch
+    private val mainBatch = FloatArray(batchSize)
+    private val lowBatch = FloatArray(batchSize)
+    private val highBatch = FloatArray(batchSize)
+    private val timeBatch = LongArray(batchSize)
+
+    /**
+     * Callback invoked when a batch of calibration windows is analyzed.
+     * Note: The array arguments are pre-allocated and reused across invocations.
+     * Implementations must copy the data if they need to persist it beyond the callback scope.
+     */
+    @Volatile var onCalibrationBatchAnalyzed: ((main: FloatArray, low: FloatArray, high: FloatArray, timeNs: LongArray, count: Int) -> Unit)? = null
+
 
     // -------------------------------------------------------------------------
     // Rate-derived configuration — set in init via configFor().
@@ -42,8 +59,12 @@ class GoertzelDetector(
     private val dominanceThreshold: Float
     private val dominanceThresholdEnd: Float
 
+    @Volatile private var magThresholdEnd = magThreshold / 2f
 
-    private val magThresholdEnd = magThreshold / 2f
+    fun setThreshold(value: Float) {
+        magThreshold = value
+        magThresholdEnd = value / 2f
+    }
 
     init {
         // Rate-dependent parameters are resolved from the currently selected device.
@@ -102,7 +123,6 @@ class GoertzelDetector(
     fun processSamples(samples: ShortArray, bufferStartNs: Long = 0L) {
         if (samples.isEmpty()) return
 
-
         val leftoverAtStart = leftoverSamples
         ensureCapacity(leftoverSamples + samples.size)
         System.arraycopy(samples, 0, processingBuffer, leftoverSamples, samples.size)
@@ -112,8 +132,25 @@ class GoertzelDetector(
 
         while (pos + windowSamples <= totalInBuffer) {
             val currentWindowGlobalSample = totalSamplesProcessed + pos
-            val (main, sideEnergy) = computeWindowEnergies(pos)
+            val energies = computeWindowEnergies(pos)
+            val main = energies.main
+            val sideEnergy = energies.sideEnergy
             onWindowAnalyzed?.invoke(main, sideEnergy)
+
+            val callback = onCalibrationBatchAnalyzed
+            if (callback != null) {
+                mainBatch[batchIndex] = energies.main
+                lowBatch[batchIndex] = energies.low
+                highBatch[batchIndex] = energies.high
+                timeBatch[batchIndex] = windowTimestampNs(bufferStartNs, pos, leftoverAtStart)
+                batchIndex++
+
+                // When the bunch is full, send it to the UI and reset
+                if (batchIndex >= batchSize) {
+                    callback.invoke(mainBatch, lowBatch, highBatch, timeBatch, batchSize)
+                    batchIndex = 0
+                }
+            }
 
             var detected     = false
             var detectedWeak = false
@@ -181,7 +218,7 @@ class GoertzelDetector(
         //}
     }
 
-    private fun computeWindowEnergies(pos: Int): Pair<Float, Float> {
+    private fun computeWindowEnergies(pos: Int): WindowEnergies {
         var q1M = 0f; var q2M = 0f
         var q1L = 0f; var q2L = 0f
         var q1H = 0f; var q2H = 0f
@@ -199,11 +236,19 @@ class GoertzelDetector(
             q2H = q1H; q1H = q0H
         }
 
-        val main      = q1M * q1M + q2M * q2M - q1M * q2M * coeffMain
-        val low       = q1L * q1L + q2L * q2L - q1L * q2L * coeffLow
-        val high      = q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh
-        val sideEnergy = maxOf(low, high) // (low + high) / 2f
-        return Pair(main, sideEnergy)
+        currentEnergies.main       = q1M * q1M + q2M * q2M - q1M * q2M * coeffMain
+        currentEnergies.low        = q1L * q1L + q2L * q2L - q1L * q2L * coeffLow
+        currentEnergies.high       = q1H * q1H + q2H * q2H - q1H * q2H * coeffHigh
+        currentEnergies.sideEnergy = maxOf(currentEnergies.low, currentEnergies.high) // (low + high) / 2f
+        return currentEnergies
+    }
+
+    private fun windowTimestampNs(bufferStartNs: Long, pos: Int, leftoverAtStart: Int): Long {
+        return if (bufferStartNs != 0L) {
+            bufferStartNs + (pos.toLong() - leftoverAtStart) * 1_000_000_000L / sampleRate
+        } else {
+            System.nanoTime()
+        }
     }
 
     private fun ensureCapacity(required: Int) {
@@ -235,6 +280,14 @@ class GoertzelDetector(
         val omega = 2.0 * PI * freq / sampleRate
         return 2.0f * cos(omega).toFloat()
     }
+
+    private class WindowEnergies(
+        var main: Float= 0f,
+        var low: Float= 0f,
+        var high: Float= 0f,
+        var sideEnergy: Float= 0f)
+
+    private val currentEnergies = WindowEnergies()
 
     private enum class State { SILENCE, DECAY, BEEP }
 
