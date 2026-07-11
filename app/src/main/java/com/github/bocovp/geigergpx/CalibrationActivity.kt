@@ -52,6 +52,7 @@ class CalibrationActivity : AppCompatActivity() {
 
     override fun onPause() {
         saveThresholdFromInput()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         super.onPause()
     }
 
