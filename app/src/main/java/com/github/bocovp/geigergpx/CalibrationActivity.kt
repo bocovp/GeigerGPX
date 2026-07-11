@@ -2,6 +2,8 @@ package com.github.bocovp.geigergpx
 
 import android.os.Bundle
 import android.text.InputType
+import android.view.MenuItem
+import android.view.WindowManager
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -25,17 +27,32 @@ class CalibrationActivity : AppCompatActivity() {
     private lateinit var autoButton: MaterialButton
     private var bluetooth = false
     private val prefs by lazy { PreferenceManager.getDefaultSharedPreferences(this) }
+    private var keepScreenOnEnabled: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         bluetooth = intent.getBooleanExtra(EXTRA_BLUETOOTH, false)
+        if (savedInstanceState != null) {
+            keepScreenOnEnabled = savedInstanceState.getBoolean("keep_screen_on", false)
+        }
         buildUi()
         loadThreshold()
         startPlotting()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean("keep_screen_on", keepScreenOnEnabled)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyKeepScreenOnFlag()
+    }
+
     override fun onPause() {
         saveThresholdFromInput()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         super.onPause()
     }
 
@@ -61,6 +78,20 @@ class CalibrationActivity : AppCompatActivity() {
             setNavigationIcon(typedValue.resourceId)
 
             setNavigationOnClickListener { finish() }
+
+            inflateMenu(R.menu.calibration_toolbar_menu)
+            refreshKeepScreenOnMenuItem(menu.findItem(R.id.action_keep_screen_on))
+            setOnMenuItemClickListener {
+                when (it.itemId) {
+                    R.id.action_keep_screen_on -> {
+                        keepScreenOnEnabled = !keepScreenOnEnabled
+                        applyKeepScreenOnFlag()
+                        refreshKeepScreenOnMenuItem(it)
+                        true
+                    }
+                    else -> false
+                }
+            }
         }
         root.addView(toolbar, LinearLayout.LayoutParams(-1, -2))
         val density = resources.displayMetrics.density
@@ -259,6 +290,21 @@ class CalibrationActivity : AppCompatActivity() {
     private fun defaultThreshold() = if (bluetooth) AudioInputManager.DEFAULT_BLUETOOTH_MAG_THRESHOLD else AudioInputManager.DEFAULT_MAG_THRESHOLD
     private fun toDb(intensity: Float) = (10.0 * log10(intensity.toDouble() / 100.0)).toFloat()
     private fun fromDb(value: Float) = (10.0.pow(value / 10.0) * 100.0).toFloat()
+    private fun refreshKeepScreenOnMenuItem(item: MenuItem?) {
+        item ?: return
+        val title = if (keepScreenOnEnabled) "Screen stay awake: ON" else "Screen stay awake: OFF"
+        val iconRes = if (keepScreenOnEnabled) R.drawable.baseline_lock_24 else R.drawable.baseline_lock_open_24
+        item.title = title
+        item.setIcon(iconRes)
+    }
+
+    private fun applyKeepScreenOnFlag() {
+        if (keepScreenOnEnabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
 
     companion object { const val EXTRA_BLUETOOTH = "bluetooth" }
 }
