@@ -100,6 +100,10 @@ class TimePlotActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState != null) {
+            keepScreenOnEnabled = savedInstanceState.getBoolean("keep_screen_on", false)
+            applyKeepScreenOnFlag()
+        }
         binding = ActivityTimePlotBinding.inflate(layoutInflater)
         setContentView(binding.root)
         setSupportActionBar(binding.topAppBar)
@@ -177,6 +181,11 @@ class TimePlotActivity : AppCompatActivity() {
         }
 
         invalidateOptionsMenu()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean("keep_screen_on", keepScreenOnEnabled)
     }
 
     /**

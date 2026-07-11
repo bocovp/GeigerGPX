@@ -32,9 +32,18 @@ class CalibrationActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         bluetooth = intent.getBooleanExtra(EXTRA_BLUETOOTH, false)
+        if (savedInstanceState != null) {
+            keepScreenOnEnabled = savedInstanceState.getBoolean("keep_screen_on", false)
+            applyKeepScreenOnFlag()
+        }
         buildUi()
         loadThreshold()
         startPlotting()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean("keep_screen_on", keepScreenOnEnabled)
     }
 
     override fun onPause() {
@@ -66,6 +75,7 @@ class CalibrationActivity : AppCompatActivity() {
             setNavigationOnClickListener { finish() }
 
             inflateMenu(R.menu.calibration_toolbar_menu)
+            refreshKeepScreenOnMenuItem(menu.findItem(R.id.action_keep_screen_on))
             setOnMenuItemClickListener {
                 when (it.itemId) {
                     R.id.action_keep_screen_on -> {

@@ -123,6 +123,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         pendingRestoreAfterStartupFolderValidation =
             savedInstanceState?.getBoolean(statePendingStartupRestore, false) ?: false
+        if (savedInstanceState != null) {
+            keepScreenOnEnabled = savedInstanceState.getBoolean("keep_screen_on", false)
+            applyKeepScreenOnFlag()
+        }
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         setSupportActionBar(binding.topAppBar)
@@ -215,6 +219,7 @@ class MainActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean(statePendingStartupRestore, pendingRestoreAfterStartupFolderValidation)
+        outState.putBoolean("keep_screen_on", keepScreenOnEnabled)
     }
 
     private fun validateConfiguredSaveFolderAtStartup(onValidationComplete: () -> Unit) {
