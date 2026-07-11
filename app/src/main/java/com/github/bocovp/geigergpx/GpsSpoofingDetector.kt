@@ -33,7 +33,7 @@ class GpsSpoofingDetector {
         val previousTimeMillis = lastTimeMillis
 
         if (previousLocation != null && previousTimeMillis > 0L) {
-            val timeDeltaSec = max(0.1, (nowMillis - previousTimeMillis) / 1000.0)
+            val timeDeltaSec = max(0.1, (loc.time - previousLocation.time) / 1000.0)
             val distance = previousLocation.distanceTo(loc).toDouble()
             val speedKmh = (distance / timeDeltaSec) * 3.6
             state = if (speedKmh > maxSpeedKmh) {

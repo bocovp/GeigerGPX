@@ -161,7 +161,7 @@ class TrackingService : Service() {
     }
 
     private fun loadTrackingPrefs() {
-        maxSpeedKmh = prefs.getString("max_speed_kmh", "30.0")?.toDoubleOrNull() ?: 30.0
+        maxSpeedKmh = prefs.getString("max_speed_kmh", "30000.0")?.toDoubleOrNull() ?: 30000.0
         spacingM = prefs.getString("point_spacing_m", "5.0")?.toDoubleOrNull() ?: 5.0
         minCountsPerPoint = prefs.getString("min_counts_per_point", "0")?.toIntOrNull() ?: 0
         maxTimeWithoutCountsS = prefs.getString("max_time_without_counts_s", "1")?.toDoubleOrNull() ?: 1.0
