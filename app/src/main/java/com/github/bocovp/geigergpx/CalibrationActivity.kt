@@ -45,6 +45,11 @@ class CalibrationActivity : AppCompatActivity() {
         outState.putBoolean("keep_screen_on", keepScreenOnEnabled)
     }
 
+    override fun onResume() {
+        super.onResume()
+        applyKeepScreenOnFlag()
+    }
+
     override fun onPause() {
         saveThresholdFromInput()
         super.onPause()
