@@ -167,10 +167,9 @@ class TimePlotView @JvmOverloads constructor(
         }
     })
 
-    private var cachedTextPrimaryColor: Int = Color.DKGRAY
+    private var cachedTextPrimaryColor: Int = resolveTextPrimaryColor()
 
     init {
-        cachedTextPrimaryColor = resolveTextPrimaryColor()
         applyAxisColors()
     }
 
