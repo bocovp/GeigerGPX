@@ -272,7 +272,7 @@ class SettingsActivity : ComponentActivity() {
                     "Counts for dose rate averaging",
                     doseRateAvg,
                     subtitle = relativeErr,
-                    listOf("5", "10", "20", "50", "100")
+                    listOf("5", "10", "15", "20", "30", "50", "100")
                 ) {
                     prefs.edit {
                         putString(

@@ -3,7 +3,9 @@
     <string-array name="dose_rate_avg_timestamps_entries">
         <item>5</item>
         <item>10</item>
+        <item>15</item>
         <item>20</item>
+        <item>30</item>
         <item>50</item>
         <item>100</item>
     </string-array>
@@ -11,7 +13,9 @@
     <string-array name="dose_rate_avg_timestamps_values">
         <item>5</item>
         <item>10</item>
+        <item>15</item>
         <item>20</item>
+        <item>30</item>
         <item>50</item>
         <item>100</item>
     </string-array>
