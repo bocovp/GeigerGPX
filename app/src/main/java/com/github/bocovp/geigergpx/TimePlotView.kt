@@ -22,8 +22,14 @@ class TimePlotView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
     companion object {
-        private const val MAX_ZOOM_X = 30f
+        private const val MIN_VISIBLE_DURATION_SECONDS = 60.0
     }
+
+    /** Maximum zoom factor: ensures the visible window is at least MIN_VISIBLE_DURATION_SECONDS. */
+    private val maxZoomX: Float
+        get() = if (trackDurationSeconds > MIN_VISIBLE_DURATION_SECONDS)
+            (trackDurationSeconds / MIN_VISIBLE_DURATION_SECONDS).toFloat()
+        else 1f
 
     var isInteracting = false
         private set
@@ -127,7 +133,7 @@ class TimePlotView @JvmOverloads constructor(
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
-            zoomX = (zoomX * detector.scaleFactor).coerceIn(1f, MAX_ZOOM_X)
+            zoomX = (zoomX * detector.scaleFactor).coerceIn(1f, maxZoomX)
             clampPan()
             onVisibleRangeChanged?.invoke()
             invalidate()
@@ -276,7 +282,7 @@ class TimePlotView @JvmOverloads constructor(
         // Only maintain visible duration if we are already zoomed in (zoomX > 1).
         // This prevents locking the window to a very small size at the start of a track.
         if (isLiveUpdate && zoomX > 1f && previousVisibleDuration > 0.0 && trackDurationSeconds > 0.0) {
-            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, MAX_ZOOM_X)
+            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, maxZoomX)
 
             // Adjust panFraction to keep the visible start time stable, preventing drift.
             val denom = trackDurationSeconds - (trackDurationSeconds / zoomX)
@@ -289,7 +295,7 @@ class TimePlotView @JvmOverloads constructor(
     fun setInitialWindowSeconds(windowSeconds: Double) {
         if (trackDurationSeconds <= 0.0) return
         val target = windowSeconds.coerceAtLeast(1.0)
-        zoomX = (trackDurationSeconds / target).toFloat().coerceIn(1f, MAX_ZOOM_X)
+        zoomX = (trackDurationSeconds / target).toFloat().coerceIn(1f, maxZoomX)
         panFraction = 1f
         clampPan()
         invalidate()
@@ -695,8 +701,39 @@ class TimePlotView @JvmOverloads constructor(
     private fun chooseHorizontalTickStepSeconds(durationSeconds: Double): Double {
         val targetTickCount = 5.0
         val desiredStepSeconds = durationSeconds / targetTickCount
-        return allowedHorizontalTickStepsSeconds.minByOrNull { kotlin.math.abs(it - desiredStepSeconds) }
+        var step = allowedHorizontalTickStepsSeconds.minByOrNull { kotlin.math.abs(it - desiredStepSeconds) }
             ?: allowedHorizontalTickStepsSeconds.first()
+
+        // When the total track is longer than 1 hour and the chosen step is sub-minute,
+        // limit the number of visible ticks to at most 5 by increasing the step.
+        if (trackDurationSeconds > 3600.0 && step < 60.0) {
+            val sorted = allowedHorizontalTickStepsSeconds.sorted()
+            while (step < 60.0 && durationSeconds / step > targetTickCount) {
+                val nextStep = sorted.firstOrNull { it > step }
+                if (nextStep != null) {
+                    step = nextStep
+                } else {
+                    break
+                }
+            }
+        }
+
+        // When the total track is longer than 10 minutes and the chosen step is sub-minute,
+        // limit the number of visible ticks to at most 6 by increasing the step.
+        if (trackDurationSeconds > 600.0 && step < 60.0) {
+            val maxTicks = 6.0
+            val sorted = allowedHorizontalTickStepsSeconds.sorted()
+            while (step < 60.0 && durationSeconds / step > maxTicks) {
+                val nextStep = sorted.firstOrNull { it > step }
+                if (nextStep != null) {
+                    step = nextStep
+                } else {
+                    break
+                }
+            }
+        }
+
+        return step
     }
 
     private fun chooseVerticalTickStep(maxValue: Double): Double {
