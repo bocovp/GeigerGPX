@@ -32,7 +32,7 @@ class TimePlotView @JvmOverloads constructor(
             (trackDurationSeconds / MIN_VISIBLE_DURATION_SECONDS).toFloat()
         else 1f
 
-    var isInteracting = false
+    var isInteracting = false/
         private set
     var onInteractionEnded: (() -> Unit)? = null
 
@@ -736,10 +736,13 @@ class TimePlotView @JvmOverloads constructor(
         var step = allowedHorizontalTickStepsSeconds.minByOrNull { kotlin.math.abs(it - desiredStepSeconds) }
             ?: allowedHorizontalTickStepsSeconds.first()
 
-        // When the total track is longer than 1 hour and the chosen step is sub-minute,
-        // limit the number of visible ticks to at most 5 by increasing the step.
-        if (trackDurationSeconds > 3600.0 && step < 60.0) {
-            while (step < 60.0 && durationSeconds / step > targetTickCount) {
+        // When chosen step is sub-minute, by increasing the step limit the number of visible ticks to
+        // at most 5 if track is longer than 1 hour
+        // at most 6 if track is longer than 10 minutes
+        // at most 7 otherwise
+        if (step < 60.0) {
+            val maxTickCount = if (trackDurationSeconds > 3600.0) 5.0 else if (trackDurationSeconds > 600.0) 6.0 else 7.0
+            while (step < 60.0 && durationSeconds / step > maxTickCount) {
                 val nextStep = allowedHorizontalTickStepsSeconds.firstOrNull { it > step }
                 if (nextStep != null) {
                     step = nextStep
@@ -748,21 +751,6 @@ class TimePlotView @JvmOverloads constructor(
                 }
             }
         }
-
-        // When the total track is longer than 10 minutes and the chosen step is sub-minute,
-        // limit the number of visible ticks to at most 6 by increasing the step.
-        if (trackDurationSeconds > 600.0 && step < 60.0) {
-            val maxTicks = 6.0
-            while (step < 60.0 && durationSeconds / step > maxTicks) {
-                val nextStep = allowedHorizontalTickStepsSeconds.firstOrNull { it > step }
-                if (nextStep != null) {
-                    step = nextStep
-                } else {
-                    break
-                }
-            }
-        }
-
         return step
     }
 
