@@ -10,6 +10,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import android.content.res.Configuration
 import androidx.core.graphics.ColorUtils
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
@@ -22,8 +23,14 @@ class TimePlotView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
     companion object {
-        private const val MAX_ZOOM_X = 30f
+        private const val MIN_VISIBLE_DURATION_SECONDS = 60.0
     }
+
+    /** Maximum zoom factor: ensures the visible window is at least MIN_VISIBLE_DURATION_SECONDS. */
+    private val maxZoomX: Float
+        get() = if (trackDurationSeconds > MIN_VISIBLE_DURATION_SECONDS)
+            (trackDurationSeconds / MIN_VISIBLE_DURATION_SECONDS).toFloat()
+        else 1f
 
     var isInteracting = false
         private set
@@ -127,7 +134,7 @@ class TimePlotView @JvmOverloads constructor(
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
-            zoomX = (zoomX * detector.scaleFactor).coerceIn(1f, MAX_ZOOM_X)
+            zoomX = (zoomX * detector.scaleFactor).coerceIn(1f, maxZoomX)
             clampPan()
             onVisibleRangeChanged?.invoke()
             invalidate()
@@ -160,8 +167,17 @@ class TimePlotView @JvmOverloads constructor(
         }
     })
 
+    private var cachedTextPrimaryColor: Int = resolveTextPrimaryColor()
+
     init {
-        refreshAxisColors()
+        applyAxisColors()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration?) {
+        super.onConfigurationChanged(newConfig)
+        cachedTextPrimaryColor = resolveTextPrimaryColor()
+        applyAxisColors()
+        invalidate()
     }
 
     fun setPoints(
@@ -276,7 +292,7 @@ class TimePlotView @JvmOverloads constructor(
         // Only maintain visible duration if we are already zoomed in (zoomX > 1).
         // This prevents locking the window to a very small size at the start of a track.
         if (isLiveUpdate && zoomX > 1f && previousVisibleDuration > 0.0 && trackDurationSeconds > 0.0) {
-            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, MAX_ZOOM_X)
+            zoomX = (trackDurationSeconds / previousVisibleDuration).toFloat().coerceIn(1f, maxZoomX)
 
             // Adjust panFraction to keep the visible start time stable, preventing drift.
             val denom = trackDurationSeconds - (trackDurationSeconds / zoomX)
@@ -289,7 +305,7 @@ class TimePlotView @JvmOverloads constructor(
     fun setInitialWindowSeconds(windowSeconds: Double) {
         if (trackDurationSeconds <= 0.0) return
         val target = windowSeconds.coerceAtLeast(1.0)
-        zoomX = (trackDurationSeconds / target).toFloat().coerceIn(1f, MAX_ZOOM_X)
+        zoomX = (trackDurationSeconds / target).toFloat().coerceIn(1f, maxZoomX)
         panFraction = 1f
         clampPan()
         invalidate()
@@ -329,7 +345,6 @@ class TimePlotView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        refreshAxisColors()
 
         val plotLeft = leftPaddingPx
         val plotTop = topPaddingPx
@@ -422,10 +437,9 @@ class TimePlotView @JvmOverloads constructor(
         invalidate()
     }
 
-    private fun refreshAxisColors() {
-        val baseTextColor = resolveTextPrimaryColor()
-        axisPaint.color = ColorUtils.blendARGB(baseTextColor, Color.WHITE, 0.10f)
-        textPaint.color = ColorUtils.blendARGB(baseTextColor, Color.WHITE, 0.20f)
+    private fun applyAxisColors() {
+        axisPaint.color = ColorUtils.blendARGB(cachedTextPrimaryColor, Color.WHITE, 0.10f)
+        textPaint.color = ColorUtils.blendARGB(cachedTextPrimaryColor, Color.WHITE, 0.20f)
         gridPaint.color = ColorUtils.setAlphaComponent(textPaint.color, 110)
     }
 
@@ -473,6 +487,8 @@ class TimePlotView @JvmOverloads constructor(
             }
         }
         val idx = plotSegments.binarySearch { it.startSeconds.compareTo(selectedSeconds) }
+        // When selectedSeconds is before the first segment, segmentIdx will be -1;
+        // getOrNull(-1) returns null, which correctly signals "no segment found".
         val segmentIdx = if (idx >= 0) idx else -idx - 2
         val segment = plotSegments.getOrNull(segmentIdx)?.takeIf { selectedSeconds <= it.endSeconds } ?: return null
         return toY(segment.value, plotBottom, plotHeight)
@@ -535,7 +551,15 @@ class TimePlotView @JvmOverloads constructor(
         val start = (trackDurationSeconds - visibleDuration) * panFraction
         val end = start + visibleDuration
 
-        for (segment in plotSegments) {
+        // Binary search for the first segment that could be visible (endSeconds > start)
+        var startIdx = plotSegments.binarySearch { it.endSeconds.compareTo(start) }
+        if (startIdx < 0) startIdx = -startIdx - 1
+        startIdx = startIdx.coerceAtLeast(0)
+
+        for (i in startIdx until plotSegments.size) {
+            val segment = plotSegments[i]
+            if (segment.startSeconds > end) break
+
             val segmentStart = maxOf(segment.startSeconds, start)
             val segmentEnd = minOf(segment.endSeconds, end)
             if (segmentEnd <= segmentStart) continue
@@ -550,20 +574,16 @@ class TimePlotView @JvmOverloads constructor(
             canvas.drawRect(leftX, ciHighY, rightX, ciLowY, ciPaint)
             canvas.drawLine(leftX, lineY, rightX, lineY, linePaint)
 
-            if (segment.endSeconds in start..end) {
+            // Draw vertical step connector to the next segment
+            if (segment.endSeconds in start..end && i + 1 < plotSegments.size) {
                 val stepX = plotLeft + (((segment.endSeconds - start) / visibleDuration).toFloat() * plotWidth)
-                val nextValue = nextSegmentValue(segment.endSeconds)
-                if (nextValue != null) {
-                    val nextY = toY(nextValue, plotBottom, plotHeight)
-                    canvas.drawLine(stepX, lineY, stepX, nextY, linePaint)
-                }
+                val nextY = toY(plotSegments[i + 1].value, plotBottom, plotHeight)
+                canvas.drawLine(stepX, lineY, stepX, nextY, linePaint)
             }
         }
     }
 
-    private fun nextSegmentValue(segmentStart: Double): Double? {
-        return plotSegments.firstOrNull { kotlin.math.abs(it.startSeconds - segmentStart) < 1e-9 }?.value
-    }
+
 
     private fun drawKernelSeries(
         canvas: Canvas,
@@ -576,9 +596,19 @@ class TimePlotView @JvmOverloads constructor(
         val visibleDuration = trackDurationSeconds / zoomX
         val start = (trackDurationSeconds - visibleDuration) * panFraction
         val end = start + visibleDuration
-        val points = kernelSeries.filter { it.t in start..end }
-        if (points.size < 2) return
+        // Binary search for the visible range (include one point outside each edge for continuity)
+        var lo = kernelSeries.binarySearch { it.t.compareTo(start) }
+        if (lo < 0) lo = -lo - 1
+        lo = (lo - 1).coerceAtLeast(0)
 
+        var hi = kernelSeries.binarySearch { it.t.compareTo(end) }
+        if (hi < 0) hi = -hi - 1
+        hi = hi.coerceAtMost(kernelSeries.size - 1)
+
+        if (hi - lo + 1 < 2) return
+        val points = kernelSeries.subList(lo, hi + 1)
+
+        // CI area path
         val areaPath = Path()
         for (idx in points.indices) {
             val p = points[idx]
@@ -595,14 +625,21 @@ class TimePlotView @JvmOverloads constructor(
         areaPath.close()
         canvas.drawPath(areaPath, ciPaint)
 
-        var prev = points.first()
+        // Mean line as a single Path for batched drawing
+        val linePath = Path()
+        val first = points.first()
+        linePath.moveTo(
+            plotLeft + (((first.t - start) / visibleDuration).toFloat() * plotWidth),
+            toY(first.mean, plotBottom, plotHeight)
+        )
         for (idx in 1 until points.size) {
-            val curr = points[idx]
-            val x1 = plotLeft + (((prev.t - start) / visibleDuration).toFloat() * plotWidth)
-            val x2 = plotLeft + (((curr.t - start) / visibleDuration).toFloat() * plotWidth)
-            canvas.drawLine(x1, toY(prev.mean, plotBottom, plotHeight), x2, toY(curr.mean, plotBottom, plotHeight), linePaint)
-            prev = curr
+            val p = points[idx]
+            linePath.lineTo(
+                plotLeft + (((p.t - start) / visibleDuration).toFloat() * plotWidth),
+                toY(p.mean, plotBottom, plotHeight)
+            )
         }
+        canvas.drawPath(linePath, linePaint)
     }
 
     private fun drawVerticalTicks(
@@ -695,8 +732,25 @@ class TimePlotView @JvmOverloads constructor(
     private fun chooseHorizontalTickStepSeconds(durationSeconds: Double): Double {
         val targetTickCount = 5.0
         val desiredStepSeconds = durationSeconds / targetTickCount
-        return allowedHorizontalTickStepsSeconds.minByOrNull { kotlin.math.abs(it - desiredStepSeconds) }
+        var step = allowedHorizontalTickStepsSeconds.minByOrNull { kotlin.math.abs(it - desiredStepSeconds) }
             ?: allowedHorizontalTickStepsSeconds.first()
+
+        // When chosen step is sub-minute, by increasing the step limit the number of visible ticks to
+        // at most 5 if track is longer than 1 hour
+        // at most 6 if track is longer than 10 minutes
+        // at most 7 otherwise
+        if (step < 60.0) {
+            val maxTickCount = if (trackDurationSeconds > 3600.0) 5.0 else if (trackDurationSeconds > 600.0) 6.0 else 7.0
+            while (step < 60.0 && durationSeconds / step > maxTickCount) {
+                val nextStep = allowedHorizontalTickStepsSeconds.firstOrNull { it > step }
+                if (nextStep != null) {
+                    step = nextStep
+                } else {
+                    break
+                }
+            }
+        }
+        return step
     }
 
     private fun chooseVerticalTickStep(maxValue: Double): Double {
