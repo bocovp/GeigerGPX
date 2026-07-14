@@ -32,7 +32,7 @@ class TimePlotView @JvmOverloads constructor(
             (trackDurationSeconds / MIN_VISIBLE_DURATION_SECONDS).toFloat()
         else 1f
 
-    var isInteracting = false/
+    var isInteracting = false
         private set
     var onInteractionEnded: (() -> Unit)? = null
 
