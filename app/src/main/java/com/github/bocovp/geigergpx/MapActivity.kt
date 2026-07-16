@@ -157,7 +157,8 @@ class MapActivity : AppCompatActivity() {
                             trackId = it.trackId,
                             trackTitle = it.trackTitle,
                             pointIndex = it.pointIndex,
-                            point = it.point
+                            point = it.point,
+                            deviceName = it.deviceName
                         )
                     }
                 )
@@ -294,10 +295,12 @@ class MapActivity : AppCompatActivity() {
         }
 
         val isCurrentTrack = selected?.trackId == TrackCatalog.currentTrackId() || selected == null
-        val deviceName = if (isCurrentTrack) {
+        val deviceName = if (selected?.deviceName != null) {
+            selected.deviceName
+        } else if (isCurrentTrack) {
             DeviceConfigManager.currentDeviceName(PreferenceManager.getDefaultSharedPreferences(this))
         } else {
-            selected?.deviceName
+            null
         }
 
         AlertDialog.Builder(this)

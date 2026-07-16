@@ -350,10 +350,12 @@ class TimePlotActivity : AppCompatActivity() {
         }
 
         val isCurrentTrack = selected.trackId == TrackCatalog.currentTrackId()
-        val deviceName = if (isCurrentTrack) {
+        val deviceName = if (selected.deviceName != null) {
+            selected.deviceName
+        } else if (isCurrentTrack) {
             DeviceConfigManager.currentDeviceName(PreferenceManager.getDefaultSharedPreferences(this))
         } else {
-            selected.deviceName
+            null
         }
 
         androidx.appcompat.app.AlertDialog.Builder(this)
