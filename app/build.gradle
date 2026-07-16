@@ -27,9 +27,10 @@ android {
         // 8 - 1.5.0
         // 9 - 1.5.1
         // 10 - 1.5.2
+        // 11 - 1.6.0
 
-        versionCode 10
-        versionName "1.5.2"
+        versionCode 11
+        versionName "1.6.0"
     }
 
     buildTypes {
