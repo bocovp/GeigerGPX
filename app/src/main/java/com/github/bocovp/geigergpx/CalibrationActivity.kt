@@ -72,7 +72,7 @@ class CalibrationActivity : AppCompatActivity() {
     private fun buildUi() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val toolbar = MaterialToolbar(this).apply {
-            title = if (bluetooth) "Bluetooth calibration" else "Calibration"
+            title = if (bluetooth) getString(R.string.bluetooth_calibration) else getString(R.string.calibration)
             val typedValue = android.util.TypedValue()
             theme.resolveAttribute(androidx.appcompat.R.attr.homeAsUpIndicator, typedValue, true)
             setNavigationIcon(typedValue.resourceId)
@@ -97,13 +97,13 @@ class CalibrationActivity : AppCompatActivity() {
         val density = resources.displayMetrics.density
         status = TextView(this).apply {
             setPadding((24 * density).toInt(), (8 * density).toInt(), (24 * density).toInt(), (8 * density).toInt())
-            text = "Starting audio..."
+            text = getString(R.string.starting_audio)
         }
         root.addView(status, LinearLayout.LayoutParams(-1, -2))
         plot = CalibrationPlotView(this)
         root.addView(plot, LinearLayout.LayoutParams(-1, 0, 1f))
         thresholdInput = EditText(this).apply {
-            hint = "Threshold (dB)"
+            hint = getString(R.string.threshold_db)
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
             setSingleLine(true)
             setOnEditorActionListener { _, _, _ -> saveThresholdFromInput(); false }
@@ -120,7 +120,7 @@ class CalibrationActivity : AppCompatActivity() {
         }
 
         autoButton = MaterialButton(this).apply {
-            text = "Autocalibrate"
+            text = getString(R.string.autocalibrate)
             layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 8 }
             setOnClickListener {
                 if (calibrationSession == null) runAutocalibration() else cancelAutocalibration()
@@ -129,7 +129,7 @@ class CalibrationActivity : AppCompatActivity() {
         buttonContainer.addView(autoButton)
 
         val doneButton = MaterialButton(this).apply {
-            text = "Done"
+            text = getString(R.string.done)
             layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = 8 }
             setOnClickListener { finish() }
         }
@@ -172,14 +172,14 @@ class CalibrationActivity : AppCompatActivity() {
 
     private fun runAutocalibration() {
         autoButton.isEnabled = false
-        autoButton.text = "Starting..."
+        autoButton.text = getString(R.string.starting)
         thresholdInput.isEnabled = false
         plot.isEnabled = false
         plot.clear()
 
         val input = audioInput
         audioInput = null
-        status.text = "Stopping audio..."
+        status.text = getString(R.string.stopping_audio)
 
         kotlin.concurrent.thread(name = "StopAudioAndCalibrate") {
             input?.stop()
@@ -187,14 +187,14 @@ class CalibrationActivity : AppCompatActivity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
 
                 autoButton.isEnabled = true
-                autoButton.text = "Cancel"
-                status.text = "Estimating signal level..."
+                autoButton.text = getString(R.string.cancel)
+                status.text = getString(R.string.estimating_signal_level)
                 calibrationSession = CalibrationSession(
                     context = applicationContext,
                     onProgress = { phase, current, total ->
                         runOnUiThread {
                             if (!isFinishing && !isDestroyed) {
-                                status.text = if (phase == 2) "Calibrating... $current/$total" else "Estimating signal level..."
+                                status.text = if (phase == 2) getString(R.string.calibrating_progress, current, total) else getString(R.string.estimating_signal_level)
                             }
                         }
                     },
@@ -202,11 +202,11 @@ class CalibrationActivity : AppCompatActivity() {
                         runOnUiThread {
                             if (!isFinishing && !isDestroyed) {
                                 calibrationSession = null
-                                autoButton.text = "Autocalibrate"
+                                autoButton.text = getString(R.string.autocalibrate)
                                 thresholdInput.isEnabled = true
                                 plot.isEnabled = true
                                 threshold?.let { saveThreshold(it, updateInput = true) }
-                                Toast.makeText(applicationContext, "Calibration finished.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(applicationContext, getString(R.string.calibration_finished), Toast.LENGTH_SHORT).show()
                                 startPlotting()
                             }
                         }
@@ -238,19 +238,19 @@ class CalibrationActivity : AppCompatActivity() {
 
     private fun cancelAutocalibration() {
         autoButton.isEnabled = false
-        autoButton.text = "Stopping..."
+        autoButton.text = getString(R.string.stopping)
         val session = calibrationSession
         calibrationSession = null
-        status.text = "Cancelling calibration..."
+        status.text = getString(R.string.cancelling_calibration)
         kotlin.concurrent.thread(name = "CancelCalibration") {
             session?.stop()
             runOnUiThread {
                 if (!isFinishing && !isDestroyed) {
                     autoButton.isEnabled = true
-                    autoButton.text = "Autocalibrate"
+                    autoButton.text = getString(R.string.autocalibrate)
                     thresholdInput.isEnabled = true
                     plot.isEnabled = true
-                    status.text = "Calibration cancelled."
+                    status.text = getString(R.string.calibration_cancelled)
                     startPlotting()
                 }
             }
@@ -292,7 +292,7 @@ class CalibrationActivity : AppCompatActivity() {
     private fun fromDb(value: Float) = (10.0.pow(value / 10.0) * 100.0).toFloat()
     private fun refreshKeepScreenOnMenuItem(item: MenuItem?) {
         item ?: return
-        val title = if (keepScreenOnEnabled) "Screen stay awake: ON" else "Screen stay awake: OFF"
+        val title = getString(if (keepScreenOnEnabled) R.string.screen_stay_awake_on else R.string.screen_stay_awake_off)
         val iconRes = if (keepScreenOnEnabled) R.drawable.baseline_lock_24 else R.drawable.baseline_lock_open_24
         item.title = title
         item.setIcon(iconRes)

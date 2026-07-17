@@ -64,7 +64,7 @@ class TracksActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.topAppBar)
 
-        supportActionBar?.title = currentFolderName?.let { "Tracks: $it" } ?: "Tracks"
+        supportActionBar?.title = currentFolderName?.let { getString(R.string.tracks_title_format, it) } ?: getString(R.string.tracks)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.topAppBar.setNavigationOnClickListener { finish() }
 
@@ -188,7 +188,7 @@ class TracksActivity : AppCompatActivity() {
             binding.progressLabel.text = if (progress == 0) {
                 getString(R.string.loading_files)
             } else {
-                "Parsing tracks: $progress%"
+                getString(R.string.parsing_tracks_progress, progress)
             }
         }
     }
@@ -248,32 +248,32 @@ class TracksActivity : AppCompatActivity() {
         popup.setForceShowIcon(true)
         MenuCompat.setGroupDividerEnabled(menu, true)
 
-        menu.add(MENU_GROUP_OPEN_SHARE, MENU_OPEN_DEFAULT, Menu.NONE, "Open in default app")
+        menu.add(MENU_GROUP_OPEN_SHARE, MENU_OPEN_DEFAULT, Menu.NONE, getString(R.string.open_in_default_app))
             .setIcon(R.drawable.baseline_open_in_new_24)
-        menu.add(MENU_GROUP_OPEN_SHARE, MENU_SHARE, Menu.NONE, "Share")
+        menu.add(MENU_GROUP_OPEN_SHARE, MENU_SHARE, Menu.NONE, getString(R.string.share))
             .setIcon(R.drawable.baseline_share_24)
-        menu.add(MENU_GROUP_OPEN_SHARE, MENU_DETAILS, Menu.NONE, "Details")
+        menu.add(MENU_GROUP_OPEN_SHARE, MENU_DETAILS, Menu.NONE, getString(R.string.details))
             .setIcon(R.drawable.baseline_info_24)
 
         if (!item.isCurrentTrack) {
-            menu.add(MENU_GROUP_MANAGE, MENU_EDIT_TRACK, Menu.NONE, "Edit track")
+            menu.add(MENU_GROUP_MANAGE, MENU_EDIT_TRACK, Menu.NONE, getString(R.string.edit_track))
                 .setIcon(R.drawable.baseline_rebase_edit_24)
-            menu.add(MENU_GROUP_MANAGE, MENU_RENAME, Menu.NONE, "Rename")
+            menu.add(MENU_GROUP_MANAGE, MENU_RENAME, Menu.NONE, getString(R.string.rename))
                 .setIcon(R.drawable.baseline_edit_24)
 
             var nextMoveId = MENU_MOVE_BASE
             val moveTargets = availableMoveTargets(item.folderName)
             if (moveTargets.size == 1) {
                 val targetFolder = moveTargets.first()
-                val title = targetFolder?.let { "Move to $it" } ?: "Move to main folder"
+                val title = targetFolder?.let { getString(R.string.move_to_format, it) } ?: getString(R.string.move_to_main_folder)
                 menu.add(MENU_GROUP_MANAGE, nextMoveId, Menu.NONE, title)
                     .setIcon(R.drawable.baseline_drive_file_move_24)
                 moveActions[nextMoveId] = targetFolder
             } else if (moveTargets.size > 1) {
-                val moveSubmenu = menu.addSubMenu(MENU_GROUP_MANAGE, MENU_MOVE_SUBMENU, Menu.NONE, "Move to ...")
+                val moveSubmenu = menu.addSubMenu(MENU_GROUP_MANAGE, MENU_MOVE_SUBMENU, Menu.NONE, getString(R.string.move_to_ellipsis))
                 moveSubmenu.item.setIcon(R.drawable.baseline_drive_file_move_24)
                 moveTargets.forEach { targetFolder ->
-                    val title = targetFolder?.let { "Move to $it" } ?: "Move to main folder"
+                    val title = targetFolder?.let { getString(R.string.move_to_format, it) } ?: getString(R.string.move_to_main_folder)
                     moveSubmenu.add(MENU_GROUP_MOVE, nextMoveId, Menu.NONE, title)
                         .setIcon(R.drawable.baseline_drive_file_move_24)
                     moveActions[nextMoveId] = targetFolder
@@ -281,7 +281,7 @@ class TracksActivity : AppCompatActivity() {
                 }
             }
 
-            menu.add(MENU_GROUP_MANAGE, MENU_DELETE, Menu.NONE, "Delete")
+            menu.add(MENU_GROUP_MANAGE, MENU_DELETE, Menu.NONE, getString(R.string.delete))
                 .setIcon(R.drawable.baseline_delete_24)
         }
 
@@ -305,11 +305,11 @@ class TracksActivity : AppCompatActivity() {
     private fun showTrackDetails(item: TrackListItem) {
         val details = formatTrackDetails(item)
         AlertDialog.Builder(this)
-            .setTitle("Track Details")
+            .setTitle(R.string.track_details)
             .setView(buildDetailsView(trackDetailsItems(item)))
-            .setNegativeButton("Close", null)
-            .setPositiveButton("Copy") { _, _ ->
-                copyTextToClipboard("Track details", details)
+            .setNegativeButton(R.string.close, null)
+            .setPositiveButton(R.string.copy) { _, _ ->
+                copyTextToClipboard(getString(R.string.track_details_clip_label), details)
             }
             .show()
     }
@@ -396,7 +396,7 @@ class TracksActivity : AppCompatActivity() {
     private fun copyTextToClipboard(label: String, text: String) {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
-        Toast.makeText(this, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT).show()
     }
 
     private fun openTrackEditor(item: TrackListItem) {
@@ -412,10 +412,10 @@ class TracksActivity : AppCompatActivity() {
     private fun handleMoveAction(item: TrackListItem, targetFolder: String?) {
         val movedTrackId = moveTrack(item, targetFolder)
         if (movedTrackId != null) {
-            Toast.makeText(this, "Track moved", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.track_moved), Toast.LENGTH_SHORT).show()
             TrackSelectionPrefs.replaceSelectedTrackId(this, item.id, movedTrackId)
         } else {
-            Toast.makeText(this, "Unable to move file", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.unable_to_move_file), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -439,18 +439,18 @@ class TracksActivity : AppCompatActivity() {
         val input = EditText(this).apply {
             setText(item.title)
             setSelection(text.length)
-            hint = "Track file name"
+            hint = getString(R.string.track_file_name)
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Rename file")
+            .setTitle(R.string.rename_file)
             .setView(input)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val result = renameTrack(item, input.text?.toString().orEmpty())
                 if (result != null) {
                     val (renamedId, renamedTitle) = result
-                    Toast.makeText(this, "File renamed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.file_renamed), Toast.LENGTH_SHORT).show()
                     TrackCatalog.onTrackRenamed(
                         context = this,
                         oldTrackId = item.id,
@@ -459,7 +459,7 @@ class TracksActivity : AppCompatActivity() {
                     )
                     TrackSelectionPrefs.replaceSelectedTrackId(this, item.id, renamedId)
                 } else {
-                    Toast.makeText(this, "Unable to rename file", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.unable_to_rename_file), Toast.LENGTH_SHORT).show()
                 }
             }
             .show()
@@ -467,17 +467,17 @@ class TracksActivity : AppCompatActivity() {
 
     private fun confirmDeleteTrack(item: TrackListItem) {
         AlertDialog.Builder(this)
-            .setTitle("Delete track")
-            .setMessage("Delete '${item.title}'?")
+            .setTitle(R.string.delete_track)
+            .setMessage(getString(R.string.delete_item_format, item.title))
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val deleted = deleteTrack(item)
                 if (deleted) {
                     TrackSelectionPrefs.removeSelectedTrackId(this, item.id)
                     TrackCatalog.onTrackDeleted(this, item.id)
-                    Toast.makeText(this, "Deleted", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.deleted), Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(this, "Unable to delete file", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.unable_to_delete_file), Toast.LENGTH_SHORT).show()
                 }
             }
             .show()
@@ -589,7 +589,7 @@ class TracksActivity : AppCompatActivity() {
 
     private fun openInDefaultApp(item: TrackListItem) {
         val uri = trackUriForOpenOrShare(item) ?: run {
-            Toast.makeText(this, "Track file is unavailable", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.track_file_unavailable), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -600,13 +600,13 @@ class TracksActivity : AppCompatActivity() {
         try {
             startActivity(intent)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(this, "No app found to open GPX files", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.no_app_found_open_gpx), Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun shareTrack(item: TrackListItem) {
         val uri = trackUriForOpenOrShare(item) ?: run {
-            Toast.makeText(this, "Track file is unavailable", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.track_file_unavailable), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -618,7 +618,7 @@ class TracksActivity : AppCompatActivity() {
         try {
             startActivity(Intent.createChooser(intent, "Share track"))
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(this, "No app available for sharing", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.no_app_available_sharing), Toast.LENGTH_SHORT).show()
         }
     }
 

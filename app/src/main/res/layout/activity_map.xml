@@ -113,7 +113,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:gravity="center"
-                    android:text="0.5 uSv/h"
+                    android:text="@string/map_scale_half_initial"
                     android:textColor="#F57F17" />
 
                 <TextView
@@ -122,7 +122,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:gravity="end"
-                    android:text="1.0 uSv/h"
+                    android:text="@string/map_scale_max_initial"
                     android:textColor="#B71C1C" />
             </LinearLayout>
         </LinearLayout>

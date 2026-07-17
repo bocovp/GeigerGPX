@@ -3,15 +3,15 @@
     <item
         android:id="@+id/action_map"
         android:icon="@drawable/baseline_map_24"
-        android:title="Map" />
+        android:title="@string/map" />
 
     <item
         android:id="@+id/action_poi"
         android:icon="@drawable/baseline_place_24"
-        android:title="POI" />
+        android:title="@string/poi" />
 
     <item
         android:id="@+id/action_settings"
         android:icon="@drawable/baseline_settings_24"
-        android:title="Settings" />
+        android:title="@string/settings" />
 </menu>

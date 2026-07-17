@@ -309,7 +309,7 @@ object TrackCatalog {
                         TrackListItem(
                             id = folderItemId(subfolder),
                             title = subfolder,
-                            subtitle = "Folder with $trackCount tracks",
+                            subtitle = context.getString(R.string.folder_with_track_count, trackCount),
                             mapTrack = null,
                             isCurrentTrack = false,
                             defaultVisible = false,
