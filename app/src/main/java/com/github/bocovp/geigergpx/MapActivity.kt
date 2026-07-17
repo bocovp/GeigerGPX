@@ -222,10 +222,10 @@ class MapActivity : AppCompatActivity() {
         val modeItem = menu.findItem(R.id.action_toggle_plot_mode)
 
         if (isHeatmapMode) {
-            toggleItem?.title = "Show Gradient Tracks"
+            toggleItem?.title = getString(R.string.show_gradient_tracks)
             toggleItem.setIcon(R.drawable.baseline_line_axis_24)
         } else {
-            toggleItem?.title = "Show Heatmap"
+            toggleItem?.title = getString(R.string.show_heatmap)
             toggleItem.setIcon(R.drawable.baseline_scatter_plot_24)
         }
         updateModeUi(modeItem)
@@ -291,7 +291,7 @@ class MapActivity : AppCompatActivity() {
         val input = EditText(this).apply {
             setText(defaultName)
             setSelection(text.length)
-            hint = "POI"
+            hint = getString(R.string.poi)
         }
 
         val isCurrentTrack = selected?.trackId == TrackCatalog.currentTrackId() || selected == null
@@ -304,8 +304,8 @@ class MapActivity : AppCompatActivity() {
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Add POI")
-            .setMessage("Define POI name:")
+            .setTitle(R.string.add_poi)
+            .setMessage(R.string.define_poi_name)
             .setView(input)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -346,7 +346,7 @@ class MapActivity : AppCompatActivity() {
                         invalidateOptionsMenu() // hides "Add POI" since no point is selected
                         refreshMapTracks(latestActivePoints)
                     }
-                    Toast.makeText(this@MapActivity, if (success) "POI added to Library" else "Unable to add POI", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MapActivity, if (success) getString(R.string.poi_added_to_library) else getString(R.string.unable_to_add_poi), Toast.LENGTH_SHORT).show()
                 }
             }
             .show()

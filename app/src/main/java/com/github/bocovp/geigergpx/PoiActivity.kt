@@ -40,7 +40,7 @@ class PoiActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.topAppBar)
 
-        supportActionBar?.title = "POI Library"
+        supportActionBar?.title = getString(R.string.poi_library)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.topAppBar.setNavigationOnClickListener { finish() }
 
@@ -133,14 +133,14 @@ class PoiActivity : AppCompatActivity() {
         val dateTime = if (poi.timestampMillis > 0L) {
             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(poi.timestampMillis))
         } else {
-            "Unknown time"
+            getString(R.string.unknown_time)
         }
         return "$dateTime   ${formatDoseRateText(poi)}"
     }
 
     private fun formatDoseRateText(poi: PoiEntry): String {
         if (poi.seconds <= 0.0) {
-            return "??? μSv/h"
+            return getString(R.string.unknown_dose_rate)
         }
         val ci = ConfidenceInterval(0.0, poi.seconds, poi.counts, false).scale(1.0 / poi.sensitivity)
         return "${ci.toText(decimalDigits = 4)} μSv/h"
@@ -162,13 +162,13 @@ class PoiActivity : AppCompatActivity() {
         val popup = PopupMenu(this, anchor)
         val menu = popup.menu
         popup.setForceShowIcon(true)
-        menu.add(Menu.NONE, MENU_RENAME, Menu.NONE, "Rename")
+        menu.add(Menu.NONE, MENU_RENAME, Menu.NONE, getString(R.string.rename))
             .setIcon(R.drawable.baseline_edit_24)
-        menu.add(Menu.NONE, MENU_SHARE, Menu.NONE, "Share")
+        menu.add(Menu.NONE, MENU_SHARE, Menu.NONE, getString(R.string.share))
             .setIcon(R.drawable.baseline_share_24)
-        menu.add(Menu.NONE, MENU_DETAILS, Menu.NONE, "Details")
+        menu.add(Menu.NONE, MENU_DETAILS, Menu.NONE, getString(R.string.details))
             .setIcon(R.drawable.baseline_info_24)
-        menu.add(Menu.NONE, MENU_DELETE, Menu.NONE, "Delete")
+        menu.add(Menu.NONE, MENU_DELETE, Menu.NONE, getString(R.string.delete))
             .setIcon(R.drawable.baseline_delete_24)
 
         popup.setOnMenuItemClickListener { menuItem ->
@@ -187,20 +187,20 @@ class PoiActivity : AppCompatActivity() {
         val input = EditText(this).apply {
             setText(item.poi.description)
             setSelection(text.length)
-            hint = "POI"
+            hint = getString(R.string.poi)
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Rename POI")
+            .setTitle(R.string.rename_poi)
             .setView(input)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val renamed = PoiLibrary.renamePoi(this, item.poi, input.text.toString())
                 if (renamed) {
-                    Toast.makeText(this, "POI renamed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.poi_renamed), Toast.LENGTH_SHORT).show()
                     refreshPoiList()
                 } else {
-                    Toast.makeText(this, "Unable to rename POI", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.unable_to_rename_poi), Toast.LENGTH_SHORT).show()
                 }
             }
             .show()
@@ -209,11 +209,11 @@ class PoiActivity : AppCompatActivity() {
     private fun showPoiDetails(poi: PoiEntry) {
         val details = formatShareText(poi)
         AlertDialog.Builder(this)
-            .setTitle("POI Details")
+            .setTitle(R.string.poi_details)
             .setView(buildDetailsView(poiDetailsItems(poi)))
-            .setNegativeButton("Close", null)
-            .setPositiveButton("Copy") { _, _ ->
-                copyTextToClipboard("POI details", details)
+            .setNegativeButton(R.string.close, null)
+            .setPositiveButton(R.string.copy) { _, _ ->
+                copyTextToClipboard(getString(R.string.poi_details_clip_label), details)
             }
             .show()
     }
@@ -222,18 +222,18 @@ class PoiActivity : AppCompatActivity() {
         val dateTime = if (poi.timestampMillis > 0L) {
             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(poi.timestampMillis))
         } else {
-            "Unknown time"
+            getString(R.string.unknown_time)
         }
         val items = mutableListOf(
-            "Name" to poi.description,
-            "Date" to dateTime,
-            "Latitude" to String.format(Locale.US, "%.6f", poi.latitude),
-            "Longitude" to String.format(Locale.US, "%.6f", poi.longitude),
-            "Counts" to poi.counts.toString(),
-            "Seconds" to String.format(Locale.US, "%.3f", poi.seconds),
-            "Dose rate" to formatDoseRateText(poi)
+            getString(R.string.details_name) to poi.description,
+            getString(R.string.details_date) to dateTime,
+            getString(R.string.details_latitude) to String.format(Locale.US, "%.6f", poi.latitude),
+            getString(R.string.details_longitude) to String.format(Locale.US, "%.6f", poi.longitude),
+            getString(R.string.details_counts) to poi.counts.toString(),
+            getString(R.string.details_seconds) to String.format(Locale.US, "%.3f", poi.seconds),
+            getString(R.string.details_dose_rate) to formatDoseRateText(poi)
         )
-        poi.deviceName?.takeIf { it.isNotBlank() }?.let { items.add("Device" to it) }
+        poi.deviceName?.takeIf { it.isNotBlank() }?.let { items.add(getString(R.string.details_device) to it) }
         return items
     }
 
@@ -273,7 +273,7 @@ class PoiActivity : AppCompatActivity() {
     private fun copyTextToClipboard(label: String, text: String) {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
-        Toast.makeText(this, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT).show()
     }
 
     private fun sharePoi(poi: PoiEntry) {
@@ -282,9 +282,9 @@ class PoiActivity : AppCompatActivity() {
             .putExtra(Intent.EXTRA_TEXT, formatShareText(poi))
 
         try {
-            startActivity(Intent.createChooser(intent, "Share POI"))
+            startActivity(Intent.createChooser(intent, getString(R.string.share_poi)))
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(this, "No app available for sharing", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.no_app_available_sharing), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -292,39 +292,39 @@ class PoiActivity : AppCompatActivity() {
         val dateTime = if (poi.timestampMillis > 0L) {
             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(poi.timestampMillis))
         } else {
-            "Unknown time"
+            getString(R.string.unknown_time)
         }
         val lat = String.format(Locale.US, "%.6f", poi.latitude)
         val lon = String.format(Locale.US, "%.6f", poi.longitude)
         return buildString {
             appendLine(poi.description)
-            appendLine("Date: $dateTime")
-            appendLine("Latitude: $lat")
-            appendLine("Longitude: $lon")
-            appendLine("Counts: ${poi.counts}")
-            appendLine("Seconds: ${String.format(Locale.US, "%.3f", poi.seconds)}")
-            append("Dose rate: ${formatDoseRateText(poi)}")
+            appendLine(getString(R.string.share_date_format, dateTime))
+            appendLine(getString(R.string.share_latitude_format, lat))
+            appendLine(getString(R.string.share_longitude_format, lon))
+            appendLine(getString(R.string.share_counts_format, poi.counts))
+            appendLine(getString(R.string.share_seconds_format, String.format(Locale.US, "%.3f", poi.seconds)))
+            append(getString(R.string.share_dose_rate_format, formatDoseRateText(poi)))
 
             poi.deviceName?.takeIf { it.isNotBlank() }?.let {
                 appendLine()
-                append("Device: $it")
+                append(getString(R.string.share_device_format, it))
             }
         }
     }
 
     private fun confirmDeletePoi(item: PoiUiItem) {
         AlertDialog.Builder(this)
-            .setTitle("Delete POI")
-            .setMessage("Delete '${item.title}'?")
+            .setTitle(R.string.delete_poi)
+            .setMessage(getString(R.string.delete_item_format, item.title))
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val deleted = PoiLibrary.removePoi(this, item.poi)
                 if (deleted) {
-                    Toast.makeText(this, "POI removed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.poi_removed), Toast.LENGTH_SHORT).show()
                     PoiLibrary.setPoiSelected(this, item.poi.id, selected = false)
                     refreshPoiList()
                 } else {
-                    Toast.makeText(this, "Unable to remove POI", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.unable_to_remove_poi), Toast.LENGTH_SHORT).show()
                 }
             }
             .show()

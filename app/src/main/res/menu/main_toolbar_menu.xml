@@ -5,32 +5,32 @@
     <item
         android:id="@+id/action_keep_screen_on"
         android:icon="@drawable/baseline_lock_open_24"
-        android:title="Screen stay awake: OFF"
+        android:title="@string/screen_stay_awake_off"
         app:showAsAction="always" />
 
     <group android:id="@+id/group_primary_navigation">
         <item
             android:id="@+id/action_tracks"
             android:icon="@drawable/baseline_track_24"
-            android:title="Tracks"
+            android:title="@string/tracks"
             app:showAsAction="never" />
 
         <item
             android:id="@+id/action_poi"
             android:icon="@drawable/baseline_place_24"
-            android:title="POI"
+            android:title="@string/poi"
             app:showAsAction="never" />
 
         <item
             android:id="@+id/action_map"
             android:icon="@drawable/baseline_map_24"
-            android:title="Map"
+            android:title="@string/map"
             app:showAsAction="never" />
 
         <item
             android:id="@+id/action_plot"
             android:icon="@drawable/baseline_query_stats_24"
-            android:title="Plot"
+            android:title="@string/plot"
             app:showAsAction="never" />
     </group>
 
@@ -38,7 +38,7 @@
         <item
             android:id="@+id/action_settings"
             android:icon="@drawable/baseline_settings_24"
-            android:title="Settings"
+            android:title="@string/settings"
             app:showAsAction="never" />
     </group>
 </menu>

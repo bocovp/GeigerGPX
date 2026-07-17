@@ -153,12 +153,12 @@ class MainActivity : AppCompatActivity() {
             val treeUri = prefs.getString(SettingsKeys.KEY_GPX_TREE_URI, null)
             if (treeUri.isNullOrBlank()) {
                 AlertDialog.Builder(this)
-                    .setTitle("Choose save folder")
-                    .setMessage("No save folder is set. Please choose a folder where the GPX file will be saved.")
-                    .setPositiveButton("Choose folder") { _, _ ->
+                    .setTitle(R.string.choose_save_folder)
+                    .setMessage(R.string.no_save_folder_message)
+                    .setPositiveButton(R.string.choose_folder) { _, _ ->
                         folderPickerForStop.launch(null)
                     }
-                    .setNegativeButton("Use app folder") { _, _ ->
+                    .setNegativeButton(R.string.use_app_folder) { _, _ ->
                         stopTracking()
                     }
                     .show()
@@ -241,7 +241,7 @@ class MainActivity : AppCompatActivity() {
             if (defaultFolderError != null) {
                 Toast.makeText(
                     this@MainActivity,
-                    "Warning: app default save folder is not writable: ${defaultFolderError.localizedMessage}",
+                    getString(R.string.warning_default_save_folder_not_writable, defaultFolderError.localizedMessage),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -252,15 +252,15 @@ class MainActivity : AppCompatActivity() {
             }
 
             AlertDialog.Builder(this@MainActivity)
-                .setTitle("Save folder unavailable")
+                .setTitle(R.string.save_folder_unavailable)
                 .setMessage(
-                    "Configured save folder is invalid or not writable. Choose another folder or app will fall back to default folder."
+                    getString(R.string.save_folder_unavailable_message)
                 )
-                .setPositiveButton("Choose folder") { _, _ ->
+                .setPositiveButton(R.string.choose_folder) { _, _ ->
                     pendingRestoreAfterStartupFolderValidation = true
                     folderPickerForStartupValidation.launch(null)
                 }
-                .setNegativeButton("Use default folder") { _, _ ->
+                .setNegativeButton(R.string.use_default_folder) { _, _ ->
                     FileStorageManager.clearConfiguredTreeUri(this@MainActivity)
                     onValidationComplete()
                 }
@@ -302,7 +302,7 @@ class MainActivity : AppCompatActivity() {
                 if (!app.isMainToolbarTitleHidden) {
                     app.isMainToolbarTitleHidden = true
                     applyToolbarTitleVisibility()
-                    Toast.makeText(this, "App name hidden until next launch", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.app_name_hidden_until_next_launch), Toast.LENGTH_SHORT).show()
                 }
                 true
             }
@@ -369,7 +369,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshKeepScreenOnMenuItem(item: MenuItem?) {
         item ?: return
-        val title = if (keepScreenOnEnabled) "Screen stay awake: ON" else "Screen stay awake: OFF"
+        val title = getString(if (keepScreenOnEnabled) R.string.screen_stay_awake_on else R.string.screen_stay_awake_off)
         val iconRes = if (keepScreenOnEnabled) {
             R.drawable.baseline_lock_24
         } else {
@@ -441,7 +441,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshTrackDuration(seconds: Long) {
-        binding.textDuration.text = "Duration: ${TrackingRepository.formatDuration(seconds)}"
+        binding.textDuration.text = getString(R.string.duration_format, TrackingRepository.formatDuration(seconds))
     }
 
     private fun formatCounts(counts: Int, countsPerBeep: Int): String {
@@ -454,9 +454,9 @@ class MainActivity : AppCompatActivity() {
     }
     private fun updateCountDisplay(state: TrackingViewModel.CountDisplayState) {
         val cpb = state.countsPerBeep
-        binding.textTrackCounts.text = "Track counts: ${formatCounts(state.trackCounts, cpb)}"
-        binding.textMeasurementCounts.text = "Counts: ${formatCounts(state.measurementCounts, cpb)}"
-        binding.textTotalCounts.text = "Total counts: ${formatCounts(state.totalCounts, cpb)}"
+        binding.textTrackCounts.text = getString(R.string.track_counts_format, formatCounts(state.trackCounts, cpb))
+        binding.textMeasurementCounts.text = getString(R.string.counts_format, formatCounts(state.measurementCounts, cpb))
+        binding.textTotalCounts.text = getString(R.string.total_counts_format, formatCounts(state.totalCounts, cpb))
     }
 
     private fun refreshMeasurementDurationFromTimer() {
@@ -471,7 +471,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             0.0
         }
-        binding.textMeasurementDuration.text = "Duration: ${measurementDurationSeconds.roundToInt()} s"
+        binding.textMeasurementDuration.text = getString(R.string.measurement_duration_format, measurementDurationSeconds.roundToInt())
     }
 
     private fun observeViewModel() {
@@ -479,7 +479,7 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     viewModel.isTracking.collect { tracking ->
-                        binding.buttonStart.text = if (tracking) "Cancel" else "Start track"
+                        binding.buttonStart.text = if (tracking) getString(R.string.cancel) else getString(R.string.start_track_lower)
                         binding.buttonStop.isEnabled = tracking
                     }
                 }
@@ -492,10 +492,10 @@ class MainActivity : AppCompatActivity() {
                 }
                 launch {
                     viewModel.distanceMeters.collect { dist ->
-                        binding.textDistance.text = "Distance: %.1f m".format(java.util.Locale.US, dist)
+                        binding.textDistance.text = String.format(java.util.Locale.US, getString(R.string.distance_m_format), dist)
                     }
                 }
-                launch { viewModel.pointCount.collect { count -> binding.textPoints.text = "Points: $count" } }
+                launch { viewModel.pointCount.collect { count -> binding.textPoints.text = getString(R.string.points_format, count) } }
                 launch {
                     viewModel.cpsUpdate.collect { update ->
                         latestCpsSnapshot = update.snapshot
@@ -506,7 +506,7 @@ class MainActivity : AppCompatActivity() {
                 launch { viewModel.countDisplayState.collect { state -> updateCountDisplay(state) } }
                 launch {
                     viewModel.gpsStatus.collect { status ->
-                        binding.textGpsStatus.text = "GPS status: $status"
+                        binding.textGpsStatus.text = getString(R.string.gps_status_format, status)
                         val color = when (status) {
                             "Waiting" -> R.color.status_waiting
                             "Working" -> R.color.status_working
@@ -517,7 +517,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 launch {
                     viewModel.audioStatus.collect { audioStatus ->
-                        binding.textAudioStatus.text = "Audio status: ${audioStatus.status}"
+                        binding.textAudioStatus.text = getString(R.string.audio_status_format, audioStatus.status)
                         val color = when (audioStatus.errorCode) {
                             TrackingRepository.AUDIO_STATUS_WORKING -> R.color.status_working
                             TrackingRepository.AUDIO_STATUS_ERROR -> R.color.status_spoofing
@@ -529,7 +529,7 @@ class MainActivity : AppCompatActivity() {
                 launch {
                     viewModel.measurementModeEnabled.collect { enabled ->
                         isMeasurementModeEnabled = enabled
-                        binding.buttonMeasurementMode.text = if (enabled) "Live Mode" else "Measure"
+                        binding.buttonMeasurementMode.text = if (enabled) getString(R.string.live_mode) else getString(R.string.measure)
                         binding.buttonSavePoi.isEnabled = enabled
                         updateCpsOrDoseLine(false)
                         refreshMeasurementDurationFromTimer()
@@ -552,13 +552,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         val input = EditText(this).apply {
-            hint = "Description"
+            hint = getString(R.string.description)
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Save POI")
+            .setTitle(R.string.save_poi)
             .setView(input)
-            .setPositiveButton("Save POI") { _, _ ->
+            .setPositiveButton(R.string.save_poi) { _, _ ->
                 val description = input.text?.toString()?.trim().orEmpty()
                 val (counts, seconds) = getCurrentMeasurementCountsAndSeconds()
 
@@ -586,12 +586,12 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
                         if (saveResult.success) {
-                            Toast.makeText(this@MainActivity, "POI saved", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, getString(R.string.poi_saved), Toast.LENGTH_SHORT).show()
                             saveResult.warning?.let { warning ->
                                 Toast.makeText(this@MainActivity, warning, Toast.LENGTH_LONG).show()
                             }
                         } else {
-                            val message = saveResult.error?.let { "Unable to save POI: $it" } ?: "Unable to save POI"
+                            val message = saveResult.error?.let { getString(R.string.unable_to_save_poi_error_format, it) } ?: getString(R.string.unable_to_save_poi)
                             Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
                         }
                     } catch (e: Exception) {
@@ -604,7 +604,7 @@ class MainActivity : AppCompatActivity() {
 
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
@@ -687,12 +687,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun showCancelTrackConfirmation() {
         AlertDialog.Builder(this)
-            .setTitle("Cancel track")
-            .setMessage("Are you sure you want to discard track?")
-            .setPositiveButton("Yes") { _, _ ->
+            .setTitle(R.string.cancel_track)
+            .setMessage(R.string.discard_track_message)
+            .setPositiveButton(R.string.yes) { _, _ ->
                 cancelTracking()
             }
-            .setNegativeButton("No", null)
+            .setNegativeButton(R.string.no, null)
             .show()
     }
 
@@ -847,9 +847,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Permissions required")
+            .setTitle(R.string.permissions_required)
             .setMessage(reasons.joinToString("\n\n"))
-            .setPositiveButton("Grant permissions") { _, _ ->
+            .setPositiveButton(R.string.grant_permissions) { _, _ ->
                 if (missingRuntimePermissions.isNotEmpty()) {
                     permissionLauncher.launch(missingRuntimePermissions.toTypedArray())
                 }
@@ -857,7 +857,7 @@ class MainActivity : AppCompatActivity() {
                     requestIgnoreBatteryOptimizations()
                 }
             }
-            .setNegativeButton("Not now", null)
+            .setNegativeButton(R.string.not_now, null)
             .show()
     }
 }
