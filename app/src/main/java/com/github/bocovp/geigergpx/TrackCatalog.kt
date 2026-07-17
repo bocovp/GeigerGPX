@@ -43,6 +43,7 @@ data class TrackListItem(
     val mapTrack: MapTrack?,
     val isCurrentTrack: Boolean,
     val defaultVisible: Boolean,
+    val stats: TrackStats? = null,
     val itemType: TrackListItemType = TrackListItemType.TRACK,
     val folderName: String? = null,
     val sensitivity: Double? = null,
@@ -77,6 +78,7 @@ object TrackCatalog {
                         id = cached.sourceId,
                         title = cached.displayName,
                         subtitle = formatStats(cached.stats),
+                        stats = cached.stats,
                         mapTrack = null,
                         isCurrentTrack = false,
                         defaultVisible = false,
@@ -227,6 +229,7 @@ object TrackCatalog {
                     id = CURRENT_TRACK_ID,
                     title = CURRENT_TRACK_TITLE,
                     subtitle = formatStats(currentTrack.stats),
+                    stats = currentTrack.stats,
                     mapTrack = if (includeCurrentMapTrack) {
                         MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.points, RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)))
                     } else {
@@ -284,6 +287,7 @@ object TrackCatalog {
                     id = source.sourceId,
                     title = source.displayName,
                     subtitle = formatStats(stats),
+                    stats = stats,
                     mapTrack = mapTrack,
                     isCurrentTrack = false,
                     defaultVisible = false,

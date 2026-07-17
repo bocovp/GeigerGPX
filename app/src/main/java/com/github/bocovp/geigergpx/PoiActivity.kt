@@ -5,10 +5,14 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Menu
 import android.view.View
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -206,12 +210,64 @@ class PoiActivity : AppCompatActivity() {
         val details = formatShareText(poi)
         AlertDialog.Builder(this)
             .setTitle("POI Details")
-            .setMessage(details)
+            .setView(buildDetailsView(poiDetailsItems(poi)))
             .setNegativeButton("Close", null)
             .setPositiveButton("Copy") { _, _ ->
                 copyTextToClipboard("POI details", details)
             }
             .show()
+    }
+
+    private fun poiDetailsItems(poi: PoiEntry): List<Pair<String, String>> {
+        val dateTime = if (poi.timestampMillis > 0L) {
+            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(poi.timestampMillis))
+        } else {
+            "Unknown time"
+        }
+        val items = mutableListOf(
+            "Name" to poi.description,
+            "Date" to dateTime,
+            "Latitude" to String.format(Locale.US, "%.6f", poi.latitude),
+            "Longitude" to String.format(Locale.US, "%.6f", poi.longitude),
+            "Counts" to poi.counts.toString(),
+            "Seconds" to String.format(Locale.US, "%.3f", poi.seconds),
+            "Dose rate" to formatDoseRateText(poi)
+        )
+        poi.deviceName?.takeIf { it.isNotBlank() }?.let { items.add("Device" to it) }
+        return items
+    }
+
+    private fun buildDetailsView(items: List<Pair<String, String>>): ScrollView {
+        val density = resources.displayMetrics.density
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val horizontalPadding = (24 * density).toInt()
+            val verticalPadding = (8 * density).toInt()
+            setPadding(horizontalPadding, verticalPadding, horizontalPadding, 0)
+        }
+
+        items.forEach { (name, value) ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = (6 * density).toInt() }
+            }
+            row.addView(TextView(this).apply {
+                text = name
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                alpha = 0.72f
+            })
+            row.addView(TextView(this).apply {
+                text = value
+                textSize = 16f
+            })
+            container.addView(row)
+        }
+
+        return ScrollView(this).apply { addView(container) }
     }
 
     private fun copyTextToClipboard(label: String, text: String) {
