@@ -1,6 +1,9 @@
 package com.github.bocovp.geigergpx
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
@@ -159,6 +162,8 @@ class PoiActivity : AppCompatActivity() {
             .setIcon(R.drawable.baseline_edit_24)
         menu.add(Menu.NONE, MENU_SHARE, Menu.NONE, "Share")
             .setIcon(R.drawable.baseline_share_24)
+        menu.add(Menu.NONE, MENU_DETAILS, Menu.NONE, "Details")
+            .setIcon(R.drawable.baseline_info_24)
         menu.add(Menu.NONE, MENU_DELETE, Menu.NONE, "Delete")
             .setIcon(R.drawable.baseline_delete_24)
 
@@ -166,6 +171,7 @@ class PoiActivity : AppCompatActivity() {
             when (menuItem.itemId) {
                 MENU_RENAME -> showRenameDialog(item)
                 MENU_SHARE -> sharePoi(item.poi)
+                MENU_DETAILS -> showPoiDetails(item.poi)
                 MENU_DELETE -> confirmDeletePoi(item)
             }
             true
@@ -194,6 +200,24 @@ class PoiActivity : AppCompatActivity() {
                 }
             }
             .show()
+    }
+
+    private fun showPoiDetails(poi: PoiEntry) {
+        val details = formatShareText(poi)
+        AlertDialog.Builder(this)
+            .setTitle("POI Details")
+            .setMessage(details)
+            .setNegativeButton("Close", null)
+            .setPositiveButton("Copy") { _, _ ->
+                copyTextToClipboard("POI details", details)
+            }
+            .show()
+    }
+
+    private fun copyTextToClipboard(label: String, text: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
+        Toast.makeText(this, "Copied to clipboard", Toast.LENGTH_SHORT).show()
     }
 
     private fun sharePoi(poi: PoiEntry) {
@@ -254,6 +278,7 @@ class PoiActivity : AppCompatActivity() {
 
         private const val MENU_RENAME = 1
         private const val MENU_SHARE = 2
-        private const val MENU_DELETE = 3
+        private const val MENU_DETAILS = 3
+        private const val MENU_DELETE = 4
     }
 }

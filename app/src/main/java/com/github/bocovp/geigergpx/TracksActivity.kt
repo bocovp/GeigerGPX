@@ -1,6 +1,9 @@
 package com.github.bocovp.geigergpx
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -245,6 +248,8 @@ class TracksActivity : AppCompatActivity() {
             .setIcon(R.drawable.baseline_open_in_new_24)
         menu.add(MENU_GROUP_OPEN_SHARE, MENU_SHARE, Menu.NONE, "Share")
             .setIcon(R.drawable.baseline_share_24)
+        menu.add(MENU_GROUP_OPEN_SHARE, MENU_DETAILS, Menu.NONE, "Details")
+            .setIcon(R.drawable.baseline_info_24)
 
         if (!item.isCurrentTrack) {
             menu.add(MENU_GROUP_MANAGE, MENU_EDIT_TRACK, Menu.NONE, "Edit track")
@@ -283,6 +288,7 @@ class TracksActivity : AppCompatActivity() {
                 MENU_DELETE -> confirmDeleteTrack(item)
                 MENU_OPEN_DEFAULT -> openInDefaultApp(item)
                 MENU_SHARE -> shareTrack(item)
+                MENU_DETAILS -> showTrackDetails(item)
                 in moveActions.keys -> {
                     handleMoveAction(item, moveActions.getValue(menuItem.itemId))
                 }
@@ -290,6 +296,38 @@ class TracksActivity : AppCompatActivity() {
             true
         }
         popup.show()
+    }
+
+    private fun showTrackDetails(item: TrackListItem) {
+        val details = formatTrackDetails(item)
+        AlertDialog.Builder(this)
+            .setTitle("Track Details")
+            .setMessage(details)
+            .setNegativeButton("Close", null)
+            .setPositiveButton("Copy") { _, _ ->
+                copyTextToClipboard("Track details", details)
+            }
+            .show()
+    }
+
+    private fun formatTrackDetails(item: TrackListItem): String {
+        return buildString {
+            appendLine(item.title)
+            appendLine("Status: ${if (item.isCurrentTrack) "Currently recording" else "Saved track"}")
+            item.folderName?.let { appendLine("Folder: $it") }
+            appendLine("Summary: ${item.subtitle}")
+            item.deviceName?.takeIf { it.isNotBlank() }?.let { appendLine("Device: $it") }
+            item.sensitivity?.takeIf { it > 0.0 }?.let {
+                appendLine("Sensitivity: ${RadiationCalibration.formatSensitivity(it)} cps/μSv/h")
+            }
+            append("Source ID: ${item.id}")
+        }
+    }
+
+    private fun copyTextToClipboard(label: String, text: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
+        Toast.makeText(this, "Copied to clipboard", Toast.LENGTH_SHORT).show()
     }
 
     private fun openTrackEditor(item: TrackListItem) {
@@ -591,7 +629,8 @@ class TracksActivity : AppCompatActivity() {
         private const val MENU_OPEN_DEFAULT = 3
         private const val MENU_SHARE = 4
         private const val MENU_EDIT_TRACK = 5
-        private const val MENU_MOVE_SUBMENU = 6
+        private const val MENU_DETAILS = 6
+        private const val MENU_MOVE_SUBMENU = 7
         private const val MENU_MOVE_BASE = 100
         private const val GPX_MIME = "application/gpx+xml"
         private const val ARCHIVE_SUBFOLDER = "Archive"

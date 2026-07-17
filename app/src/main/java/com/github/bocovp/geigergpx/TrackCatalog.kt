@@ -44,7 +44,9 @@ data class TrackListItem(
     val isCurrentTrack: Boolean,
     val defaultVisible: Boolean,
     val itemType: TrackListItemType = TrackListItemType.TRACK,
-    val folderName: String? = null
+    val folderName: String? = null,
+    val sensitivity: Double? = null,
+    val deviceName: String? = null
 )
 
 enum class TrackListItemType {
@@ -79,7 +81,9 @@ object TrackCatalog {
                         isCurrentTrack = false,
                         defaultVisible = false,
                         itemType = TrackListItemType.TRACK,
-                        folderName = cached.folderName
+                        folderName = cached.folderName,
+                        sensitivity = cached.sensitivity,
+                        deviceName = cached.deviceName
                     )
                 }
         }
@@ -229,7 +233,8 @@ object TrackCatalog {
                         null
                     },
                     isCurrentTrack = true,
-                    defaultVisible = true
+                    defaultVisible = true,
+                    sensitivity = RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(context))
                 )
             )
         }
@@ -283,7 +288,9 @@ object TrackCatalog {
                     isCurrentTrack = false,
                     defaultVisible = false,
                     itemType = TrackListItemType.TRACK,
-                    folderName = source.folderName
+                    folderName = source.folderName,
+                    sensitivity = cached.sensitivity,
+                    deviceName = cached.deviceName
                 )
             )
         }
