@@ -346,7 +346,7 @@ class TimePlotActivity : AppCompatActivity() {
         val input = EditText(this).apply {
             setText(defaultName)
             setSelection(text.length)
-            hint = "POI"
+            hint = getString(R.string.poi)
         }
 
         val isCurrentTrack = selected.trackId == TrackCatalog.currentTrackId()
@@ -359,8 +359,8 @@ class TimePlotActivity : AppCompatActivity() {
         }
 
         androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Add POI")
-            .setMessage("Define POI name:")
+            .setTitle(R.string.add_poi)
+            .setMessage(R.string.define_poi_name)
             .setView(input)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -379,7 +379,7 @@ class TimePlotActivity : AppCompatActivity() {
                             deviceName = deviceName
                         )
                     }
-                    android.widget.Toast.makeText(this@TimePlotActivity, if (success) "POI saved" else "Unable to save POI", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(this@TimePlotActivity, if (success) getString(R.string.poi_saved) else getString(R.string.unable_to_save_poi), android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
             .show()
@@ -457,7 +457,7 @@ class TimePlotActivity : AppCompatActivity() {
 
     private fun refreshKeepScreenOnMenuItem(item: MenuItem?) {
         item ?: return
-        val title = if (keepScreenOnEnabled) "Screen stay awake: ON" else "Screen stay awake: OFF"
+        val title = getString(if (keepScreenOnEnabled) R.string.screen_stay_awake_on else R.string.screen_stay_awake_off)
         val iconRes = if (keepScreenOnEnabled) R.drawable.baseline_lock_24 else R.drawable.baseline_lock_open_24
         item.title = title
         item.setIcon(iconRes)
@@ -827,7 +827,7 @@ class TimePlotActivity : AppCompatActivity() {
     }
 
     private fun updateSliderDescription(valueMinutes: Float) {
-        binding.averagingLabel.text = "Averaging window: ${"%.1f".format(Locale.US, valueMinutes)} min"
+        binding.averagingLabel.text = String.format(Locale.US, getString(R.string.averaging_window_minutes_format), valueMinutes)
     }
 
     private fun startOrStopLiveKdeRefresh() {

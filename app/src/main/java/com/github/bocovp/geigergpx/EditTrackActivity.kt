@@ -58,7 +58,7 @@ class EditTrackActivity : AppCompatActivity() {
 
         setSupportActionBar(binding.topAppBar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        binding.topAppBar.title = "Edit Track"
+        binding.topAppBar.title = getString(R.string.edit_track_title)
         binding.topAppBar.subtitle = trackTitle
         binding.topAppBar.setNavigationOnClickListener { finish() }
 
@@ -142,7 +142,7 @@ class EditTrackActivity : AppCompatActivity() {
                 }
             }.getOrNull()
             if (loaded == null || loaded.points.isEmpty()) {
-                Toast.makeText(this@EditTrackActivity, "Unable to load track", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@EditTrackActivity, getString(R.string.unable_to_load_track), Toast.LENGTH_SHORT).show()
                 finish()
                 return@launch
             }
@@ -223,7 +223,7 @@ class EditTrackActivity : AppCompatActivity() {
         selectionOverlay.selectionEnabled = mode != EditMode.NONE
         binding.descriptionText.setText(descriptionText())
         binding.btnApply.isEnabled = isApplyEnabled()
-        binding.btnCancel.text = if (!hasEdits) "Cancel" else if (selectedIndices.isEmpty()) "Finish" else "Cancel"
+        binding.btnCancel.text = if (!hasEdits) getString(R.string.cancel) else if (selectedIndices.isEmpty()) getString(R.string.finish) else getString(R.string.cancel)
         binding.mapView.invalidate()
     }
 
@@ -323,7 +323,7 @@ class EditTrackActivity : AppCompatActivity() {
                 while (end < points.lastIndex && points[end + 1].badCoordinates) end += 1
 
                 if (start == 0 || end == points.lastIndex) {
-                    Toast.makeText(this, "Cannot interpolate points at the beginning/end of the track", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.cannot_interpolate_endpoints), Toast.LENGTH_SHORT).show()
                     return
                 }
 
@@ -354,7 +354,7 @@ class EditTrackActivity : AppCompatActivity() {
                 val first = updatedPoints.take(split + 1)
                 val second = points.drop(split + 1)
                 if (first.isEmpty() || second.isEmpty()) {
-                    Toast.makeText(this, "Unable to split at selected point", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.unable_to_split_selected_point), Toast.LENGTH_SHORT).show()
                     return
                 }
                 updatedPoints.clear()
@@ -403,7 +403,7 @@ class EditTrackActivity : AppCompatActivity() {
                 }
 
                 if (!success) {
-                    Toast.makeText(this@EditTrackActivity, "Failed to save changes", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@EditTrackActivity, getString(R.string.failed_to_save_changes), Toast.LENGTH_SHORT).show()
                     return@launch
                 }
 
@@ -411,13 +411,13 @@ class EditTrackActivity : AppCompatActivity() {
                 hasEdits = true
                 trackAlreadyEdited = true
                 mode = EditMode.NONE
-                binding.editModeDropdown.setText("Move / zoom", false)
+                binding.editModeDropdown.setText(getString(R.string.move_zoom), false)
                 selectedIndices = emptyList()
                 boundaryIndex = null
                 refreshUiState()
-                Toast.makeText(this@EditTrackActivity, "Track updated", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@EditTrackActivity, getString(R.string.track_updated), Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Toast.makeText(this@EditTrackActivity, "Error saving changes", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@EditTrackActivity, getString(R.string.error_saving_changes), Toast.LENGTH_SHORT).show()
             } finally {
                 binding.btnApply.isEnabled = isApplyEnabled()
             }

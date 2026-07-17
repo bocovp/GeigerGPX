@@ -23,7 +23,7 @@ class CalibrationPlotView @JvmOverloads constructor(
     private val maxDb = 140f
     @Volatile private var startNs: Long = 0L
     private var thresholdDb: Float = 0f
-    private var thresholdText: String = "threshold 0.0 dB"
+    private var thresholdText: String = String.format(java.util.Locale.US, context.getString(R.string.threshold_db_format), 0.0f)
     private val dbLabels = arrayOf("0", "35", "70", "105", "140")
     var onThresholdSelected: ((Float, Boolean) -> Unit)? = null
 
@@ -44,7 +44,7 @@ class CalibrationPlotView @JvmOverloads constructor(
 
     fun setThresholdMagnitude(value: Float) {
         thresholdDb = toDb(value).coerceIn(0f, maxDb)
-        thresholdText = "threshold %.1f dB".format(java.util.Locale.US, thresholdDb)
+        thresholdText = String.format(java.util.Locale.US, context.getString(R.string.threshold_db_format), thresholdDb)
         invalidate()
     }
 
@@ -105,7 +105,7 @@ class CalibrationPlotView @JvmOverloads constructor(
                 canvas.drawLine(left, y, left + w, y, gridPaint)
                 canvas.drawText(dbLabels[i], 4f * density, y + 4f * density, textPaint)
             }
-            canvas.drawText("dB", 4f * density, top + 10f * density, textPaint)
+            canvas.drawText(context.getString(R.string.db_unit), 4f * density, top + 10f * density, textPaint)
 
             val ty = yFor(thresholdDb, h)
             canvas.drawLine(left, ty, left + w, ty, thresholdPaint)
@@ -162,7 +162,7 @@ class CalibrationPlotView @JvmOverloads constructor(
                 if (h > 0f) {
                     val db = ((top + h - event.y) / h * maxDb).coerceIn(0f, maxDb)
                     thresholdDb = db
-                    thresholdText = "threshold %.1f dB".format(java.util.Locale.US, db)
+                    thresholdText = String.format(java.util.Locale.US, context.getString(R.string.threshold_db_format), db)
                     val isFinished = event.actionMasked == MotionEvent.ACTION_UP
                     if (isFinished) {
                         performClick()

@@ -6,7 +6,7 @@
     <item
         android:id="@+id/action_add_poi"
         android:icon="@drawable/baseline_add_location_alt_24"
-        android:title="Add POI"
+        android:title="@string/add_poi"
         android:visible="false"
         android:orderInCategory="10"
         app:showAsAction="always" />
@@ -21,14 +21,14 @@
     <item
         android:id="@+id/action_toggle_heatmap"
         android:icon="@drawable/baseline_scatter_plot_24"
-        android:title="Show Heatmap"
+        android:title="@string/show_heatmap"
         android:orderInCategory="30"
         app:showAsAction="always" />
 
     <item
         android:id="@+id/action_auto_zoom"
         android:icon="@drawable/baseline_fit_screen_24"
-        android:title="Auto Zoom"
+        android:title="@string/auto_zoom"
         android:orderInCategory="40"
         app:showAsAction="always" />
     

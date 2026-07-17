@@ -148,7 +148,7 @@ class SettingsActivity : ComponentActivity() {
                         if (page == SettingsPage.ChooseDevice) ExtendedFloatingActionButton(
                             onClick = { showCloneDialog { refresh++; page = SettingsPage.Device } },
                             icon = { Icon(Icons.Rounded.Add, null) },
-                            text = { Text("New device") }
+                            text = { Text(context.getString(R.string.new_device)) }
                         )
                     }
                 ) { padding ->
@@ -296,7 +296,7 @@ class SettingsActivity : ComponentActivity() {
                 }
 
                 SettingsRow(
-                    title = "Alert at dose rate",
+                    title = context.getString(R.string.alert_at_dose_rate),
                     value = alertVal,
                     subtitle = alertSub,
                     onClick = {
@@ -402,7 +402,7 @@ class SettingsActivity : ComponentActivity() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 32.dp)
-            ) { Text("Change device") }
+            ) { Text(context.getString(R.string.change_device)) }
             Section("Current device parameters") {
                 SettingsRow(
                     "Device name",
@@ -827,8 +827,8 @@ class SettingsActivity : ComponentActivity() {
         }
         trackDialog(
             AlertDialog.Builder(this).setTitle(title).setView(input)
-                .setPositiveButton("Save") { _, _ -> onSave(input.text.toString().trim()) }
-                .setNegativeButton("Cancel", null).create()
+                .setPositiveButton(R.string.save) { _, _ -> onSave(input.text.toString().trim()) }
+                .setNegativeButton(R.string.cancel, null).create()
         )
     }
 
@@ -891,8 +891,8 @@ class SettingsActivity : ComponentActivity() {
             setSelection(text.length)
             isSingleLine = true
         }
-        AlertDialog.Builder(this).setTitle("Rename device").setView(input)
-            .setPositiveButton("Save", null).setNegativeButton("Cancel", null).create()
+        AlertDialog.Builder(this).setTitle(R.string.rename_device).setView(input)
+            .setPositiveButton(R.string.save, null).setNegativeButton(R.string.cancel, null).create()
             .also { dialog ->
                 dialog.setOnShowListener {
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -920,9 +920,9 @@ class SettingsActivity : ComponentActivity() {
 
     private fun showDeleteConfirmation(name: String, onRefresh: () -> Unit) {
         trackDialog(AlertDialog.Builder(this)
-            .setTitle("Delete device")
-            .setMessage("Are you sure you want to delete '$name'?")
-            .setPositiveButton("Delete") { _, _ ->
+            .setTitle(R.string.delete_device)
+            .setMessage(getString(R.string.delete_device_confirmation, name))
+            .setPositiveButton(R.string.delete) { _, _ ->
                 lifecycleScope.launch(Dispatchers.IO) {
                     val success = DeviceConfigManager.deleteDevice(this@SettingsActivity, name)
                     if (success) {
@@ -933,7 +933,7 @@ class SettingsActivity : ComponentActivity() {
                     }
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.cancel, null)
             .create())
     }
 
@@ -941,17 +941,17 @@ class SettingsActivity : ComponentActivity() {
         val names = DeviceConfigManager.devices(this).map { it.name }.toTypedArray()
         trackDialog(
             AlertDialog.Builder(this)
-                .setTitle("Choose base device to copy from")
+                .setTitle(R.string.choose_base_device)
                 .setItems(names) { _, which ->
                     val input = EditText(this).apply {
-                        hint = "New device name"
+                        hint = getString(R.string.new_device_name)
                         isSingleLine = true
                     }
                     val d = AlertDialog.Builder(this)
-                        .setTitle("Enter name for new device")
+                        .setTitle(R.string.enter_name_new_device)
                         .setView(input)
-                        .setPositiveButton("Create", null)
-                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton(R.string.create, null)
+                        .setNegativeButton(R.string.cancel, null)
                         .create()
 
                     d.setOnShowListener {
@@ -981,7 +981,7 @@ class SettingsActivity : ComponentActivity() {
                     }
                     trackDialog(d)
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(R.string.cancel, null)
                 .create()
         )
     }
