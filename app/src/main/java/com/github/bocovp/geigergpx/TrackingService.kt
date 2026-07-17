@@ -25,6 +25,9 @@ import java.util.concurrent.atomic.AtomicLong
 class TrackingService : Service() {
 
     companion object {
+        private const val ALERT_SOUND_RATE_LIMIT_WINDOW_MS = 5_000L
+        private const val MAX_ALERT_SOUNDS_PER_WINDOW = 2
+        private const val ALERT_SOUND_SPACING_MS = 400L
         @Volatile
         private var runningInstance: TrackingService? = null
 
@@ -101,6 +104,7 @@ class TrackingService : Service() {
     @Volatile private var countsPerBeep: Int = 1
     private var toneGenerator: ToneGenerator? = null
     private val lastAlertAtMillis = AtomicLong(0L)
+    private val alertSoundTimesMillis = ArrayDeque<Long>()
     private val doseRateMeasurement = DoseRateMeasurement()
     @Volatile private var kde: KernelDensityEstimator? = null
 
@@ -583,6 +587,8 @@ class TrackingService : Service() {
 
     private fun playAlertSound(soundCount: Int) {
         if (soundCount <= 0) return
+        val tonesToPlay = reserveAlertSoundSlots(soundCount)
+        if (tonesToPlay <= 0) return
         if (toneGenerator == null) {
             try {
                 toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 100)
@@ -594,17 +600,32 @@ class TrackingService : Service() {
 
         val tg = toneGenerator ?: return
         serviceScope.launch(Dispatchers.Main) {
-            repeat(soundCount) { index ->
+            repeat(tonesToPlay) { index ->
                 try {
                     tg.startTone(ToneGenerator.TONE_CDMA_HIGH_L, 200)
                 } catch (e: Exception) {
                     android.util.Log.e("TrackingService", "Failed to play tone", e)
                     return@launch
                 }
-                if (index < soundCount - 1) {
+                if (index < tonesToPlay - 1) {
                     delay(400L)
                 }
             }
+        }
+    }
+
+    private fun reserveAlertSoundSlots(requestedCount: Int): Int {
+        val now = System.currentTimeMillis()
+        synchronized(alertSoundTimesMillis) {
+            while (alertSoundTimesMillis.isNotEmpty() && now - alertSoundTimesMillis.first() >= ALERT_SOUND_RATE_LIMIT_WINDOW_MS) {
+                alertSoundTimesMillis.removeFirst()
+            }
+            val available = (MAX_ALERT_SOUNDS_PER_WINDOW - alertSoundTimesMillis.size).coerceAtLeast(0)
+            val reserved = requestedCount.coerceAtMost(available)
+            repeat(reserved) { index ->
+                alertSoundTimesMillis.addLast(now + index * ALERT_SOUND_SPACING_MS)
+            }
+            return reserved
         }
     }
 

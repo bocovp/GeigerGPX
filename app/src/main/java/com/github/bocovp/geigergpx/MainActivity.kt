@@ -31,6 +31,9 @@ import android.view.WindowManager
 import android.widget.EditText
 import android.widget.TextView
 import android.os.Build
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import kotlin.math.roundToInt
@@ -52,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     private var openSavedTrackPlotAfterStop = false
     private var trackSavedReceiverRegistered = false
     private var pendingRestoreAfterStartupFolderValidation = false
+    private var defaultTextCpsColor: Int = 0
     private val statePendingStartupRestore = "state_pending_startup_restore"
 
     private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
@@ -128,6 +132,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        defaultTextCpsColor = binding.textCps.currentTextColor
         setSupportActionBar(binding.topAppBar)
         applyToolbarTitleVisibility()
         setupToolbarTitleLongPress()
@@ -670,7 +675,7 @@ class MainActivity : AppCompatActivity() {
             doseRateMean < 0.3 -> R.color.dose_medium
             else -> R.color.dose_high
         }
-        binding.textCps.setTextColor(ContextCompat.getColor(this, doseColor))
+        val labelColor = ContextCompat.getColor(this, doseColor)
 
         val formatted = DoseRateFormatting.format(
             ci = ci,
@@ -678,10 +683,20 @@ class MainActivity : AppCompatActivity() {
             decimalDigits = decimalDigits,
             formatting = doseRateFormatting
         )
-        binding.textCps.text = if (doseRateFormatting.isDoseRate) {
-            "Dose rate: $formatted"
-        } else {
-            "CPS: $formatted"
+        val label = if (doseRateFormatting.isDoseRate) "Dose rate:" else "CPS:"
+        binding.textCps.setTextColor(defaultTextCpsColor)
+        binding.textCps.text = colorDoseRateLabel(label, formatted, labelColor)
+    }
+
+    private fun colorDoseRateLabel(label: String, value: String, labelColor: Int): SpannableString {
+        val line = "$label $value"
+        return SpannableString(line).apply {
+            setSpan(
+                ForegroundColorSpan(labelColor),
+                0,
+                label.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
         }
     }
 
