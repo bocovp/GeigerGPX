@@ -43,8 +43,11 @@ data class TrackListItem(
     val mapTrack: MapTrack?,
     val isCurrentTrack: Boolean,
     val defaultVisible: Boolean,
+    val stats: TrackStats? = null,
     val itemType: TrackListItemType = TrackListItemType.TRACK,
-    val folderName: String? = null
+    val folderName: String? = null,
+    val sensitivity: Double? = null,
+    val deviceName: String? = null
 )
 
 enum class TrackListItemType {
@@ -75,11 +78,14 @@ object TrackCatalog {
                         id = cached.sourceId,
                         title = cached.displayName,
                         subtitle = formatStats(cached.stats),
+                        stats = cached.stats,
                         mapTrack = null,
                         isCurrentTrack = false,
                         defaultVisible = false,
                         itemType = TrackListItemType.TRACK,
-                        folderName = cached.folderName
+                        folderName = cached.folderName,
+                        sensitivity = cached.sensitivity,
+                        deviceName = cached.deviceName
                     )
                 }
         }
@@ -223,13 +229,15 @@ object TrackCatalog {
                     id = CURRENT_TRACK_ID,
                     title = CURRENT_TRACK_TITLE,
                     subtitle = formatStats(currentTrack.stats),
+                    stats = currentTrack.stats,
                     mapTrack = if (includeCurrentMapTrack) {
                         MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.points, RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)))
                     } else {
                         null
                     },
                     isCurrentTrack = true,
-                    defaultVisible = true
+                    defaultVisible = true,
+                    sensitivity = RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(context))
                 )
             )
         }
@@ -279,11 +287,14 @@ object TrackCatalog {
                     id = source.sourceId,
                     title = source.displayName,
                     subtitle = formatStats(stats),
+                    stats = stats,
                     mapTrack = mapTrack,
                     isCurrentTrack = false,
                     defaultVisible = false,
                     itemType = TrackListItemType.TRACK,
-                    folderName = source.folderName
+                    folderName = source.folderName,
+                    sensitivity = cached.sensitivity,
+                    deviceName = cached.deviceName
                 )
             )
         }

@@ -1,7 +1,11 @@
 package com.github.bocovp.geigergpx
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
@@ -9,6 +13,9 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -245,6 +252,8 @@ class TracksActivity : AppCompatActivity() {
             .setIcon(R.drawable.baseline_open_in_new_24)
         menu.add(MENU_GROUP_OPEN_SHARE, MENU_SHARE, Menu.NONE, "Share")
             .setIcon(R.drawable.baseline_share_24)
+        menu.add(MENU_GROUP_OPEN_SHARE, MENU_DETAILS, Menu.NONE, "Details")
+            .setIcon(R.drawable.baseline_info_24)
 
         if (!item.isCurrentTrack) {
             menu.add(MENU_GROUP_MANAGE, MENU_EDIT_TRACK, Menu.NONE, "Edit track")
@@ -283,6 +292,7 @@ class TracksActivity : AppCompatActivity() {
                 MENU_DELETE -> confirmDeleteTrack(item)
                 MENU_OPEN_DEFAULT -> openInDefaultApp(item)
                 MENU_SHARE -> shareTrack(item)
+                MENU_DETAILS -> showTrackDetails(item)
                 in moveActions.keys -> {
                     handleMoveAction(item, moveActions.getValue(menuItem.itemId))
                 }
@@ -290,6 +300,103 @@ class TracksActivity : AppCompatActivity() {
             true
         }
         popup.show()
+    }
+
+    private fun showTrackDetails(item: TrackListItem) {
+        val details = formatTrackDetails(item)
+        AlertDialog.Builder(this)
+            .setTitle("Track Details")
+            .setView(buildDetailsView(trackDetailsItems(item)))
+            .setNegativeButton("Close", null)
+            .setPositiveButton("Copy") { _, _ ->
+                copyTextToClipboard("Track details", details)
+            }
+            .show()
+    }
+
+    private fun formatTrackDetails(item: TrackListItem): String {
+        return trackDetailsItems(item).joinToString(separator = "\n") { (name, value) -> "$name: $value" }
+    }
+
+    private fun trackDetailsItems(item: TrackListItem): List<Pair<String, String>> {
+        val stats = item.stats
+        val items = mutableListOf(
+            "Name" to item.title,
+            "Status" to if (item.isCurrentTrack) "Currently recording" else "Saved track"
+        )
+        item.folderName?.let { items.add("Folder" to it) }
+        if (stats != null) {
+            items.add("Points" to stats.pointCount.toString())
+            items.add("Duration" to formatDuration(stats.durationMillis))
+            items.add("Distance" to formatDistance(stats.distanceMeters))
+        } else {
+            val parts = item.subtitle.split("·").map { it.trim() }
+            if (parts.size >= 3) {
+                items.add("Points" to parts[0].removeSuffix(" points"))
+                items.add("Duration" to parts[1])
+                items.add("Distance" to parts[2])
+            }
+        }
+        item.deviceName?.takeIf { it.isNotBlank() }?.let { items.add("Device" to it) }
+        item.sensitivity?.takeIf { it > 0.0 }?.let {
+            items.add("Sensitivity" to "${RadiationCalibration.formatSensitivity(it)} cps/μSv/h")
+        }
+        return items
+    }
+
+    private fun buildDetailsView(items: List<Pair<String, String>>): ScrollView {
+        val density = resources.displayMetrics.density
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val horizontalPadding = (24 * density).toInt()
+            val verticalPadding = (8 * density).toInt()
+            setPadding(horizontalPadding, verticalPadding, horizontalPadding, 0)
+        }
+
+        items.forEach { (name, value) ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = (6 * density).toInt() }
+            }
+            row.addView(TextView(this).apply {
+                text = name
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                alpha = 0.72f
+            })
+            row.addView(TextView(this).apply {
+                text = value
+                textSize = 16f
+            })
+            container.addView(row)
+        }
+
+        return ScrollView(this).apply { addView(container) }
+    }
+
+    private fun formatDuration(durationMillis: Long): String {
+        val durationSeconds = durationMillis / 1000L
+        val hh = durationSeconds / 3600
+        val mm = (durationSeconds % 3600) / 60
+        val ss = durationSeconds % 60
+        return String.format(java.util.Locale.US, "%02d:%02d:%02d", hh, mm, ss)
+    }
+
+    private fun formatDistance(distanceMeters: Double): String {
+        return if (distanceMeters < 1000.0) {
+            "%.0f m".format(java.util.Locale.US, distanceMeters)
+        } else {
+            "%.1f km".format(java.util.Locale.US, distanceMeters / 1000.0)
+        }
+    }
+
+    private fun copyTextToClipboard(label: String, text: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
+        Toast.makeText(this, "Copied to clipboard", Toast.LENGTH_SHORT).show()
     }
 
     private fun openTrackEditor(item: TrackListItem) {
@@ -591,7 +698,8 @@ class TracksActivity : AppCompatActivity() {
         private const val MENU_OPEN_DEFAULT = 3
         private const val MENU_SHARE = 4
         private const val MENU_EDIT_TRACK = 5
-        private const val MENU_MOVE_SUBMENU = 6
+        private const val MENU_DETAILS = 6
+        private const val MENU_MOVE_SUBMENU = 7
         private const val MENU_MOVE_BASE = 100
         private const val GPX_MIME = "application/gpx+xml"
         private const val ARCHIVE_SUBFOLDER = "Archive"
