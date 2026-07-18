@@ -587,8 +587,9 @@ class TrackingService : Service() {
 
     private fun playAlertSound(soundCount: Int) {
         if (soundCount <= 0) return
-        val tonesToPlay = reserveAlertSoundSlots(soundCount)
-        if (tonesToPlay <= 0) return
+        // Check if we are allowed to play the alert
+        if (!reserveAlertSoundSlots()) return
+
         if (toneGenerator == null) {
             try {
                 toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 100)
@@ -600,32 +601,36 @@ class TrackingService : Service() {
 
         val tg = toneGenerator ?: return
         serviceScope.launch(Dispatchers.Main) {
-            repeat(tonesToPlay) { index ->
+            repeat(soundCount) { index ->
                 try {
                     tg.startTone(ToneGenerator.TONE_CDMA_HIGH_L, 200)
                 } catch (e: Exception) {
                     android.util.Log.e("TrackingService", "Failed to play tone", e)
                     return@launch
                 }
-                if (index < tonesToPlay - 1) {
+                if (index < soundCount - 1) {
                     delay(400L)
                 }
             }
         }
     }
 
-    private fun reserveAlertSoundSlots(requestedCount: Int): Int {
+    private fun reserveAlertSoundSlots(): Boolean {
         val now = System.currentTimeMillis()
         synchronized(alertSoundTimesMillis) {
+            // 1. Remove alerts that fall outside the 5-second window
             while (alertSoundTimesMillis.isNotEmpty() && now - alertSoundTimesMillis.first() >= ALERT_SOUND_RATE_LIMIT_WINDOW_MS) {
                 alertSoundTimesMillis.removeFirst()
             }
-            val available = (MAX_ALERT_SOUNDS_PER_WINDOW - alertSoundTimesMillis.size).coerceAtLeast(0)
-            val reserved = requestedCount.coerceAtMost(available)
-            repeat(reserved) { index ->
-                alertSoundTimesMillis.addLast(now + index * ALERT_SOUND_SPACING_MS)
+
+            // 2. Check if we have room for ONE more alert event
+            if (alertSoundTimesMillis.size < MAX_ALERT_SOUNDS_PER_WINDOW) {
+                alertSoundTimesMillis.addLast(now)
+                return true // Slot reserved successfully
             }
-            return reserved
+
+            // 3. Rate limit exceeded
+            return false
         }
     }
 
