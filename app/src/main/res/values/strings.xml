@@ -1,35 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--App and shared navigation-->
     <string name="app_name">Geiger GPX</string>
-    <string name="loading_files">Loading files…</string>
-    <string name="loading_tracks">Loading tracks…</string>
-    <string name="loading_poi_library">Loading POI library…</string>
-    <string name="no_tracks_found">No tracks found</string>
-    <string name="no_poi_file_found">No POI.gpx file found</string>
-    <string name="no_poi_in_library">No POI in Library</string>
-    <string name="refresh">Refresh</string>
-    <string name="time_plot_mode_sliding_window">Sliding Window</string>
-    <string name="time_plot_mode_kernel_estimator">Kernel Estimator</string>
-    <string name="time_plot_switch_to_sliding_window">Switch to sliding window</string>
-    <string name="time_plot_switch_to_kernel_estimator">Switch to kernel estimator</string>
-    <string name="time_plot_no_track_data">No track data</string>
-    <string name="time_plot_loading">Loading…</string>
-    <string name="time_plot_track_label">Track</string>
-    <string name="time_plot_previous_track">Previous selected track</string>
-    <string name="time_plot_next_track">Next selected track</string>
-
-    <string name="screen_stay_awake_off">Screen stay awake: OFF</string>
-    <string name="screen_stay_awake_on">Screen stay awake: ON</string>
+    <string name="home">Home</string>
     <string name="tracks">Tracks</string>
     <string name="poi">POI</string>
     <string name="map">Map</string>
     <string name="plot">Plot</string>
     <string name="settings">Settings</string>
-    <string name="add_poi">Add POI</string>
-    <string name="show_heatmap">Show Heatmap</string>
-    <string name="show_gradient_tracks">Show Gradient Tracks</string>
-    <string name="auto_zoom">Auto Zoom</string>
-    <string name="home">Home</string>
+    <string name="refresh">Refresh</string>
+    <string name="screen_stay_awake_off">Screen stay awake: OFF</string>
+    <string name="screen_stay_awake_on">Screen stay awake: ON</string>
+
+    <!--Common actions-->
+    <string name="cancel">Cancel</string>
+    <string name="done">Done</string>
+    <string name="apply">Apply</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="save">Save</string>
+    <string name="share">Share</string>
+    <string name="details">Details</string>
+    <string name="rename">Rename</string>
+    <string name="delete">Delete</string>
+    <string name="close">Close</string>
+    <string name="copy">Copy</string>
+    <string name="copied_to_clipboard">Copied to clipboard</string>
+    <string name="open_in_default_app">Open in default app</string>
+    <string name="no_app_available_sharing">No app available for sharing</string>
+
+    <!--Main screen-->
     <string name="cps_value">CPS: 0.00</string>
     <string name="start_track">Start Track</string>
     <string name="start_track_lower">Start track</string>
@@ -48,16 +48,6 @@
     <string name="audio_status_working">Audio status: Working</string>
     <string name="waiting">Waiting</string>
     <string name="working">Working</string>
-    <string name="cancel">Cancel</string>
-    <string name="done">Done</string>
-    <string name="apply">Apply</string>
-    <string name="previous_short">Prev</string>
-    <string name="next">Next</string>
-    <string name="action">Action</string>
-    <string name="planned_changes">Planned changes</string>
-    <string name="averaging_window">Averaging window:</string>
-    <string name="map_scale_half_initial">0.5 uSv/h</string>
-    <string name="map_scale_max_initial">1.0 uSv/h</string>
     <string name="choose_save_folder">Choose save folder</string>
     <string name="choose_folder">Choose folder</string>
     <string name="use_app_folder">Use app folder</string>
@@ -77,20 +67,44 @@
     <string name="audio_status_format">Audio status: %1$s</string>
     <string name="cancel_track">Cancel track</string>
     <string name="discard_track_message">Are you sure you want to discard track?</string>
-    <string name="yes">Yes</string>
-    <string name="no">No</string>
     <string name="permissions_required">Permissions required</string>
     <string name="grant_permissions">Grant permissions</string>
     <string name="not_now">Not now</string>
-    <string name="open_in_default_app">Open in default app</string>
-    <string name="share">Share</string>
-    <string name="details">Details</string>
+    <string name="poi_saved">POI saved</string>
+    <string name="unable_to_save_poi">Unable to save POI</string>
+    <string name="warning_default_save_folder_not_writable">Warning: app default save folder is not writable: %1$s</string>
+    <string name="description">Description</string>
+    <string name="unable_to_save_poi_error_format">Unable to save POI: %1$s</string>
+
+    <!--Map screen-->
+    <string name="loading_tracks">Loading tracks…</string>
+    <string name="add_poi">Add POI</string>
+    <string name="show_heatmap">Show Heatmap</string>
+    <string name="show_gradient_tracks">Show Gradient Tracks</string>
+    <string name="auto_zoom">Auto Zoom</string>
+    <string name="map_scale_half_initial">0.5 uSv/h</string>
+    <string name="map_scale_max_initial">1.0 uSv/h</string>
+    <string name="define_poi_name">Define POI name:</string>
+    <string name="poi_added_to_library">POI added to Library</string>
+    <string name="unable_to_add_poi">Unable to add POI</string>
+
+    <!--Time plot screen-->
+    <string name="time_plot_mode_sliding_window">Sliding Window</string>
+    <string name="time_plot_mode_kernel_estimator">Kernel Estimator</string>
+    <string name="time_plot_switch_to_sliding_window">Switch to sliding window</string>
+    <string name="time_plot_switch_to_kernel_estimator">Switch to kernel estimator</string>
+    <string name="time_plot_no_track_data">No track data</string>
+    <string name="time_plot_loading">Loading…</string>
+    <string name="time_plot_track_label">Track</string>
+    <string name="time_plot_previous_track">Previous selected track</string>
+    <string name="time_plot_next_track">Next selected track</string>
+    <string name="averaging_window">Averaging window:</string>
+    <string name="averaging_window_minutes_format">Averaging window: %1$.1f min</string>
+
+    <!--Tracks screen-->
+    <string name="loading_files">Loading files…</string>
+    <string name="no_tracks_found">No tracks found</string>
     <string name="edit_track">Edit track</string>
-    <string name="rename">Rename</string>
-    <string name="delete">Delete</string>
-    <string name="close">Close</string>
-    <string name="copy">Copy</string>
-    <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="delete_track">Delete track</string>
     <string name="delete_item_format">Delete \'%1$s\'?</string>
     <string name="deleted">Deleted</string>
@@ -102,7 +116,6 @@
     <string name="unable_to_move_file">Unable to move file</string>
     <string name="track_file_unavailable">Track file is unavailable</string>
     <string name="no_app_found_open_gpx">No app found to open GPX files</string>
-    <string name="no_app_available_sharing">No app available for sharing</string>
     <string name="track_details">Track Details</string>
     <string name="track_details_clip_label">Track details</string>
     <string name="tracks_title_format">Tracks: %1$s</string>
@@ -110,21 +123,28 @@
     <string name="move_to_format">Move to %1$s</string>
     <string name="move_to_main_folder">Move to main folder</string>
     <string name="move_to_ellipsis">Move to …</string>
+    <string name="track_file_name">Track file name</string>
+    <string name="folder_with_track_count">Folder with %1$d tracks</string>
+
+    <!--Edit track screen-->
     <string name="edit_track_title">Edit Track</string>
     <string name="unable_to_load_track">Unable to load track</string>
     <string name="finish">Finish</string>
+    <string name="previous_short">Prev</string>
+    <string name="next">Next</string>
+    <string name="action">Action</string>
+    <string name="planned_changes">Planned changes</string>
     <string name="cannot_interpolate_endpoints">Cannot interpolate points at the beginning/end of the track</string>
     <string name="unable_to_split_selected_point">Unable to split at selected point</string>
     <string name="failed_to_save_changes">Failed to save changes</string>
     <string name="track_updated">Track updated</string>
     <string name="error_saving_changes">Error saving changes</string>
-    <string name="define_poi_name">Define POI name:</string>
-    <string name="poi_added_to_library">POI added to Library</string>
-    <string name="unable_to_add_poi">Unable to add POI</string>
-    <string name="poi_saved">POI saved</string>
-    <string name="unable_to_save_poi">Unable to save POI</string>
-    <string name="warning_default_save_folder_not_writable">Warning: app default save folder is not writable: %1$s</string>
-    <string name="averaging_window_minutes_format">Averaging window: %1$.1f min</string>
+    <string name="move_zoom">Move / zoom</string>
+
+    <!--POI screen-->
+    <string name="loading_poi_library">Loading POI library…</string>
+    <string name="no_poi_file_found">No POI.gpx file found</string>
+    <string name="no_poi_in_library">No POI in Library</string>
     <string name="poi_library">POI Library</string>
     <string name="unknown_time">Unknown time</string>
     <string name="unknown_dose_rate">\?\?\? μSv/h</string>
@@ -152,8 +172,8 @@
     <string name="share_seconds_format">Seconds: %1$s</string>
     <string name="share_dose_rate_format">Dose rate: %1$s</string>
     <string name="share_device_format">Device: %1$s</string>
-    <string name="description">Description</string>
-    <string name="unable_to_save_poi_error_format">Unable to save POI: %1$s</string>
+
+    <!--Calibration screen-->
     <string name="bluetooth_calibration">Bluetooth calibration</string>
     <string name="calibration">Calibration</string>
     <string name="starting_audio">Starting audio…</string>
@@ -167,10 +187,13 @@
     <string name="stopping">Stopping…</string>
     <string name="cancelling_calibration">Cancelling calibration…</string>
     <string name="calibration_cancelled">Calibration cancelled.</string>
+    <string name="threshold_db_format">threshold %1$.1f dB</string>
+    <string name="db_unit">dB</string>
+
+    <!--Settings screen-->
     <string name="new_device">New device</string>
     <string name="alert_at_dose_rate">Alert at dose rate</string>
     <string name="change_device">Change device</string>
-    <string name="save">Save</string>
     <string name="rename_device">Rename device</string>
     <string name="delete_device">Delete device</string>
     <string name="delete_device_confirmation">Are you sure you want to delete \'%1$s\'?</string>
@@ -178,9 +201,5 @@
     <string name="enter_name_new_device">Enter name for new device</string>
     <string name="create">Create</string>
     <string name="new_device_name">New device name</string>
-    <string name="track_file_name">Track file name</string>
-    <string name="move_zoom">Move / zoom</string>
-    <string name="folder_with_track_count">Folder with %1$d tracks</string>
-    <string name="threshold_db_format">threshold %1$.1f dB</string>
-    <string name="db_unit">dB</string>
+
 </resources>
