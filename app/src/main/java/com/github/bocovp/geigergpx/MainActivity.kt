@@ -645,7 +645,8 @@ class MainActivity : AppCompatActivity() {
             // Something not right we have no interval
             ConfidenceInterval(0.0, 0.0, 0.0, 0.0, 0)
         } else if (onBeep) {
-            val tn = System.currentTimeMillis().toDouble() / 1000.0
+            //val tn = System.currentTimeMillis().toDouble() / 1000.0
+            val tn = latestCpsSnapshot.newestTimestampMillis.toDouble() / 1000.0
             // if onBeep we have only n-1 intervals ot analyze (t1->t2) (t2->t1) ... (t{n-1}->tn)
             //ConfidenceInterval(t1, tn, latestCpsSnapshot.sampleCount)
 

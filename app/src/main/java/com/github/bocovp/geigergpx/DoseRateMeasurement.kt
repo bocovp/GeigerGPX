@@ -82,11 +82,11 @@ class DoseRateMeasurement(
         }
     }
 
-    fun processBeep(beepCount: Int, nowProvider: () -> Long = System::currentTimeMillis): AlertEvent? {
+    fun processBeep(beepCount: Int, providedTimestamp: Long?): AlertEvent? {
         if (beepCount <= 0) return null
         return synchronized(mainCpsLock) {
 
-            val now = nowProvider()
+            val now = providedTimestamp ?: System.currentTimeMillis()
             val startT = newestMainCpsTimestamp() ?: now
             val delta = if (startT < now) now - startT else 0L
             for (i in 1..beepCount) {
@@ -131,6 +131,7 @@ class DoseRateMeasurement(
         TrackingRepository.CpsSnapshot(
             sampleCount = currentSampleCountLocked(),
             oldestTimestampMillis = currentOldestTimestampMillisLocked(),
+            newestTimestampMillis = newestMainCpsTimestamp() ?: 0L,
             measurementStartTimestampMillis = if (measurementModeEnabled) {
                 measurementStartTimestampMillis
             } else {

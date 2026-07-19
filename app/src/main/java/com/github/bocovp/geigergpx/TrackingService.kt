@@ -179,7 +179,7 @@ class TrackingService : Service() {
         countsPerBeep = DeviceConfigManager.currentDevice(this)?.fallbackConfig?.countsPerBeep ?: 1
         repo.updateCountsPerBeep(countsPerBeep)
 
-        val allowedSizes = setOf(5, 10, 20, 50, 100)
+        val allowedSizes = setOf(5, 10, 15, 20, 30, 50, 100)
         val requestedWindowSize = prefs.getString("dose_rate_avg_timestamps_n", "10")
             ?.toIntOrNull()
             ?.takeIf { it in allowedSizes }
@@ -543,7 +543,8 @@ class TrackingService : Service() {
                         }
                     }
 
-                    val alertEvent = doseRateMeasurement.processBeep(actualCounts)
+                    val wallMillis = (wallSeconds * 1000.0).toLong()
+                    val alertEvent = doseRateMeasurement.processBeep(actualCounts, wallMillis)
                     repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true)
                     alertEvent?.let { dispatchDoseRateAlert(it) }
 

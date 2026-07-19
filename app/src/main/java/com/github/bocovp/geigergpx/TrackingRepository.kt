@@ -27,6 +27,7 @@ class TrackingRepository {
     data class CpsSnapshot(
         val sampleCount: Int = 0,
         val oldestTimestampMillis: Long = 0L,
+        val newestTimestampMillis: Long = 0L,
         val measurementStartTimestampMillis: Long = 0L
     )
 
