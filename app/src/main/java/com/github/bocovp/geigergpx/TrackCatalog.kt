@@ -642,7 +642,7 @@ object TrackCatalog {
                     .put("durationMillis", stats.durationMillis)
                     .put("distanceMeters", stats.distanceMeters))
             deviceName?.let { obj.put("deviceName", it) }
-            dose?.let { obj.put("dose", it) }
+            dose?.takeIf { it.isFinite() }?.let { obj.put("dose", it) }
             return obj
         }
 
