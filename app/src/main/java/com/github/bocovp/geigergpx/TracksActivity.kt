@@ -337,9 +337,19 @@ class TracksActivity : AppCompatActivity() {
                 items.add("Distance" to parts[2])
             }
         }
-        item.deviceName?.takeIf { it.isNotBlank() }?.let { items.add("Device" to it) }
-        item.sensitivity?.takeIf { it > 0.0 }?.let {
-            items.add("Sensitivity" to "${RadiationCalibration.formatSensitivity(it)} cps/μSv/h")
+        item.deviceName?.takeIf { it.isNotBlank() }?.let { items.add("Device name" to it) }
+        val doseMuSv = item.dose ?: if (item.isCurrentTrack) {
+            val totalCounts = item.mapTrack?.points?.sumOf { it.counts.toLong() } ?: 0L
+            val sensitivity = item.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY
+            if (sensitivity > 0 && totalCounts > 0) {
+                totalCounts.toDouble() / sensitivity / 3600.0
+            } else null
+        } else null
+        doseMuSv?.let {
+            val formatted = String.format(java.util.Locale.US, "%.4f", it)
+            val trimmed = if (formatted.contains('.')) formatted.trimEnd('0').trimEnd('.') else formatted
+            val doseStr = if (trimmed.isEmpty()) "0" else trimmed
+            items.add("Dose" to "$doseStr μSv")
         }
         return items
     }
