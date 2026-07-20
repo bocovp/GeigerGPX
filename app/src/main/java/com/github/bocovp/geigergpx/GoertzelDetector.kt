@@ -270,9 +270,9 @@ class GoertzelDetector(
             in fourBeepMin..fourBeepMax   -> 4
             else                          -> 0
         }
-       // if (BuildConfig.DEBUG) {
-            android.util.Log.d(TAG, "$count Duration ${"%.4f".format(java.util.Locale.US, duration)}\tPeak ${"%.2e".format(java.util.Locale.US, peakMain)}")
-       // }
+        //if (BuildConfig.DEBUG) {
+        //    android.util.Log.d(TAG, "$count Duration ${"%.4f".format(java.util.Locale.US, duration)}\tPeak ${"%.2e".format(java.util.Locale.US, peakMain)}")
+        //}
         onBeep(peakMain, count, beepEndNs)
     }
 
