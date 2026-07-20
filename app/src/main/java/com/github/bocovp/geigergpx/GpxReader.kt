@@ -30,14 +30,16 @@ object GpxReader {
         val points: List<TrackPoint>,
         val stats: TrackStats,
         val sensitivity: Double,
-        val deviceName: String? = null
+        val deviceName: String? = null,
+        val dose: Double? = null
     )
 
     data class TrackWithMetadata(
         val points: List<TrackPoint>,
         val isEdited: Boolean,
         val sensitivity: Double?,
-        val deviceName: String? = null
+        val deviceName: String? = null,
+        val dose: Double? = null
     )
 
     private data class ParsedTrackData(
@@ -49,7 +51,7 @@ object GpxReader {
 
     fun readTrackWithMetadata(inputStream: InputStream): TrackWithMetadata? {
         val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false) ?: return null
-        return TrackWithMetadata(parsed.points, parsed.edited, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName)
+        return TrackWithMetadata(parsed.points, parsed.edited, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName, parsed.metadata?.doseMuSv)
     }
 
     fun readTrack(inputStream: InputStream): List<TrackPoint>? {
@@ -60,7 +62,7 @@ object GpxReader {
 
     fun readTrackWithStats(inputStream: InputStream): TrackWithStats? {
         val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false) ?: return null
-        return TrackWithStats(parsed.points, parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName)
+        return TrackWithStats(parsed.points, parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName, parsed.metadata?.doseMuSv)
     }
 
     fun readTrackStats(inputStream: InputStream): TrackStats? {
@@ -71,7 +73,7 @@ object GpxReader {
 
     fun readTrackStatsWithSensitivity(inputStream: InputStream): TrackWithStats? {
         val parsed = readTrackInternal(inputStream, parsePoints = false, preferMetadataStats = true) ?: return null
-        return TrackWithStats(emptyList(), parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName)
+        return TrackWithStats(emptyList(), parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName, parsed.metadata?.doseMuSv)
     }
 
     fun readPois(xml: String): List<PoiEntry> {

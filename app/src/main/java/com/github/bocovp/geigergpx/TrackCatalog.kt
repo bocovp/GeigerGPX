@@ -47,7 +47,8 @@ data class TrackListItem(
     val itemType: TrackListItemType = TrackListItemType.TRACK,
     val folderName: String? = null,
     val sensitivity: Double? = null,
-    val deviceName: String? = null
+    val deviceName: String? = null,
+    val dose: Double? = null
 )
 
 enum class TrackListItemType {
@@ -85,7 +86,8 @@ object TrackCatalog {
                         itemType = TrackListItemType.TRACK,
                         folderName = cached.folderName,
                         sensitivity = cached.sensitivity,
-                        deviceName = cached.deviceName
+                        deviceName = cached.deviceName,
+                        dose = cached.dose
                     )
                 }
         }
@@ -169,7 +171,7 @@ object TrackCatalog {
                 repeat(totalCount) {
                     val (source, parsed) = results.receive()
                     if (parsed != null) {
-                        updatedTracks[source.id] = CachedParsedTrack.from(source, parsed.stats, parsed.sensitivity, parsed.deviceName)
+                        updatedTracks[source.id] = CachedParsedTrack.from(source, parsed.stats, parsed.sensitivity, parsed.deviceName, parsed.dose)
                     }
                     processedCount += 1
                     if (totalCount > 0) {
@@ -294,7 +296,8 @@ object TrackCatalog {
                     itemType = TrackListItemType.TRACK,
                     folderName = source.folderName,
                     sensitivity = cached.sensitivity,
-                    deviceName = cached.deviceName
+                    deviceName = cached.deviceName,
+                    dose = cached.dose
                 )
             )
         }
@@ -480,7 +483,7 @@ object TrackCatalog {
         } ?: return null
 
         val parsed = runCatching { source.openStream().use { parseGpxTrackStats(it) } }.getOrNull() ?: return null
-        return CachedParsedTrack.from(source.copy(folderName = folderName), parsed.stats, parsed.sensitivity, parsed.deviceName)
+        return CachedParsedTrack.from(source.copy(folderName = folderName), parsed.stats, parsed.sensitivity, parsed.deviceName, parsed.dose)
     }
 
 
@@ -619,6 +622,7 @@ object TrackCatalog {
         val stats: TrackStats,
         val sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY,
         val deviceName: String? = null,
+        val dose: Double? = null,
         val pointCache: List<TrackPoint>? = null
     ) {
         fun hasPoints(): Boolean = pointCache != null
@@ -638,11 +642,12 @@ object TrackCatalog {
                     .put("durationMillis", stats.durationMillis)
                     .put("distanceMeters", stats.distanceMeters))
             deviceName?.let { obj.put("deviceName", it) }
+            dose?.takeIf { it.isFinite() }?.let { obj.put("dose", it) }
             return obj
         }
 
         companion object {
-            fun from(source: TrackSource, stats: TrackStats, sensitivity: Double, deviceName: String? = null): CachedParsedTrack {
+            fun from(source: TrackSource, stats: TrackStats, sensitivity: Double, deviceName: String? = null, dose: Double? = null): CachedParsedTrack {
                 return CachedParsedTrack(
                     sourceId = source.id,
                     displayName = source.displayName,
@@ -650,6 +655,7 @@ object TrackCatalog {
                     stats = stats,
                     sensitivity = sensitivity,
                     deviceName = deviceName,
+                    dose = dose,
                     pointCache = null
                 )
             }
@@ -658,6 +664,7 @@ object TrackCatalog {
                 val statsJson = json.getJSONObject("stats")
                 val folderName = if (json.has("folderName") && !json.isNull("folderName")) json.getString("folderName") else null
                 val deviceName = if (json.has("deviceName") && !json.isNull("deviceName")) json.getString("deviceName") else null
+                val dose = if (json.has("dose") && !json.isNull("dose")) json.getDouble("dose") else null
                 return CachedParsedTrack(
                     sourceId = json.getString("sourceId"),
                     displayName = json.getString("displayName"),
@@ -668,7 +675,8 @@ object TrackCatalog {
                         distanceMeters = statsJson.getDouble("distanceMeters")
                     ),
                     sensitivity = json.optDouble("sensitivity", RadiationCalibration.DEFAULT_SENSITIVITY).takeIf { it > 0.0 } ?: RadiationCalibration.DEFAULT_SENSITIVITY,
-                    deviceName = deviceName
+                    deviceName = deviceName,
+                    dose = dose
                 )
             }
         }
