@@ -337,10 +337,7 @@ class TracksActivity : AppCompatActivity() {
                 items.add("Distance" to parts[2])
             }
         }
-        item.deviceName?.takeIf { it.isNotBlank() }?.let { items.add("Device name" to it) }
-        item.sensitivity?.takeIf { it > 0.0 }?.let {
-            items.add("Sensitivity" to "${RadiationCalibration.formatSensitivity(it)} cps/μSv/h")
-        }
+        item.deviceName?.takeIf { it.isNotBlank() }?.let { items.add(getString(R.string.device_name) to it) }
         val doseMuSv = item.dose ?: if (item.isCurrentTrack) {
             val points = TrackingService.activeTrackPointsSnapshot()
             val totalCounts = points.sumOf { it.counts.toLong() }
@@ -350,10 +347,8 @@ class TracksActivity : AppCompatActivity() {
             } else null
         } else null
         doseMuSv?.let {
-            val formatted = String.format(java.util.Locale.US, "%.4f", it)
-            val trimmed = if (formatted.contains('.')) formatted.trimEnd('0').trimEnd('.') else formatted
-            val doseStr = if (trimmed.isEmpty()) "0" else trimmed
-            items.add("Dose" to "$doseStr μSv")
+            val format = java.text.DecimalFormat("0.####", java.text.DecimalFormatSymbols(java.util.Locale.US))
+            items.add(getString(R.string.dose) to getString(R.string.dose_value_format, format.format(it)))
         }
         return items
     }

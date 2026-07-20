@@ -118,6 +118,9 @@
     <string name="no_app_found_open_gpx">No app found to open GPX files</string>
     <string name="track_details">Track Details</string>
     <string name="track_details_clip_label">Track details</string>
+    <string name="device_name">Device name</string>
+    <string name="dose">Dose</string>
+    <string name="dose_value_format">%1$s μSv</string>
     <string name="tracks_title_format">Tracks: %1$s</string>
     <string name="parsing_tracks_progress">Parsing tracks: %1$d%%</string>
     <string name="move_to_format">Move to %1$s</string>
