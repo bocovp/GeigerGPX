@@ -338,8 +338,12 @@ class TracksActivity : AppCompatActivity() {
             }
         }
         item.deviceName?.takeIf { it.isNotBlank() }?.let { items.add("Device name" to it) }
+        item.sensitivity?.takeIf { it > 0.0 }?.let {
+            items.add("Sensitivity" to "${RadiationCalibration.formatSensitivity(it)} cps/μSv/h")
+        }
         val doseMuSv = item.dose ?: if (item.isCurrentTrack) {
-            val totalCounts = item.mapTrack?.points?.sumOf { it.counts.toLong() } ?: 0L
+            val points = TrackingService.activeTrackPointsSnapshot()
+            val totalCounts = points.sumOf { it.counts.toLong() }
             val sensitivity = item.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY
             if (sensitivity > 0 && totalCounts > 0) {
                 totalCounts.toDouble() / sensitivity / 3600.0

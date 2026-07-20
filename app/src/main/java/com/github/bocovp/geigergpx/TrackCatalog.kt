@@ -296,7 +296,8 @@ object TrackCatalog {
                     itemType = TrackListItemType.TRACK,
                     folderName = source.folderName,
                     sensitivity = cached.sensitivity,
-                    deviceName = cached.deviceName
+                    deviceName = cached.deviceName,
+                    dose = cached.dose
                 )
             )
         }
