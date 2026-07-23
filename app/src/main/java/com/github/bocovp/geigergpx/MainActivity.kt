@@ -89,6 +89,7 @@ class MainActivity : AppCompatActivity() {
     private val mainScreenKde = KernelDensityEstimator(RadiationCalibration.DEFAULT_SENSITIVITY).apply { timeout = 180.0 }
     private var mainPlotView: TimePlotView? = null
     private var composeBeepVisualizer: BeepVisualizerView? = null
+    private var mainKdeLastTotalCounts: Int? = null
     private val statePendingStartupRestore = "state_pending_startup_restore"
 
     private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
@@ -445,6 +446,17 @@ class MainActivity : AppCompatActivity() {
         composeTrackCounts = getString(R.string.track_counts_format, formatCounts(state.trackCounts, cpb))
         composeMeasurementCounts = getString(R.string.counts_format, formatCounts(state.measurementCounts, cpb))
         composeTotalCounts = getString(R.string.total_counts_format, formatCounts(state.totalCounts, cpb))
+        feedMainKdeFromTotalCounts(state.totalCounts)
+    }
+
+    private fun feedMainKdeFromTotalCounts(totalCounts: Int) {
+        val previous = mainKdeLastTotalCounts
+        mainKdeLastTotalCounts = totalCounts
+        if (previous == null) return
+        val newCounts = totalCounts - previous
+        if (newCounts <= 0) return
+        mainScreenKde.addPoint(System.currentTimeMillis() / 1000.0, newCounts, spreadCounts = true)
+        refreshMainDosePlot()
     }
 
     private fun refreshMeasurementDurationFromTimer() {
@@ -527,8 +539,6 @@ class MainActivity : AppCompatActivity() {
                 launch {
                     viewModel.beepEvents.collect { timestamp ->
                         composeBeepVisualizer?.addBeep(timestamp)
-                        mainScreenKde.addPoint(timestamp / 1000.0, 1, spreadCounts = false)
-                        refreshMainDosePlot()
                     }
                 }
             }
@@ -599,10 +609,16 @@ class MainActivity : AppCompatActivity() {
 
     @Composable
     private fun MainScreenContent() {
-        var doseExpanded by remember { mutableStateOf(true) }
+        var doseExpanded by remember { mutableStateOf(false) }
         var trackExpanded by remember { mutableStateOf(false) }
         var measurementExpanded by remember { mutableStateOf(false) }
         var statusExpanded by remember { mutableStateOf(false) }
+        LaunchedEffect(composeIsTracking) {
+            if (composeIsTracking) trackExpanded = true
+        }
+        LaunchedEffect(composeMeasurementEnabled) {
+            if (composeMeasurementEnabled) measurementExpanded = true
+        }
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
