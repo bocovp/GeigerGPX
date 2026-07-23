@@ -19,21 +19,15 @@ import com.github.bocovp.geigergpx.databinding.ActivityMainBinding
 import android.widget.Toast
 import android.os.PowerManager
 import android.provider.Settings
-import android.net.Uri
 import android.content.Context
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
-import android.icu.util.Measure
 import android.view.Menu
 import android.view.MenuItem
-import android.view.View
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.TextView
 import android.os.Build
-import android.text.SpannableString
-import android.text.Spanned
-import android.text.style.ForegroundColorSpan
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import kotlin.math.roundToInt
@@ -43,6 +37,25 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.core.content.edit
 import androidx.core.net.toUri
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.layout.FlowRow
 
 class MainActivity : AppCompatActivity() {
 
@@ -55,13 +68,27 @@ class MainActivity : AppCompatActivity() {
     private var openSavedTrackPlotAfterStop = false
     private var trackSavedReceiverRegistered = false
     private var pendingRestoreAfterStartupFolderValidation = false
-    private var defaultTextCpsColor: Int = 0
+    private var composeDoseText by mutableStateOf("Dose rate: --")
+    private var composeDoseColor by mutableStateOf(Color.Unspecified)
+    private var composeTrackDuration by mutableStateOf("")
+    private var composeDistance by mutableStateOf("")
+    private var composeTrackCounts by mutableStateOf("")
+    private var composePoints by mutableStateOf("")
+    private var composeMeasurementDuration by mutableStateOf("")
+    private var composeMeasurementCounts by mutableStateOf("")
+    private var composeTotalCounts by mutableStateOf("")
+    private var composeGpsStatus by mutableStateOf("Waiting")
+    private var composeGpsColor by mutableStateOf(Color.Unspecified)
+    private var composeAudioStatus by mutableStateOf("Working")
+    private var composeAudioColor by mutableStateOf(Color.Unspecified)
+    private var composeIsTracking by mutableStateOf(false)
+    private var composeMeasurementEnabled by mutableStateOf(false)
+    private val mainScreenKde = KernelDensityEstimator(RadiationCalibration.DEFAULT_SENSITIVITY).apply { timeout = 180.0 }
+    private var mainPlotView: TimePlotView? = null
+    private var composeBeepVisualizer: BeepVisualizerView? = null
     private val statePendingStartupRestore = "state_pending_startup_restore"
 
     private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
-        if (key == "visualize_beeps") {
-            binding.beepVisualizer.visibility = if (prefs.getBoolean("visualize_beeps", false)) View.VISIBLE else View.GONE
-        }
         if (key == SettingsKeys.KEY_DOSE_RATE_FORMATTING) {
             val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
             doseRateFormatting = DoseRateFormatting.validForSensitivity(DoseRateFormatting.fromPrefs(prefs), sensitivity)
@@ -132,52 +159,13 @@ class MainActivity : AppCompatActivity() {
         }
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        defaultTextCpsColor = binding.textCps.currentTextColor
         setSupportActionBar(binding.topAppBar)
         applyToolbarTitleVisibility()
         setupToolbarTitleLongPress()
+        setupMainCompose()
 
         validateConfiguredSaveFolderAtStartup {
             restoreStartupBackupIfNeeded()
-        }
-
-        binding.buttonStart.setOnClickListener {
-            if (viewModel.isTracking.value) {
-                if (viewModel.pointCount.value == 0) {
-                    cancelTracking()
-                } else {
-                    showCancelTrackConfirmation()
-                }
-            } else if (ensureTrackingPrerequisites()) {
-                startTracking()
-            }
-        }
-
-        binding.buttonStop.setOnClickListener {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-            val treeUri = prefs.getString(SettingsKeys.KEY_GPX_TREE_URI, null)
-            if (treeUri.isNullOrBlank()) {
-                AlertDialog.Builder(this)
-                    .setTitle(R.string.choose_save_folder)
-                    .setMessage(R.string.no_save_folder_message)
-                    .setPositiveButton(R.string.choose_folder) { _, _ ->
-                        folderPickerForStop.launch(null)
-                    }
-                    .setNegativeButton(R.string.use_app_folder) { _, _ ->
-                        stopTracking()
-                    }
-                    .show()
-            } else {
-                stopTracking()
-            }
-        }
-
-        binding.buttonMeasurementMode.setOnClickListener {
-            dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE)
-        }
-
-        binding.buttonSavePoi.setOnClickListener {
-            showSavePoiDialog()
         }
 
         syncBottomNavigationSelection()
@@ -204,16 +192,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        binding.textCps.setOnClickListener {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-            val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
-            val nextFormatting = DoseRateFormatting.validForSensitivity(doseRateFormatting.nextSameUnit(), sensitivity)
-            prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, nextFormatting.preferenceLabel) }
-        }
-
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         doseRateFormatting = DoseRateFormatting.normalizePrefsForSensitivity(prefs, RadiationCalibration.sensitivityFromPrefs(prefs))
-        binding.beepVisualizer.visibility = if (prefs.getBoolean("visualize_beeps", false)) View.VISIBLE else View.GONE
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
 
         observeViewModel()
@@ -446,7 +426,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshTrackDuration(seconds: Long) {
-        binding.textDuration.text = getString(R.string.duration_format, TrackingRepository.formatDuration(seconds))
+        composeTrackDuration = getString(R.string.duration_format, TrackingRepository.formatDuration(seconds))
     }
 
     private fun formatCounts(counts: Int, countsPerBeep: Int): String {
@@ -459,9 +439,9 @@ class MainActivity : AppCompatActivity() {
     }
     private fun updateCountDisplay(state: TrackingViewModel.CountDisplayState) {
         val cpb = state.countsPerBeep
-        binding.textTrackCounts.text = getString(R.string.track_counts_format, formatCounts(state.trackCounts, cpb))
-        binding.textMeasurementCounts.text = getString(R.string.counts_format, formatCounts(state.measurementCounts, cpb))
-        binding.textTotalCounts.text = getString(R.string.total_counts_format, formatCounts(state.totalCounts, cpb))
+        composeTrackCounts = getString(R.string.track_counts_format, formatCounts(state.trackCounts, cpb))
+        composeMeasurementCounts = getString(R.string.counts_format, formatCounts(state.measurementCounts, cpb))
+        composeTotalCounts = getString(R.string.total_counts_format, formatCounts(state.totalCounts, cpb))
     }
 
     private fun refreshMeasurementDurationFromTimer() {
@@ -476,7 +456,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             0.0
         }
-        binding.textMeasurementDuration.text = getString(R.string.measurement_duration_format, measurementDurationSeconds.roundToInt())
+        composeMeasurementDuration = getString(R.string.measurement_duration_format, measurementDurationSeconds.roundToInt())
     }
 
     private fun observeViewModel() {
@@ -484,8 +464,7 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     viewModel.isTracking.collect { tracking ->
-                        binding.buttonStart.text = if (tracking) getString(R.string.cancel) else getString(R.string.start_track_lower)
-                        binding.buttonStop.isEnabled = tracking
+                        composeIsTracking = tracking
                     }
                 }
                 launch { viewModel.trackDurationSeconds.collect { seconds -> refreshTrackDuration(seconds) } }
@@ -497,10 +476,13 @@ class MainActivity : AppCompatActivity() {
                 }
                 launch {
                     viewModel.distanceMeters.collect { dist ->
-                        binding.textDistance.text = String.format(java.util.Locale.US, getString(R.string.distance_m_format), dist)
+                        composeDistance = String.format(java.util.Locale.US, getString(R.string.distance_m_format), dist)
                     }
                 }
-                launch { viewModel.pointCount.collect { count -> binding.textPoints.text = getString(R.string.points_format, count) } }
+                launch { viewModel.pointCount.collect { count ->
+                        composePoints = getString(R.string.points_format, count)
+                    }
+                }
                 launch {
                     viewModel.cpsUpdate.collect { update ->
                         latestCpsSnapshot = update.snapshot
@@ -511,45 +493,168 @@ class MainActivity : AppCompatActivity() {
                 launch { viewModel.countDisplayState.collect { state -> updateCountDisplay(state) } }
                 launch {
                     viewModel.gpsStatus.collect { status ->
-                        binding.textGpsStatus.text = getString(R.string.gps_status_format, status)
                         val color = when (status) {
                             "Waiting" -> R.color.status_waiting
                             "Working" -> R.color.status_working
                             else -> if (status.startsWith("Spoofing detected")) R.color.status_spoofing else R.color.status_waiting
                         }
-                        binding.textGpsStatus.setTextColor(ContextCompat.getColor(this@MainActivity, color))
+                        composeGpsStatus = status
+                        composeGpsColor = Color(ContextCompat.getColor(this@MainActivity, color))
                     }
                 }
                 launch {
                     viewModel.audioStatus.collect { audioStatus ->
-                        binding.textAudioStatus.text = getString(R.string.audio_status_format, audioStatus.status)
                         val color = when (audioStatus.errorCode) {
                             TrackingRepository.AUDIO_STATUS_WORKING -> R.color.status_working
                             TrackingRepository.AUDIO_STATUS_ERROR -> R.color.status_spoofing
                             else -> R.color.status_waiting
                         }
-                        binding.textAudioStatus.setTextColor(ContextCompat.getColor(this@MainActivity, color))
+                        composeAudioStatus = audioStatus.status
+                        composeAudioColor = Color(ContextCompat.getColor(this@MainActivity, color))
                     }
                 }
                 launch {
                     viewModel.measurementModeEnabled.collect { enabled ->
                         isMeasurementModeEnabled = enabled
-                        binding.buttonMeasurementMode.text = if (enabled) getString(R.string.live_mode) else getString(R.string.measure)
-                        binding.buttonSavePoi.isEnabled = enabled
+                        composeMeasurementEnabled = enabled
                         updateCpsOrDoseLine(false)
                         refreshMeasurementDurationFromTimer()
                     }
                 }
                 launch {
                     viewModel.beepEvents.collect { timestamp ->
-                        if (binding.beepVisualizer.visibility == View.VISIBLE) {
-                            binding.beepVisualizer.addBeep(timestamp)
-                        }
+                        composeBeepVisualizer?.addBeep(timestamp)
+                        mainScreenKde.addPoint(timestamp / 1000.0, 1, spreadCounts = false)
+                        refreshMainDosePlot()
                     }
                 }
             }
         }
     }
+
+
+    private fun handleStartTrackClick() {
+        if (viewModel.isTracking.value) {
+            if (viewModel.pointCount.value == 0) {
+                cancelTracking()
+            } else {
+                showCancelTrackConfirmation()
+            }
+        } else if (ensureTrackingPrerequisites()) {
+            startTracking()
+        }
+    }
+
+    private fun handleFinishTrackClick() {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val treeUri = prefs.getString(SettingsKeys.KEY_GPX_TREE_URI, null)
+        if (treeUri.isNullOrBlank()) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.choose_save_folder)
+                .setMessage(R.string.no_save_folder_message)
+                .setPositiveButton(R.string.choose_folder) { _, _ ->
+                    folderPickerForStop.launch(null)
+                }
+                .setNegativeButton(R.string.use_app_folder) { _, _ ->
+                    stopTracking()
+                }
+                .show()
+        } else {
+            stopTracking()
+        }
+    }
+
+    private fun cycleDoseRateFormatting() {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
+        val nextFormatting = DoseRateFormatting.validForSensitivity(doseRateFormatting.nextSameUnit(), sensitivity)
+        prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, nextFormatting.preferenceLabel) }
+    }
+
+    private fun setupMainCompose() {
+        binding.mainCompose.setContent {
+            MaterialTheme {
+                MainScreenContent()
+            }
+        }
+    }
+
+    private fun refreshMainDosePlot() {
+        val plot = mainPlotView ?: return
+        val now = System.currentTimeMillis() / 1000.0
+        val start = now - 300.0
+        val times = DoubleArray(121) { start + it * 2.5 }
+        val sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this))
+        val scale = (13.0 / sensitivity).coerceAtLeast(1.0) * 60.0
+        val (mean, low, high) = mainScreenKde.getConfidenceIntervals(times, scale, now)
+        plot.setKernelSeries(DoubleArray(times.size) { it * 2.5 }, mean, low, high, sensitivity, 300.0, isLiveUpdate = true)
+        plot.setInitialWindowSeconds(300.0)
+    }
+
+    @Composable
+    private fun MainScreenContent() {
+        var doseExpanded by remember { mutableStateOf(true) }
+        var trackExpanded by remember { mutableStateOf(false) }
+        var measurementExpanded by remember { mutableStateOf(false) }
+        var statusExpanded by remember { mutableStateOf(false) }
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            ExpandablePanel("Dose rate", doseExpanded, { doseExpanded = !doseExpanded }) {
+                Text(composeDoseText, color = composeDoseColor, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { cycleDoseRateFormatting() })
+                AnimatedVisibility(doseExpanded) {
+                    AndroidView(factory = { context -> TimePlotView(context).also { mainPlotView = it; it.setEmptyMessage("Waiting for counts"); it.setShowLiveMarker(true); it.isEnabled = false } }, modifier = Modifier.fillMaxWidth().height(220.dp), update = { refreshMainDosePlot() })
+                }
+            }
+            ExpandablePanel("Track recording", trackExpanded, { trackExpanded = !trackExpanded }, active = composeIsTracking) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { handleStartTrackClick() }, modifier = Modifier.weight(1f)) { Text(if (composeIsTracking) "✕" else "▶"); Spacer(Modifier.width(6.dp)); Text(if (composeIsTracking) getString(R.string.cancel) else getString(R.string.start_track_lower)) }
+                    Button(onClick = { handleFinishTrackClick() }, enabled = composeIsTracking, modifier = Modifier.weight(1f)) { Text("⚑"); Spacer(Modifier.width(6.dp)); Text(getString(R.string.finish_track)) }
+                }
+                AnimatedVisibility(trackExpanded) { InfoFlow(composeTrackDuration, composeDistance, composeTrackCounts, composePoints) }
+            }
+            ExpandablePanel("Measurement", measurementExpanded, { measurementExpanded = !measurementExpanded }, active = composeMeasurementEnabled) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE) }, modifier = Modifier.weight(1f)) { Text(if (composeMeasurementEnabled) "✕" else "▶"); Spacer(Modifier.width(6.dp)); Text(if (composeMeasurementEnabled) getString(R.string.live_mode) else getString(R.string.measure)) }
+                    Button(onClick = { showSavePoiDialog() }, enabled = composeMeasurementEnabled, modifier = Modifier.weight(1f)) { Text("💾"); Spacer(Modifier.width(6.dp)); Text(getString(R.string.save_poi)) }
+                }
+                AnimatedVisibility(measurementExpanded) { InfoFlow(composeMeasurementDuration, composeMeasurementCounts) }
+            }
+            ExpandablePanel("Status", statusExpanded, { statusExpanded = !statusExpanded }) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("GPS: $composeGpsStatus", color = composeGpsColor)
+                    Text("Audio: $composeAudioStatus", color = composeAudioColor)
+                }
+                AnimatedVisibility(statusExpanded) { Column { Text(composeTotalCounts); AndroidView(factory = { context -> BeepVisualizerView(context).also { composeBeepVisualizer = it } }, modifier = Modifier.fillMaxWidth().height(44.dp)) } }
+            }
+        }
+    }
+
+    @Composable private fun ExpandablePanel(title: String, expanded: Boolean, onToggle: () -> Unit, active: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+        ElevatedCard(shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth().clickable { onToggle() }, verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        buildAnnotatedString {
+                            append(title)
+                            if (active) {
+                                append(" ")
+                                withStyle(SpanStyle(color = Color(0xFF2E7D32))) { append("(active)") }
+                            }
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(if (expanded) "Collapse" else "Expand", color = MaterialTheme.colorScheme.primary)
+                }
+                content()
+            }
+        }
+    }
+
+    @OptIn(ExperimentalLayoutApi::class)
+    @Composable private fun InfoFlow(vararg labels: String) { FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { labels.filter { it.isNotBlank() }.forEach { AssistChip(onClick = {}, label = { Text(it) }) } } }
 
     private fun showSavePoiDialog() {
         if (!isMeasurementModeEnabled) {
@@ -685,21 +790,11 @@ class MainActivity : AppCompatActivity() {
             formatting = doseRateFormatting
         )
         val label = if (doseRateFormatting.isDoseRate) "Dose rate:" else "CPS:"
-        binding.textCps.setTextColor(defaultTextCpsColor)
-        binding.textCps.text = colorDoseRateLabel(label, formatted, labelColor)
+        composeDoseText = "$label $formatted"
+        composeDoseColor = Color(labelColor)
+        refreshMainDosePlot()
     }
 
-    private fun colorDoseRateLabel(label: String, value: String, labelColor: Int): SpannableString {
-        val line = "$label $value"
-        return SpannableString(line).apply {
-            setSpan(
-                ForegroundColorSpan(labelColor),
-                0,
-                label.length,
-                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
-        }
-    }
 
     private fun showCancelTrackConfirmation() {
         AlertDialog.Builder(this)

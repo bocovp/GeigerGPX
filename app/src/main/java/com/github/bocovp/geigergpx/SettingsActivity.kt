@@ -192,7 +192,6 @@ class SettingsActivity : ComponentActivity() {
         val btThresholdSummaryVal = remember(refresh) { thresholdSummary(true) }
         val btThresholdSubtitleVal = remember(refresh) { thresholdSubtitle(true) }
         val useBtMic = remember(refresh) { prefs.getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false) }
-        val visualizeBeeps = remember(refresh) { prefs.getBoolean("visualize_beeps", false) }
         val doseRateAvg = remember(refresh) { prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10" }
         val relativeErr = remember(refresh) { getRelativeErrString(prefs)}
         val sensitivity = remember(refresh) { RadiationCalibration.sensitivityFromPrefs(prefs) }
@@ -256,14 +255,6 @@ class SettingsActivity : ComponentActivity() {
                             it
                         )
                     }
-                    onRefresh()
-                }
-                SwitchRow(
-                    "Visualize beeps",
-                    visualizeBeeps,
-                    "Show a real-time particle waterfall on the main screen"
-                ) {
-                    prefs.edit { putBoolean("visualize_beeps", it) }
                     onRefresh()
                 }
             }

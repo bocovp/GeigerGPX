@@ -119,7 +119,6 @@ class TrackingService : Service() {
             "max_time_without_counts_s",
             "max_time_without_gps_s",
             "dose_rate_avg_timestamps_n",
-            "visualize_beeps",
             "alert_dose_rate",
             RadiationCalibration.KEY_SENSITIVITY,
             "cps_to_usvh",
@@ -128,8 +127,6 @@ class TrackingService : Service() {
                 -> loadTrackingPrefs()
         }
     }
-
-    @Volatile private var visualizeBeeps: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -172,8 +169,6 @@ class TrackingService : Service() {
         maxTimeWithoutGpsS = prefs.getString("max_time_without_gps_s", "60")?.toDoubleOrNull() ?: 60.0
         val configuredAlertDoseRate = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
         alertDoseRate = if (configuredAlertDoseRate > 0.0) configuredAlertDoseRate else 0.0
-
-        visualizeBeeps = prefs.getBoolean("visualize_beeps", false)
 
         sensitivity = DeviceConfigManager.currentDevice(this)?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY
         countsPerBeep = DeviceConfigManager.currentDevice(this)?.fallbackConfig?.countsPerBeep ?: 1
@@ -530,7 +525,7 @@ class TrackingService : Service() {
                         System.currentTimeMillis() / 1000.0
                     }
 
-                    if (visualizeBeeps && repo.hasBeepObservers) {// Emit events for beep visualizer
+                    if (repo.hasBeepObservers) {// Emit events for beep visualizer
                         val elapsedRealtimeMillis = if (beepEndNs > 0L) {
                             android.os.SystemClock.elapsedRealtime() + ((beepEndNs - System.nanoTime()) / 1e6).toLong()
                         } else {
