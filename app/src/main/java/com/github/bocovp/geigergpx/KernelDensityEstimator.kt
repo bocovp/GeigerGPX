@@ -14,6 +14,9 @@ import kotlin.math.floor
  */
 class KernelDensityEstimator(private val sensitivity: Double) {
 
+    /** Optional retention window in seconds. When positive, newly added data evicts older events. */
+    var timeout: Double = 0.0
+
     companion object {
         private const val INITIAL_CAPACITY    = 256
         /** Two step events closer than this [s] are considered co-incident and merged. */
@@ -63,6 +66,7 @@ class KernelDensityEstimator(private val sensitivity: Double) {
         other.stepCount = stepCount
         other.dataTStart = dataTStart
         other.dataTEnd = dataTEnd
+        other.timeout = timeout
         return other
     }
 
@@ -117,6 +121,7 @@ class KernelDensityEstimator(private val sensitivity: Double) {
 
         if (time < dataTStart) dataTStart = time
         if (time > dataTEnd)   dataTEnd   = time
+        pruneTimedOut(time)
     }
 
     /**
@@ -157,6 +162,7 @@ class KernelDensityEstimator(private val sensitivity: Double) {
 
         if (intervalStartSeconds < dataTStart) dataTStart = intervalStartSeconds
         if (intervalEnd          > dataTEnd)   dataTEnd   = intervalEnd
+        pruneTimedOut(intervalEnd)
     }
 
     /**
@@ -435,6 +441,63 @@ class KernelDensityEstimator(private val sensitivity: Double) {
         System.arraycopy(stepTs, index + 1, stepTs, index, stepCount - index - 1)
         System.arraycopy(stepWs, index + 1, stepWs, index, stepCount - index - 1)
         stepCount--
+    }
+
+
+    private fun pruneTimedOut(referenceTime: Double) {
+        if (timeout <= 0.0 || referenceTime.isNaN()) return
+        val minTime = referenceTime - timeout
+        var keepFrom = 0
+        while (keepFrom < size && ts[keepFrom] < minTime) keepFrom++
+        if (keepFrom > 0) {
+            System.arraycopy(ts, keepFrom, ts, 0, size - keepFrom)
+            System.arraycopy(ns, keepFrom, ns, 0, size - keepFrom)
+            size -= keepFrom
+        }
+        val stepKeepFrom = removableTimedOutStepPrefix(minTime)
+        if (stepKeepFrom > 0) {
+            System.arraycopy(stepTs, stepKeepFrom, stepTs, 0, stepCount - stepKeepFrom)
+            System.arraycopy(stepWs, stepKeepFrom, stepWs, 0, stepCount - stepKeepFrom)
+            stepCount -= stepKeepFrom
+        }
+        recomputeDataBounds()
+    }
+
+
+    /**
+     * Returns the length of the oldest timed-out step-event prefix that can be
+     * safely dropped without changing the remaining rectangular interval signal.
+     *
+     * Step events are +/- changes to a piecewise-constant density. Dropping only
+     * complete zero-sum batches preserves the density just after the retained
+     * prefix; deleting an unmatched rising/falling edge would shift every later
+     * interval contribution.
+     */
+    private fun removableTimedOutStepPrefix(minTime: Double): Int {
+        var runningWeight = 0.0
+        var removableCount = 0
+        var index = 0
+        while (index < stepCount && stepTs[index] < minTime) {
+            runningWeight += stepWs[index]
+            index++
+            if (kotlin.math.abs(runningWeight) < STEP_WEIGHT_EPSILON) {
+                removableCount = index
+            }
+        }
+        return removableCount
+    }
+
+    private fun recomputeDataBounds() {
+        dataTStart = Double.MAX_VALUE
+        dataTEnd = Double.NEGATIVE_INFINITY
+        for (i in 0 until size) {
+            if (ts[i] < dataTStart) dataTStart = ts[i]
+            if (ts[i] > dataTEnd) dataTEnd = ts[i]
+        }
+        for (i in 0 until stepCount) {
+            if (stepTs[i] < dataTStart) dataTStart = stepTs[i]
+            if (stepTs[i] > dataTEnd) dataTEnd = stepTs[i]
+        }
     }
 
     private fun growPoints() {
