@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.painterResource
 
 class MainActivity : AppCompatActivity() {
@@ -70,7 +71,7 @@ class MainActivity : AppCompatActivity() {
     private var openSavedTrackPlotAfterStop = false
     private var trackSavedReceiverRegistered = false
     private var pendingRestoreAfterStartupFolderValidation = false
-    private var composeDoseText by mutableStateOf("Dose rate: --")
+    private var composeDoseText by mutableStateOf("--")
     private var composeDoseColor by mutableStateOf(Color.Unspecified)
     private var composeTrackDuration by mutableStateOf("")
     private var composeDistance by mutableStateOf("")
@@ -606,20 +607,20 @@ class MainActivity : AppCompatActivity() {
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            ExpandablePanel("Current Dose Rate", doseExpanded, { doseExpanded = !doseExpanded }, leadingIcon = R.drawable.rd1224si_24) {
+            ExpandablePanel("Dose rate", doseExpanded, { doseExpanded = !doseExpanded }) {
                 Text(composeDoseText, color = composeDoseColor, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { cycleDoseRateFormatting() })
                 AnimatedVisibility(doseExpanded) {
                     AndroidView(factory = { context -> TimePlotView(context).also { mainPlotView = it; it.setEmptyMessage("Waiting for counts"); it.setShowLiveMarker(true); it.isEnabled = false } }, modifier = Modifier.fillMaxWidth().height(220.dp), update = { refreshMainDosePlot() })
                 }
             }
-            ExpandablePanel("Track Recording", trackExpanded, { trackExpanded = !trackExpanded }, active = composeIsTracking, leadingIcon = R.drawable.baseline_track_24) {
+            ExpandablePanel("Track recording", trackExpanded, { trackExpanded = !trackExpanded }, active = composeIsTracking) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { handleStartTrackClick() }, modifier = Modifier.weight(1f)) { Text(if (composeIsTracking) "✕" else "▶"); Spacer(Modifier.width(6.dp)); Text(if (composeIsTracking) getString(R.string.cancel) else getString(R.string.start_track_lower)) }
                     Button(onClick = { handleFinishTrackClick() }, enabled = composeIsTracking, modifier = Modifier.weight(1f)) { Text("⚑"); Spacer(Modifier.width(6.dp)); Text(getString(R.string.finish_track)) }
                 }
                 AnimatedVisibility(trackExpanded) { InfoGrid(composeTrackDuration, composeDistance, composeTrackCounts, composePoints) }
             }
-            ExpandablePanel("Measurement Mode", measurementExpanded, { measurementExpanded = !measurementExpanded }, active = composeMeasurementEnabled, leadingIcon = R.drawable.baseline_place_24) {
+            ExpandablePanel("Measurement", measurementExpanded, { measurementExpanded = !measurementExpanded }, active = composeMeasurementEnabled) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE) }, modifier = Modifier.weight(1f)) { Text(if (composeMeasurementEnabled) "✕" else "▶"); Spacer(Modifier.width(6.dp)); Text(if (composeMeasurementEnabled) getString(R.string.live_mode) else getString(R.string.measure)) }
                     Button(onClick = { showSavePoiDialog() }, enabled = composeMeasurementEnabled, modifier = Modifier.weight(1f)) { Icon(painterResource(R.drawable.baseline_add_location_alt_24), null); Spacer(Modifier.width(6.dp)); Text(getString(R.string.save_poi)) }
@@ -641,11 +642,10 @@ class MainActivity : AppCompatActivity() {
         expanded: Boolean,
         onToggle: () -> Unit,
         active: Boolean = false,
-        leadingIcon: Int? = null,
         content: @Composable ColumnScope.() -> Unit
     ) {
         ElevatedCard(
-            shape = MaterialTheme.shapes.extraLarge,
+            shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -654,19 +654,6 @@ class MainActivity : AppCompatActivity() {
         ) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(Modifier.fillMaxWidth().clickable { onToggle() }, verticalAlignment = Alignment.CenterVertically) {
-                    if (leadingIcon != null) {
-                        Surface(
-                            shape = MaterialTheme.shapes.large,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(painterResource(leadingIcon), contentDescription = null, modifier = Modifier.size(24.dp))
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
-                    }
                     Text(
                         buildAnnotatedString {
                             append(title)
@@ -675,7 +662,8 @@ class MainActivity : AppCompatActivity() {
                                 withStyle(SpanStyle(color = Color(0xFF2E7D32))) { append("(active)") }
                             }
                         },
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f)
                     )
@@ -840,8 +828,7 @@ class MainActivity : AppCompatActivity() {
             decimalDigits = decimalDigits,
             formatting = doseRateFormatting
         )
-        val label = if (doseRateFormatting.isDoseRate) "Dose rate:" else "CPS:"
-        composeDoseText = "$label $formatted"
+        composeDoseText = formatted
         composeDoseColor = Color(labelColor)
         refreshMainDosePlot()
     }
