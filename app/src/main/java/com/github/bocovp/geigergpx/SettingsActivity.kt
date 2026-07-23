@@ -226,13 +226,15 @@ class SettingsActivity : ComponentActivity() {
                 SettingsRow(
                     "Dosimeter",
                     currentDeviceName,
-                    onClick = onDevice
+                    onClick = onDevice,
+                    showChevron = true
                 )
                 SettingsRow(
                     "Threshold",
                     thresholdSummaryVal,
                     thresholdSubtitleVal,
-                    onClick = { startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, false)) }
+                    onClick = { startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, false)) },
+                    showChevron = true
                 )
                 SettingsRow(
                     "Bluetooth threshold",
@@ -244,7 +246,8 @@ class SettingsActivity : ComponentActivity() {
                         } else {
                             startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, true))
                         }
-                    }
+                    },
+                    showChevron = true
                 )
                 SwitchRow(
                     "Use Bluetooth mic",
@@ -641,7 +644,7 @@ class SettingsActivity : ComponentActivity() {
                 Column(
                     // 16.dp horizontal to match the title above it
                     Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp) // Tighter spacing since you have no dividers
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     content()
                 }
@@ -657,7 +660,8 @@ class SettingsActivity : ComponentActivity() {
         subtitle: String? = null,
         enabled: Boolean = true,
         onClick: (() -> Unit)? = null,
-        onLongClick: (() -> Unit)? = null
+        onLongClick: (() -> Unit)? = null,
+        showChevron: Boolean = false
     ) {
         Column(
             Modifier
@@ -669,20 +673,22 @@ class SettingsActivity : ComponentActivity() {
                         onLongClick = onLongClick
                     ) else Modifier
                 )
-                .padding(vertical = 6.dp)
                 .defaultMinSize(minHeight = 32.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Column(Modifier.weight(1f).padding(end = 16.dp)) {
                     Text(
                         title,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     if (subtitle != null) {
                         Text(
                             subtitle,
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -690,11 +696,23 @@ class SettingsActivity : ComponentActivity() {
                 if (value != null) {
                     Text(
                         value,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                if (showChevron) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        painter = painterResource(R.drawable.baseline_navigate_next_24),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
+            HorizontalDivider(
+                modifier = Modifier.padding(top = 2.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
+            )
         }
     }
 
@@ -708,21 +726,34 @@ class SettingsActivity : ComponentActivity() {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
                 .defaultMinSize(minHeight = 32.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                if (subtitle != null) Text(
-                    subtitle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            Column(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        if (subtitle != null) Text(
+                            subtitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked, onCheckedChange)
+                }
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 2.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
                 )
             }
-            Switch(checked, onCheckedChange)
         }
     }
 
