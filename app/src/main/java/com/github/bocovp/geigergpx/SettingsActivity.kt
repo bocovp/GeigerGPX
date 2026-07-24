@@ -55,6 +55,15 @@ private enum class SettingsPage(val title: String) {
     )
 }
 
+// Strictly scientific UI shapes
+private val outerRadius = 16.dp
+private val innerRadius = 4.dp
+
+private val TopItemShape = RoundedCornerShape(topStart = outerRadius, topEnd = outerRadius, bottomStart = innerRadius, bottomEnd = innerRadius)
+private val MiddleItemShape = RoundedCornerShape(innerRadius)
+private val BottomItemShape = RoundedCornerShape(topStart = innerRadius, topEnd = innerRadius, bottomStart = outerRadius, bottomEnd = outerRadius)
+private val SingleItemShape = RoundedCornerShape(outerRadius)
+
 class SettingsActivity : ComponentActivity() {
     private val activeDialogs = mutableSetOf<AlertDialog>()
 
@@ -89,37 +98,36 @@ class SettingsActivity : ComponentActivity() {
             page = if (page == SettingsPage.ChooseDevice) SettingsPage.Device else SettingsPage.Main
         }
 
-        // 1. Define the collapsing scroll behavior
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
         val myCustomLightScheme = remember { lightColorScheme(
-            primary = Color(0xFF005FB0),     // Deep Blue instead of purple
+            primary = Color(0xFF005FB0),
             onPrimary = Color.White,
-            secondary = Color(0xFF565F71),   // Cool Gray instead of slate purple
-            surfaceVariant = Color(0xFFE0E2EC), // Light gray card backgrounds
+            secondary = Color(0xFF565F71),
+            surfaceVariant = Color(0xFFE0E2EC),
             primaryContainer = Color(0xFFD6E3FF),
             onPrimaryContainer = Color(0xFF001B3E),
             inversePrimary = Color(0xFFAAC7FF),
-            background = Color(0xFFFEF7FF),       // Clean light page backdrop
-            surface = Color(0xFFFEF7FF),          // Surface backing
-            onSurface = Color(0xFF1D1B20),         // Dark text/icon color
-            onSurfaceVariant = Color(0xFF49454F),  // Inactive toggle color
+            background = Color(0xFFFEF7FF),
+            surface = Color(0xFFFEF7FF),
+            onSurface = Color(0xFF1D1B20),
+            onSurfaceVariant = Color(0xFF49454F),
             outline = Color(0xFF79747E)
         )}
 
         val myCustomDarkScheme = remember {darkColorScheme(
-            primary = Color(0xFFAAC7FF),     // Bright Blue for contrast on dark backgrounds
+            primary = Color(0xFFAAC7FF),
             onPrimary = Color(0xFF003062),
-            secondary = Color(0xFFBEC6DC),   // Light Gray for readability
-            surfaceVariant = Color(0xFF43474E), // Dark gray card backgrounds
+            secondary = Color(0xFFBEC6DC),
+            surfaceVariant = Color(0xFF43474E),
             primaryContainer = Color(0xFF004787),
             onPrimaryContainer = Color(0xFFD6E3FF),
             inversePrimary = Color(0xFF005FB0),
-            background = Color(0xFF141218),       // Deep dark page backdrop
-            surface = Color(0xFF141218),          // Surface backing
-            onSurface = Color(0xFFE6E1E5),         // Light text/icon color
-            onSurfaceVariant = Color(0xFFCAC4D0),  // Inactive dark toggle color
-            outline = Color(0xFF938F99)            // Dark toggle boundary line
+            background = Color(0xFF141218),
+            surface = Color(0xFF141218),
+            onSurface = Color(0xFFE6E1E5),
+            onSurfaceVariant = Color(0xFFCAC4D0),
+            outline = Color(0xFF938F99)
         )}
 
         val colorScheme = if (isSystemInDarkTheme()) myCustomDarkScheme else myCustomLightScheme
@@ -127,10 +135,8 @@ class SettingsActivity : ComponentActivity() {
         MaterialTheme(colorScheme = colorScheme) {
             Surface(color = MaterialTheme.colorScheme.background) {
                 Scaffold(
-                    // 2. Link the scroll behavior to the Scaffold
                     modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
                     topBar = {
-                        // 3. Use the native Material 3 Large Top App Bar
                         MediumTopAppBar(
                             title = { Text(page.title) },
                             navigationIcon = {
@@ -152,7 +158,6 @@ class SettingsActivity : ComponentActivity() {
                         )
                     }
                 ) { padding ->
-                    // 4. Content container (LazyColumns will now drive the collapsing toolbar)
                     Box(modifier = Modifier.fillMaxSize()) {
                         when (page) {
                             SettingsPage.Main -> MainSettings(padding,refresh, onDevice = { page = SettingsPage.Device }, onRefresh = { refresh++ })
@@ -226,14 +231,16 @@ class SettingsActivity : ComponentActivity() {
                     "Dosimeter",
                     currentDeviceName,
                     onClick = onDevice,
-                    showChevron = true
+                    showChevron = true,
+                    shape = TopItemShape
                 )
                 SettingsRow(
                     "Threshold",
                     thresholdSummaryVal,
                     thresholdSubtitleVal,
                     onClick = { startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, false)) },
-                    showChevron = true
+                    showChevron = true,
+                    shape = MiddleItemShape
                 )
                 SettingsRow(
                     "Bluetooth threshold",
@@ -246,11 +253,13 @@ class SettingsActivity : ComponentActivity() {
                             startActivity(Intent(this@SettingsActivity, CalibrationActivity::class.java).putExtra(CalibrationActivity.EXTRA_BLUETOOTH, true))
                         }
                     },
-                    showChevron = true
+                    showChevron = true,
+                    shape = MiddleItemShape
                 )
                 SwitchRow(
                     "Use Bluetooth mic",
-                    useBtMic
+                    useBtMic,
+                    shape = BottomItemShape
                 ) {
                     prefs.edit {
                         putBoolean(
@@ -266,7 +275,8 @@ class SettingsActivity : ComponentActivity() {
                     "Counts for dose rate averaging",
                     doseRateAvg,
                     subtitle = relativeErr,
-                    listOf("5", "10", "15", "20", "30", "50", "100")
+                    choices = listOf("5", "10", "15", "20", "30", "50", "100"),
+                    shape = TopItemShape
                 ) {
                     prefs.edit {
                         putString(
@@ -281,7 +291,8 @@ class SettingsActivity : ComponentActivity() {
                     "Dose rate formatting",
                     doseRateFormatting.sampleValue,
                     subtitle = doseRateFormatting.preferenceLabel,
-                    doseRateFormattingChoices
+                    choices = doseRateFormattingChoices,
+                    shape = MiddleItemShape
                 ) {
                     val selected = DoseRateFormatting.fromLabel(it) ?: doseRateFormatting
                     val normalized = DoseRateFormatting.validForSensitivity(selected, sensitivity)
@@ -293,6 +304,7 @@ class SettingsActivity : ComponentActivity() {
                     title = context.getString(R.string.alert_at_dose_rate),
                     value = alertVal,
                     subtitle = alertSub,
+                    shape = BottomItemShape,
                     onClick = {
                         showEditDialog(
                             "Alert at dose rate",
@@ -316,6 +328,7 @@ class SettingsActivity : ComponentActivity() {
                         )
                     ),
                     "Press to change",
+                    shape = TopItemShape,
                     onClick = { folderLauncher.launch(null) })
                 EditPref(
                     "GPS Spoofing detection speed",
@@ -324,6 +337,7 @@ class SettingsActivity : ComponentActivity() {
                     "km/h",
                     true,
                     refresh,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 EditPref(
@@ -333,6 +347,7 @@ class SettingsActivity : ComponentActivity() {
                     "m",
                     true,
                     refresh,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 EditPref(
@@ -342,6 +357,7 @@ class SettingsActivity : ComponentActivity() {
                     null,
                     false,
                     refresh,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 EditPref(
@@ -351,6 +367,7 @@ class SettingsActivity : ComponentActivity() {
                     "s",
                     true,
                     refresh,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 EditPref(
@@ -360,11 +377,13 @@ class SettingsActivity : ComponentActivity() {
                     "s",
                     true,
                     refresh,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 SwitchRow(
                     "Also save dose rate in <ele> tag",
-                    prefs.getBoolean("save_dose_rate_in_ele", false)
+                    prefs.getBoolean("save_dose_rate_in_ele", false),
+                    shape = BottomItemShape
                 ) { prefs.edit { putBoolean("save_dose_rate_in_ele", it) }; onRefresh() }
             }
         }
@@ -397,12 +416,14 @@ class SettingsActivity : ComponentActivity() {
                     .fillMaxWidth()
                     .heightIn(min = 32.dp)
             ) { Text(context.getString(R.string.change_device)) }
+
             Section("Current device parameters") {
                 SettingsRow(
                     "Device name",
                     device.name,
                     if (device.isCustom) "Custom" else "Built-in",
                     enabled = device.isCustom,
+                    shape = TopItemShape,
                     onClick = {
                         if (active) toast("Cannot rename device while tracking or measuring") else renameDevice(
                             device,
@@ -418,9 +439,10 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
-                SettingsRow("Beep detector", "Goertzel detector", enabled = false)
+                SettingsRow("Beep detector", "Goertzel detector", enabled = false, shape = MiddleItemShape)
                 DeviceParam(
                     "Counts per beep",
                     DeviceConfigManager.KEY_COUNTS_PER_BEEP,
@@ -430,6 +452,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -441,6 +464,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -452,6 +476,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -463,6 +488,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -474,6 +500,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -485,6 +512,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -496,6 +524,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -507,6 +536,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -518,6 +548,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -529,6 +560,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -540,6 +572,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -551,6 +584,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = MiddleItemShape,
                     onRefresh
                 )
                 DeviceParam(
@@ -562,6 +596,7 @@ class SettingsActivity : ComponentActivity() {
                     ),
                     device.isCustom,
                     active,
+                    shape = BottomItemShape,
                     onRefresh
                 )
             }
@@ -583,7 +618,7 @@ class SettingsActivity : ComponentActivity() {
             verticalArrangement = Arrangement.spacedBy(28.dp)) {
             items(devices, key = { d -> d.name }) { d ->
                 ElevatedCard(
-                    shape = RoundedCornerShape(24.dp),
+                    shape = SingleItemShape,
                     colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                     onClick = { DeviceConfigManager.selectDevice(context, d.name); onSelected() }
                 ) {
@@ -596,13 +631,11 @@ class SettingsActivity : ComponentActivity() {
                             Text(d.name, style = MaterialTheme.typography.titleMedium)
                             Text((if (d.isCustom) "Custom" else "Built-in") + if (d.name == current) " • ACTIVE" else "", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        // Show delete icon for custom devices
                         if (d.isCustom) {
                             IconButton(onClick = { showDeleteConfirmation(d.name, onRefresh) }) {
                                 Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                             }
                         }
-                        // Show checkmark if it's the active device
                         if (d.name == current) {
                             Icon(Icons.Rounded.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
                         }
@@ -615,30 +648,17 @@ class SettingsActivity : ComponentActivity() {
     @Composable
     private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
         Column {
-            // 1. The Title
             Text(
                 text = title,
                 color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.titleSmall,
-                // Align start with the card's inner content (16.dp)
-                // Add a little padding to the bottom so it doesn't hug the card
-                modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
+                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
             )
 
-            // 2. The Card
-            ElevatedCard(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Column(
-                    // 16.dp horizontal to match the title above it
-                    Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    content()
-                }
+                content()
             }
         }
     }
@@ -650,24 +670,27 @@ class SettingsActivity : ComponentActivity() {
         value: String? = null,
         subtitle: String? = null,
         enabled: Boolean = true,
+        shape: androidx.compose.ui.graphics.Shape = MiddleItemShape,
         onClick: (() -> Unit)? = null,
         onLongClick: (() -> Unit)? = null,
         showChevron: Boolean = false
     ) {
-        Column(
-            Modifier
+        Surface(
+            shape = shape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(shape)
                 .then(
                     if ((onClick != null || onLongClick != null) && enabled) Modifier.combinedClickable(
                         onClick = { onClick?.invoke() },
                         onLongClick = onLongClick
                     ) else Modifier
                 )
-                .defaultMinSize(minHeight = 32.dp)
+                .defaultMinSize(minHeight = 56.dp)
         ) {
             Row(
-                modifier = Modifier.padding(vertical = 6.dp),
+                modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f).padding(end = 16.dp)) {
@@ -700,10 +723,6 @@ class SettingsActivity : ComponentActivity() {
                     )
                 }
             }
-            HorizontalDivider(
-                modifier = Modifier.padding(top = 2.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
-            )
         }
     }
 
@@ -712,38 +731,33 @@ class SettingsActivity : ComponentActivity() {
         title: String,
         checked: Boolean,
         subtitle: String? = null,
+        shape: androidx.compose.ui.graphics.Shape = MiddleItemShape,
         onCheckedChange: (Boolean) -> Unit
     ) {
-        Row(
-            Modifier
+        Surface(
+            shape = shape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = 32.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .clip(shape)
+                .defaultMinSize(minHeight = 56.dp)
         ) {
-            Column(Modifier.fillMaxWidth()) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            title,
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                        if (subtitle != null) Text(
-                            subtitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(checked, onCheckedChange)
+            Row(
+                modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    if (subtitle != null) Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                HorizontalDivider(
-                    modifier = Modifier.padding(top = 2.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
-                )
+                Switch(checked, onCheckedChange)
             }
         }
     }
@@ -754,6 +768,7 @@ class SettingsActivity : ComponentActivity() {
         value: String,
         subtitle: String?,
         choices: List<String>,
+        shape: androidx.compose.ui.graphics.Shape = MiddleItemShape,
         onChoice: (String) -> Unit
     ) {
         var open by remember { mutableStateOf(false) }
@@ -762,6 +777,7 @@ class SettingsActivity : ComponentActivity() {
                 title,
                 value,
                 subtitle = subtitle,
+                shape = shape,
                 onClick = { open = true }
             )
             DropdownMenu(
@@ -786,16 +802,16 @@ class SettingsActivity : ComponentActivity() {
         unit: String?,
         decimal: Boolean,
         refresh: Int,
+        shape: androidx.compose.ui.graphics.Shape = MiddleItemShape,
         onRefresh: () -> Unit
     ) {
         val context = LocalContext.current
         val prefs = remember { PreferenceManager.getDefaultSharedPreferences(context) }
         val value = remember(refresh, key) { prefs.getString(key, default) ?: default }
 
-        // Restored the blank check logic here
         val summary = if (value.isBlank()) "Not set" else if (unit == null) value else "$value $unit"
 
-        SettingsRow(title, summary, onClick = {
+        SettingsRow(title, summary, shape = shape, onClick = {
             showEditDialog(title, value, decimal, false) {
                 prefs.edit { putString(key, it) }
                 onRefresh()
@@ -810,12 +826,14 @@ class SettingsActivity : ComponentActivity() {
         value: String,
         isCustom: Boolean,
         trackingActive: Boolean,
+        shape: androidx.compose.ui.graphics.Shape = MiddleItemShape,
         onRefresh: () -> Unit
     ) {
         SettingsRow(
             title,
             formatDeviceSummary(key, value),
             enabled = isCustom,
+            shape = shape,
             onClick = {
                 if (trackingActive) toast("Cannot edit parameters while tracking or measuring") else showEditDialog(
                     title,
