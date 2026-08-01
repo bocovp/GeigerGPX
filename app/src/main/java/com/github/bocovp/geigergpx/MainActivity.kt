@@ -685,7 +685,7 @@ class MainActivity : AppCompatActivity() {
                         ),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text(if (composeIsTracking) "✕" else "▶");
+                        Icon(painterResource(if (composeIsTracking) R.drawable.baseline_stop_24 else R.drawable.baseline_play_arrow_24), null);
                         Spacer(Modifier.width(6.dp));
                         Text(if (composeIsTracking) getString(R.string.cancel) else getString(R.string.start_track_lower))
                     }
@@ -697,7 +697,7 @@ class MainActivity : AppCompatActivity() {
                         ),
                         enabled = composeIsTracking, modifier = Modifier.weight(1f)
                     ) {
-                        Text("⚑");
+                        Icon(painterResource(R.drawable.baseline_flag_24), null);
                         Spacer(Modifier.width(6.dp)); Text(getString(R.string.finish_track))
                     }
                 }
@@ -714,7 +714,7 @@ class MainActivity : AppCompatActivity() {
                         ),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text(if (composeMeasurementEnabled) "✕" else "▶");
+                        Icon(painterResource(if (composeMeasurementEnabled) R.drawable.baseline_stop_24 else R.drawable.baseline_play_arrow_24), null);
                         Spacer(Modifier.width(6.dp));
                         Text(if (composeMeasurementEnabled) getString(R.string.live_mode) else getString(R.string.measure))
                     }
