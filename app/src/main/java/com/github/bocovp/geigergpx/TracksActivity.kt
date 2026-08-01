@@ -31,6 +31,9 @@ import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.bocovp.geigergpx.databinding.ActivityTracksBinding
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -303,27 +306,31 @@ class TracksActivity : AppCompatActivity() {
     }
 
     private fun showTrackDetails(item: TrackListItem) {
-        val details = formatTrackDetails(item)
-        AlertDialog.Builder(this)
-            .setTitle(R.string.track_details)
-            .setView(buildDetailsView(trackDetailsItems(item)))
-            .setNegativeButton(R.string.close, null)
-            .setPositiveButton(R.string.copy) { _, _ ->
-                copyTextToClipboard(getString(R.string.track_details_clip_label), details)
-            }
-            .show()
+        lifecycleScope.launch {
+            val firstPointTimeMillis = withContext(Dispatchers.IO) { firstTrackPointTimeMillis(item) }
+            val detailsItems = trackDetailsItems(item, firstPointTimeMillis)
+            val details = formatTrackDetails(detailsItems)
+            AlertDialog.Builder(this@TracksActivity)
+                .setTitle(R.string.track_details)
+                .setView(buildDetailsView(detailsItems))
+                .setNegativeButton(R.string.close, null)
+                .setPositiveButton(R.string.copy) { _, _ ->
+                    copyTextToClipboard(getString(R.string.track_details_clip_label), details)
+                }
+                .show()
+        }
     }
 
-    private fun formatTrackDetails(item: TrackListItem): String {
-        return trackDetailsItems(item).joinToString(separator = "\n") { (name, value) -> "$name: $value" }
+    private fun formatTrackDetails(items: List<Pair<String, String>>): String {
+        return items.joinToString(separator = "\n") { (name, value) -> "$name: $value" }
     }
 
-    private fun trackDetailsItems(item: TrackListItem): List<Pair<String, String>> {
+    private fun trackDetailsItems(item: TrackListItem, firstPointTimeMillis: Long?): List<Pair<String, String>> {
         val stats = item.stats
-        val items = mutableListOf(
-            "Name" to item.title,
-            "Status" to if (item.isCurrentTrack) "Currently recording" else "Saved track"
-        )
+        val items = mutableListOf("Name" to item.title)
+        firstPointTimeMillis?.takeIf { it > 0L }?.let {
+            items.add("Date" to SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(it)))
+        }
         item.folderName?.let { items.add("Folder" to it) }
         if (stats != null) {
             items.add("Points" to stats.pointCount.toString())
@@ -337,7 +344,9 @@ class TracksActivity : AppCompatActivity() {
                 items.add("Distance" to parts[2])
             }
         }
-        item.deviceName?.takeIf { it.isNotBlank() }?.let { items.add(getString(R.string.device_name) to it) }
+        val deviceName = item.deviceName?.takeIf { it.isNotBlank() }
+            ?: if (item.isCurrentTrack) DeviceConfigManager.currentDeviceName(PreferenceManager.getDefaultSharedPreferences(this)) else null
+        deviceName?.takeIf { it.isNotBlank() }?.let { items.add(getString(R.string.device_name) to it) }
         val doseMuSv = item.dose ?: if (item.isCurrentTrack) {
             val points = TrackingService.activeTrackPointsSnapshot()
             val totalCounts = points.sumOf { it.counts.toLong() }
@@ -353,6 +362,27 @@ class TracksActivity : AppCompatActivity() {
         return items
     }
 
+    private fun firstTrackPointTimeMillis(item: TrackListItem): Long? {
+        return if (item.isCurrentTrack) {
+            val points = viewModel.activeTrackPoints.value.orEmpty().ifEmpty {
+                TrackingService.activeTrackPointsSnapshot()
+            }
+            points.firstOrNull()?.timeMillis?.takeIf { it > 0L }
+        } else {
+            try {
+                when {
+                    trackDocumentUri(item) != null -> contentResolver.openInputStream(trackDocumentUri(item)!!)
+                    item.id.startsWith("file:") -> File(item.id.removePrefix("file:")).takeIf { it.exists() }?.inputStream()
+                    else -> null
+                }?.use { input ->
+                    GpxReader.readTrackWithStats(input)?.points?.firstOrNull()?.timeMillis?.takeIf { it > 0L }
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
     private fun buildDetailsView(items: List<Pair<String, String>>): ScrollView {
         val density = resources.displayMetrics.density
         val container = LinearLayout(this).apply {
@@ -363,12 +393,17 @@ class TracksActivity : AppCompatActivity() {
         }
 
         items.forEach { (name, value) ->
+            val copyLine = "$name: $value"
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { bottomMargin = (6 * density).toInt() }
+            }
+            row.setOnLongClickListener {
+                copyTextToClipboard(getString(R.string.track_details_clip_label), copyLine)
+                true
             }
             row.addView(TextView(this).apply {
                 text = name
@@ -379,6 +414,10 @@ class TracksActivity : AppCompatActivity() {
             row.addView(TextView(this).apply {
                 text = value
                 textSize = 16f
+                setOnLongClickListener {
+                    copyTextToClipboard(getString(R.string.track_details_clip_label), copyLine)
+                    true
+                }
             })
             container.addView(row)
         }
