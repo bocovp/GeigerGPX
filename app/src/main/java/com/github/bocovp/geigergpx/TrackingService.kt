@@ -541,6 +541,7 @@ class TrackingService : Service() {
                     val wallMillis = (wallSeconds * 1000.0).toLong()
                     val alertEvent = doseRateMeasurement.processBeep(actualCounts, wallMillis)
                     repo.updateCpsSnapshot(doseRateMeasurement.currentSnapshot(), onBeep = true)
+                    repo.emitCountEvent(wallSeconds, actualCounts)
                     alertEvent?.let { dispatchDoseRateAlert(it) }
 
                     // 3. Feed the KDE with sub-millisecond precision and auto-spreading

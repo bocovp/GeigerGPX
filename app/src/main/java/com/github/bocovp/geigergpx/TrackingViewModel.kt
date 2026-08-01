@@ -64,4 +64,6 @@ class  TrackingViewModel(app: Application) : AndroidViewModel(app) {
     val uiTickMillis: StateFlow<Long> = repo.uiTickMillis
 
     val beepEvents = repo.beepEvents
+
+    val countEvents = repo.countEvents
 }

@@ -130,6 +130,23 @@ class TimePlotView @JvmOverloads constructor(
     private var selectedTimeSeconds: Double? = null
     var onPointSelectionChanged: ((Double?) -> Unit)? = null
     var onVisibleRangeChanged: (() -> Unit)? = null
+    var pointSelectionEnabled: Boolean = true
+        set(value) {
+            field = value
+            if (!value) {
+                longPressSelecting = false
+            }
+            if (!value && selectedTimeSeconds != null) {
+                selectedTimeSeconds = null
+                onPointSelectionChanged?.invoke(null)
+                invalidate()
+            }
+        }
+    var showTimeRemainingLabels: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
     private var longPressSelecting = false
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -162,6 +179,7 @@ class TimePlotView @JvmOverloads constructor(
         }
 
         override fun onLongPress(e: MotionEvent) {
+            if (!pointSelectionEnabled) return
             longPressSelecting = true
             selectFromX(e.x)
         }
@@ -324,7 +342,7 @@ class TimePlotView @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_MOVE -> {
-                if (longPressSelecting) {
+                if (pointSelectionEnabled && longPressSelecting) {
                     selectFromX(event.x)
                     return true // Consume the event so it doesn't get passed down
                 }
@@ -778,31 +796,33 @@ class TimePlotView @JvmOverloads constructor(
     }
 
     private fun formatTickLabel(seconds: Double): String {
-        val totalSeconds = kotlin.math.round(seconds).toInt()
+        val displaySeconds = if (showTimeRemainingLabels) seconds - trackDurationSeconds else seconds
+        val sign = if (showTimeRemainingLabels && displaySeconds < -0.5) "−" else ""
+        val totalSeconds = kotlin.math.round(kotlin.math.abs(displaySeconds)).toInt()
         return when (xAxisTickFormat) {
             XAxisTickFormat.SECONDS -> {
-                "${totalSeconds % 60}"
+                "$sign${totalSeconds % 60}"
             }
             XAxisTickFormat.MINUTES_SECONDS -> {
                 val minutes = totalSeconds / 60
                 val sec = totalSeconds % 60
-                String.format(java.util.Locale.US, "%d:%02d", minutes, sec)
+                sign + String.format(java.util.Locale.US, "%d:%02d", minutes, sec)
             }
             XAxisTickFormat.HOURS_MINUTES_SECONDS -> {
                 val hours = totalSeconds / 3600
                 val minutes = (totalSeconds % 3600) / 60
                 val sec = totalSeconds % 60
-                String.format(java.util.Locale.US, "%d:%02d:%02d", hours, minutes, sec)
+                sign + String.format(java.util.Locale.US, "%d:%02d:%02d", hours, minutes, sec)
             }
             XAxisTickFormat.MINUTES -> {
                 val totalMinutes = totalSeconds / 60
-                "$totalMinutes"
+                "$sign$totalMinutes"
             }
             XAxisTickFormat.HOURS_MINUTES -> {
                 val totalMinutes = totalSeconds / 60
                 val hours = totalMinutes / 60
                 val minutes = totalMinutes % 60
-                String.format(java.util.Locale.US, "%d:%02d", hours, minutes)
+                sign + String.format(java.util.Locale.US, "%d:%02d", hours, minutes)
             }
         }
     }

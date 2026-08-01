@@ -36,6 +36,11 @@ class TrackingRepository {
         val onBeep: Boolean = false
     )
 
+    data class CountEvent(
+        val wallSeconds: Double,
+        val counts: Int
+    )
+
     private val _isTracking = MutableStateFlow(false)
     val isTracking: StateFlow<Boolean> = _isTracking.asStateFlow()
 
@@ -86,11 +91,23 @@ class TrackingRepository {
     )
     val beepEvents: SharedFlow<Long> = _beepEvents.asSharedFlow()
 
+    private val _countEvents = MutableSharedFlow<CountEvent>(
+        extraBufferCapacity = 100,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val countEvents: SharedFlow<CountEvent> = _countEvents.asSharedFlow()
+
     val hasBeepObservers: Boolean
         get() = _beepEvents.subscriptionCount.value > 0
 
     fun emitBeepEvent(timestampMillis: Long) {
         _beepEvents.tryEmit(timestampMillis)
+    }
+
+    fun emitCountEvent(wallSeconds: Double, counts: Int) {
+        if (counts > 0) {
+            _countEvents.tryEmit(CountEvent(wallSeconds, counts))
+        }
     }
 
     private val _countsPerBeep = MutableStateFlow(1)
