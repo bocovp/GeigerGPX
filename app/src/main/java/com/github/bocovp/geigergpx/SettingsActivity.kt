@@ -328,6 +328,7 @@ class SettingsActivity : ComponentActivity() {
                         )
                     ),
                     "Press to change",
+                    showChevron = true,
                     shape = TopItemShape,
                     onClick = { folderLauncher.launch(null) })
                 EditPref(
@@ -743,7 +744,7 @@ class SettingsActivity : ComponentActivity() {
                 .defaultMinSize(minHeight = 56.dp)
         ) {
             Row(
-                modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
+                modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f).padding(end = 16.dp)) {
@@ -812,7 +813,7 @@ class SettingsActivity : ComponentActivity() {
         val summary = if (value.isBlank()) "Not set" else if (unit == null) value else "$value $unit"
 
         SettingsRow(title, summary, shape = shape, onClick = {
-            showEditDialog(title, value, decimal, false) {
+            showEditDialog(dialogTitle(title, unit), value, decimal, false) {
                 prefs.edit { putString(key, it) }
                 onRefresh()
             }
@@ -836,7 +837,7 @@ class SettingsActivity : ComponentActivity() {
             shape = shape,
             onClick = {
                 if (trackingActive) toast("Cannot edit parameters while tracking or measuring") else showEditDialog(
-                    title,
+                    dialogTitle(title, deviceParamUnit(key)),
                     formatValue(key, value),
                     key != DeviceConfigManager.KEY_COUNTS_PER_BEEP,
                     key == RadiationCalibration.KEY_SENSITIVITY
@@ -850,6 +851,16 @@ class SettingsActivity : ComponentActivity() {
                 }
             }
         )
+    }
+
+    private fun dialogTitle(title: String, unit: String?): String =
+        if (unit.isNullOrBlank()) title else "$title, $unit"
+
+    private fun deviceParamUnit(key: String): String? = when (key) {
+        RadiationCalibration.KEY_SENSITIVITY -> "cps per μSv/h"
+        DeviceConfigManager.KEY_FREQ_LOW, DeviceConfigManager.KEY_FREQ_MAIN, DeviceConfigManager.KEY_FREQ_HIGH -> "Hz"
+        DeviceConfigManager.KEY_DURATION, DeviceConfigManager.KEY_WINDOW_SIZE, DeviceConfigManager.KEY_STEP_SIZE, DeviceConfigManager.KEY_ONE_BEEP_TOL, DeviceConfigManager.KEY_TWO_BEEP_TOL, DeviceConfigManager.KEY_THREE_BEEP_TOL, DeviceConfigManager.KEY_FOUR_BEEP_TOL -> "s"
+        else -> null
     }
 
     private fun showEditDialog(
