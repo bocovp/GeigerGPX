@@ -59,6 +59,9 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.foundation.background
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -71,7 +74,7 @@ class MainActivity : AppCompatActivity() {
     private var openSavedTrackPlotAfterStop = false
     private var trackSavedReceiverRegistered = false
     private var pendingRestoreAfterStartupFolderValidation = false
-    private var composeDoseText by mutableStateOf("--")
+    private var composeDoseText by mutableStateOf(AnnotatedString("--"))
     private var composeDoseColor by mutableStateOf(Color.Unspecified)
     private var composeTrackDuration by mutableStateOf("")
     private var composeDistance by mutableStateOf("")
@@ -99,6 +102,7 @@ class MainActivity : AppCompatActivity() {
             updateCpsOrDoseLine(false)
         }
     }
+
     private val trackSavedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != TrackingService.ACTION_TRACK_SAVED) return
@@ -620,26 +624,106 @@ class MainActivity : AppCompatActivity() {
             if (composeMeasurementEnabled) measurementExpanded = true
         }
         Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             ExpandablePanel("Dose rate", doseExpanded, { doseExpanded = !doseExpanded }) {
-                Text(composeDoseText, color = composeDoseColor, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { cycleDoseRateFormatting() })
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { cycleDoseRateFormatting() }
+                ) {
+                    // The vertical color-encoded rectangle
+                    Box(
+                        modifier = Modifier
+                            .width(8.dp)
+                            .height(40.dp)
+                            .background(
+                                color = composeDoseColor,
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                    )
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    // High-contrast, theme-aware text rendering the multi-styled AnnotatedString
+                    Text(
+                        text = composeDoseText,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 AnimatedVisibility(doseExpanded) {
-                    AndroidView(factory = { context -> TimePlotView(context).also { mainPlotView = it; it.setEmptyMessage("Waiting for counts"); it.setShowLiveMarker(true); it.isEnabled = false } }, modifier = Modifier.fillMaxWidth().height(220.dp), update = { refreshMainDosePlot() })
+                    AndroidView(
+                        factory = {
+                            context -> TimePlotView(context).also {
+                                mainPlotView = it; it.setEmptyMessage("Waiting for counts");
+                                it.setShowLiveMarker(true);
+                                it.isEnabled = false
+                            } },
+                        modifier = Modifier.fillMaxWidth().height(220.dp).padding(horizontal = 4.dp),
+                        update = { refreshMainDosePlot() })
                 }
             }
             ExpandablePanel("Track recording", trackExpanded, { trackExpanded = !trackExpanded }, active = composeIsTracking) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { handleStartTrackClick() }, modifier = Modifier.weight(1f)) { Text(if (composeIsTracking) "✕" else "▶"); Spacer(Modifier.width(6.dp)); Text(if (composeIsTracking) getString(R.string.cancel) else getString(R.string.start_track_lower)) }
-                    Button(onClick = { handleFinishTrackClick() }, enabled = composeIsTracking, modifier = Modifier.weight(1f)) { Text("⚑"); Spacer(Modifier.width(6.dp)); Text(getString(R.string.finish_track)) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Button(
+                        onClick = { handleStartTrackClick() },
+                        shape = RoundedCornerShape(10.dp), // Tighter buttons
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary, // Or a custom dark/steel gray
+                            contentColor = MaterialTheme.colorScheme.onSecondary
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (composeIsTracking) "✕" else "▶");
+                        Spacer(Modifier.width(6.dp));
+                        Text(if (composeIsTracking) getString(R.string.cancel) else getString(R.string.start_track_lower))
+                    }
+                    Button(onClick = { handleFinishTrackClick() },
+                        shape = RoundedCornerShape(10.dp), // Tighter buttons
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary, // Or a custom dark/steel gray
+                            contentColor = MaterialTheme.colorScheme.onSecondary
+                        ),
+                        enabled = composeIsTracking, modifier = Modifier.weight(1f)
+                    ) {
+                        Text("⚑");
+                        Spacer(Modifier.width(6.dp)); Text(getString(R.string.finish_track))
+                    }
                 }
                 AnimatedVisibility(trackExpanded) { InfoGrid(composeTrackDuration, composeDistance, composeTrackCounts, composePoints) }
             }
             ExpandablePanel("Measurement", measurementExpanded, { measurementExpanded = !measurementExpanded }, active = composeMeasurementEnabled) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE) }, modifier = Modifier.weight(1f)) { Text(if (composeMeasurementEnabled) "✕" else "▶"); Spacer(Modifier.width(6.dp)); Text(if (composeMeasurementEnabled) getString(R.string.live_mode) else getString(R.string.measure)) }
-                    Button(onClick = { showSavePoiDialog() }, enabled = composeMeasurementEnabled, modifier = Modifier.weight(1f)) { Icon(painterResource(R.drawable.baseline_add_location_alt_24), null); Spacer(Modifier.width(6.dp)); Text(getString(R.string.save_poi)) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Button(
+                        onClick = { dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE) },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary,
+                            contentColor = MaterialTheme.colorScheme.onSecondary
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (composeMeasurementEnabled) "✕" else "▶");
+                        Spacer(Modifier.width(6.dp));
+                        Text(if (composeMeasurementEnabled) getString(R.string.live_mode) else getString(R.string.measure))
+                    }
+                    Button(
+                        onClick = { showSavePoiDialog() },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary,
+                            contentColor = MaterialTheme.colorScheme.onSecondary
+                        ),
+                        enabled = composeMeasurementEnabled,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(painterResource(R.drawable.baseline_add_location_alt_24), null);
+                        Spacer(Modifier.width(6.dp));
+                        Text(getString(R.string.save_poi))
+                    }
                 }
                 AnimatedVisibility(measurementExpanded) { InfoGrid(composeMeasurementDuration, composeMeasurementCounts) }
             }
@@ -661,14 +745,17 @@ class MainActivity : AppCompatActivity() {
         content: @Composable ColumnScope.() -> Unit
     ) {
         ElevatedCard(
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.onSurface
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Row(Modifier.fillMaxWidth().clickable { onToggle() }, verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         buildAnnotatedString {
@@ -830,22 +917,69 @@ class MainActivity : AppCompatActivity() {
             if (doseRateDelta < 0.01 * (10.0 / sensitivity)) 4 else 3
         } else 2
 
-        val doseColor = when {
-            doseRateMean < 0.000001 -> R.color.dose_zero
-            doseRateMean < 0.15 -> R.color.dose_low
-            doseRateMean < 0.3 -> R.color.dose_medium
-            else -> R.color.dose_high
-        }
-        val labelColor = ContextCompat.getColor(this, doseColor)
+        val doseColorInt = DoseColorScale.colorForDose(
+            value = doseRateMean,
+            minDose = 0.0,
+            maxDose = DoseColorScale.DEFAULT_MAX_DOSE
+        )
+        composeDoseColor = Color(doseColorInt)
 
+// 2. Format base string
         val formatted = DoseRateFormatting.format(
             ci = ci,
             sensitivity = sensitivity,
             decimalDigits = decimalDigits,
             formatting = doseRateFormatting
         )
-        composeDoseText = formatted
-        composeDoseColor = Color(labelColor)
+
+// 3. Parse strings into different font sizes based on the active mode
+        composeDoseText = buildAnnotatedString {
+            if (doseRateFormatting.isInterval) {
+                // Interval Mode: Entire interval large, unit small (e.g., "0.12 … 0.14" and "μSv/h")
+                val unitIndex = formatted.lastIndexOf(doseRateFormatting.unit)
+                if (unitIndex != -1) {
+                    withStyle(SpanStyle(fontSize = 32.sp)) {
+                        append(formatted.substring(0, unitIndex).trim())
+                    }
+                    append(" ")
+                    withStyle(SpanStyle(fontSize = 18.sp, fontWeight = FontWeight.Normal)) {
+                        append(formatted.substring(unitIndex))
+                    }
+                } else {
+                    withStyle(SpanStyle(fontSize = 32.sp)) { append(formatted) }
+                }
+
+            } else if (doseRateFormatting.isRelative) {
+                // Relative Mode: Value large, unit and error small (e.g., "0.15" and "μSv/h ± 10%")
+                val firstSpace = formatted.indexOf(' ')
+                if (firstSpace != -1) {
+                    withStyle(SpanStyle(fontSize = 32.sp)) {
+                        append(formatted.substring(0, firstSpace))
+                    }
+                    append(" ")
+                    withStyle(SpanStyle(fontSize = 18.sp, fontWeight = FontWeight.Normal)) {
+                        append(formatted.substring(firstSpace + 1))
+                    }
+                } else {
+                    withStyle(SpanStyle(fontSize = 32.sp)) { append(formatted) }
+                }
+
+            } else {
+                // Absolute Mode: Value large, error and unit small (e.g., "0.15" and "± 0.05 μSv/h")
+                val pmIndex = formatted.indexOf(" ± ")
+                if (pmIndex != -1) {
+                    withStyle(SpanStyle(fontSize = 32.sp)) {
+                        append(formatted.substring(0, pmIndex))
+                    }
+                    withStyle(SpanStyle(fontSize = 18.sp, fontWeight = FontWeight.Normal)) {
+                        append(formatted.substring(pmIndex))
+                    }
+                } else {
+                    withStyle(SpanStyle(fontSize = 32.sp)) { append(formatted) }
+                }
+            }
+        }
+
         refreshMainDosePlot()
     }
 

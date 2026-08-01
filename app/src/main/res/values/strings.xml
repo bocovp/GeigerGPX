@@ -33,7 +33,7 @@
     <string name="cps_value">CPS: 0.00</string>
     <string name="start_track">Start Track</string>
     <string name="start_track_lower">Start track</string>
-    <string name="finish_track">Finish Track</string>
+    <string name="finish_track">Finish</string>
     <string name="duration_initial">Duration: 00:00:00</string>
     <string name="duration_seconds_initial">Duration: 0</string>
     <string name="distance_initial">Distance: 0 m</string>
