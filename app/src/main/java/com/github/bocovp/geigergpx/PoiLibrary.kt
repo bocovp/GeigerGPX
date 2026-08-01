@@ -109,7 +109,7 @@ object PoiLibrary {
                 counts = counts,
                 seconds = seconds,
                 description = description.ifBlank { "POI" },
-                deviceName = deviceName
+                deviceName = deviceName.takeIf { counts > 0 }
             )
         }
         if (result.success && selected) {
