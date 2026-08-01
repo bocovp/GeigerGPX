@@ -227,8 +227,8 @@ class PoiActivity : AppCompatActivity() {
         val items = mutableListOf(
             getString(R.string.details_name) to poi.description,
             getString(R.string.details_date) to dateTime,
-            getString(R.string.details_latitude) to String.format(Locale.US, "%.6f", poi.latitude),
-            getString(R.string.details_longitude) to String.format(Locale.US, "%.6f", poi.longitude),
+            "${getString(R.string.details_latitude)} / ${getString(R.string.details_longitude)}" to
+                "${String.format(Locale.US, "%.6f", poi.latitude)}, ${String.format(Locale.US, "%.6f", poi.longitude)}",
             getString(R.string.details_counts) to poi.counts.toString(),
             getString(R.string.details_seconds) to String.format(Locale.US, "%.3f", poi.seconds),
             getString(R.string.details_dose_rate) to formatDoseRateText(poi)
@@ -247,12 +247,17 @@ class PoiActivity : AppCompatActivity() {
         }
 
         items.forEach { (name, value) ->
+            val copyLine = "$name: $value"
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { bottomMargin = (6 * density).toInt() }
+            }
+            row.setOnLongClickListener {
+                copyTextToClipboard(getString(R.string.poi_details_clip_label), copyLine)
+                true
             }
             row.addView(TextView(this).apply {
                 text = name
@@ -263,6 +268,10 @@ class PoiActivity : AppCompatActivity() {
             row.addView(TextView(this).apply {
                 text = value
                 textSize = 16f
+                setOnLongClickListener {
+                    copyTextToClipboard(getString(R.string.poi_details_clip_label), copyLine)
+                    true
+                }
             })
             container.addView(row)
         }
