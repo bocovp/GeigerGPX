@@ -4,75 +4,90 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import java.util.Locale
 
-enum class DoseRateFormatting(
+enum class DoseRateDimension(
     val preferenceLabel: String,
-    val sampleValue: String,
-    val unit: String
+    val unit: String,
+    val sampleValue: String
 ) {
-    ABSOLUTE_USV("Absolute error in μSv/h", "0.15 ± 0.05 μSv/h", "μSv/h"),
-    RELATIVE_USV("Relative error in μSv/h", "0.15 μSv/h ± 10%", "μSv/h"),
-    INTERVAL_USV("Interval in μSv/h", "0.12 … 0.14 μSv/h", "μSv/h"),
-    ABSOLUTE_CPS("Absolute error in cps", "15.1 ± 1.5 cps", "cps"),
-    RELATIVE_CPS("Relative error in cps", "15.1 cps ± 10%", "cps"),
-    INTERVAL_CPS("Interval in cps", "12.5 … 14.2 cps", "cps");
-
-    val isDoseRate: Boolean get() = unit == "μSv/h"
-    val isRelative: Boolean get() = this == RELATIVE_USV || this == RELATIVE_CPS
-    val isInterval: Boolean get() = this == INTERVAL_USV || this == INTERVAL_CPS
-
-    fun correspondingCps(): DoseRateFormatting = when (this) {
-        ABSOLUTE_USV -> ABSOLUTE_CPS
-        RELATIVE_USV -> RELATIVE_CPS
-        INTERVAL_USV -> INTERVAL_CPS
-        else -> this
-    }
-
-    fun nextSameUnit(): DoseRateFormatting = when (this) {
-        ABSOLUTE_USV -> RELATIVE_USV
-        RELATIVE_USV -> INTERVAL_USV
-        INTERVAL_USV -> ABSOLUTE_USV
-        ABSOLUTE_CPS -> RELATIVE_CPS
-        RELATIVE_CPS -> INTERVAL_CPS
-        INTERVAL_CPS -> ABSOLUTE_CPS
-    }
+    USV_H("μSv/h", "μSv/h", "0.15 μSv/h"),
+    CPS("cps", "cps", "15.1 cps");
 
     companion object {
+        private const val KEY = SettingsKeys.KEY_DOSE_RATE_DIMENSION
+        private const val LOCK_EPSILON = 1e-9
         private val VALUES = values()
         val allLabels: List<String> = VALUES.map { it.preferenceLabel }
 
-        fun fromLabel(label: String?): DoseRateFormatting? = VALUES.firstOrNull { it.preferenceLabel == label }
-        fun fromPrefs(prefs: SharedPreferences): DoseRateFormatting =
-            fromLabel(prefs.getString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, null)) ?: ABSOLUTE_USV
+        fun fromLabel(label: String?): DoseRateDimension? = VALUES.firstOrNull { it.preferenceLabel == label }
 
-        fun validForSensitivity(formatting: DoseRateFormatting, sensitivity: Double): DoseRateFormatting =
-            if (sensitivity == 1.0 || sensitivity <= 0.0) formatting.correspondingCps() else formatting
-
-        fun normalizePrefsForSensitivity(prefs: SharedPreferences, sensitivity: Double): DoseRateFormatting {
-            val current = fromPrefs(prefs)
-            val normalized = validForSensitivity(current, sensitivity)
-            if (normalized != current) {
-                prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, normalized.preferenceLabel) }
-            }
-            return normalized
+        fun fromPrefs(prefs: SharedPreferences, sensitivity: Double? = null): DoseRateDimension {
+            val dimension = fromLabel(prefs.getString(KEY, null))
+                ?: legacyDimensionFromFormatting(prefs.getString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, null))
+                ?: USV_H
+            return if (isLockedToCps(sensitivity)) CPS else dimension
         }
 
-        fun format(ci: ConfidenceInterval, sensitivity: Double, decimalDigits: Int, formatting: DoseRateFormatting): String {
-            val counts = ci.sampleCount
-            if (counts < 2) return "0 ${formatting.unit}"
+        fun isLockedToCps(sensitivity: Double?): Boolean = sensitivity != null && kotlin.math.abs(sensitivity - 1.0) < LOCK_EPSILON
 
-            val scaled = if (formatting.isDoseRate) {
-                val factor = if (sensitivity > 0.0) 1.0 / sensitivity else 0.0
-                ci.scale(factor)
-            } else ci
-            return when {
-                formatting.isInterval -> "${scaled.toIntervalText(decimalDigits)} ${formatting.unit}"
-                formatting.isRelative -> {
-                    val relative = ConfidenceInterval.relativeErrPercent(counts)
-                    val percentText = if (relative == null) "0%" else String.format(Locale.US, "%.0f%%", relative)
-                    String.format(Locale.US, "%.${decimalDigits}f %s ± %s", scaled.mean, formatting.unit, percentText)
-                }
-                else -> "${scaled.toPlusMinusText(decimalDigits)} ${formatting.unit}"
-            }
+        fun normalizePrefsForSensitivity(prefs: SharedPreferences, sensitivity: Double): DoseRateDimension {
+            val current = fromPrefs(prefs, sensitivity)
+            if (isLockedToCps(sensitivity)) prefs.edit { putString(KEY, CPS.preferenceLabel) }
+            return current
+        }
+
+        private fun legacyDimensionFromFormatting(label: String?): DoseRateDimension? = when {
+            label == null -> null
+            label.contains("cps", ignoreCase = true) -> CPS
+            label.contains("Sv/h", ignoreCase = true) -> USV_H
+            else -> null
         }
     }
+}
+
+enum class DoseRateErrorFormat {
+    ABSOLUTE,
+    RELATIVE,
+    INTERVAL;
+
+    fun next(): DoseRateErrorFormat = when (this) {
+        ABSOLUTE -> RELATIVE
+        RELATIVE -> INTERVAL
+        INTERVAL -> ABSOLUTE
+    }
+
+    companion object {
+        fun fromPrefs(prefs: SharedPreferences): DoseRateErrorFormat =
+            runCatching { valueOf(prefs.getString(SettingsKeys.KEY_DOSE_RATE_ERROR_FORMAT, null) ?: ABSOLUTE.name) }
+                .getOrDefault(ABSOLUTE)
+
+        fun save(prefs: SharedPreferences, format: DoseRateErrorFormat) {
+            prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_ERROR_FORMAT, format.name) }
+        }
+    }
+}
+
+object DoseRateFormatter {
+    fun format(ci: ConfidenceInterval, sensitivity: Double, decimalDigits: Int, dimension: DoseRateDimension, errorFormat: DoseRateErrorFormat): String {
+        val counts = ci.sampleCount
+        if (counts < 2) return "0 ${dimension.unit}"
+        val scaled = scale(ci, sensitivity, dimension)
+        return when (errorFormat) {
+            DoseRateErrorFormat.INTERVAL -> "${scaled.toIntervalText(decimalDigits)} ${dimension.unit}"
+            DoseRateErrorFormat.RELATIVE -> {
+                val relative = ConfidenceInterval.relativeErrPercent(counts)
+                val percentText = if (relative == null) "0%" else String.format(Locale.US, "%.0f%%", relative)
+                String.format(Locale.US, "%.${decimalDigits}f %s ± %s", scaled.mean, dimension.unit, percentText)
+            }
+            DoseRateErrorFormat.ABSOLUTE -> "${scaled.toPlusMinusText(decimalDigits)} ${dimension.unit}"
+        }
+    }
+
+    fun scale(ci: ConfidenceInterval, sensitivity: Double, dimension: DoseRateDimension): ConfidenceInterval =
+        if (dimension == DoseRateDimension.USV_H) ci.scale(if (sensitivity > 0.0) 1.0 / sensitivity else 0.0) else ci
+
+    fun valueFromDoseRate(doseRate: Double, sensitivity: Double, dimension: DoseRateDimension): Double =
+        if (dimension == DoseRateDimension.CPS) RadiationCalibration.cpsFromDoseRate(doseRate, sensitivity) else doseRate
+
+    fun doseRateFromDisplayValue(value: Double, sensitivity: Double, dimension: DoseRateDimension): Double =
+        if (dimension == DoseRateDimension.CPS) RadiationCalibration.doseRateFromCps(value, sensitivity) else value
 }

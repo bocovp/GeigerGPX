@@ -69,7 +69,8 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var latestCpsSnapshot = TrackingRepository.CpsSnapshot()
     private var isMeasurementModeEnabled: Boolean = false
-    private var doseRateFormatting: DoseRateFormatting = DoseRateFormatting.ABSOLUTE_USV
+    private var doseRateDimension: DoseRateDimension = DoseRateDimension.USV_H
+    private var doseRateErrorFormat: DoseRateErrorFormat = DoseRateErrorFormat.ABSOLUTE
     private var keepScreenOnEnabled: Boolean = false
     private var openSavedTrackPlotAfterStop = false
     private var trackSavedReceiverRegistered = false
@@ -96,10 +97,12 @@ class MainActivity : AppCompatActivity() {
     private val statePendingStartupRestore = "state_pending_startup_restore"
 
     private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
-        if (key == SettingsKeys.KEY_DOSE_RATE_FORMATTING) {
+        if (key == SettingsKeys.KEY_DOSE_RATE_DIMENSION || key == SettingsKeys.KEY_DOSE_RATE_ERROR_FORMAT || key == SettingsKeys.KEY_DOSE_RATE_FORMATTING) {
             val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
-            doseRateFormatting = DoseRateFormatting.validForSensitivity(DoseRateFormatting.fromPrefs(prefs), sensitivity)
+            doseRateDimension = DoseRateDimension.fromPrefs(prefs, sensitivity)
+            doseRateErrorFormat = DoseRateErrorFormat.fromPrefs(prefs)
             updateCpsOrDoseLine(false)
+            refreshMainDosePlot()
         }
     }
 
@@ -201,7 +204,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        doseRateFormatting = DoseRateFormatting.normalizePrefsForSensitivity(prefs, RadiationCalibration.sensitivityFromPrefs(prefs))
+        doseRateDimension = DoseRateDimension.normalizePrefsForSensitivity(prefs, RadiationCalibration.sensitivityFromPrefs(prefs))
+        doseRateErrorFormat = DoseRateErrorFormat.fromPrefs(prefs)
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
 
         observeViewModel()
@@ -579,9 +583,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun cycleDoseRateFormatting() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
-        val nextFormatting = DoseRateFormatting.validForSensitivity(doseRateFormatting.nextSameUnit(), sensitivity)
-        prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, nextFormatting.preferenceLabel) }
+        val nextFormat = doseRateErrorFormat.next()
+        DoseRateErrorFormat.save(prefs, nextFormat)
+        doseRateErrorFormat = nextFormat
+        updateCpsOrDoseLine(false)
     }
 
     private fun setupMainCompose() {
@@ -603,7 +608,7 @@ class MainActivity : AppCompatActivity() {
         val sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this))
         val scale = (13.0 / sensitivity).coerceAtLeast(1.0) * 60.0
         val (mean, low, high) = mainScreenKde.getConfidenceIntervals(times, scale, now)
-        plot.setKernelSeries(DoubleArray(times.size) { it * 2.5 }, mean, low, high, sensitivity, 300.0, isLiveUpdate = true)
+        plot.setKernelSeries(DoubleArray(times.size) { it * 2.5 }, mean, low, high, sensitivity, 300.0, isLiveUpdate = true, dimension = doseRateDimension)
         plot.setInitialWindowSeconds(300.0)
     }
 
@@ -918,11 +923,12 @@ class MainActivity : AppCompatActivity() {
             ConfidenceInterval(t1, t_now, eventsInside, false) // disregarding t1
         }
 
+        val displayCi = DoseRateFormatter.scale(ci, sensitivity, doseRateDimension)
         val doseRateMean = ci.mean * inverseSensitivity
-        val doseRateDelta = ci.delta * inverseSensitivity
+        val displayDelta = displayCi.delta
 
         val decimalDigits = if (isMeasurementModeEnabled) {
-            if (doseRateDelta < 0.01 * (10.0 / sensitivity)) 4 else 3
+            if (displayDelta < 0.01 * (10.0 / sensitivity)) 4 else 3
         } else 2
 
         val doseColorInt = DoseColorScale.colorForDose(
@@ -933,18 +939,19 @@ class MainActivity : AppCompatActivity() {
         composeDoseColor = Color(doseColorInt)
 
 // 2. Format base string
-        val formatted = DoseRateFormatting.format(
+        val formatted = DoseRateFormatter.format(
             ci = ci,
             sensitivity = sensitivity,
             decimalDigits = decimalDigits,
-            formatting = doseRateFormatting
+            dimension = doseRateDimension,
+            errorFormat = doseRateErrorFormat
         )
 
 // 3. Parse strings into different font sizes based on the active mode
         composeDoseText = buildAnnotatedString {
-            if (doseRateFormatting.isInterval) {
+            if (doseRateErrorFormat == DoseRateErrorFormat.INTERVAL) {
                 // Interval Mode: Entire interval large, unit small (e.g., "0.12 … 0.14" and "μSv/h")
-                val unitIndex = formatted.lastIndexOf(doseRateFormatting.unit)
+                val unitIndex = formatted.lastIndexOf(doseRateDimension.unit)
                 if (unitIndex != -1) {
                     withStyle(SpanStyle(fontSize = 32.sp)) {
                         append(formatted.substring(0, unitIndex).trim())
@@ -957,7 +964,7 @@ class MainActivity : AppCompatActivity() {
                     withStyle(SpanStyle(fontSize = 32.sp)) { append(formatted) }
                 }
 
-            } else if (doseRateFormatting.isRelative) {
+            } else if (doseRateErrorFormat == DoseRateErrorFormat.RELATIVE) {
                 // Relative Mode: Value large, unit and error small (e.g., "0.15" and "μSv/h ± 10%")
                 val firstSpace = formatted.indexOf(' ')
                 if (firstSpace != -1) {

@@ -202,11 +202,12 @@ class TimePlotView @JvmOverloads constructor(
         points: List<TrackPoint>,
         sensitivity: Double,
         recalculateVerticalAxis: Boolean = true,
-        isLiveUpdate: Boolean = false
+        isLiveUpdate: Boolean = false,
+        dimension: DoseRateDimension = DoseRateDimension.USV_H
     ) {
         kernelSeries = emptyList()
         plotSegments.clear()
-        yAxisUnit = if (kotlin.math.abs(sensitivity - 1.0) < 1e-9) "cps" else "μSv/h"
+        yAxisUnit = dimension.unit
 
         if (points.isEmpty()) {
             trackDurationSeconds = 0.0
@@ -226,13 +227,14 @@ class TimePlotView @JvmOverloads constructor(
         for (p in points) {
             val seconds = p.seconds.coerceAtLeast(0.001)
             val ci = ConfidenceInterval(0.0, seconds, p.counts, false)
-            val value = p.doseRate
+            val value = DoseRateFormatter.valueFromDoseRate(p.doseRate, sensitivity, dimension)
+            val scaledCi = DoseRateFormatter.scale(ci, sensitivity, dimension)
             plotSegments += PlotSegment(
                 startSeconds = elapsedSeconds,
                 endSeconds = elapsedSeconds + seconds,
                 value = value,
-                ciLow = ci.lowBound.coerceAtLeast(0.0) / sensitivity,
-                ciHigh = ci.highBound.coerceAtLeast(0.0) / sensitivity
+                ciLow = scaledCi.lowBound.coerceAtLeast(0.0),
+                ciHigh = scaledCi.highBound.coerceAtLeast(0.0)
             )
             elapsedSeconds += seconds
         }
@@ -257,17 +259,18 @@ class TimePlotView @JvmOverloads constructor(
         sensitivity: Double,
         totalTrackDurationSeconds: Double,
         recalculateVerticalAxis: Boolean = true,
-        isLiveUpdate: Boolean = false
+        isLiveUpdate: Boolean = false,
+        dimension: DoseRateDimension = DoseRateDimension.USV_H
     ) {
         plotSegments.clear()
-        yAxisUnit = if (kotlin.math.abs(sensitivity - 1.0) < 1e-9) "cps" else "μSv/h"
+        yAxisUnit = dimension.unit
         val size = minOf(relativeSeconds.size, mean.size, low.size, high.size)
         kernelSeries = List(size) { idx ->
             KernelPoint(
                 t = relativeSeconds[idx].coerceAtLeast(0.0),
-                mean = mean[idx].coerceAtLeast(0.0),
-                low = low[idx].coerceAtLeast(0.0),
-                high = high[idx].coerceAtLeast(0.0)
+                mean = DoseRateFormatter.valueFromDoseRate(mean[idx].coerceAtLeast(0.0), sensitivity, dimension),
+                low = DoseRateFormatter.valueFromDoseRate(low[idx].coerceAtLeast(0.0), sensitivity, dimension),
+                high = DoseRateFormatter.valueFromDoseRate(high[idx].coerceAtLeast(0.0), sensitivity, dimension)
             )
         }
         if (kernelSeries.isEmpty()) {

@@ -484,14 +484,14 @@ class MapActivity : AppCompatActivity() {
                     val selectedPoiIds = ensurePoiSelectionInitialized(allPois.map { it.id }.toSet())
                     val visiblePois = allPois.filter { it.id in selectedPoiIds }
 
-                    val sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this@MapActivity))
-                    val showCpsUnit = kotlin.math.abs(sensitivity - 1.0) < 1e-9
+                    val prefs = PreferenceManager.getDefaultSharedPreferences(this@MapActivity)
+                    val dimension = DoseRateDimension.fromPrefs(prefs, RadiationCalibration.sensitivityFromPrefs(prefs))
 
                     val poiMapItems = visiblePois.map { poi ->
                         val cps = if (poi.seconds > 0.0001) poi.counts / poi.seconds else 0.0
                         val doseRate = RadiationCalibration.doseRateFromCps(cps, poi.sensitivity)
-                        val value = if (showCpsUnit) cps else doseRate
-                        val unit = if (showCpsUnit) "cps" else "μSv/h"
+                        val value = DoseRateFormatter.valueFromDoseRate(doseRate, poi.sensitivity, dimension)
+                        val unit = dimension.unit
                         PoiMapItem(
                             id = poi.id,
                             name = poi.description,

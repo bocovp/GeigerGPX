@@ -8,7 +8,8 @@ import kotlin.math.min
 import org.osmdroid.util.PointL
 
 class HeatmapOverlay(
-    var sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
+    var sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY,
+    var dimension: DoseRateDimension = DoseRateDimension.USV_H
 ) : Overlay() {
 
     // Data source
@@ -125,7 +126,7 @@ class HeatmapOverlay(
                 val index = row * cols + col
                 sumCounts[index] += pt.counts
                 sumSeconds[index] += pt.seconds
-                sumDose[index] += pt.counts / (track.sensitivity.takeIf { it > 0.0 } ?: RadiationCalibration.DEFAULT_SENSITIVITY)
+                sumDose[index] += if (dimension == DoseRateDimension.CPS) pt.counts.toDouble() else pt.counts / (track.sensitivity.takeIf { it > 0.0 } ?: RadiationCalibration.DEFAULT_SENSITIVITY)
             }
         }
 
@@ -143,7 +144,7 @@ class HeatmapOverlay(
             val index = row * cols + col
             sumCounts[index] += poi.counts
             sumSeconds[index] += poi.seconds
-            sumDose[index] += poi.counts / (poi.sensitivity.takeIf { it > 0.0 } ?: RadiationCalibration.DEFAULT_SENSITIVITY)
+            sumDose[index] += if (dimension == DoseRateDimension.CPS) poi.counts.toDouble() else poi.counts / (poi.sensitivity.takeIf { it > 0.0 } ?: RadiationCalibration.DEFAULT_SENSITIVITY)
         }
 
         var maxBinnedDose = Double.NEGATIVE_INFINITY

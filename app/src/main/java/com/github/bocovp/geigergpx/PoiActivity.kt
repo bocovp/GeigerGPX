@@ -18,6 +18,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.lifecycle.lifecycleScope
+import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.bocovp.geigergpx.databinding.ActivityPoiBinding
 import java.text.SimpleDateFormat
@@ -142,8 +143,10 @@ class PoiActivity : AppCompatActivity() {
         if (poi.seconds <= 0.0) {
             return getString(R.string.unknown_dose_rate)
         }
-        val ci = ConfidenceInterval(0.0, poi.seconds, poi.counts, false).scale(1.0 / poi.sensitivity)
-        return "${ci.toText(decimalDigits = 4)} μSv/h"
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val dimension = DoseRateDimension.fromPrefs(prefs, poi.sensitivity)
+        val ci = DoseRateFormatter.scale(ConfidenceInterval(0.0, poi.seconds, poi.counts, false), poi.sensitivity, dimension)
+        return "${ci.toText(decimalDigits = 4)} ${dimension.unit}"
     }
 
     private fun onPoiToggled(poiId: String, visible: Boolean) {

@@ -200,19 +200,15 @@ class SettingsActivity : ComponentActivity() {
         val doseRateAvg = remember(refresh) { prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10" }
         val relativeErr = remember(refresh) { getRelativeErrString(prefs)}
         val sensitivity = remember(refresh) { RadiationCalibration.sensitivityFromPrefs(prefs) }
-        val storedDoseRateFormatting = remember(refresh) { DoseRateFormatting.fromPrefs(prefs) }
-        val doseRateFormatting = remember(refresh, sensitivity) {
-            DoseRateFormatting.validForSensitivity(storedDoseRateFormatting, sensitivity)
-        }
+        val doseRateDimension = remember(refresh, sensitivity) { DoseRateDimension.fromPrefs(prefs, sensitivity) }
+        val dimensionLockedToCps = remember(refresh, sensitivity) { DoseRateDimension.isLockedToCps(sensitivity) }
         LaunchedEffect(sensitivity) {
-            DoseRateFormatting.normalizePrefsForSensitivity(prefs, sensitivity)
+            DoseRateDimension.normalizePrefsForSensitivity(prefs, sensitivity)
         }
-        val doseRateFormattingChoices = remember(refresh, sensitivity) {
-            DoseRateFormatting.values()
-                .filter { (sensitivity != 1.0 && sensitivity > 0.0) || !it.isDoseRate }
-                .map { it.preferenceLabel }
+        val doseRateDimensionChoices = remember(refresh, sensitivity) {
+            DoseRateDimension.allLabels.filter { !dimensionLockedToCps || it == DoseRateDimension.CPS.preferenceLabel }
         }
-        val (alertVal, alertSub) = remember(refresh) { getAlertStrings(prefs) }
+        val (alertVal, alertSub) = remember(refresh, doseRateDimension, sensitivity) { getAlertStrings(prefs, doseRateDimension, sensitivity) }
 
         Column(
             modifier = Modifier
@@ -288,15 +284,15 @@ class SettingsActivity : ComponentActivity() {
                 }
 
                 ChoiceRow(
-                    "Dose rate formatting",
-                    doseRateFormatting.sampleValue,
-                    subtitle = doseRateFormatting.preferenceLabel,
-                    choices = doseRateFormattingChoices,
+                    "Dose rate dimension",
+                    doseRateDimension.sampleValue,
+                    subtitle = if (dimensionLockedToCps) "Locked to cps for sensitivity 1" else doseRateDimension.preferenceLabel,
+                    choices = doseRateDimensionChoices,
                     shape = MiddleItemShape
                 ) {
-                    val selected = DoseRateFormatting.fromLabel(it) ?: doseRateFormatting
-                    val normalized = DoseRateFormatting.validForSensitivity(selected, sensitivity)
-                    prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_FORMATTING, normalized.preferenceLabel) }
+                    val selected = DoseRateDimension.fromLabel(it) ?: doseRateDimension
+                    val normalized = if (dimensionLockedToCps) DoseRateDimension.CPS else selected
+                    prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_DIMENSION, normalized.preferenceLabel) }
                     onRefresh()
                 }
 
@@ -308,11 +304,13 @@ class SettingsActivity : ComponentActivity() {
                     onClick = {
                         showEditDialog(
                             "Alert at dose rate",
-                            prefs.getString("alert_dose_rate", "0") ?: "0",
+                            if (alertVal == "Not set") "0" else alertVal.substringBefore(' '),
                             decimal = true,
                             signed = false
                         ) {
-                            prefs.edit { putString("alert_dose_rate", it) }
+                            val displayValue = it.toDoubleOrNull() ?: 0.0
+                            val storedDoseRate = DoseRateFormatter.doseRateFromDisplayValue(displayValue, sensitivity, doseRateDimension)
+                            prefs.edit { putString("alert_dose_rate", storedDoseRate.toString()) }
                             onRefresh()
                         }
                     }
@@ -916,17 +914,18 @@ class SettingsActivity : ComponentActivity() {
         return "Relative error: %.0f%%".format(java.util.Locale.US, err)
     }
 
-    private fun getAlertStrings(prefs: android.content.SharedPreferences): Pair<String, String?> {
-        val alertValStr = prefs.getString("alert_dose_rate", "0") ?: "0"
-        val alertVal = alertValStr.toDoubleOrNull() ?: 0.0
-        val sens = RadiationCalibration.sensitivityFromPrefs(prefs)
-        val unit = if (sens == 1.0) "cps" else "μSv/h"
+    private fun getAlertStrings(
+        prefs: android.content.SharedPreferences,
+        dimension: DoseRateDimension,
+        sensitivity: Double
+    ): Pair<String, String?> {
+        val alertDoseRate = prefs.getString("alert_dose_rate", "0")?.toDoubleOrNull() ?: 0.0
+        val displayValue = DoseRateFormatter.valueFromDoseRate(alertDoseRate, sensitivity, dimension)
+        val valueStr = if (alertDoseRate <= 0.0) "Not set" else "%.2f %s".format(java.util.Locale.US, displayValue, dimension.unit)
 
-        val valueStr = if (alertVal <= 0.0) "Not set" else "%.2f %s".format(java.util.Locale.US, alertVal, unit)
-
-        val subtitleStr = if (alertVal <= 0.0 || sens == 1.0) null else {
+        val subtitleStr = if (alertDoseRate <= 0.0) null else {
             val avg = prefs.getString("dose_rate_avg_timestamps_n", "10")?.toIntOrNull() ?: 10
-            val rate = ConfidenceInterval.getFalseAlarmRate(alertVal, avg, sens)
+            val rate = ConfidenceInterval.getFalseAlarmRate(alertDoseRate, avg, sensitivity)
             "False alarms: %.1f / hour".format(java.util.Locale.US, rate)
         }
 

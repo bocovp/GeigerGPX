@@ -632,8 +632,9 @@ class TrackingService : Service() {
     }
 
     private fun showDoseRateAlertNotification(meanDoseRate: Double) {
-        val unit = if (sensitivity == 1.0) "cps" else "μSv/h"
-        notificationManager.postAlertNotification(meanDoseRate = meanDoseRate, unit = unit)
+        val dimension = DoseRateDimension.fromPrefs(prefs, sensitivity)
+        val displayValue = DoseRateFormatter.valueFromDoseRate(meanDoseRate, sensitivity, dimension)
+        notificationManager.postAlertNotification(meanDoseRate = displayValue, unit = dimension.unit)
     }
 
     // -------------------------------------------------------------------------
