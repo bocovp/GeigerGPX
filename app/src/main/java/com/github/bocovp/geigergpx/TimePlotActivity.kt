@@ -233,6 +233,7 @@ class TimePlotActivity : AppCompatActivity() {
         val plotMode = request.mode
         val sensitivity = request.sensitivity
         val recalculateVerticalAxis = request.recalculateVerticalAxis
+        val dimension = DoseRateDimension.fromPrefs(PreferenceManager.getDefaultSharedPreferences(this), sensitivity)
         binding.timePlotView.setShowLiveMarker(isCurrentTrack && plotMode == PlotMode.KERNEL_ESTIMATOR)
         when (result) {
             is PlotResult.Kde -> {
@@ -247,7 +248,8 @@ class TimePlotActivity : AppCompatActivity() {
                     sensitivity = sensitivity,
                     totalTrackDurationSeconds = result.totalTrackDurationSeconds,
                     recalculateVerticalAxis = recalculateVerticalAxis,
-                    isLiveUpdate = isCurrentTrack
+                    isLiveUpdate = isCurrentTrack,
+                    dimension = dimension
                 )
                 if (shouldApplyInitialLiveWindow && result.totalTrackDurationSeconds > 0.0) {
                     binding.timePlotView.setInitialWindowSeconds(INITIAL_LIVE_WINDOW_SECONDS)
@@ -263,7 +265,8 @@ class TimePlotActivity : AppCompatActivity() {
                     points = result.points,
                     sensitivity = sensitivity,
                     recalculateVerticalAxis = recalculateVerticalAxis,
-                    isLiveUpdate = isCurrentTrack
+                    isLiveUpdate = isCurrentTrack,
+                    dimension = dimension
                 )
                 if (shouldApplyInitialLiveWindow && result.points.isNotEmpty()) {
                     binding.timePlotView.setInitialWindowSeconds(INITIAL_LIVE_WINDOW_SECONDS)
@@ -274,7 +277,7 @@ class TimePlotActivity : AppCompatActivity() {
                 showPlotMessage(if (result.points.isEmpty()) R.string.time_plot_no_track_data else null)
             }
             null -> {
-                binding.timePlotView.setPoints(emptyList(), sensitivity, recalculateVerticalAxis, isLiveUpdate = isCurrentTrack)
+                binding.timePlotView.setPoints(emptyList(), sensitivity, recalculateVerticalAxis, isLiveUpdate = isCurrentTrack, dimension = dimension)
                 showPlotMessage(R.string.time_plot_no_track_data)
             }
         }
@@ -639,7 +642,7 @@ class TimePlotActivity : AppCompatActivity() {
                     selectedTrackIdForPlot = null
                     updateCurrentPoints(emptyList(), null)
                     updateTrackTitle(null)
-                    binding.timePlotView.setPoints(emptyList(), sensitivity, recalculateVerticalAxis = true)
+                    binding.timePlotView.setPoints(emptyList(), sensitivity, recalculateVerticalAxis = true, dimension = DoseRateDimension.fromPrefs(PreferenceManager.getDefaultSharedPreferences(this@TimePlotActivity), sensitivity))
                     showPlotMessage(R.string.time_plot_no_track_data)
                     setupRenderCollector() // Restart the loop
                 } else if (resolvedTrackId != selectedTrackIdForPlot || currentPoints.isEmpty()) {

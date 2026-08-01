@@ -41,7 +41,7 @@ class TrackMapRenderer(
     private var lastUseKernelEstimator: Boolean = false
     private var lastKdeScaleSeconds: Double? = null
     private var lastGeneralizationTrackFingerprint: String = ""
-    private var cachedShowCpsUnit: Boolean = false
+    private var cachedDoseRateDimension: DoseRateDimension = DoseRateDimension.USV_H
     private var highlightOverlay: DoseRateHighlightOverlay? = null
     private var highlightedPoint: DoseRateHighlightOverlay.HighlightPoint? = null
     private var selectedPointInfo: SelectedPointInfo? = null
@@ -57,19 +57,29 @@ class TrackMapRenderer(
         kdeScaleSeconds: Double? = null
     ): Boolean {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
-        val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
-    //    cachedShowCpsUnit = kotlin.math.abs(sensitivity - 1.0) < 1e-9
-        cachedShowCpsUnit = (tracks.isNotEmpty() || pois.isNotEmpty()) &&
-                tracks.all { kotlin.math.abs(it.sensitivity - 1.0) < 1e-9 } &&
-                pois.all { kotlin.math.abs(it.sensitivity - 1.0) < 1e-9 }
+        cachedDoseRateDimension = DoseRateDimension.fromPrefs(prefs, RadiationCalibration.sensitivityFromPrefs(prefs))
+        val displayTracks = tracks.map { track ->
+            if (cachedDoseRateDimension == DoseRateDimension.CPS) {
+                track.copy(points = track.points.map { point ->
+                    val cps = if (point.seconds > 1e-9) point.counts / point.seconds else RadiationCalibration.cpsFromDoseRate(point.doseRate, track.sensitivity)
+                    point.copy(doseRate = cps)
+                })
+            } else track
+        }
+        val displayPois = pois.map { poi ->
+            if (cachedDoseRateDimension == DoseRateDimension.CPS) {
+                val cps = if (poi.seconds > 1e-9) poi.counts / poi.seconds else RadiationCalibration.cpsFromDoseRate(poi.doseRateForColor, poi.sensitivity)
+                poi.copy(doseRateForColor = cps, doseLabel = String.format(java.util.Locale.US, "%.3f %s", cps, cachedDoseRateDimension.unit))
+            } else poi
+        }
 
-        val activeTrackIds = tracks.map { it.id }.toSet()
+        val activeTrackIds = displayTracks.map { it.id }.toSet()
         val currentZoomLevel = mapView.zoomLevelDouble
         val zoomChangedForGeneralization = lastGeneralizationZoomLevel == null ||
                 kotlin.math.abs((lastGeneralizationZoomLevel ?: currentZoomLevel) - currentZoomLevel) > 1e-9
         val modeChangedForGeneralization = lastUseKernelEstimator != useKernelEstimator
         val scaleChangedForGeneralization = kotlin.math.abs((lastKdeScaleSeconds ?: -1.0) - (kdeScaleSeconds ?: -1.0)) > 1e-9
-        val currentTrackFingerprint = buildGeneralizationTrackFingerprint(tracks)
+        val currentTrackFingerprint = buildGeneralizationTrackFingerprint(displayTracks)
         val trackDataChangedForGeneralization = currentTrackFingerprint != lastGeneralizationTrackFingerprint
         val generalizationChanged = zoomChangedForGeneralization ||
                 modeChangedForGeneralization ||
@@ -77,7 +87,7 @@ class TrackMapRenderer(
                 trackDataChangedForGeneralization
 
         if (generalizationChanged) {
-            recalculateGeneralizedTracks(tracks, currentZoomLevel, useKernelEstimator, kdeScaleSeconds)
+            recalculateGeneralizedTracks(displayTracks, currentZoomLevel, useKernelEstimator, kdeScaleSeconds)
             lastGeneralizationZoomLevel = currentZoomLevel
             lastUseKernelEstimator = useKernelEstimator
             lastKdeScaleSeconds = kdeScaleSeconds
@@ -88,7 +98,7 @@ class TrackMapRenderer(
         var currentMin = 0.0
         var scaleChanged = false
         if (!isHeatmapMode) {
-            currentMax = computeTrackAndPoiColorbarMax(tracks, pois, useKernelEstimator)
+            currentMax = computeTrackAndPoiColorbarMax(displayTracks, displayPois, useKernelEstimator)
             scaleChanged = updateColorbarScale(currentMax)
         }
         var latestPoint: GeoPoint? = null
@@ -112,13 +122,13 @@ class TrackMapRenderer(
                 heatmapOverlay = it
             }
             trackDosePointOverlay?.enabledQ = false
-            //overlay.sensitivity = sensitivity
+            overlay.dimension = cachedDoseRateDimension
 
-            val filteredTracks = tracks.map { track ->
+            val filteredTracks = displayTracks.map { track ->
                 track.copy(points = track.points.filterNot { it.badCoordinates })
             }
             overlay.tracks = filteredTracks
-            overlay.pois = pois
+            overlay.pois = displayPois
 
             // Always unlock before raster refresh so heatmap colors are computed
             // against the same freshly clamped max that drives the colorbar labels.
@@ -139,11 +149,11 @@ class TrackMapRenderer(
 
             shouldInvalidate = true
 
-            if (tracks.isNotEmpty() && tracks.last().points.isNotEmpty()) {
-                val lastP = tracks.last().points.last()
+            if (displayTracks.isNotEmpty() && displayTracks.last().points.isNotEmpty()) {
+                val lastP = displayTracks.last().points.last()
                 latestPoint = GeoPoint(lastP.latitude, lastP.longitude)
-            } else if (pois.isNotEmpty()) {
-                latestPoint = GeoPoint(pois.last().latitude, pois.last().longitude)
+            } else if (displayPois.isNotEmpty()) {
+                latestPoint = GeoPoint(displayPois.last().latitude, displayPois.last().longitude)
             }
         } else {
             heatmapOverlay?.let {
@@ -153,7 +163,7 @@ class TrackMapRenderer(
 
             removeDeletedTracks(activeTrackIds)
 
-            tracks.forEach { track ->
+            displayTracks.forEach { track ->
                 val trackPoints = if (useKernelEstimator) {
                     generalizedTracksById[track.id] ?: track.points
                 } else {
@@ -187,7 +197,7 @@ class TrackMapRenderer(
             val shouldShowDosePoints = !useKernelEstimator
             dosePointOverlay.enabledQ = shouldShowDosePoints
             if (shouldShowDosePoints) {
-                dosePointOverlay.tracks = tracks
+                dosePointOverlay.tracks = displayTracks
                 dosePointOverlay.minDose = currentMin
                 dosePointOverlay.maxDose = currentMax
                 ensureTrackDosePointOverlayOnTop()
@@ -200,34 +210,34 @@ class TrackMapRenderer(
                 shouldInvalidate = true
             }
             val poiOverlayCreated = existingPoiOverlay == null
-            val poisChanged = pois != lastRenderedPois
+            val poisChanged = displayPois != lastRenderedPois
             if (poiOverlayCreated || poisChanged || scaleChanged) {
-                overlay.points = pois
+                overlay.points = displayPois
                 overlay.minDose = currentMin
                 overlay.maxDose = currentMax
                 shouldInvalidate = true
             }
-            if (pois.isNotEmpty()) {
-                latestPoint = GeoPoint(pois.last().latitude, pois.last().longitude)
+            if (displayPois.isNotEmpty()) {
+                latestPoint = GeoPoint(displayPois.last().latitude, displayPois.last().longitude)
             }
         }
 
         val renderFingerprint = buildString {
             append(activeTrackIds.sorted().joinToString(","))
             append('|')
-            append(pois.map { it.id }.sorted().joinToString(","))
+            append(displayPois.map { it.id }.sorted().joinToString(","))
         }
         val datasetChanged = renderFingerprint != lastRenderFingerprint
         if (datasetChanged && shouldAutoFit) {
-            autoFitApplied = fitToSelection(tracks, pois, latestPoint, animate = true)
+            autoFitApplied = fitToSelection(displayTracks, displayPois, latestPoint, animate = true)
             lastRenderFingerprint = renderFingerprint
             shouldInvalidate = true
         } else if (datasetChanged) {
             lastRenderFingerprint = renderFingerprint
         }
 
-        lastRenderedTracks = tracks
-        lastRenderedPois = pois
+        lastRenderedTracks = displayTracks
+        lastRenderedPois = displayPois
         lastFallbackPoint = latestPoint
         ensureHighlightOverlayOnTop(currentMin, currentMax)
 
@@ -251,7 +261,7 @@ class TrackMapRenderer(
             }
             pointsForColorScale.forEach { p ->
                 if (p.badCoordinates) return@forEach
-                val v = if (cachedShowCpsUnit && p.seconds > 1e-9) p.counts / p.seconds else p.doseRate
+                val v = p.doseRate
                 if (v > currentMax) currentMax = v
             }
         }
@@ -467,7 +477,7 @@ class TrackMapRenderer(
     }
 
     private fun showCpsUnit(): Boolean {
-        return cachedShowCpsUnit
+        return cachedDoseRateDimension == DoseRateDimension.CPS
     }
 
     private fun ensureHighlightOverlayOnTop(minDose: Double, maxDose: Double) {
