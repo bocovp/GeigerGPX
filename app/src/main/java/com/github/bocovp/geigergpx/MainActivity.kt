@@ -35,6 +35,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.core.content.edit
 import androidx.core.net.toUri
 
@@ -90,11 +92,16 @@ class MainActivity : AppCompatActivity() {
     private var composeAudioColor by mutableStateOf(Color.Unspecified)
     private var composeIsTracking by mutableStateOf(false)
     private var composeMeasurementEnabled by mutableStateOf(false)
-    private val mainScreenKde = KernelDensityEstimator(RadiationCalibration.DEFAULT_SENSITIVITY).apply { timeout = 180.0 }
+    private val mainScreenKde = KernelDensityEstimator(RadiationCalibration.DEFAULT_SENSITIVITY).apply { timeout = 350.0 }
     private var mainPlotView: TimePlotView? = null
     private var composeBeepVisualizer: BeepVisualizerView? = null
     private var mainDosePlotPanelOpen by mutableStateOf(false)
     private val statePendingStartupRestore = "state_pending_startup_restore"
+    private var lastPlotPauseTimeSeconds: Double = 0.0
+    private var lastPlotPauseTotalCounts: Int = 0
+    private var mainPlotUpdateJob: kotlinx.coroutines.Job? = null
+
+
 
     private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
         if (key == SettingsKeys.KEY_DOSE_RATE_DIMENSION || key == SettingsKeys.KEY_DOSE_RATE_ERROR_FORMAT || key == SettingsKeys.KEY_DOSE_RATE_FORMATTING) {
@@ -174,6 +181,8 @@ class MainActivity : AppCompatActivity() {
         applyToolbarTitleVisibility()
         setupToolbarTitleLongPress()
         setupMainCompose()
+        lastPlotPauseTimeSeconds = System.currentTimeMillis() / 1000.0
+        lastPlotPauseTotalCounts = (application as GeigerGpxApp).trackingRepository.getTotalCounts()
 
         validateConfiguredSaveFolderAtStartup {
             restoreStartupBackupIfNeeded()
@@ -415,6 +424,11 @@ class MainActivity : AppCompatActivity() {
         //refreshMeasurementDurationFromTimer()
         //updateCountDisplay(viewModel.countDisplayState.value)
         startMonitoring()
+        if (mainDosePlotPanelOpen) {
+            // Temporarily flag as closed so openMainDosePlot() injects the background interval
+            mainDosePlotPanelOpen = false
+            openMainDosePlot()
+        }
     }
 
     override fun onPause() {
@@ -428,6 +442,11 @@ class MainActivity : AppCompatActivity() {
         // measurement mode is enabled.
         if (!viewModel.isTracking.value && !isMeasurementModeEnabled) {
             stopMonitoring()
+        }
+        if (mainDosePlotPanelOpen) {
+            stopMainPlotLiveUpdate()
+            lastPlotPauseTimeSeconds = System.currentTimeMillis() / 1000.0
+            lastPlotPauseTotalCounts = viewModel.countDisplayState.value.totalCounts
         }
     }
 
@@ -456,10 +475,57 @@ class MainActivity : AppCompatActivity() {
         composeTotalCounts = getString(R.string.total_counts_format, formatCounts(state.totalCounts, cpb))
     }
 
+    private fun openMainDosePlot() {
+        if (mainDosePlotPanelOpen) return
+        mainDosePlotPanelOpen = true
+
+        // Catch up: Add a highly efficient interval for the time the plot was closed
+        val nowSeconds = System.currentTimeMillis() / 1000.0
+        if (lastPlotPauseTimeSeconds > 0.0) {
+            val duration = (nowSeconds - lastPlotPauseTimeSeconds).coerceAtLeast(0.0)
+            val currentCounts = viewModel.countDisplayState.value.totalCounts
+            val countsDiff = (currentCounts - lastPlotPauseTotalCounts).coerceAtLeast(0)
+
+            if (duration > 0.0 && countsDiff > 0) {
+                mainScreenKde.addSampleInterval(lastPlotPauseTimeSeconds, duration, countsDiff)
+            }
+        }
+
+        refreshMainDosePlot()
+        startMainPlotLiveUpdate()
+    }
+
+    private fun closeMainDosePlot() {
+        if (!mainDosePlotPanelOpen) return
+        mainDosePlotPanelOpen = false
+
+        stopMainPlotLiveUpdate()
+
+        // Record the state so we can calculate the interval when opened again
+        lastPlotPauseTimeSeconds = System.currentTimeMillis() / 1000.0
+        lastPlotPauseTotalCounts = viewModel.countDisplayState.value.totalCounts
+    }
+
+    private fun startMainPlotLiveUpdate() {
+        mainPlotUpdateJob?.cancel()
+        mainPlotUpdateJob = lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (isActive && mainDosePlotPanelOpen) {
+                    refreshMainDosePlot()
+                    delay(200L) // 5 FPS refresh for smooth real-time sliding
+                }
+            }
+        }
+    }
+
+    private fun stopMainPlotLiveUpdate() {
+        mainPlotUpdateJob?.cancel()
+        mainPlotUpdateJob = null
+    }
+
     private fun updateMainDosePlotForCountEvent(event: TrackingRepository.CountEvent) {
         if (!mainDosePlotPanelOpen || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
         mainScreenKde.addPoint(event.wallSeconds, event.counts, spreadCounts = true)
-        refreshMainDosePlot()
     }
 
     private fun refreshMeasurementDurationFromTimer() {
@@ -606,7 +672,7 @@ class MainActivity : AppCompatActivity() {
         val start = now - 300.0
         val times = DoubleArray(121) { start + it * 2.5 }
         val sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this))
-        val scale = (13.0 / sensitivity).coerceAtLeast(1.0) * 60.0
+        val scale = ((13.0 / sensitivity) * 60.0).coerceAtLeast(1.0)
         val (mean, low, high) = mainScreenKde.getConfidenceIntervals(times, scale, now)
         plot.setKernelSeries(DoubleArray(times.size) { it * 2.5 }, mean, low, high, sensitivity, 300.0, isLiveUpdate = true, dimension = doseRateDimension)
         plot.setInitialWindowSeconds(300.0)
@@ -619,8 +685,11 @@ class MainActivity : AppCompatActivity() {
         var measurementExpanded by remember { mutableStateOf(false) }
         var statusExpanded by remember { mutableStateOf(false) }
         LaunchedEffect(doseExpanded) {
-            mainDosePlotPanelOpen = doseExpanded
-            if (doseExpanded) refreshMainDosePlot()
+            if (doseExpanded) {
+                openMainDosePlot()
+            } else {
+                closeMainDosePlot()
+            }
         }
         DisposableEffect(Unit) {
             onDispose {

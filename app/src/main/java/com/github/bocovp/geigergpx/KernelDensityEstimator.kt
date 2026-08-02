@@ -221,8 +221,11 @@ class KernelDensityEstimator(private val sensitivity: Double) {
             val t  = t2s[i]
             val km = bufKernelMasses[i]
 
-            val uLo        = maxOf(-1.0, (t - effectiveTEnd   ) * invScale)
-            val uHi        = minOf( 1.0, (t - effectiveTStart ) * invScale)
+            val tClamped   = t.coerceIn(effectiveTStart, effectiveTEnd)
+            //Outside the measurement range, don't allow the effective exposure to shrink further; use the boundary value.
+
+            val uLo        = maxOf(-1.0, (tClamped - effectiveTEnd   ) * invScale)
+            val uHi        = minOf( 1.0, (tClamped - effectiveTStart ) * invScale)
             val k2         = epanechnikovSquaredIntegral(uLo, uHi)
             val tEff       = if (k2 > 1e-12) scale * km * km / k2 else 0.0
             val scale2usvh = if (tEff > 0.0) 0.5 / tEff * inverseSensitivity   else 0.0
@@ -347,8 +350,11 @@ class KernelDensityEstimator(private val sensitivity: Double) {
             val intervalContrib = stepDone + stepTransition   // [cps]
 
             // Boundary correction: fraction of kernel support inside data extent.
-            val uLo        = maxOf(-1.0, (t - tEnd)   * invScale)
-            val uHi        = minOf( 1.0, (t - tStart) * invScale)
+            // Clamping t prevents the denominator from collapsing to 0 when querying outside bounds.
+            // Outside the measurement range, don't allow the effective exposure to shrink further; use the boundary value.
+            val tClamped   = t.coerceIn(tStart, tEnd)
+            val uLo        = maxOf(-1.0, (tClamped - tEnd)   * invScale)
+            val uHi        = minOf( 1.0, (tClamped - tStart) * invScale)
             val kernelMass = epanechnikovIntegral(uLo, uHi)
 
             outKernelMasses[j] = kernelMass
