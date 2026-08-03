@@ -12,7 +12,7 @@ import kotlin.math.floor
  *
  * @param sensitivity  sensitivity [cps per µSv/h]
  */
-class KernelDensityEstimator(private val sensitivity: Double) {
+class KernelDensityEstimator(private var sensitivity: Double) {
 
     /** Optional retention window in seconds. When positive, newly added data evicts older events. */
     var timeout: Double = 0.0
@@ -47,7 +47,12 @@ class KernelDensityEstimator(private val sensitivity: Double) {
 
     // Reused to access chi2L / chi2R without duplicating that logic.
     private val ci = ConfidenceInterval(0.0, 0.0, 0.0, 0.0, 0)
-    private val inverseSensitivity = if (sensitivity > 0.0) 1.0 / sensitivity else 0.0
+    private var inverseSensitivity = if (sensitivity > 0.0) 1.0 / sensitivity else 0.0
+
+    fun updateSensitivity(newSensitivity: Double) {
+        sensitivity = newSensitivity
+        inverseSensitivity = if (newSensitivity > 0.0) 1.0 / newSensitivity else 0.0
+    }
 
     /**
      * Creates a deep copy of the estimator's current state.
