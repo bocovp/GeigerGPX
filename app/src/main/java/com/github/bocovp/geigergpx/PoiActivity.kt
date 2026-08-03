@@ -141,7 +141,7 @@ class PoiActivity : AppCompatActivity() {
 
     private fun formatDoseRateText(poi: PoiEntry): String {
         if (poi.seconds <= 0.0) {
-            return getString(R.string.unknown_dose_rate)
+            return getString(R.string.unknown_dose_rate_usv) //todo
         }
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val dimension = DoseRateDimension.fromPrefs(prefs, poi.sensitivity)

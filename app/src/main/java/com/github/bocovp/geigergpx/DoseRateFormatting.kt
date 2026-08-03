@@ -6,11 +6,10 @@ import java.util.Locale
 
 enum class DoseRateDimension(
     val preferenceLabel: String,
-    val unit: String,
-    val sampleValue: String
+    val unit: String
 ) {
-    USV_H("μSv/h", "μSv/h", "0.15 μSv/h"),
-    CPS("cps", "cps", "15.1 cps");
+    USV_H("μSv/h", "μSv/h"),
+    CPS("cps", "cps");
 
     companion object {
         private const val KEY = SettingsKeys.KEY_DOSE_RATE_DIMENSION

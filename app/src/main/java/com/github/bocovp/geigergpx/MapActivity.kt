@@ -492,6 +492,17 @@ class MapActivity : AppCompatActivity() {
                         val doseRate = RadiationCalibration.doseRateFromCps(cps, poi.sensitivity)
                         val value = DoseRateFormatter.valueFromDoseRate(doseRate, poi.sensitivity, dimension)
                         val unit = dimension.unit
+
+                        // Handle fallback if no dose rate / counts information is present
+                        val doseLabel = if (poi.seconds <= 0.0 && poi.counts == 0) {
+                            when (dimension) {
+                                DoseRateDimension.CPS -> "??? cps"
+                                DoseRateDimension.USV_H -> "??? μSv/h"
+                            }
+                        } else {
+                            String.format(Locale.US, "%.3f %s", value, unit)
+                        }
+
                         PoiMapItem(
                             id = poi.id,
                             name = poi.description,
@@ -501,7 +512,7 @@ class MapActivity : AppCompatActivity() {
                             counts = poi.counts,
                             seconds = poi.seconds,
                             sensitivity = poi.sensitivity,
-                            doseLabel = String.format(Locale.US, "%.3f %s", value, unit)
+                            doseLabel = doseLabel
                         )
                     }
 

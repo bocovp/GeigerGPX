@@ -757,10 +757,11 @@ class MainActivity : AppCompatActivity() {
                             containerColor = MaterialTheme.colorScheme.secondary, // Or a custom dark/steel gray
                             contentColor = MaterialTheme.colorScheme.onSecondary
                         ),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(painterResource(if (composeIsTracking) R.drawable.baseline_stop_24 else R.drawable.baseline_play_arrow_24), null);
-                        Spacer(Modifier.width(6.dp));
+                        Spacer(Modifier.width(4.dp));
                         Text(if (composeIsTracking) getString(R.string.cancel) else getString(R.string.start_track_lower))
                     }
                     Button(onClick = { handleFinishTrackClick() },
@@ -769,10 +770,12 @@ class MainActivity : AppCompatActivity() {
                             containerColor = MaterialTheme.colorScheme.secondary, // Or a custom dark/steel gray
                             contentColor = MaterialTheme.colorScheme.onSecondary
                         ),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                         enabled = composeIsTracking, modifier = Modifier.weight(1f)
                     ) {
                         Icon(painterResource(R.drawable.baseline_flag_24), null);
-                        Spacer(Modifier.width(6.dp)); Text(getString(R.string.finish_track))
+                        Spacer(Modifier.width(4.dp));
+                        Text(getString(R.string.finish_track))
                     }
                 }
                 AnimatedVisibility(trackExpanded) { InfoGrid(composeTrackDuration, composeDistance, composeTrackCounts, composePoints) }
@@ -786,10 +789,11 @@ class MainActivity : AppCompatActivity() {
                             containerColor = MaterialTheme.colorScheme.secondary,
                             contentColor = MaterialTheme.colorScheme.onSecondary
                         ),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(painterResource(if (composeMeasurementEnabled) R.drawable.baseline_stop_24 else R.drawable.baseline_play_arrow_24), null);
-                        Spacer(Modifier.width(6.dp));
+                        Spacer(Modifier.width(4.dp));
                         Text(if (composeMeasurementEnabled) getString(R.string.live_mode) else getString(R.string.measure))
                     }
                     Button(
@@ -799,11 +803,12 @@ class MainActivity : AppCompatActivity() {
                             containerColor = MaterialTheme.colorScheme.secondary,
                             contentColor = MaterialTheme.colorScheme.onSecondary
                         ),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                         enabled = composeMeasurementEnabled,
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(painterResource(R.drawable.baseline_add_location_alt_24), null);
-                        Spacer(Modifier.width(6.dp));
+                        Spacer(Modifier.width(4.dp));
                         Text(getString(R.string.save_poi))
                     }
                 }

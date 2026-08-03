@@ -150,7 +150,8 @@
     <string name="no_poi_in_library">No POI in Library</string>
     <string name="poi_library">POI Library</string>
     <string name="unknown_time">Unknown time</string>
-    <string name="unknown_dose_rate">\?\?\? μSv/h</string>
+    <string name="unknown_dose_rate_cps">\?\?\? cps</string>
+    <string name="unknown_dose_rate_usv">\?\?\? μSv/h</string>
     <string name="rename_poi">Rename POI</string>
     <string name="poi_renamed">POI renamed</string>
     <string name="unable_to_rename_poi">Unable to rename POI</string>

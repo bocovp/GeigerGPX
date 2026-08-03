@@ -206,7 +206,7 @@ class SettingsActivity : ComponentActivity() {
             DoseRateDimension.normalizePrefsForSensitivity(prefs, sensitivity)
         }
         val doseRateDimensionChoices = remember(refresh, sensitivity) {
-            DoseRateDimension.allLabels.filter { !dimensionLockedToCps || it == DoseRateDimension.CPS.preferenceLabel }
+            DoseRateDimension.values().map { it.preferenceLabel }.filter { !dimensionLockedToCps || it == DoseRateDimension.CPS.preferenceLabel }
         }
         val (alertVal, alertSub) = remember(refresh, doseRateDimension, sensitivity) { getAlertStrings(prefs, doseRateDimension, sensitivity) }
 
@@ -285,8 +285,8 @@ class SettingsActivity : ComponentActivity() {
 
                 ChoiceRow(
                     "Dose rate dimension",
-                    doseRateDimension.sampleValue,
-                    subtitle = if (dimensionLockedToCps) "Locked to cps for sensitivity 1" else doseRateDimension.preferenceLabel,
+                    doseRateDimension.unit,
+                    subtitle = null,
                     choices = doseRateDimensionChoices,
                     shape = MiddleItemShape
                 ) {
@@ -303,7 +303,7 @@ class SettingsActivity : ComponentActivity() {
                     shape = BottomItemShape,
                     onClick = {
                         showEditDialog(
-                            "Alert at dose rate",
+                            dialogTitle("Alert at dose rate", doseRateDimension.unit),
                             if (alertVal == "Not set") "0" else alertVal.substringBefore(' '),
                             decimal = true,
                             signed = false
