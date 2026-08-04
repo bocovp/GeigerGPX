@@ -833,7 +833,7 @@ class MainActivity : AppCompatActivity() {
         content: @Composable ColumnScope.() -> Unit
     ) {
         ElevatedCard(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.onSurface
