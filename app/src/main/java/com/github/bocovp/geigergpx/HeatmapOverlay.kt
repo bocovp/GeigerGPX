@@ -162,7 +162,18 @@ class HeatmapOverlay(
         if (!maxBinnedDose.isFinite()) return null
 
         val pixels = IntArray(cellCount)
-        val computedColorMaxDose = DoseColorScale.clampColorbarMax(maxBinnedDose)
+        
+        val maxUsv = if (dimension == DoseRateDimension.CPS) {
+            DoseRateFormatter.doseRateFromDisplayValue(maxBinnedDose, sensitivity, DoseRateDimension.CPS)
+        } else {
+            maxBinnedDose
+        }
+        val clampedUsv = DoseColorScale.clampColorbarMax(maxUsv)
+        val computedColorMaxDose = if (dimension == DoseRateDimension.CPS) {
+            DoseRateFormatter.valueFromDoseRate(clampedUsv, sensitivity, DoseRateDimension.CPS)
+        } else {
+            clampedUsv
+        }
         val colorMaxDose = lockedColorbarMaxDose ?: computedColorMaxDose
         minDose = 0.0
         maxDose = colorMaxDose

@@ -485,17 +485,18 @@ class MapActivity : AppCompatActivity() {
                     val visiblePois = allPois.filter { it.id in selectedPoiIds }
 
                     val prefs = PreferenceManager.getDefaultSharedPreferences(this@MapActivity)
-                    val dimension = DoseRateDimension.fromPrefs(prefs, RadiationCalibration.sensitivityFromPrefs(prefs))
+
 
                     val poiMapItems = visiblePois.map { poi ->
                         val cps = if (poi.seconds > 0.0001) poi.counts / poi.seconds else 0.0
                         val doseRate = RadiationCalibration.doseRateFromCps(cps, poi.sensitivity)
-                        val value = DoseRateFormatter.valueFromDoseRate(doseRate, poi.sensitivity, dimension)
-                        val unit = dimension.unit
+                        val poiDimension = DoseRateDimension.fromPrefs(prefs, poi.sensitivity)
+                        val value = DoseRateFormatter.valueFromDoseRate(doseRate, poi.sensitivity, poiDimension)
+                        val unit = poiDimension.unit
 
                         // Handle fallback if no dose rate / counts information is present
                         val doseLabel = if (poi.seconds <= 0.0 && poi.counts == 0) {
-                            when (dimension) {
+                            when (poiDimension) {
                                 DoseRateDimension.CPS -> "??? cps"
                                 DoseRateDimension.USV_H -> "??? μSv/h"
                             }
