@@ -329,6 +329,11 @@ class TimePlotActivity : AppCompatActivity() {
                 finish()
                 true
             }
+            R.id.action_auto_zoom -> {
+                binding.timePlotView.fitToScreen()
+                updatePlot(recalculateVerticalAxis = true)
+                true
+            }
             R.id.action_toggle_plot_mode -> {
                 plotMode = if (plotMode == PlotMode.SLIDING_WINDOW) {
                     PlotMode.KERNEL_ESTIMATOR

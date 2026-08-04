@@ -140,11 +140,13 @@ class PoiActivity : AppCompatActivity() {
     }
 
     private fun formatDoseRateText(poi: PoiEntry): String {
-        if (poi.seconds <= 0.0) {
-            return getString(R.string.unknown_dose_rate_usv) //todo
-        }
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val dimension = DoseRateDimension.fromPrefs(prefs, poi.sensitivity)
+
+        if (poi.seconds <= 0.0 && poi.counts == 0) {
+            return "??? ${dimension.unit}"
+        }
+
         val ci = DoseRateFormatter.scale(ConfidenceInterval(0.0, poi.seconds, poi.counts, false), poi.sensitivity, dimension)
         return "${ci.toText(decimalDigits = 4)} ${dimension.unit}"
     }

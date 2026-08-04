@@ -18,4 +18,9 @@
         android:icon="@drawable/baseline_planner_review_24"
         android:title="@string/time_plot_switch_to_kernel_estimator"
         app:showAsAction="always" />
+    <item
+        android:id="@+id/action_auto_zoom"
+        android:icon="@drawable/baseline_fit_screen_24"
+        android:title="@string/auto_zoom"
+        app:showAsAction="always" />
 </menu>

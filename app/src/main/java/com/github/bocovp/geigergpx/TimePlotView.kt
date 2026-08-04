@@ -435,6 +435,13 @@ class TimePlotView @JvmOverloads constructor(
         invalidate()
     }
 
+    fun fitToScreen() {
+        zoomX = 1f
+        panFraction = 0f
+        clampPan()
+        invalidate()
+    }
+
     fun restoreZoomState(savedZoomX: Float, savedPanFraction: Float) {
         zoomX = savedZoomX.coerceIn(1f, maxZoomX)
         panFraction = savedPanFraction.coerceIn(0f, 1f)
