@@ -672,6 +672,7 @@ class MainActivity : AppCompatActivity() {
         val start = now - 300.0
         val times = DoubleArray(121) { start + it * 2.5 }
         val sensitivity = RadiationCalibration.sensitivityFromPrefs(PreferenceManager.getDefaultSharedPreferences(this))
+        mainScreenKde.updateSensitivity(sensitivity)
         val scale = ((13.0 / sensitivity) * 60.0).coerceAtLeast(1.0)
         val (mean, low, high) = mainScreenKde.getConfidenceIntervals(times, scale, now)
         plot.setKernelSeries(DoubleArray(times.size) { it * 2.5 }, mean, low, high, sensitivity, 300.0, isLiveUpdate = true, dimension = doseRateDimension)
@@ -841,7 +842,7 @@ class MainActivity : AppCompatActivity() {
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                Modifier.padding(16.dp),
+                Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(Modifier.fillMaxWidth().clickable { onToggle() }, verticalAlignment = Alignment.CenterVertically) {

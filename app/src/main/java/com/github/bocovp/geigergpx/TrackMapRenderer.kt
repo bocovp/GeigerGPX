@@ -123,6 +123,7 @@ class TrackMapRenderer(
             }
             trackDosePointOverlay?.enabledQ = false
             overlay.dimension = cachedDoseRateDimension
+            overlay.sensitivity = RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context))
 
             val filteredTracks = displayTracks.map { track ->
                 track.copy(points = track.points.filterNot { it.badCoordinates })
@@ -268,7 +269,22 @@ class TrackMapRenderer(
         pois.forEach { poi ->
             if (poi.doseRateForColor > currentMax) currentMax = poi.doseRateForColor
         }
-        return DoseColorScale.clampColorbarMax(currentMax)
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mapView.context)
+        val sensitivity = RadiationCalibration.sensitivityFromPrefs(prefs)
+        
+        val maxUsv = if (showCpsUnit()) {
+            DoseRateFormatter.doseRateFromDisplayValue(currentMax, sensitivity, DoseRateDimension.CPS)
+        } else {
+            currentMax
+        }
+        
+        val clampedUsv = DoseColorScale.clampColorbarMax(maxUsv)
+        
+        return if (showCpsUnit()) {
+            DoseRateFormatter.valueFromDoseRate(clampedUsv, sensitivity, DoseRateDimension.CPS)
+        } else {
+            clampedUsv
+        }
     }
 
     private fun updateColorbarScale(currentMax: Double): Boolean {
@@ -383,7 +399,7 @@ class TrackMapRenderer(
             latitude = latitude,
             longitude = longitude,
             doseRateForColor = 0.0,
-            doseLabel = "??? μSv/h",
+            doseLabel = "??? ${cachedDoseRateDimension.unit}",
             isUnknown = true
         )
         highlightOverlay?.highlightedPoint = highlightedPoint
