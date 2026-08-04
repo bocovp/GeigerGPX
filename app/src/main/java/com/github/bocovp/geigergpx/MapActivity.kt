@@ -163,11 +163,17 @@ class MapActivity : AppCompatActivity() {
                     }
                 )
             },
-
             onLongPressFinished = {
                 if (!longPressHasTrackPointSelection) {
                     val geo = binding.mapView.projection.fromPixels(lastLongPressX.toInt(), lastLongPressY.toInt())
                     trackMapRenderer.setUnknownHighlightedPoint(geo.latitude, geo.longitude)
+                    appState.setHighlightedTrackPoint(null)
+                    invalidateOptionsMenu()
+                }
+            },
+            onShortPress = {
+                if (trackMapRenderer.hasHighlightedPoint()) {
+                    trackMapRenderer.clearHighlightedPoint()
                     appState.setHighlightedTrackPoint(null)
                     invalidateOptionsMenu()
                 }

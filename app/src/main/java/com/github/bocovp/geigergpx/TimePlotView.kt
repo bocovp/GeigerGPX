@@ -165,6 +165,15 @@ class TimePlotView @JvmOverloads constructor(
     private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent): Boolean = true
 
+        override fun onSingleTapUp(e: MotionEvent): Boolean {
+            if (pointSelectionEnabled && selectedTimeSeconds != null) {
+                selectedTimeSeconds = null
+                onPointSelectionChanged?.invoke(null)
+                invalidate()
+                return true
+            }
+            return false
+        }
         override fun onScroll(
             e1: MotionEvent?,
             e2: MotionEvent,

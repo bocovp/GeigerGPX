@@ -9,9 +9,12 @@ import kotlin.math.abs
 
 class MapDoseLongPressOverlay(
     private val onLongPressPositionChanged: (x: Float, y: Float) -> Unit,
-    private val onLongPressFinished: () -> Unit
+    private val onLongPressFinished: () -> Unit,
+    private val onShortPress: () -> Unit
 ) : Overlay() {
     var longPressEnabled: Boolean = true
+
+    private var hasMoved = false
 
     private var longPressTriggered = false
     private var downX = 0f
@@ -42,6 +45,7 @@ class MapDoseLongPressOverlay(
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                hasMoved = false
                 mapView.removeCallbacks(longPressRunnable)
                 longPressTriggered = false
                 downX = event.x
@@ -56,6 +60,7 @@ class MapDoseLongPressOverlay(
                 } else {
                     val moved = abs(event.x - downX) > touchSlop || abs(event.y - downY) > touchSlop
                     if (moved) {
+                        hasMoved = true
                         mapView.removeCallbacks(longPressRunnable)
                     }
                 }
@@ -65,6 +70,9 @@ class MapDoseLongPressOverlay(
                 mapView.removeCallbacks(longPressRunnable)
                 if (longPressTriggered) {
                     onLongPressFinished()
+                    consumeEvent = true
+                } else if (event.actionMasked == MotionEvent.ACTION_UP && !hasMoved) {
+                    onShortPress()
                     consumeEvent = true
                 }
                 longPressTriggered = false
