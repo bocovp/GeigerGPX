@@ -742,6 +742,7 @@ class MainActivity : AppCompatActivity() {
                                 it.setShowLiveMarker(true);
                                 it.pointSelectionEnabled = false;
                                 it.showTimeRemainingLabels = true;
+                                it.zoomEnabled = false;
                                 it.post { refreshMainDosePlot() }
                             } },
                         modifier = Modifier.fillMaxWidth().height(220.dp).padding(horizontal = 4.dp),

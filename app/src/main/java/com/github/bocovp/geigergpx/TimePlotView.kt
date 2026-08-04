@@ -130,6 +130,9 @@ class TimePlotView @JvmOverloads constructor(
     private var selectedTimeSeconds: Double? = null
     var onPointSelectionChanged: ((Double?) -> Unit)? = null
     var onVisibleRangeChanged: (() -> Unit)? = null
+    var zoomEnabled: Boolean = true
+    val currentZoomX: Float get() = zoomX
+    val currentPanFraction: Float get() = panFraction
     var pointSelectionEnabled: Boolean = true
         set(value) {
             field = value
@@ -359,7 +362,7 @@ class TimePlotView @JvmOverloads constructor(
                 }
             }
         }
-        val scaled = scaleDetector.onTouchEvent(event)
+        val scaled = if (zoomEnabled) scaleDetector.onTouchEvent(event) else false
         val gestured = gestureDetector.onTouchEvent(event)
         return scaled || gestured || super.onTouchEvent(event)
     }
@@ -428,6 +431,13 @@ class TimePlotView @JvmOverloads constructor(
         zoomX = 1f
         panFraction = 0f
         trackDurationSeconds = 0.0
+        clampPan()
+        invalidate()
+    }
+
+    fun restoreZoomState(savedZoomX: Float, savedPanFraction: Float) {
+        zoomX = savedZoomX.coerceIn(1f, maxZoomX)
+        panFraction = savedPanFraction.coerceIn(0f, 1f)
         clampPan()
         invalidate()
     }

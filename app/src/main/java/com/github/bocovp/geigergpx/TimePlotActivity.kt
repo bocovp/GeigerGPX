@@ -284,6 +284,12 @@ class TimePlotActivity : AppCompatActivity() {
 
         // Restore the point selection exactly when the new plot data is applied
         syncPointSelection()
+        // Restore zoom position if the user returned from another screen (savedZoomX > 1
+        // means the user had zoomed in; we skip restoration for the trivial full-view case)
+        val zx = savedZoomX
+        if (zx > 1f) {
+            binding.timePlotView.restoreZoomState(zx, savedPanFraction)
+        }
     }
 
     override fun onResume() {
@@ -295,6 +301,9 @@ class TimePlotActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Snapshot zoom state so it can be restored when the user returns
+        savedZoomX = binding.timePlotView.currentZoomX
+        savedPanFraction = binding.timePlotView.currentPanFraction
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -1013,7 +1022,9 @@ class TimePlotActivity : AppCompatActivity() {
         private const val KDE_PLOT_SAMPLE_COUNT = 240
         private const val LIVE_KDE_UPDATE_INTERVAL_MS = 200L
         private const val INITIAL_LIVE_WINDOW_SECONDS = 120.0
-        private var plotMode: PlotMode = PlotMode.SLIDING_WINDOW
+        private var plotMode: PlotMode = PlotMode.KERNEL_ESTIMATOR
+        private var savedZoomX: Float = 1f
+        private var savedPanFraction: Float = 0f
 
         fun rememberTrackSelection(context: android.content.Context, trackId: String) {
             (context.applicationContext as? GeigerGpxApp)?.selectedTimePlotTrackId = trackId
