@@ -289,6 +289,7 @@ class TimePlotActivity : AppCompatActivity() {
         val zx = savedZoomX
         if (zx > 1f) {
             binding.timePlotView.restoreZoomState(zx, savedPanFraction)
+            savedZoomX = 1f // Clear the snapshot so it doesn't lock the user
         }
     }
 
