@@ -399,7 +399,7 @@ class TrackMapRenderer(
             latitude = latitude,
             longitude = longitude,
             doseRateForColor = 0.0,
-            doseLabel = "??? μSv/h",
+            doseLabel = "??? ${cachedDoseRateDimension.unit}",
             isUnknown = true
         )
         highlightOverlay?.highlightedPoint = highlightedPoint

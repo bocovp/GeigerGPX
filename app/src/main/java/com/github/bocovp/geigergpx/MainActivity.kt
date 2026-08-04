@@ -833,7 +833,7 @@ class MainActivity : AppCompatActivity() {
         content: @Composable ColumnScope.() -> Unit
     ) {
         ElevatedCard(
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -841,7 +841,7 @@ class MainActivity : AppCompatActivity() {
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                Modifier.padding(16.dp),
+                Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(Modifier.fillMaxWidth().clickable { onToggle() }, verticalAlignment = Alignment.CenterVertically) {
