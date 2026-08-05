@@ -681,10 +681,12 @@ class MainActivity : AppCompatActivity() {
 
     @Composable
     private fun MainScreenContent() {
-        var doseExpanded by remember { mutableStateOf(false) }
-        var trackExpanded by remember { mutableStateOf(false) }
-        var measurementExpanded by remember { mutableStateOf(false) }
-        var statusExpanded by remember { mutableStateOf(false) }
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this@MainActivity)
+        var doseExpanded by remember { mutableStateOf(prefs.getBoolean("panel_dose_expanded", false)) }
+        var trackExpanded by remember { mutableStateOf(prefs.getBoolean("panel_track_expanded", false)) }
+        var measurementExpanded by remember { mutableStateOf(prefs.getBoolean("panel_measurement_expanded", false)) }
+        var statusExpanded by remember { mutableStateOf(prefs.getBoolean("panel_status_expanded", false)) }
+
         LaunchedEffect(doseExpanded) {
             if (doseExpanded) {
                 openMainDosePlot()
@@ -708,7 +710,10 @@ class MainActivity : AppCompatActivity() {
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            ExpandablePanel("Dose rate", doseExpanded, { doseExpanded = !doseExpanded }) {
+            ExpandablePanel("Dose rate", doseExpanded, {
+                doseExpanded = !doseExpanded
+                prefs.edit { putBoolean("panel_dose_expanded", doseExpanded)}
+            }) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -750,7 +755,10 @@ class MainActivity : AppCompatActivity() {
                         update = { })
                 }
             }
-            ExpandablePanel("Track recording", trackExpanded, { trackExpanded = !trackExpanded }, active = composeIsTracking) {
+            ExpandablePanel("Track recording", trackExpanded, {
+                trackExpanded = !trackExpanded
+                prefs.edit { putBoolean("panel_track_expanded", trackExpanded) }
+            }, active = composeIsTracking) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Button(
                         onClick = { handleStartTrackClick() },
@@ -782,7 +790,11 @@ class MainActivity : AppCompatActivity() {
                 }
                 AnimatedVisibility(trackExpanded) { InfoGrid(composeTrackDuration, composeDistance, composeTrackCounts, composePoints) }
             }
-            ExpandablePanel("Measurement", measurementExpanded, { measurementExpanded = !measurementExpanded }, active = composeMeasurementEnabled) {
+            ExpandablePanel("Measurement", measurementExpanded,
+                {
+                    measurementExpanded = !measurementExpanded
+                    prefs.edit { putBoolean("panel_measurement_expanded", measurementExpanded) }
+                }, active = composeMeasurementEnabled) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Button(
                         onClick = { dispatchTrackingAction(TrackingService.ACTION_TOGGLE_MEASUREMENT_MODE) },
@@ -816,7 +828,10 @@ class MainActivity : AppCompatActivity() {
                 }
                 AnimatedVisibility(measurementExpanded) { InfoGrid(composeMeasurementDuration, composeMeasurementCounts) }
             }
-            ExpandablePanel("Status", statusExpanded, { statusExpanded = !statusExpanded }) {
+            ExpandablePanel("Status", statusExpanded, {
+                statusExpanded = !statusExpanded
+                prefs.edit { putBoolean("panel_status_expanded", statusExpanded) }
+            }) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("GPS: $composeGpsStatus", color = composeGpsColor)
                     Text("Audio: $composeAudioStatus", color = composeAudioColor)
