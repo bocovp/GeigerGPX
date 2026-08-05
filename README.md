@@ -22,13 +22,14 @@ for RD1224Si, turn on "quantum sound".
 
 ## Screenshots
 
-<img width="23%" height="auto" alt="Main screen" src="https://github.com/user-attachments/assets/4768d1fd-f57b-4a70-ab51-6ad4ad73ccc7" />
+<img width="23%" height="auto" alt="Main screen" src="https://github.com/user-attachments/assets/857e9afe-c408-4125-8b4d-5fb64df91b78" />
 <img width="23%" height="auto" alt="Tracks screen" src="https://github.com/user-attachments/assets/17ec6f2e-0def-4a57-9455-2fcbe582086c" />
 <img width="23%" height="auto" alt="POI screen" src="https://github.com/user-attachments/assets/01c8e0d5-2d57-4c84-8a04-bfa618e45015" />
 <img width="23%" height="auto" alt="Map screen" src="https://github.com/user-attachments/assets/34d1996c-4d27-413f-ab8f-ff368b37abf5" />
 
+
+
 <img width="23%" height="auto" alt="Plot screen 1" src="https://github.com/user-attachments/assets/158d9525-543d-4c51-9ffb-3bfa0bc3d022" />
 <img width="23%" height="auto" alt="Plot screen 2" src="https://github.com/user-attachments/assets/9f5c1eda-be6c-47f5-90a4-3a707a725a6f" />
 <img width="23%" height="auto" alt="Plot screen 3" src="https://github.com/user-attachments/assets/8d7abab5-72f8-461e-b1ac-3a85ae6c7a85" />
-<img width="23%" height="auto" alt="Edit screen" src="https://github.com/user-attachments/assets/2514316b-203d-4ce6-b0d6-0cc43a89eb1d" />
-
+<img width="23%" height="auto" alt="Edit screen" src="https://github.com/user-attachments/assets/659a5079-af4b-471c-a718-87c796732616" />
