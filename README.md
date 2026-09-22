@@ -1,24 +1,28 @@
 # GeigerGPX
 
-GeigerGPX is an Android application for simultaneous recording GPS track and dose-rate information obtained from a Geiger counter.
-Currently **RADEX RD1008** (РАДЭКС РД1008) and **RADEX RD1224Si** are suppoerted.
-No modification to the radiometer is required; signals are recorded via the microphone. Simply switch RD1008 into "search" mode, reset the threshold, and turn on the sound;
-for RD1224Si, turn on "quantum sound".
+GeigerGPX is an Android application designed to simultaneously record GPS tracks and dose-rate data from a Geiger counter.
 
-## Current capabilities
+Currently, **RADEX RD1008** (РАДЭКС РД1008) and **RADEX RD1224Si** are supported.
 
-- **Audio pulse detection:** Pulse detection uses three Goertzel filters: the main one (tuned at 3276.8 Hz for RD1008) and a pair of witnesses; plus a pulse duration filter.
-- **GPS track recording with dose overlay:** The application records position and superimposes dose rate data on the same track timeline.
-- **Export tracks to GPX files:** Tracks are saved in GPX format with custom extensions for dose rate; other GPX applications can open tracks, but will not display the dose rate information.
-- **Dose-aware map analysis:** Recorded tracks can be analyzed on a map as either color-graded lines or a heat map built from multiple selected tracks.
-- **Fast current-dose preview:** A real-time dose rate estimate is shown (based on the last 10 detected pulses).
-- **Confidence interval calculation:** Confidence intervals (CIs) are computed using χ² quantiles at a 0.95 confidence level.
-- **Long-term Measurement mode:** A dedicated measurement workflow for low-background and long-duration sampling.
-- **Measurement results export:** Measurement results are written to a separate GPX-file with `<wpt>` tags containing description, coordinates, timestamp, dose rate, and CI-related fields.
-- **Dose rate plots:** For recorded tracks the application provides a dose rate plot with a manually adjustable averaging window (fixed-duration window or Epanechnikov kernel estimator).
-- **Track editing:** One can crop beginning/end of the track, cut track into two, or mark some points as "bad" so they aren't shown on the map.
-- **Experimental Bluetooth audio input:** Audio capture from Bluetooth headsets is supported as an experimental feature, but it is way less stable and provides lower quality as compared to built-in microphone capture.
-- **High-rate limitation warning:** At high dose rates, dosimeter may not emit all pulses audibly, so phone-side estimates can be biased low.
+No hardware modifications are required; the app records signals directly via the microphone (an external wired microphone is recommended). To use the app, simply enable audio output on your device:
+- **RD1008:** Switch to "search" mode, set the threshold to zero, and turn on the sound.
+- **RD1224Si:** Enable "quantum sound."
+
+## Key Features
+
+- **Audio pulse detection:** Utilizes three Goertzel filters (tuned to 3276.8 Hz for the RD1008, plus two witness filters) alongside a pulse duration filter for accurate detection.
+- **GPS & dose recording:** Records your geographic position and overlays dose-rate data onto the track timeline.
+- **GPX export:** Saves tracks in GPX format with custom extensions for dose-rate data. (Standard GPX viewers will display the path but not the dose information.)
+- **Dose-aware mapping:** Visualize recorded tracks on a map using color-graded lines or generate heat maps from multiple tracks.
+- **Real-time dose rate preview:** Displays a fast, real-time dose rate estimate based on the last 10 detected pulses.
+- **Confidence interval calculation:** Automatically calculates confidence intervals (CIs) using χ² quantiles at a 95% confidence level.
+- **Long-term measurement mode:** Useful for long-duration sampling in low-background environments.
+- **Measurement results export:** Saves detailed measurement results to a separate GPX file using <wpt> tags that include descriptions, coordinates, timestamps, dose rates, and CI data.
+- **Dose rate plots:** View dose rate plots for recorded tracks with adjustable averaging windows (fixed-duration or Epanechnikov kernel estimator).
+- **Track editing:** Crop the start or end of a track, split tracks, or flag specific points as "bad" to exclude them from map visualizations.
+- **Bluetooth audio (experimental):** Supports audio capture via Bluetooth headsets, though stability and quality are currently lower than wired or built-in microphone input.
+
+**Note:** At high dose rates, the dosimeter may not audibly emit every pulse, so phone-side estimates can be biased low.
 
 ## Screenshots
 
