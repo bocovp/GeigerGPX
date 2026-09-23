@@ -233,7 +233,7 @@ object TrackCatalog {
                     subtitle = formatStats(currentTrack.stats),
                     stats = currentTrack.stats,
                     mapTrack = if (includeCurrentMapTrack) {
-                        MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.points, RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)))
+                        MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.points, RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)), pois = (context.applicationContext as GeigerGpxApp).trackingRepository.activeTrackPois.value)
                     } else {
                         null
                     },
@@ -261,7 +261,7 @@ object TrackCatalog {
                         openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(it) }
                     }
                     if (parsed != null) {
-                        val updated = source.copy(sensitivity = parsed.sensitivity, deviceName = parsed.deviceName).withPoints(parsed.points)
+                        val updated = source.copy(sensitivity = parsed.sensitivity, deviceName = parsed.deviceName, pois = parsed.pois).withPoints(parsed.points)
                         cacheMutex.withLock {
                             parsedTrackCache[source.sourceId] = updated
                             _tracks.value = parsedTrackCache.toMap()
@@ -281,7 +281,7 @@ object TrackCatalog {
             val stats = cached.stats
             val mapTrack = when {
                 !shouldIncludeMapTrack -> null
-                else -> MapTrack(source.sourceId, source.displayName, cached.pointsOrEmpty(), cached.sensitivity, cached.deviceName)
+                else -> MapTrack(source.sourceId, source.displayName, cached.pointsOrEmpty(), cached.sensitivity, cached.deviceName, cached.pois)
             }
 
             items.add(
@@ -510,7 +510,8 @@ object TrackCatalog {
         val title: String,
         val points: List<TrackPoint>,
         val sensitivity: Double,
-        val deviceName: String? = null
+        val deviceName: String? = null,
+        val pois: List<PoiEntry> = emptyList()
     )
 
     suspend fun loadTrackSamplesById(context: Context, trackId: String): TrackPlotData? {
@@ -523,7 +524,7 @@ object TrackCatalog {
         val cachedDeviceName = cachedTrack?.deviceName
 
         if (points != null && displayName != null) {
-            return TrackPlotData(id = trackId, title = displayName, points = points, sensitivity = cachedSensitivity, deviceName = cachedDeviceName)
+            return TrackPlotData(id = trackId, title = displayName, points = points, sensitivity = cachedSensitivity, deviceName = cachedDeviceName, pois = cachedTrack?.pois.orEmpty())
         }
 
         if (displayName == null) return null
@@ -535,12 +536,12 @@ object TrackCatalog {
 
         cacheMutex.withLock {
             val cached = parsedTrackCache[trackId] ?: return@withLock
-            val updated = cached.copy(sensitivity = parsed.sensitivity, deviceName = parsed.deviceName).withPoints(parsed.points)
+            val updated = cached.copy(sensitivity = parsed.sensitivity, deviceName = parsed.deviceName, pois = parsed.pois).withPoints(parsed.points)
             parsedTrackCache[trackId] = updated
             _tracks.value = parsedTrackCache.toMap()
         }
 
-        return TrackPlotData(id = trackId, title = displayName, points = parsed.points, sensitivity = parsed.sensitivity, deviceName = parsed.deviceName)
+        return TrackPlotData(id = trackId, title = displayName, points = parsed.points, sensitivity = parsed.sensitivity, deviceName = parsed.deviceName, pois = parsed.pois)
     }
     fun folderItemId(folderName: String): String = "folder:$folderName"
 
@@ -623,7 +624,8 @@ object TrackCatalog {
         val sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY,
         val deviceName: String? = null,
         val dose: Double? = null,
-        val pointCache: List<TrackPoint>? = null
+        val pointCache: List<TrackPoint>? = null,
+        val pois: List<PoiEntry> = emptyList()
     ) {
         fun hasPoints(): Boolean = pointCache != null
 
