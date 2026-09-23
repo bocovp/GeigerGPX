@@ -55,6 +55,8 @@ class TrackingRepository {
 
     private val _activeTrackPoints = MutableStateFlow<List<TrackPoint>>(emptyList())
     val activeTrackPoints: StateFlow<List<TrackPoint>> = _activeTrackPoints.asStateFlow()
+    private val _activeTrackPois = MutableStateFlow<List<PoiEntry>>(emptyList())
+    val activeTrackPois: StateFlow<List<PoiEntry>> = _activeTrackPois.asStateFlow()
 
     private val _cpsUpdate = MutableStateFlow(CpsUpdate())
     val cpsUpdate: StateFlow<CpsUpdate> = _cpsUpdate.asStateFlow()
@@ -135,11 +137,15 @@ class TrackingRepository {
         _countsAtTrackStart.value = totalCounter.get()
         _savedTrackCounts.value = null
         _activeTrackPoints.value = emptyList()
+        _activeTrackPois.value = emptyList()
     }
 
     fun setActiveTrackPoints(points: List<TrackPoint>) {
         _activeTrackPoints.value = points
     }
+
+    fun addActiveTrackPoi(poi: PoiEntry) { _activeTrackPois.value = _activeTrackPois.value + poi }
+    fun clearActiveTrackPois() { _activeTrackPois.value = emptyList() }
 
     fun finalizeTrackCounts() {
         val total = totalCounter.get()

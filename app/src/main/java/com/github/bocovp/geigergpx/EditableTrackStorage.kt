@@ -11,13 +11,13 @@ import java.io.OutputStream
 import androidx.core.net.toUri
 
 object EditableTrackStorage {
-    data class LoadResult(val points: List<TrackPoint>, val isEdited: Boolean, val sensitivity: Double?, val deviceName: String? = null)
+    data class LoadResult(val points: List<TrackPoint>, val isEdited: Boolean, val sensitivity: Double?, val deviceName: String? = null, val pois: List<PoiEntry> = emptyList())
     data class SplitResult(val newTrackId: String, val newTrackTitle: String)
 
     suspend fun loadTrack(context: Context, trackId: String): LoadResult? = withContext(Dispatchers.IO) {
         val input = openInputStream(context, trackId) ?: return@withContext null
         val loaded = GpxReader.readTrackWithMetadata(input) ?: return@withContext null
-        LoadResult(loaded.points, loaded.isEdited, loaded.sensitivity, loaded.deviceName)
+        LoadResult(loaded.points, loaded.isEdited, loaded.sensitivity, loaded.deviceName, loaded.pois)
     }
 
     suspend fun overwriteTrack(
@@ -26,7 +26,8 @@ object EditableTrackStorage {
         points: List<TrackPoint>,
         edited: Boolean = false,
         sensitivityOverride: Double? = null,
-        deviceNameOverride: String? = null
+        deviceNameOverride: String? = null,
+        pois: List<PoiEntry> = emptyList()
     ) = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
@@ -36,7 +37,7 @@ object EditableTrackStorage {
         val output = openOutputStream(context, trackId) ?: return@withContext
         output.use { out ->
             out.bufferedWriter().use { writer ->
-                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName, edited = edited)
+                GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName, edited = edited, pois = pois)
             }
         }
     }

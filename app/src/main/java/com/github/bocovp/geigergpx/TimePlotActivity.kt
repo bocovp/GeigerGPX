@@ -69,6 +69,7 @@ class TimePlotActivity : AppCompatActivity() {
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
     private var currentPoints: List<TrackPoint> = emptyList()
+    private var currentPois: List<PoiEntry> = emptyList()
    // private var activeTrackObserverAttached = false
  //   private var trackingObserverAttached = false
 
@@ -138,6 +139,15 @@ class TimePlotActivity : AppCompatActivity() {
                         if (plotMode == PlotMode.SLIDING_WINDOW) {
                             updatePlot(recalculateVerticalAxis = true)
                         }                    }
+                }
+
+                launch {
+                    viewModel.activeTrackPois.collectLatest { pois ->
+                        if (selectedTrackIdForPlot == TrackCatalog.currentTrackId()) {
+                            currentPois = pois
+                            updatePoiMarkers()
+                        }
+                    }
                 }
 
                 launch {
@@ -366,6 +376,12 @@ class TimePlotActivity : AppCompatActivity() {
             setSelection(text.length)
             hint = getString(R.string.poi)
         }
+        val saveInTrack = android.widget.CheckBox(this).apply { setText(R.string.save_inside_track_file) }
+        val dialogView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (24 * resources.displayMetrics.density).toInt(); setPadding(pad, 0, pad, 0)
+            addView(input); addView(saveInTrack)
+        }
 
         val isCurrentTrack = selected.trackId == TrackCatalog.currentTrackId()
         val deviceName = if (selected.deviceName != null) {
@@ -379,13 +395,17 @@ class TimePlotActivity : AppCompatActivity() {
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle(R.string.add_poi)
             .setMessage(R.string.define_poi_name)
-            .setView(input)
+            .setView(dialogView)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val description = input.text?.toString().orEmpty()
                 lifecycleScope.launch {
                     val success = withContext(Dispatchers.IO) {
-                        PoiLibrary.addPoi(
+                        if (saveInTrack.isChecked) TrackPoiStorage.addPoi(applicationContext, selected.trackId ?: TrackCatalog.currentTrackId(), PoiEntry(
+                            buildPoiId(selected.point.timeMillis, selected.point.latitude, selected.point.longitude), selected.point.timeMillis,
+                            selected.point.latitude, selected.point.longitude, selected.point.doseRate, selected.point.counts, selected.point.seconds,
+                            description.ifBlank { "POI" }
+                        )) else PoiLibrary.addPoi(
                             context = applicationContext,
                             description = description,
                             timestampMillis = selected.point.timeMillis,
@@ -397,7 +417,7 @@ class TimePlotActivity : AppCompatActivity() {
                             deviceName = deviceName
                         )
                     }
-                    android.widget.Toast.makeText(this@TimePlotActivity, if (success) getString(R.string.poi_saved) else getString(R.string.unable_to_save_poi), android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(this@TimePlotActivity, if (success) getString(if (saveInTrack.isChecked) R.string.poi_saved_to_track else R.string.poi_saved) else getString(R.string.unable_to_save_poi), android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
             .show()
@@ -568,6 +588,7 @@ class TimePlotActivity : AppCompatActivity() {
         estimatorCache = null
         slidingWindowCache = null
         rebuildPointIndex()
+        updatePoiMarkers()
 
         // Only clear the view's point selection if we loaded a completely different track
         if (trackChanged) {
@@ -589,6 +610,12 @@ class TimePlotActivity : AppCompatActivity() {
             pointMidElapsedSeconds[index] = elapsed + duration / 2.0
             elapsed += duration
         }
+    }
+
+    private fun updatePoiMarkers() {
+        binding.timePlotView.setPoiMarkers(currentPois.mapNotNull { poi ->
+            nearestIndexForTimeMillis(poi.timestampMillis).takeIf { it >= 0 }?.let { pointMidElapsedSeconds[it] to poi.description }
+        })
     }
 
     private fun nearestIndexForElapsedSeconds(seconds: Double): Int {
@@ -774,6 +801,7 @@ class TimePlotActivity : AppCompatActivity() {
             val pointsForPlot = viewModel.activeTrackPoints.value.ifEmpty {
                 TrackingService.activeTrackPointsSnapshot()
             }
+            currentPois = viewModel.activeTrackPois.value
             updateCurrentPoints(pointsForPlot, TrackCatalog.currentTrackId())
             updatePlot(recalculateVerticalAxis = true)
             return true
@@ -789,6 +817,7 @@ class TimePlotActivity : AppCompatActivity() {
         updateTrackTitle(selectedTrack.title)
         updateTrackSelectorUi()
         sensitivity = selectedTrack.sensitivity
+        currentPois = selectedTrack.pois
         updateCurrentPoints(selectedTrack.points, trackId)
         updatePlot()
     }

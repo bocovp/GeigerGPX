@@ -31,7 +31,8 @@ object GpxReader {
         val stats: TrackStats,
         val sensitivity: Double,
         val deviceName: String? = null,
-        val dose: Double? = null
+        val dose: Double? = null,
+        val pois: List<PoiEntry> = emptyList()
     )
 
     data class TrackWithMetadata(
@@ -39,19 +40,21 @@ object GpxReader {
         val isEdited: Boolean,
         val sensitivity: Double?,
         val deviceName: String? = null,
-        val dose: Double? = null
+        val dose: Double? = null,
+        val pois: List<PoiEntry> = emptyList()
     )
 
     private data class ParsedTrackData(
         val points: List<TrackPoint>,
         val stats: TrackStats,
         val metadata: TrackMetadata?,
-        val edited: Boolean
+        val edited: Boolean,
+        val pois: List<PoiEntry>
     )
 
     fun readTrackWithMetadata(inputStream: InputStream): TrackWithMetadata? {
         val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false) ?: return null
-        return TrackWithMetadata(parsed.points, parsed.edited, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName, parsed.metadata?.doseMuSv)
+        return TrackWithMetadata(parsed.points, parsed.edited, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName, parsed.metadata?.doseMuSv, parsed.pois)
     }
 
     fun readTrack(inputStream: InputStream): List<TrackPoint>? {
@@ -62,7 +65,7 @@ object GpxReader {
 
     fun readTrackWithStats(inputStream: InputStream): TrackWithStats? {
         val parsed = readTrackInternal(inputStream, parsePoints = true, preferMetadataStats = false) ?: return null
-        return TrackWithStats(parsed.points, parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName, parsed.metadata?.doseMuSv)
+        return TrackWithStats(parsed.points, parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName, parsed.metadata?.doseMuSv, parsed.pois)
     }
 
     fun readTrackStats(inputStream: InputStream): TrackStats? {
@@ -102,6 +105,7 @@ object GpxReader {
             val parser = parserFactory.newPullParser().apply { setInput(stream, null) }
 
             val points = mutableListOf<TrackPoint>()
+            val pois = mutableListOf<PoiEntry>()
             var totalSeconds = 0.0
             var pointCount = 0
             var calculatedDistance = 0.0
@@ -116,6 +120,8 @@ object GpxReader {
             var badCoordinates = false
             var timeMs = 0L
             var insideTrkpt = false
+            var insideWpt = false
+            var wptName = ""
 
             var metadataDistance: Double? = null
             var metadataPointCount: Int? = null
@@ -155,7 +161,7 @@ object GpxReader {
                                     metadataSeconds,
                                     metadataDose,
                                     metadataSensitivity
-                                ), metadataEdited)
+                                ), metadataEdited, emptyList())
                             }
 
                             insideTrkpt = true
@@ -167,6 +173,10 @@ object GpxReader {
                             badCoordinates = false
                             timeMs = 0L
                         }
+                        if (parser.name.equals("wpt", ignoreCase = true)) {
+                            insideWpt = true; lat = parser.getAttributeValue(null, "lat")?.toDoubleOrNull() ?: 0.0; lon = parser.getAttributeValue(null, "lon")?.toDoubleOrNull() ?: 0.0
+                            doseRate = 0.0; counts = 0; seconds = 0.0; timeMs = 0L; wptName = ""
+                        }
 
                         if (insideTrkpt && currentNamespace == RAD_NAMESPACE && parser.name == "badCoordinates") {
                             badCoordinates = true
@@ -175,9 +185,10 @@ object GpxReader {
 
                     XmlPullParser.TEXT -> {
                         val value = parser.text?.trim()
-                        if (insideTrkpt) {
+                        if (insideTrkpt || insideWpt) {
                             when {
                                 currentTag == "time" -> timeMs = parseIsoTime(value)
+                                insideWpt && currentTag == "name" -> wptName = value.orEmpty()
                                 currentTag == "fix" && value.equals("none", ignoreCase = true) -> {
                                     badCoordinates = true
                                 }
@@ -246,6 +257,10 @@ object GpxReader {
                             totalSeconds += seconds
                             insideTrkpt = false
                         }
+                        if (parser.name == "wpt" && insideWpt) {
+                            pois += PoiEntry(buildPoiId(timeMs, lat, lon), timeMs, lat, lon, doseRate, counts, seconds, wptName.ifBlank { "POI" })
+                            insideWpt = false
+                        }
                         currentTag = null
                         currentNamespace = null
                     }
@@ -281,7 +296,8 @@ object GpxReader {
                 }
             }
 
-            return ParsedTrackData(points, stats, metadata, metadataEdited)
+            val sensitivity = metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY
+            return ParsedTrackData(points, stats, metadata, metadataEdited, pois.map { it.copy(sensitivity = sensitivity) })
         }
     }
 
