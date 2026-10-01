@@ -397,6 +397,28 @@ object TrackCatalog {
         }
     }
 
+    /**
+     * Refreshes only the in-memory payload of a track whose file was rewritten.
+     *
+     * Adding a waypoint does not change catalog metadata, so doing a full storage scan here
+     * is both unnecessary and particularly expensive for document-tree storage. The point and
+     * waypoint caches are not persisted, therefore no disk-cache write is needed either.
+     */
+    suspend fun onTrackPoisUpdated(
+        trackId: String,
+        points: List<TrackPoint>,
+        pois: List<PoiEntry>
+    ) {
+        cacheMutex.withLock {
+            val existing = parsedTrackCache[trackId] ?: return@withLock
+            parsedTrackCache[trackId] = existing.copy(
+                pointCache = points,
+                pois = pois
+            )
+            _tracks.value = parsedTrackCache.toMap()
+        }
+    }
+
     fun onTrackRenamed(context: Context, oldTrackId: String, newTrackId: String, newDisplayName: String) {
         val appContext = context.applicationContext
         catalogScope.launch {
