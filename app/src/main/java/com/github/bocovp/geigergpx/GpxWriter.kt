@@ -59,13 +59,13 @@ object GpxWriter {
     }
 
     fun saveTrackWithResult(context: Context, points: List<TrackPoint>, pois: List<PoiEntry>): SaveTrackResult? {
-        if (points.isEmpty()) return null
+        if (points.isEmpty() && pois.isEmpty()) return null
         val fileName = defaultTimestampFileName()
         val result = writeTrackFile(context, points, fileName, pois = pois)
         if (result != null) {
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val deviceName = DeviceConfigManager.currentDeviceName(prefs)
-            TrackCatalog.onTrackSaved(context, fileName, points, deviceName)
+            TrackCatalog.onTrackSaved(context, fileName, points, deviceName, pois)
         }
         return result
     }

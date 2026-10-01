@@ -337,7 +337,13 @@ object TrackCatalog {
 
     fun listTrackSubfolderNames(): List<String> = allSubfolders.value
 
-    fun onTrackSaved(context: Context, relativePath: String, points: List<TrackPoint>, deviceName: String? = null) {
+    fun onTrackSaved(
+        context: Context,
+        relativePath: String,
+        points: List<TrackPoint>,
+        deviceName: String? = null,
+        pois: List<PoiEntry> = emptyList()
+    ) {
         val sensitivity = RadiationCalibration.sensitivityFromPrefs(
             PreferenceManager.getDefaultSharedPreferences(context)
         )
@@ -355,7 +361,8 @@ object TrackCatalog {
                         stats = stats,
                         sensitivity = sensitivity,
                         deviceName = deviceName,
-                        pointCache = points
+                        pointCache = points,
+                        pois = pois
                     )
                     _tracks.value = parsedTrackCache.toMap()
                     hasScannedStorage = true

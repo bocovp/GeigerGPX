@@ -278,7 +278,7 @@ object GpxReader {
                 metadataDeviceName
             )
 
-            if (parsePoints && points.isEmpty()) return null
+            if (parsePoints && points.isEmpty() && pois.isEmpty()) return null
             val stats = when {
                 preferMetadataStats && metadataDistance != null && (metadataSeconds != null) -> {
                     TrackStats(
