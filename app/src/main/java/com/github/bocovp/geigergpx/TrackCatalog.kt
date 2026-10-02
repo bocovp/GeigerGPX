@@ -379,7 +379,8 @@ object TrackCatalog {
         folderName: String?,
         points: List<TrackPoint>,
         sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY,
-        deviceName: String? = null
+        deviceName: String? = null,
+        pois: List<PoiEntry> = emptyList()
     ) {
         val appContext = context.applicationContext
         catalogScope.launch {
@@ -394,7 +395,8 @@ object TrackCatalog {
                         stats = stats,
                         sensitivity = sensitivity,
                         deviceName = deviceName,
-                        pointCache = points
+                        pointCache = points,
+                        pois = pois
                     )
                     _tracks.value = parsedTrackCache.toMap()
                     hasScannedStorage = true

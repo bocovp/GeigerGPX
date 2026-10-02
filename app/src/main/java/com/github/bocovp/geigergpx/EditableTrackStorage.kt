@@ -49,7 +49,8 @@ object EditableTrackStorage {
         folderName: String?,
         points: List<TrackPoint>,
         sensitivityOverride: Double? = null,
-        deviceNameOverride: String? = null
+        deviceNameOverride: String? = null,
+        pois: List<PoiEntry> = emptyList()
     ): SplitResult? = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
@@ -64,7 +65,7 @@ object EditableTrackStorage {
                 val target = File(parentDir, nextName)
                 target.outputStream().use { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName, edited = true)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName, edited = true, pois = pois)
                     }
                 }
                 Uri.fromFile(target)
@@ -76,7 +77,7 @@ object EditableTrackStorage {
                     relativePath = relativePath
                 ) { out ->
                     out.bufferedWriter().use { writer ->
-                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName, edited = true)
+                        GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName, edited = true, pois = pois)
                     }
                 }
                 result.uri ?: return@withContext null

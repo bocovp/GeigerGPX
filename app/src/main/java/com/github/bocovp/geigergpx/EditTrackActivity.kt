@@ -275,6 +275,8 @@ class EditTrackActivity : AppCompatActivity() {
     private fun applyChanges() {
         val updatedPoints = points.toMutableList()
         var splitPoints: List<TrackPoint>? = null
+        var updatedTrackPois = trackPois
+        var splitTrackPois: List<PoiEntry> = emptyList()
 
         when (mode) {
             EditMode.NONE -> return
@@ -362,6 +364,9 @@ class EditTrackActivity : AppCompatActivity() {
                 updatedPoints.clear()
                 updatedPoints.addAll(first)
                 splitPoints = second
+                val partition = partitionPoisAtSplit(trackPois, first, second)
+                updatedTrackPois = partition.first
+                splitTrackPois = partition.second
             }
         }
 
@@ -380,7 +385,8 @@ class EditTrackActivity : AppCompatActivity() {
                             trackFolder,
                             secondPart,
                             trackSensitivity,
-                            trackDeviceName
+                            trackDeviceName,
+                            splitTrackPois
                         ) ?: return@withContext false
                         TrackCatalog.onTrackSavedById(
                             this@EditTrackActivity,
@@ -389,7 +395,8 @@ class EditTrackActivity : AppCompatActivity() {
                             trackFolder,
                             secondPart,
                             trackSensitivity,
-                            trackDeviceName
+                            trackDeviceName,
+                            splitTrackPois
                         )
                     }
                     EditableTrackStorage.overwriteTrack(
@@ -399,9 +406,18 @@ class EditTrackActivity : AppCompatActivity() {
                         edited = true,
                         sensitivityOverride = trackSensitivity,
                         deviceNameOverride = trackDeviceName,
-                        pois = trackPois
+                        pois = updatedTrackPois
                     )
-                    TrackCatalog.onTrackSavedById(this@EditTrackActivity, trackId, trackTitle, trackFolder, updatedPoints, trackSensitivity, trackDeviceName)
+                    TrackCatalog.onTrackSavedById(
+                        this@EditTrackActivity,
+                        trackId,
+                        trackTitle,
+                        trackFolder,
+                        updatedPoints,
+                        trackSensitivity,
+                        trackDeviceName,
+                        updatedTrackPois
+                    )
                     true
                 }
 
@@ -411,6 +427,7 @@ class EditTrackActivity : AppCompatActivity() {
                 }
 
                 points = updatedPoints
+                trackPois = updatedTrackPois
                 hasEdits = true
                 trackAlreadyEdited = true
                 mode = EditMode.NONE
@@ -431,5 +448,27 @@ class EditTrackActivity : AppCompatActivity() {
         const val EXTRA_TRACK_ID = "extra_track_id"
         const val EXTRA_TRACK_TITLE = "extra_track_title"
         const val EXTRA_TRACK_FOLDER = "extra_track_folder"
+
+        /**
+         * Splits waypoints at the temporal boundary between the two point lists. If the
+         * boundary cannot be established (missing or non-increasing timestamps), retaining
+         * every waypoint in both files is safer than silently losing an attachment.
+         */
+        internal fun partitionPoisAtSplit(
+            pois: List<PoiEntry>,
+            firstPoints: List<TrackPoint>,
+            secondPoints: List<TrackPoint>
+        ): Pair<List<PoiEntry>, List<PoiEntry>> {
+            val firstTime = firstPoints.lastOrNull()?.timeMillis
+            val secondTime = secondPoints.firstOrNull()?.timeMillis
+            if (firstTime == null || secondTime == null || firstTime <= 0L || secondTime <= firstTime) {
+                return pois to pois
+            }
+
+            val boundary = firstTime + (secondTime - firstTime) / 2
+            val firstPois = pois.filter { it.timestampMillis <= 0L || it.timestampMillis <= boundary }
+            val secondPois = pois.filter { it.timestampMillis <= 0L || it.timestampMillis > boundary }
+            return firstPois to secondPois
+        }
     }
 }
