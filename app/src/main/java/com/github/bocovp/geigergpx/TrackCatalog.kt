@@ -34,6 +34,7 @@ import androidx.core.net.toUri
 
 private const val CURRENT_TRACK_ID = "active-track"
 private const val CURRENT_TRACK_TITLE = "Currently recording"
+private const val TRACK_CACHE_VERSION = 2
 private val EXCLUDED_GPX_FILE_SET = setOf("Backup.gpx", "POI.gpx", "POI-Backup.gpx")
 
 data class TrackListItem(
@@ -78,7 +79,7 @@ object TrackCatalog {
                     TrackListItem(
                         id = cached.sourceId,
                         title = cached.displayName,
-                        subtitle = formatStats(cached.stats),
+                        subtitle = formatStats(cached.stats, cached.poiCount),
                         stats = cached.stats,
                         mapTrack = null,
                         isCurrentTrack = false,
@@ -171,7 +172,14 @@ object TrackCatalog {
                 repeat(totalCount) {
                     val (source, parsed) = results.receive()
                     if (parsed != null) {
-                        updatedTracks[source.id] = CachedParsedTrack.from(source, parsed.stats, parsed.sensitivity, parsed.deviceName, parsed.dose)
+                        updatedTracks[source.id] = CachedParsedTrack.from(
+                            source,
+                            parsed.stats,
+                            parsed.sensitivity,
+                            parsed.deviceName,
+                            parsed.dose,
+                            parsed.pois.size
+                        )
                     }
                     processedCount += 1
                     if (totalCount > 0) {
@@ -225,15 +233,16 @@ object TrackCatalog {
 
         if (includeCurrentTrack && browseFolderName == null) {
             val currentTrack = currentTrackData(activePoints)
+            val activePois = (context.applicationContext as GeigerGpxApp).trackingRepository.activeTrackPois.value
             val includeCurrentMapTrack = includeMapTracks && (mapTrackIds == null || CURRENT_TRACK_ID in mapTrackIds)
             items.add(
                 TrackListItem(
                     id = CURRENT_TRACK_ID,
                     title = CURRENT_TRACK_TITLE,
-                    subtitle = formatStats(currentTrack.stats),
+                    subtitle = formatStats(currentTrack.stats, activePois.size),
                     stats = currentTrack.stats,
                     mapTrack = if (includeCurrentMapTrack) {
-                        MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.points, RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)), pois = (context.applicationContext as GeigerGpxApp).trackingRepository.activeTrackPois.value)
+                        MapTrack(CURRENT_TRACK_ID, CURRENT_TRACK_TITLE, currentTrack.points, RadiationCalibration.sensitivityFromPrefs(androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)), pois = activePois)
                     } else {
                         null
                     },
@@ -261,7 +270,12 @@ object TrackCatalog {
                         openInputStreamForTrack(context, source.sourceId)?.use { parseGpxTrack(it) }
                     }
                     if (parsed != null) {
-                        val updated = source.copy(sensitivity = parsed.sensitivity, deviceName = parsed.deviceName, pois = parsed.pois).withPoints(parsed.points)
+                        val updated = source.copy(
+                            sensitivity = parsed.sensitivity,
+                            deviceName = parsed.deviceName,
+                            pois = parsed.pois,
+                            poiCount = parsed.pois.size
+                        ).withPoints(parsed.points)
                         cacheMutex.withLock {
                             parsedTrackCache[source.sourceId] = updated
                             _tracks.value = parsedTrackCache.toMap()
@@ -288,7 +302,7 @@ object TrackCatalog {
                 TrackListItem(
                     id = source.sourceId,
                     title = source.displayName,
-                    subtitle = formatStats(stats),
+                    subtitle = formatStats(stats, cached.poiCount),
                     stats = stats,
                     mapTrack = mapTrack,
                     isCurrentTrack = false,
@@ -362,7 +376,8 @@ object TrackCatalog {
                         sensitivity = sensitivity,
                         deviceName = deviceName,
                         pointCache = points,
-                        pois = pois
+                        pois = pois,
+                        poiCount = pois.size
                     )
                     _tracks.value = parsedTrackCache.toMap()
                     hasScannedStorage = true
@@ -396,7 +411,8 @@ object TrackCatalog {
                         sensitivity = sensitivity,
                         deviceName = deviceName,
                         pointCache = points,
-                        pois = pois
+                        pois = pois,
+                        poiCount = pois.size
                     )
                     _tracks.value = parsedTrackCache.toMap()
                     hasScannedStorage = true
@@ -411,9 +427,11 @@ object TrackCatalog {
      *
      * Adding a waypoint does not change catalog metadata, so doing a full storage scan here
      * is both unnecessary and particularly expensive for document-tree storage. The point and
-     * waypoint caches are not persisted, therefore no disk-cache write is needed either.
+     * waypoint payloads are not persisted, but the waypoint count is persisted so the tracks
+     * screen remains correct after an application restart.
      */
     suspend fun onTrackPoisUpdated(
+        context: Context,
         trackId: String,
         points: List<TrackPoint>,
         pois: List<PoiEntry>
@@ -422,10 +440,12 @@ object TrackCatalog {
             val existing = parsedTrackCache[trackId] ?: return@withLock
             parsedTrackCache[trackId] = existing.copy(
                 pointCache = points,
-                pois = pois
+                pois = pois,
+                poiCount = pois.size
             )
             _tracks.value = parsedTrackCache.toMap()
         }
+        persistTrackCache(context.applicationContext)
     }
 
     fun onTrackRenamed(context: Context, oldTrackId: String, newTrackId: String, newDisplayName: String) {
@@ -514,7 +534,14 @@ object TrackCatalog {
         } ?: return null
 
         val parsed = runCatching { source.openStream().use { parseGpxTrackStats(it) } }.getOrNull() ?: return null
-        return CachedParsedTrack.from(source.copy(folderName = folderName), parsed.stats, parsed.sensitivity, parsed.deviceName, parsed.dose)
+        return CachedParsedTrack.from(
+            source.copy(folderName = folderName),
+            parsed.stats,
+            parsed.sensitivity,
+            parsed.deviceName,
+            parsed.dose,
+            parsed.pois.size
+        )
     }
 
 
@@ -567,7 +594,12 @@ object TrackCatalog {
 
         cacheMutex.withLock {
             val cached = parsedTrackCache[trackId] ?: return@withLock
-            val updated = cached.copy(sensitivity = parsed.sensitivity, deviceName = parsed.deviceName, pois = parsed.pois).withPoints(parsed.points)
+            val updated = cached.copy(
+                sensitivity = parsed.sensitivity,
+                deviceName = parsed.deviceName,
+                pois = parsed.pois,
+                poiCount = parsed.pois.size
+            ).withPoints(parsed.points)
             parsedTrackCache[trackId] = updated
             _tracks.value = parsedTrackCache.toMap()
         }
@@ -631,7 +663,7 @@ object TrackCatalog {
         return result[0].toDouble()
     }
 
-    private fun formatStats(stats: TrackStats): String {
+    private fun formatStats(stats: TrackStats, poiCount: Int = 0): String {
         val durationSeconds = stats.durationMillis / 1000L
         val hh = durationSeconds / 3600
         val mm = (durationSeconds % 3600) / 60
@@ -644,7 +676,8 @@ object TrackCatalog {
             "%.1f km".format(java.util.Locale.US, stats.distanceMeters / 1000.0)
         }
         
-        return "${stats.pointCount} points · $durationText · $distanceText"
+        val poiText = if (poiCount > 0) " · $poiCount POIs" else ""
+        return "${stats.pointCount} points · $durationText · $distanceText$poiText"
     }
 
     private data class CachedParsedTrack(
@@ -656,7 +689,8 @@ object TrackCatalog {
         val deviceName: String? = null,
         val dose: Double? = null,
         val pointCache: List<TrackPoint>? = null,
-        val pois: List<PoiEntry> = emptyList()
+        val pois: List<PoiEntry> = emptyList(),
+        val poiCount: Int = pois.size
     ) {
         fun hasPoints(): Boolean = pointCache != null
 
@@ -676,11 +710,19 @@ object TrackCatalog {
                     .put("distanceMeters", stats.distanceMeters))
             deviceName?.let { obj.put("deviceName", it) }
             dose?.takeIf { it.isFinite() }?.let { obj.put("dose", it) }
+            obj.put("poiCount", poiCount)
             return obj
         }
 
         companion object {
-            fun from(source: TrackSource, stats: TrackStats, sensitivity: Double, deviceName: String? = null, dose: Double? = null): CachedParsedTrack {
+            fun from(
+                source: TrackSource,
+                stats: TrackStats,
+                sensitivity: Double,
+                deviceName: String? = null,
+                dose: Double? = null,
+                poiCount: Int = 0
+            ): CachedParsedTrack {
                 return CachedParsedTrack(
                     sourceId = source.id,
                     displayName = source.displayName,
@@ -689,7 +731,8 @@ object TrackCatalog {
                     sensitivity = sensitivity,
                     deviceName = deviceName,
                     dose = dose,
-                    pointCache = null
+                    pointCache = null,
+                    poiCount = poiCount
                 )
             }
 
@@ -709,7 +752,8 @@ object TrackCatalog {
                     ),
                     sensitivity = json.optDouble("sensitivity", RadiationCalibration.DEFAULT_SENSITIVITY).takeIf { it > 0.0 } ?: RadiationCalibration.DEFAULT_SENSITIVITY,
                     deviceName = deviceName,
-                    dose = dose
+                    dose = dose,
+                    poiCount = json.optInt("poiCount", 0).coerceAtLeast(0)
                 )
             }
         }
@@ -793,6 +837,7 @@ object TrackCatalog {
             withContext(Dispatchers.IO) {
                 val cacheFile = trackCacheFile(context)
                 if (cacheFile.exists()) {
+                    var loadedCurrentCache = false
                     runCatching {
                         BufferedReader(cacheFile.reader()).use { reader ->
                             val raw = reader.readText()
@@ -800,6 +845,10 @@ object TrackCatalog {
                                 JSONObject().put("tracks", JSONArray(raw))
                             } else {
                                 JSONObject(raw)
+                            }
+                            if (root.optInt("version", 0) != TRACK_CACHE_VERSION) {
+                                parsedTrackCache.clear()
+                                return@use
                             }
                             val tracks = root.optJSONArray("tracks") ?: JSONArray()
                             for (i in 0 until tracks.length()) {
@@ -810,12 +859,13 @@ object TrackCatalog {
                                     Log.w("GPX", "Failed to parse track cache entry at index $i", it)
                                 }
                             }
+                            loadedCurrentCache = true
                         }
                     }.onFailure {
                         Log.w("GPX", "Unable to load track cache ${cacheFile.absolutePath}", it)
                         parsedTrackCache.clear()
                     }
-                    hasScannedStorage = true
+                    hasScannedStorage = loadedCurrentCache
                 }
             }
             _tracks.value = parsedTrackCache.toMap()
@@ -842,6 +892,7 @@ object TrackCatalog {
                             .forEach { subfolders.put(it) }
                         writer.write(
                             JSONObject()
+                                .put("version", TRACK_CACHE_VERSION)
                                 .put("tracks", tracks)
                                 .put("subfolders", subfolders)
                                 .toString()

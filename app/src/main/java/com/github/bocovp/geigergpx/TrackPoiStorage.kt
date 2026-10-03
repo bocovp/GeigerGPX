@@ -19,7 +19,7 @@ object TrackPoiStorage {
                 sensitivityOverride = loaded.sensitivity, deviceNameOverride = loaded.deviceName,
                 pois = updatedPois
             )
-            TrackCatalog.onTrackPoisUpdated(trackId, loaded.points, updatedPois)
+            TrackCatalog.onTrackPoisUpdated(context, trackId, loaded.points, updatedPois)
             true
         }.getOrDefault(false)
     }

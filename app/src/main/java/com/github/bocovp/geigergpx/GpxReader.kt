@@ -76,7 +76,7 @@ object GpxReader {
 
     fun readTrackStatsWithSensitivity(inputStream: InputStream): TrackWithStats? {
         val parsed = readTrackInternal(inputStream, parsePoints = false, preferMetadataStats = true) ?: return null
-        return TrackWithStats(emptyList(), parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName, parsed.metadata?.doseMuSv)
+        return TrackWithStats(emptyList(), parsed.stats, parsed.metadata?.sensitivity ?: RadiationCalibration.DEFAULT_SENSITIVITY, parsed.metadata?.deviceName, parsed.metadata?.doseMuSv, parsed.pois)
     }
 
     fun readPois(xml: String): List<PoiEntry> {
@@ -161,7 +161,7 @@ object GpxReader {
                                     metadataSeconds,
                                     metadataDose,
                                     metadataSensitivity
-                                ), metadataEdited, emptyList())
+                                ), metadataEdited, pois)
                             }
 
                             insideTrkpt = true
