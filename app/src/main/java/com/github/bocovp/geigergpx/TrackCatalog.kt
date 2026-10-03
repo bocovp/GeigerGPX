@@ -676,7 +676,11 @@ object TrackCatalog {
             "%.1f km".format(java.util.Locale.US, stats.distanceMeters / 1000.0)
         }
         
-        val poiText = if (poiCount > 0) " · $poiCount POIs" else ""
+        val poiText = when (poiCount) {
+            0 -> ""
+            1 -> " · 1 POI"
+            else -> " · $poiCount POIs"
+        }
         return "${stats.pointCount} points · $durationText · $distanceText$poiText"
     }
 
