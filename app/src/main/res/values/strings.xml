@@ -158,6 +158,8 @@
     <string name="poi_details">POI Details</string>
     <string name="poi_details_clip_label">POI details</string>
     <string name="share_poi">Share POI</string>
+    <string name="save_inside_track_file">Save inside track file</string>
+    <string name="poi_saved_to_track">POI saved inside track file</string>
     <string name="delete_poi">Delete POI</string>
     <string name="poi_removed">POI removed</string>
     <string name="unable_to_remove_poi">Unable to remove POI</string>

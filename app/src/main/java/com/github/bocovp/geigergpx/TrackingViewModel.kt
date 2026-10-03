@@ -27,6 +27,7 @@ class  TrackingViewModel(app: Application) : AndroidViewModel(app) {
     val pointCount: StateFlow<Int> = repo.pointCount
 
     val activeTrackPoints: StateFlow<List<TrackPoint>> = repo.activeTrackPoints
+    val activeTrackPois: StateFlow<List<PoiEntry>> = repo.activeTrackPois
 
     val cpsUpdate: StateFlow<TrackingRepository.CpsUpdate> = repo.cpsUpdate
 

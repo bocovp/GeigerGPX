@@ -376,13 +376,14 @@ class TrackingService : Service() {
         stopBackupLoop()
 
         val copy = trackWriter.activeTrackPointsSnapshot()
+        val trackPois = repo.activeTrackPois.value
         val finalPointCount = copy.size
         repo.setActiveTrackPoints(copy)
         serviceScope.launch {
             try {
-                if (copy.isNotEmpty()) {
+                if (copy.isNotEmpty() || trackPois.isNotEmpty()) {
                     val saveResult = withContext(NonCancellable + Dispatchers.IO) {
-                        GpxWriter.saveTrackWithResult(this@TrackingService, copy)
+                        GpxWriter.saveTrackWithResult(this@TrackingService, copy, trackPois)
                     }
                     if (saveResult != null) {
                         // Final save succeeded: remove any leftover backup file
@@ -406,6 +407,7 @@ class TrackingService : Service() {
                 android.util.Log.e("TrackingService", "Error during final save", e)
             } finally {
                 repo.finalizeTrackCounts()
+                repo.clearActiveTrackPois()
                 stopTrackingSession(
                     TrackStopStats(
                         trackDurationSeconds = finalTrackDurationSeconds,

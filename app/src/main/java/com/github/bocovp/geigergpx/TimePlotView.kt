@@ -128,6 +128,7 @@ class TimePlotView @JvmOverloads constructor(
     private var zoomX = 1f
     private var panFraction = 0f
     private var selectedTimeSeconds: Double? = null
+    private var poiMarkers: List<Pair<Double, String>> = emptyList()
     var onPointSelectionChanged: ((Double?) -> Unit)? = null
     var onVisibleRangeChanged: (() -> Unit)? = null
     var zoomEnabled: Boolean = true
@@ -397,6 +398,7 @@ class TimePlotView @JvmOverloads constructor(
                 drawSeries(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
             }
             drawSelectedPointMarker(canvas, plotLeft, plotTop, plotBottom, plotWidth, plotHeight)
+            drawPoiMarkers(canvas, plotLeft, plotBottom, plotWidth, plotHeight)
             drawLastKernelPointMarker(canvas, plotLeft, plotTop, plotBottom, plotWidth, plotHeight)
 
             drawVerticalTicks(canvas, plotLeft, plotTop, plotBottom, plotRight)
@@ -470,6 +472,8 @@ class TimePlotView @JvmOverloads constructor(
         invalidate()
     }
 
+    fun setPoiMarkers(markers: List<Pair<Double, String>>) { poiMarkers = markers; invalidate() }
+
     private fun selectFromX(x: Float) {
         if (trackDurationSeconds <= 0.0) return
         val plotLeft = leftPaddingPx
@@ -513,6 +517,20 @@ class TimePlotView @JvmOverloads constructor(
         canvas.drawCircle(x, y, radius, selectedPointStrokePaint)
         if (longPressSelecting) {
             canvas.drawLine(x, plotTop, x, plotBottom, axisPaint)
+        }
+    }
+
+    private fun drawPoiMarkers(canvas: Canvas, plotLeft: Float, plotBottom: Float, plotWidth: Float, plotHeight: Float) {
+        val (start, end, duration) = visibleRangeSeconds()
+        if (duration <= 0.0) return
+        poiMarkers.forEach { (seconds, name) ->
+            if (seconds !in start..end) return@forEach
+            val x = plotLeft + ((seconds - start) / duration).toFloat() * plotWidth
+            val y = selectedYForTime(seconds, plotBottom, plotHeight) ?: return@forEach
+            val radius = 3.8f * density
+            canvas.drawCircle(x, y, radius, selectedPointPaint)
+            canvas.drawCircle(x, y, radius, selectedPointStrokePaint)
+            canvas.drawText(name, x + radius + 3f * density, y - radius, textPaint)
         }
     }
 
