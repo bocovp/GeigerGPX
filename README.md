@@ -24,6 +24,10 @@ No hardware modifications are required; the app records signals directly via the
 
 **Note:** At high dose rates, the dosimeter may not audibly emit every pulse, so phone-side estimates can be biased low.
 
+## GPX Format Specification
+
+Open [gpx-format-specification.html](gpx-format-specification.html) in a browser for the radiation extension specification, organized by metadata, track points, and waypoints. It includes tag meanings, units, serialization details, and highlighted GPX usage examples. The page is a single self-contained file and works offline.
+
 ## Screenshots
 
 <img width="23%" height="auto" alt="Main screen" src="https://github.com/user-attachments/assets/857e9afe-c408-4125-8b4d-5fb64df91b78" />
