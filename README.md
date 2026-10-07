@@ -26,7 +26,7 @@ No hardware modifications are required; the app records signals directly via the
 
 ## GPX Format Specification
 
-Open [gpx-format-specification.html](gpx-format-specification.html) in a browser for the radiation extension reference, including tag meanings, units, highlighted GPX examples, legacy compatibility, and confidence-interval calculations. The interactive page is a single self-contained file and works offline.
+Open [gpx-format-specification.html](gpx-format-specification.html) in a browser for the radiation extension specification, organized by metadata, track points, and waypoints. It includes tag meanings, units, serialization details, and highlighted GPX usage examples. The page is a single self-contained file and works offline.
 
 ## Screenshots
 
