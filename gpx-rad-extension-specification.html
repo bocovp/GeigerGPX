@@ -656,48 +656,24 @@
     </aside>
     <div class="main">
       <header class="topbar">
-        <button type="button" class="mobile-menu" hidden aria-controls="sidebar" aria-expanded="false" aria-label="Toggle specification navigation">
-          Menu
-        </button>
+        <button type="button" class="mobile-menu" hidden aria-controls="sidebar" aria-expanded="false" aria-label="Toggle specification navigation">Menu</button>
         <span class="breadcrumb">rad extension / GPX 1.1</span>
-        <button type="button" id="theme-toggle" hidden aria-label="Switch to dark theme" aria-pressed="false">
-          Dark theme
-        </button>
+        <button type="button" id="theme-toggle" hidden aria-label="Switch to dark theme" aria-pressed="false">Dark theme</button>
       </header>
       <main class="content" id="main-content">
         <section id="overview" aria-labelledby="overview-title">
           <h1 id="overview-title">rad extension specification for GPX</h1>
-          <p class="draft-notice">
-            <strong>Draft:</strong>
-            This specification is subject to change.
-          </p>
-          <p class="lead">
-            This document specifies the
-            <code>rad</code>
-            extension for radiation measurement data in GPX 1.1. Tags are grouped by their placement
-            in metadata, track points, and waypoints. Each entry specifies the value’s meaning,
-            units, serialization, and usage.
-          </p>
+          <p class="draft-notice"><strong>Draft:</strong> This specification is subject to change.</p>
+          <p class="lead">This document specifies the <code>rad</code> extension for radiation measurement data in GPX 1.1. Tags are grouped by their placement in metadata, track points, and waypoints. Each entry specifies the value’s meaning, units, serialization, and usage.</p>
         </section>
         <section id="namespace" aria-labelledby="namespace-title">
           <h2 id="namespace-title">Namespace</h2>
-          <p class="section-description">
-            Standard GPX elements use the GPX 1.1 namespace. Radiation extension elements use the
-            <code>rad</code>
-            namespace URI
-            <code>https://github.com/bocovp/GeigerGPX</code>
-            . The
-            <code>rad</code>
-            prefix is conventional; any prefix bound to that URI is equivalent. XML tag names are
-            case-sensitive.
-          </p>
+          <p class="section-description">Standard GPX elements use the GPX 1.1 namespace. Radiation extension elements use the <code>rad</code> namespace URI <code>https://github.com/bocovp/GeigerGPX</code>. The <code>rad</code> prefix is conventional; any prefix bound to that URI is equivalent. XML tag names are case-sensitive.</p>
           <div class="code-block">
             <div class="code-bar">
               <span>XML · namespace declaration</span>
               <div>
-                <button type="button" class="copy-button" hidden aria-label="Copy XML · namespace declaration">
-                  Copy
-                </button>
+                <button type="button" class="copy-button" hidden aria-label="Copy XML · namespace declaration">Copy</button>
               </div>
             </div>
             <pre>
@@ -722,27 +698,13 @@
               <span>Standalone measurement values and detector name.</span>
             </div>
           </div>
-          <p class="section-description" style="margin-top: 18px">
-            The extension tags belong inside the GPX
-            <code>extensions</code>
-            element of the stated parent. Examples below assume the namespace declarations shown
-            above. Numeric values use a period as the decimal separator, without unit text or
-            thousands separators. “Always written” refers to the current exporter; older files may
-            omit fields.
-          </p>
+          <p class="section-description" style="margin-top: 18px">The extension tags belong inside the GPX <code>extensions</code> element of the stated parent. Examples below assume the namespace declarations shown above. Numeric values use a period as the decimal separator, without unit text or thousands separators. “Always written” refers to the current exporter; older files may omit fields.</p>
         </section>
         <section id="metadata" aria-labelledby="metadata-title">
           <h2 id="metadata-title">Metadata</h2>
-          <p class="element-path">
-            Location:
-            <code>gpx/metadata/extensions</code>
-          </p>
+          <p class="element-path">Location: <code>gpx/metadata/extensions</code></p>
           <div class="section-description">
-            <p>
-              These extensions summarize the exported track and store its detector calibration.
-              Summaries are recalculated from the retained track points when the track is exported,
-              including after cropping or splitting.
-            </p>
+            <p>These extensions summarize the exported track and store its detector calibration. Summaries are recalculated from the retained track points when the track is exported, including after cropping or splitting.</p>
           </div>
           <article class="tag-card" id="metadata-pointcount" data-context="metadata" data-tag="pointcount" aria-labelledby="metadata-pointcount-title">
             <h3 id="metadata-pointcount-title">
@@ -750,16 +712,8 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Number of
-                  <code>trkpt</code>
-                  elements stored in the exported track, including points with invalid coordinates.
-                  Waypoints are excluded.
-                </p>
-                <p>
-                  The exporter always writes this field and recalculates it from the stored point
-                  list.
-                </p>
+                <p>Number of <code>trkpt</code> elements stored in the exported track, including points with invalid coordinates. Waypoints are excluded.</p>
+                <p>The exporter always writes this field and recalculates it from the stored point list.</p>
                 <dl class="properties">
                   <div>
                     <dt>Value type</dt>
@@ -780,9 +734,7 @@
                   <div class="code-bar">
                     <span>XML · metadata / rad:pointcount</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:pointcount">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:pointcount">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -802,18 +754,8 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Sum of the geographic distances between successive valid track points, calculated
-                  using Android’s
-                  <code>Location.distanceBetween</code>
-                  .
-                </p>
-                <p>
-                  Points marked with
-                  <code>&lt;fix&gt;none&lt;/fix&gt;</code>
-                  are skipped. Distance is measured directly from the previous valid point to the
-                  next valid point. With fewer than two valid points, the value is zero.
-                </p>
+                <p>Sum of the geographic distances between successive valid track points, calculated using Android’s <code>Location.distanceBetween</code> .</p>
+                <p>Points marked with <code>&lt;fix&gt;none&lt;/fix&gt;</code> are skipped. Distance is measured directly from the previous valid point to the next valid point. With fewer than two valid points, the value is zero.</p>
                 <p>The exporter always writes this field.</p>
                 <dl class="properties">
                   <div>
@@ -835,9 +777,7 @@
                   <div class="code-bar">
                     <span>XML · metadata / rad:distance</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:distance">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:distance">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -857,14 +797,8 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Sum of detector counts over all stored track points, including points with invalid
-                  coordinates. This is a track total rather than the count at a single point.
-                </p>
-                <p>
-                  Counts and measurement duration are stored so a confidence interval can be
-                  calculated for the recorded series.
-                </p>
+                <p>Sum of detector counts over all stored track points, including points with invalid coordinates. This is a track total rather than the count at a single point.</p>
+                <p>Counts and measurement duration are stored so a confidence interval can be calculated for the recorded series.</p>
                 <p>The exporter always writes this field.</p>
                 <dl class="properties">
                   <div>
@@ -886,9 +820,7 @@
                   <div class="code-bar">
                     <span>XML · metadata / rad:counts</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:counts">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:counts">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -909,19 +841,9 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Sum of the measurement durations of all stored track points, including points with
-                  invalid coordinates. This value is not the difference between the first and last
-                  point timestamps.
-                </p>
-                <p>
-                  Duration provides the observation time required for count-rate and
-                  confidence-interval calculations.
-                </p>
-                <p>
-                  The exporter always writes this field. Individual durations and the total are
-                  rounded independently, so their serialized sums may differ slightly.
-                </p>
+                <p>Sum of the measurement durations of all stored track points, including points with invalid coordinates. This value is not the difference between the first and last point timestamps.</p>
+                <p>Duration provides the observation time required for count-rate and confidence-interval calculations.</p>
+                <p>The exporter always writes this field. Individual durations and the total are rounded independently, so their serialized sums may differ slightly.</p>
                 <dl class="properties">
                   <div>
                     <dt>Value type</dt>
@@ -942,9 +864,7 @@
                   <div class="code-bar">
                     <span>XML · metadata / rad:seconds</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:seconds">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:seconds">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -965,23 +885,9 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Estimated accumulated dose over all stored track points, including measurement
-                  windows recorded without valid coordinates.
-                </p>
-                <p>
-                  The exporter calculates
-                  <code>dose = total counts / sensitivity / 3600</code>
-                  . The factor 3600 converts hours to seconds. This calculation uses counts and
-                  calibration rather than rounded point dose rates.
-                </p>
-                <p>
-                  The field is omitted when sensitivity is exactly
-                  <code>1.0</code>
-                  , which is used for count-rate mode. A small nonzero dose may round to
-                  <code>0.000</code>
-                  .
-                </p>
+                <p>Estimated accumulated dose over all stored track points, including measurement windows recorded without valid coordinates.</p>
+                <p>The exporter calculates <code>dose = total counts / sensitivity / 3600</code>. The factor 3600 converts hours to seconds. This calculation uses counts and calibration rather than rounded point dose rates.</p>
+                <p>The field is omitted when sensitivity is exactly <code>1.0</code> , which is used for count-rate mode. A small nonzero dose may round to <code>0.000</code> .</p>
                 <dl class="properties">
                   <div>
                     <dt>Value type</dt>
@@ -1002,9 +908,7 @@
                   <div class="code-bar">
                     <span>XML · metadata / rad:dose</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:dose">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:dose">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -1026,15 +930,8 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Human-readable name of the radiation detector selected for recording the track.
-                </p>
-                <p>
-                  The exporter writes this field only when the device name is nonblank. The name is
-                  a label; calibration is stored separately in
-                  <code>rad:sensitivity</code>
-                  . XML-sensitive characters in the name are escaped.
-                </p>
+                <p>Human-readable name of the radiation detector selected for recording the track.</p>
+                <p>The exporter writes this field only when the device name is nonblank. The name is a label; calibration is stored separately in <code>rad:sensitivity</code> . XML-sensitive characters in the name are escaped.</p>
                 <dl class="properties">
                   <div>
                     <dt>Value type</dt>
@@ -1055,9 +952,7 @@
                   <div class="code-bar">
                     <span>XML · metadata / rad:device</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:device">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:device">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -1077,27 +972,9 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Detector count rate in counts per second corresponding to a dose rate of 1 µSv/h.
-                  The calibration relation is
-                  <code>dose rate = count rate / sensitivity</code>
-                  .
-                </p>
-                <p>
-                  The exporter always writes the literal attribute
-                  <code>dimension="cps/uSv/h"</code>
-                  , meaning
-                  <code>cps / (µSv/h)</code>
-                  . The current reader parses the positive numeric value and does not inspect this
-                  attribute. Missing or non-positive values fall back to
-                  <code>10.0</code>
-                  .
-                </p>
-                <p>
-                  A value of
-                  <code>1.0</code>
-                  is used for count-rate mode; accumulated dose is omitted in this mode.
-                </p>
+                <p>Detector count rate in counts per second corresponding to a dose rate of 1 µSv/h. The calibration relation is <code>dose rate = count rate / sensitivity</code> .</p>
+                <p>The exporter always writes the literal attribute <code>dimension="cps/uSv/h"</code> , meaning <code>cps / (µSv/h)</code>. The current reader parses the positive numeric value and does not inspect this attribute. Missing or non-positive values fall back to <code>10.0</code> .</p>
+                <p>A value of <code>1.0</code> is used for count-rate mode; accumulated dose is omitted in this mode.</p>
                 <dl class="properties">
                   <div>
                     <dt>Value type</dt>
@@ -1118,9 +995,7 @@
                   <div class="code-bar">
                     <span>XML · metadata / rad:sensitivity</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:sensitivity">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:sensitivity">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -1140,19 +1015,8 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Indicates that the track was saved through an editing operation, such as cropping,
-                  splitting, or marking coordinates as invalid.
-                </p>
-                <p>
-                  The exporter writes
-                  <code>true</code>
-                  when the edited flag is set and omits the field otherwise. The reader treats
-                  case-insensitive
-                  <code>true</code>
-                  as edited; absence or other values are treated as false. The field does not record
-                  individual editing operations.
-                </p>
+                <p>Indicates that the track was saved through an editing operation, such as cropping, splitting, or marking coordinates as invalid.</p>
+                <p>The exporter writes <code>true</code> when the edited flag is set and omits the field otherwise. The reader treats case-insensitive <code>true</code> as edited; absence or other values are treated as false. The field does not record individual editing operations.</p>
                 <dl class="properties">
                   <div>
                     <dt>Value type</dt>
@@ -1173,9 +1037,7 @@
                   <div class="code-bar">
                     <span>XML · metadata / rad:edited</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:edited">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · metadata / rad:edited">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -1192,35 +1054,11 @@
         </section>
         <section id="track-point" aria-labelledby="track-point-title">
           <h2 id="track-point-title">Track points</h2>
-          <p class="element-path">
-            Location:
-            <code>gpx/trk/trkseg/trkpt/extensions</code>
-          </p>
+          <p class="element-path">Location: <code>gpx/trk/trkseg/trkpt/extensions</code></p>
           <div class="section-description">
-            <p>
-              Each
-              <code>trkpt</code>
-              represents a measurement window. Coordinates are averaged over that window when GPS
-              samples are available, and the timestamp is its midpoint.
-            </p>
-            <p>
-              The exporter marks invalid coordinates with the standard GPX element
-              <code>&lt;fix&gt;none&lt;/fix&gt;</code>
-              , directly inside
-              <code>trkpt</code>
-              . Such points retain their measurement values and contribute to metadata totals, but
-              are excluded from distance calculations.
-            </p>
-            <p>
-              An optional app setting duplicates dose rate into GPX
-              <code>ele</code>
-              . In that case, the value is radiation data rather than elevation in metres. The
-              reader uses
-              <code>rad:doserate</code>
-              and does not use
-              <code>ele</code>
-              as a radiation fallback.
-            </p>
+            <p>Each <code>trkpt</code> represents a measurement window. Coordinates are averaged over that window when GPS samples are available, and the timestamp is its midpoint.</p>
+            <p>The exporter marks invalid coordinates with the standard GPX element <code>&lt;fix&gt;none&lt;/fix&gt;</code> , directly inside <code>trkpt</code> . Such points retain their measurement values and contribute to metadata totals, but are excluded from distance calculations.</p>
+            <p>An optional app setting duplicates dose rate into GPX <code>ele</code> . In that case, the value is radiation data rather than elevation in metres. The reader uses <code>rad:doserate</code> and does not use <code>ele</code> as a radiation fallback.</p>
           </div>
           <article class="tag-card" id="track-point-doserate" data-context="track-point" data-tag="doserate" aria-labelledby="track-point-doserate-title">
             <h3 id="track-point-doserate-title">
@@ -1228,25 +1066,9 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Mean dose rate over the measurement window represented by this track point. For
-                  calibrated measurements,
-                  <code>doserate = counts / seconds / sensitivity</code>
-                  , using the sensitivity stored in track metadata.
-                </p>
-                <p>
-                  The exporter always writes this field. In count-rate mode, with metadata
-                  sensitivity
-                  <code>1.0</code>
-                  , the numeric value corresponds to counts per second.
-                </p>
-                <p>
-                  The track reader uses a positive stored dose rate. Otherwise, when duration is
-                  greater than
-                  <code>0.000001</code>
-                  seconds, it reconstructs the value from counts, duration, and metadata
-                  sensitivity.
-                </p>
+                <p>Mean dose rate over the measurement window represented by this track point. For calibrated measurements, <code>doserate = counts / seconds / sensitivity</code> , using the sensitivity stored in track metadata.</p>
+                <p>The exporter always writes this field. In count-rate mode, with metadata sensitivity <code>1.0</code> , the numeric value corresponds to counts per second.</p>
+                <p>The track reader uses a positive stored dose rate. Otherwise, when duration is greater than <code>0.000001</code> seconds, it reconstructs the value from counts, duration, and metadata sensitivity.</p>
                 <dl class="properties">
                   <div>
                     <dt>Value type</dt>
@@ -1267,9 +1089,7 @@
                   <div class="code-bar">
                     <span>XML · track points / rad:doserate</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · track points / rad:doserate">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · track points / rad:doserate">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -1292,20 +1112,9 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Detector counts collected during this point’s
-                  <code>rad:seconds</code>
-                  measurement window. This is an interval count, not a cumulative track count.
-                </p>
-                <p>
-                  Counts and duration are stored so confidence intervals can be calculated for one
-                  point or a series of points.
-                </p>
-                <p>
-                  The exporter always writes this field. Counts include the configured
-                  counts-per-beep multiplier and may differ from the number of detected audio beeps.
-                  The multiplier is not exported.
-                </p>
+                <p>Detector counts collected during this point’s <code>rad:seconds</code> measurement window. This is an interval count, not a cumulative track count.</p>
+                <p>Counts and duration are stored so confidence intervals can be calculated for one point or a series of points.</p>
+                <p>The exporter always writes this field. Counts include the configured counts-per-beep multiplier and may differ from the number of detected audio beeps. The multiplier is not exported.</p>
                 <dl class="properties">
                   <div>
                     <dt>Value type</dt>
@@ -1326,9 +1135,7 @@
                   <div class="code-bar">
                     <span>XML · track points / rad:counts</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · track points / rad:counts">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · track points / rad:counts">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -1351,20 +1158,8 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Duration of the measurement window during which this point’s counts were
-                  collected. A positive duration is required to calculate a count rate or confidence
-                  interval.
-                </p>
-                <p>
-                  For newly recorded track points, GPX
-                  <code>time</code>
-                  represents the window midpoint. Window boundaries can therefore be reconstructed
-                  as
-                  <code>time ± seconds / 2</code>
-                  ; duration should not be inferred from the difference between adjacent midpoint
-                  timestamps.
-                </p>
+                <p>Duration of the measurement window during which this point’s counts were collected. A positive duration is required to calculate a count rate or confidence interval.</p>
+                <p>For newly recorded track points, GPX <code>time</code> represents the window midpoint. Window boundaries can therefore be reconstructed as <code>time ± seconds / 2</code> ; duration should not be inferred from the difference between adjacent midpoint timestamps.</p>
                 <p>The exporter always writes this field.</p>
                 <dl class="properties">
                   <div>
@@ -1386,9 +1181,7 @@
                   <div class="code-bar">
                     <span>XML · track points / rad:seconds</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · track points / rad:seconds">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · track points / rad:seconds">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -1408,20 +1201,9 @@
         </section>
         <section id="waypoint" aria-labelledby="waypoint-title">
           <h2 id="waypoint-title">Waypoints</h2>
-          <p class="element-path">
-            Location:
-            <code>gpx/wpt/extensions</code>
-          </p>
+          <p class="element-path">Location: <code>gpx/wpt/extensions</code></p>
           <div class="section-description">
-            <p>
-              Each
-              <code>wpt</code>
-              stores a standalone measurement or a location bookmark. Coordinates, time, and the
-              description are stored in standard GPX attributes and elements; radiation data is
-              stored in the waypoint’s
-              <code>extensions</code>
-              .
-            </p>
+            <p>Each <code>wpt</code> stores a standalone measurement or a location bookmark. Coordinates, time, and the description are stored in standard GPX attributes and elements; radiation data is stored in the waypoint’s <code>extensions</code> .</p>
           </div>
           <article class="tag-card" id="waypoint-doserate" data-context="waypoint" data-tag="doserate" aria-labelledby="waypoint-doserate-title">
             <h3 id="waypoint-doserate-title">
@@ -1429,27 +1211,9 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Mean dose rate for the standalone measurement represented by this waypoint. The
-                  waypoint reader uses the stored value and does not reconstruct it from counts and
-                  duration.
-                </p>
-                <p>
-                  The exporter always writes this field. No sensitivity tag is written in waypoint
-                  extensions. When counts, duration, and dose rate are positive and duration exceeds
-                  <code>0.000001</code>
-                  seconds, the app infers sensitivity as
-                  <code>(counts / seconds) / doserate</code>
-                  ; otherwise it uses
-                  <code>10.0</code>
-                  . For count-rate observations with inferred sensitivity
-                  <code>1.0</code>
-                  , the numeric value corresponds to counts per second.
-                </p>
-                <p>
-                  A location-only bookmark is written with zero dose rate, counts, and duration. It
-                  does not represent a measured zero radiation level.
-                </p>
+                <p>Mean dose rate for the standalone measurement represented by this waypoint. The waypoint reader uses the stored value and does not reconstruct it from counts and duration.</p>
+                <p>The exporter always writes this field. No sensitivity tag is written in waypoint extensions. When counts, duration, and dose rate are positive and duration exceeds <code>0.000001</code> seconds, the app infers sensitivity as <code>(counts / seconds) / doserate</code> ; otherwise it uses <code>10.0</code> . For count-rate observations with inferred sensitivity <code>1.0</code> , the numeric value corresponds to counts per second.</p>
+                <p>A location-only bookmark is written with zero dose rate, counts, and duration. It does not represent a measured zero radiation level.</p>
                 <dl class="properties">
                   <div>
                     <dt>Value type</dt>
@@ -1470,9 +1234,7 @@
                   <div class="code-bar">
                     <span>XML · waypoints / rad:doserate</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · waypoints / rad:doserate">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · waypoints / rad:doserate">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -1496,20 +1258,9 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Detector counts collected during this waypoint’s standalone measurement. This
-                  value is not a total over other waypoints or track points.
-                </p>
-                <p>
-                  Counts and duration allow a confidence interval to be calculated for the
-                  measurement.
-                </p>
-                <p>
-                  The exporter always writes this field, including the configured counts-per-beep
-                  multiplier. A waypoint created without a measurement contains
-                  <code>0</code>
-                  counts and zero duration.
-                </p>
+                <p>Detector counts collected during this waypoint’s standalone measurement. This value is not a total over other waypoints or track points.</p>
+                <p>Counts and duration allow a confidence interval to be calculated for the measurement.</p>
+                <p>The exporter always writes this field, including the configured counts-per-beep multiplier. A waypoint created without a measurement contains <code>0</code> counts and zero duration.</p>
                 <dl class="properties">
                   <div>
                     <dt>Value type</dt>
@@ -1530,9 +1281,7 @@
                   <div class="code-bar">
                     <span>XML · waypoints / rad:counts</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · waypoints / rad:counts">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · waypoints / rad:counts">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -1556,18 +1305,8 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Duration of this waypoint’s standalone measurement. The waypoint timestamp is
-                  stored in GPX
-                  <code>time</code>
-                  ; it does not define the measurement duration.
-                </p>
-                <p>
-                  A positive duration is required for count-rate and confidence-interval
-                  calculations. A waypoint created without a measurement contains
-                  <code>0.000</code>
-                  seconds.
-                </p>
+                <p>Duration of this waypoint’s standalone measurement. The waypoint timestamp is stored in GPX <code>time</code> ; it does not define the measurement duration.</p>
+                <p>A positive duration is required for count-rate and confidence-interval calculations. A waypoint created without a measurement contains <code>0.000</code> seconds.</p>
                 <p>The exporter always writes this field.</p>
                 <dl class="properties">
                   <div>
@@ -1589,9 +1328,7 @@
                   <div class="code-bar">
                     <span>XML · waypoints / rad:seconds</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · waypoints / rad:seconds">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · waypoints / rad:seconds">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -1615,15 +1352,8 @@
             </h3>
             <div class="tag-body">
               <div class="description">
-                <p>
-                  Human-readable name of the detector associated with this waypoint’s measurement.
-                  The value applies to this waypoint rather than the file as a whole.
-                </p>
-                <p>
-                  The exporter writes this field only when the waypoint has more than zero counts
-                  and a nonblank device name. Location-only bookmarks therefore omit it.
-                  XML-sensitive characters in the name are escaped.
-                </p>
+                <p>Human-readable name of the detector associated with this waypoint’s measurement. The value applies to this waypoint rather than the file as a whole.</p>
+                <p>The exporter writes this field only when the waypoint has more than zero counts and a nonblank device name. Location-only bookmarks therefore omit it. XML-sensitive characters in the name are escaped.</p>
                 <dl class="properties">
                   <div>
                     <dt>Value type</dt>
@@ -1644,9 +1374,7 @@
                   <div class="code-bar">
                     <span>XML · waypoints / rad:device</span>
                     <div>
-                      <button type="button" class="copy-button" hidden aria-label="Copy XML · waypoints / rad:device">
-                        Copy
-                      </button>
+                      <button type="button" class="copy-button" hidden aria-label="Copy XML · waypoints / rad:device">Copy</button>
                     </div>
                   </div>
                   <pre>
@@ -1668,40 +1396,21 @@
         </section>
         <section id="examples" aria-labelledby="examples-title">
           <h2 id="examples-title">Complete examples</h2>
-          <p class="section-description">
-            The following examples are complete GPX documents with illustrative values. Standard GPX
-            children are arranged in schema order, including
-            <code>time</code>
-            before
-            <code>name</code>
-            in waypoints.
-          </p>
+          <p class="section-description">The following examples are complete GPX documents with illustrative values. Standard GPX children are arranged in schema order, including <code>time</code> before <code>name</code> in waypoints.</p>
           <div class="example-tabs" role="tablist" aria-label="GPX example type" hidden>
-            <button type="button" role="tab" id="tab-track" aria-controls="example-track" aria-selected="true" tabindex="0">
-              Track
-            </button>
-            <button type="button" role="tab" id="tab-waypoints" aria-controls="example-waypoints" aria-selected="false" tabindex="-1">
-              Waypoints
-            </button>
-            <button type="button" role="tab" id="tab-gps-gap" aria-controls="example-gps-gap" aria-selected="false" tabindex="-1">
-              Invalid coordinates
-            </button>
+            <button type="button" role="tab" id="tab-track" aria-controls="example-track" aria-selected="true" tabindex="0">Track</button>
+            <button type="button" role="tab" id="tab-waypoints" aria-controls="example-waypoints" aria-selected="false" tabindex="-1">Waypoints</button>
+            <button type="button" role="tab" id="tab-gps-gap" aria-controls="example-gps-gap" aria-selected="false" tabindex="-1">Invalid coordinates</button>
           </div>
           <div class="example-panel" id="example-track" role="tabpanel" aria-labelledby="tab-track" tabindex="0" data-filename="rad-track-example.gpx">
             <h3 class="example-fallback-title">Track</h3>
-            <p>
-              Two adjacent measurement windows at the same coordinates, containing 120 counts over
-              60 seconds and 30 counts over 30 seconds. Metadata summarizes both points. The track
-              is marked edited.
-            </p>
+            <p>Two adjacent measurement windows at the same coordinates, containing 120 counts over 60 seconds and 30 counts over 30 seconds. Metadata summarizes both points. The track is marked edited.</p>
             <div class="code-block">
               <div class="code-bar">
                 <span>XML · track.gpx</span>
                 <div>
                   <button type="button" class="download-button" hidden>Download GPX</button>
-                  <button type="button" class="copy-button" hidden aria-label="Copy XML · track.gpx">
-                    Copy
-                  </button>
+                  <button type="button" class="copy-button" hidden aria-label="Copy XML · track.gpx">Copy</button>
                 </div>
               </div>
               <pre>
@@ -1747,18 +1456,13 @@
           </div>
           <div class="example-panel" id="example-waypoints" role="tabpanel" aria-labelledby="tab-waypoints" tabindex="0" data-filename="rad-waypoints-example.gpx">
             <h3 class="example-fallback-title">Waypoints</h3>
-            <p>
-              A standalone measurement containing 600 counts over 300 seconds, followed by a
-              location bookmark without a measurement.
-            </p>
+            <p>A standalone measurement containing 600 counts over 300 seconds, followed by a location bookmark without a measurement.</p>
             <div class="code-block">
               <div class="code-bar">
                 <span>XML · waypoints.gpx</span>
                 <div>
                   <button type="button" class="download-button" hidden>Download GPX</button>
-                  <button type="button" class="copy-button" hidden aria-label="Copy XML · waypoints.gpx">
-                    Copy
-                  </button>
+                  <button type="button" class="copy-button" hidden aria-label="Copy XML · waypoints.gpx">Copy</button>
                 </div>
               </div>
               <pre>
@@ -1791,18 +1495,13 @@
           </div>
           <div class="example-panel" id="example-gps-gap" role="tabpanel" aria-labelledby="tab-gps-gap" tabindex="0" data-filename="rad-gps-gap-example.gpx">
             <h3 class="example-fallback-title">Invalid coordinates</h3>
-            <p>
-              A track point recorded without valid coordinates. The standard GPX fix element flags
-              the position; counts, duration, and dose remain included in metadata totals.
-            </p>
+            <p>A track point recorded without valid coordinates. The standard GPX fix element flags the position; counts, duration, and dose remain included in metadata totals.</p>
             <div class="code-block">
               <div class="code-bar">
                 <span>XML · gps-gap.gpx</span>
                 <div>
                   <button type="button" class="download-button" hidden>Download GPX</button>
-                  <button type="button" class="copy-button" hidden aria-label="Copy XML · gps-gap.gpx">
-                    Copy
-                  </button>
+                  <button type="button" class="copy-button" hidden aria-label="Copy XML · gps-gap.gpx">Copy</button>
                 </div>
               </div>
               <pre>
@@ -1839,11 +1538,7 @@
           </div>
         </section>
         <noscript>
-          <p class="noscript-note">
-            All descriptions and XML examples are available without JavaScript. Syntax highlighting,
-            mobile navigation, example tabs, copying, downloads, and theme selection require
-            JavaScript.
-          </p>
+          <p class="noscript-note">All descriptions and XML examples are available without JavaScript. Syntax highlighting, mobile navigation, example tabs, copying, downloads, and theme selection require JavaScript.</p>
         </noscript>
         <footer class="footer">
           <span>rad extension specification for GPX 1.1 · Draft</span>
