@@ -691,6 +691,15 @@ class TimePlotActivity : AppCompatActivity() {
                     if (resolvedTrackId != TrackCatalog.currentTrackId()) showLoading(true)
                     loadTrackForPlotAsync(resolvedTrackId)
                 } else {
+                    if (resolvedTrackId != TrackCatalog.currentTrackId()) {
+                        val pois = withContext(Dispatchers.IO) {
+                            TrackCatalog.loadTrackSamplesById(this@TimePlotActivity, resolvedTrackId)?.pois
+                        }
+                        if (selectedTrackIdForPlot == resolvedTrackId && pois != null) {
+                            currentPois = pois
+                            updatePoiMarkers()
+                        }
+                    }
                     showLoading(false)
                 }
             } catch (e: CancellationException) {

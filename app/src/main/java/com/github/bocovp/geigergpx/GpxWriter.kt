@@ -70,9 +70,9 @@ object GpxWriter {
         return result
     }
 
-    fun saveBackup(context: Context, points: List<TrackPoint>): String? {
-        if (points.isEmpty()) return null
-        return writeTrackFile(context, points, BACKUP_FILE_NAME, forceDefaultFolder = true)?.displayPath
+    fun saveBackup(context: Context, points: List<TrackPoint>, pois: List<PoiEntry> = emptyList()): String? {
+        if (points.isEmpty() && pois.isEmpty()) return null
+        return writeTrackFile(context, points, BACKUP_FILE_NAME, forceDefaultFolder = true, pois = pois)?.displayPath
     }
 
     fun backupUri(context: Context): Uri? {
@@ -187,10 +187,10 @@ object GpxWriter {
         entries.sortedBy { it.timestampMillis }.forEach { poi ->
             val timeValue = if (poi.timestampMillis > 0) ISO_INSTANT_FORMATTER.format(Instant.ofEpochMilli(poi.timestampMillis)) else ""
             builder.append("\t<wpt lat=\"${"%.8f".format(Locale.US, poi.latitude)}\" lon=\"${"%.8f".format(Locale.US, poi.longitude)}\">\n")
-            builder.append("\t\t<name>${escapeXml(poi.description)}</name>\n")
             if (timeValue.isNotBlank()) {
                 builder.append("\t\t<time>${escapeXml(timeValue)}</time>\n")
             }
+            builder.append("\t\t<name>${escapeXml(poi.description)}</name>\n")
             builder.append("\t\t<extensions>\n")
             builder.append("\t\t\t<rad:doserate>${"%.5f".format(Locale.US, poi.doseRate)}</rad:doserate>\n")
             builder.append("\t\t\t<rad:counts>${poi.counts}</rad:counts>\n")
@@ -210,8 +210,8 @@ object GpxWriter {
         entries.sortedBy { it.timestampMillis }.forEach { poi ->
             val time = poi.timestampMillis.takeIf { it > 0 }?.let { ISO_INSTANT_FORMATTER.format(Instant.ofEpochMilli(it)) }
             writer.write("\t<wpt lat=\"${"%.8f".format(Locale.US, poi.latitude)}\" lon=\"${"%.8f".format(Locale.US, poi.longitude)}\">\n")
-            writer.write("\t\t<name>${escapeXml(poi.description.ifBlank { "POI" })}</name>\n")
             time?.let { writer.write("\t\t<time>$it</time>\n") }
+            writer.write("\t\t<name>${escapeXml(poi.description.ifBlank { "POI" })}</name>\n")
             writer.write("\t\t<extensions>\n")
             writer.write("\t\t\t<rad:doserate>${"%.5f".format(Locale.US, poi.doseRate)}</rad:doserate>\n")
             writer.write("\t\t\t<rad:counts>${poi.counts}</rad:counts>\n")

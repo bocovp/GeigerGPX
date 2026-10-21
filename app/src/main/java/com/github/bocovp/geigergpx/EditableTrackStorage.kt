@@ -28,18 +28,19 @@ object EditableTrackStorage {
         sensitivityOverride: Double? = null,
         deviceNameOverride: String? = null,
         pois: List<PoiEntry> = emptyList()
-    ) = withContext(Dispatchers.IO) {
+    ): Boolean = withContext(Dispatchers.IO) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
         val sensitivity = sensitivityOverride ?: RadiationCalibration.sensitivityFromPrefs(prefs)
         val deviceName = deviceNameOverride ?: DeviceConfigManager.currentDeviceName(prefs)
 
-        val output = openOutputStream(context, trackId) ?: return@withContext
+        val output = openOutputStream(context, trackId) ?: return@withContext false
         output.use { out ->
             out.bufferedWriter().use { writer ->
                 GpxWriter.writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName, edited = edited, pois = pois)
             }
         }
+        true
     }
 
     suspend fun createSplitTrack(

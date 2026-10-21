@@ -399,7 +399,7 @@ class EditTrackActivity : AppCompatActivity() {
                             splitTrackPois
                         )
                     }
-                    EditableTrackStorage.overwriteTrack(
+                    val saved = EditableTrackStorage.overwriteTrack(
                         this@EditTrackActivity,
                         trackId,
                         updatedPoints,
@@ -408,6 +408,7 @@ class EditTrackActivity : AppCompatActivity() {
                         deviceNameOverride = trackDeviceName,
                         pois = updatedTrackPois
                     )
+                    if (!saved) return@withContext false
                     TrackCatalog.onTrackSavedById(
                         this@EditTrackActivity,
                         trackId,

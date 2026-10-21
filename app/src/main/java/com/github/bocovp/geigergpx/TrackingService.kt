@@ -357,8 +357,10 @@ class TrackingService : Service() {
     }
 
     private fun cancelTracking() {
-        if (!trackWriter.isTracking()) return
+        if (!trackWriter.isTracking() || stopInProgress) return
 
+        repo.finishActiveTrack(emptyList())
+        repo.clearActiveTrackPois()
         stopBackupLoop()
         stopGpsFallbackLoop()
         GpxWriter.deleteBackupIfExists(this)
@@ -373,14 +375,17 @@ class TrackingService : Service() {
         val finalTrackDurationSeconds = trackWriter.elapsedSeconds(System.currentTimeMillis())
         val finalDistance = trackWriter.totalDistance
 
-        stopBackupLoop()
+        val pendingBackup = stopBackupLoop()
 
-        val copy = trackWriter.activeTrackPointsSnapshot()
-        val trackPois = repo.activeTrackPois.value
+        val snapshot = repo.finishActiveTrack(trackWriter.activeTrackPointsSnapshot())
+        val copy = snapshot.points
+        val trackPois = snapshot.pois
         val finalPointCount = copy.size
-        repo.setActiveTrackPoints(copy)
         serviceScope.launch {
             try {
+                // A cancelled backup may still be finishing blocking file I/O.
+                // Wait before the final save can delete its recovery file.
+                withContext(NonCancellable) { pendingBackup?.join() }
                 if (copy.isNotEmpty() || trackPois.isNotEmpty()) {
                     val saveResult = withContext(NonCancellable + Dispatchers.IO) {
                         GpxWriter.saveTrackWithResult(this@TrackingService, copy, trackPois)
@@ -649,11 +654,12 @@ class TrackingService : Service() {
             while (isActive && trackWriter.isTracking()) {
                 delay(BACKUP_INTERVAL_MS)
                 if (!trackWriter.isTracking()) break
-                val snapshot = trackWriter.activeTrackPointsSnapshot()
-                if (snapshot.isEmpty()) continue
-                launch(Dispatchers.IO) {
+                repo.setActiveTrackPoints(trackWriter.activeTrackPointsSnapshot())
+                val snapshot = repo.activeTrackSnapshot()
+                if (snapshot.points.isEmpty() && snapshot.pois.isEmpty()) continue
+                withContext(Dispatchers.IO) {
                     try {
-                        GpxWriter.saveBackup(this@TrackingService, snapshot)
+                        GpxWriter.saveBackup(this@TrackingService, snapshot.points, snapshot.pois)
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
@@ -662,9 +668,11 @@ class TrackingService : Service() {
         }
     }
 
-    private fun stopBackupLoop() {
-        backupJob?.cancel()
+    private fun stopBackupLoop(): kotlinx.coroutines.Job? {
+        val pending = backupJob
+        pending?.cancel()
         backupJob = null
+        return pending
     }
 
     private fun startGpsFallbackLoop() {
