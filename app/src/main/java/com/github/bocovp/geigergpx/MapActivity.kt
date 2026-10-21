@@ -9,6 +9,8 @@ import android.view.View
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.CheckBox
+import android.widget.LinearLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
@@ -299,6 +301,16 @@ class MapActivity : AppCompatActivity() {
             setSelection(text.length)
             hint = getString(R.string.poi)
         }
+        val saveInTrack = CheckBox(this).apply {
+            setText(R.string.save_inside_track_file)
+            isEnabled = selected != null
+        }
+        val dialogView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (24 * resources.displayMetrics.density).toInt()
+            setPadding(pad, 0, pad, 0)
+            addView(input); addView(saveInTrack)
+        }
 
         val isCurrentTrack = selected?.trackId == TrackCatalog.currentTrackId() || selected == null
         val deviceName = if (selected?.deviceName != null) {
@@ -312,7 +324,7 @@ class MapActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.add_poi)
             .setMessage(R.string.define_poi_name)
-            .setView(input)
+            .setView(dialogView)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val description = input.text.toString()
@@ -320,7 +332,13 @@ class MapActivity : AppCompatActivity() {
                 val current = trackMapRenderer.highlightedPoint()
                 lifecycleScope.launch {
                     val success = withContext(Dispatchers.IO) {
-                        if (point != null) {
+                        if (point != null && saveInTrack.isChecked) {
+                            TrackPoiStorage.addPoi(this@MapActivity, selected.trackId, PoiEntry(
+                                buildPoiId(point.timeMillis, point.latitude, point.longitude), point.timeMillis,
+                                point.latitude, point.longitude, point.doseRate, point.counts, point.seconds,
+                                description.ifBlank { "POI" }
+                            ))
+                        } else if (point != null) {
                             PoiLibrary.addPoi(
                                 context = this@MapActivity,
                                 description = description,
@@ -352,7 +370,7 @@ class MapActivity : AppCompatActivity() {
                         invalidateOptionsMenu() // hides "Add POI" since no point is selected
                         refreshMapTracks(latestActivePoints)
                     }
-                    Toast.makeText(this@MapActivity, if (success) getString(R.string.poi_added_to_library) else getString(R.string.unable_to_add_poi), Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MapActivity, if (success) getString(if (saveInTrack.isChecked) R.string.poi_saved_to_track else R.string.poi_added_to_library) else getString(R.string.unable_to_add_poi), Toast.LENGTH_SHORT).show()
                 }
             }
             .show()
@@ -488,7 +506,7 @@ class MapActivity : AppCompatActivity() {
 
                     val allPois = PoiLibrary.loadPoiLibrary(this@MapActivity).entries
                     val selectedPoiIds = ensurePoiSelectionInitialized(allPois.map { it.id }.toSet())
-                    val visiblePois = allPois.filter { it.id in selectedPoiIds }
+                    val visiblePois = allPois.filter { it.id in selectedPoiIds } + visibleTracks.flatMap { it.pois }
 
                     val prefs = PreferenceManager.getDefaultSharedPreferences(this@MapActivity)
 

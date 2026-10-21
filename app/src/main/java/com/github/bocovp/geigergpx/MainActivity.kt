@@ -910,10 +910,19 @@ class MainActivity : AppCompatActivity() {
         val input = EditText(this).apply {
             hint = getString(R.string.description)
         }
+        val saveInTrack = android.widget.CheckBox(this).apply {
+            setText(R.string.save_inside_track_file)
+            isEnabled = viewModel.isTracking.value
+        }
+        val dialogView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (24 * resources.displayMetrics.density).toInt(); setPadding(pad, 0, pad, 0)
+            addView(input); addView(saveInTrack)
+        }
 
         AlertDialog.Builder(this)
             .setTitle(R.string.save_poi)
-            .setView(input)
+            .setView(dialogView)
             .setPositiveButton(R.string.save_poi) { _, _ ->
                 val description = input.text?.toString()?.trim().orEmpty()
                 val (counts, seconds) = getCurrentMeasurementCountsAndSeconds()
@@ -927,9 +936,13 @@ class MainActivity : AppCompatActivity() {
 
                 lifecycleScope.launch {
                     try {
-                        val timestampMillis = System.currentTimeMillis()
+                        val timestampMillis = System.currentTimeMillis() - (seconds * 500.0).toLong()
                         val saveResult = withContext(NonCancellable + Dispatchers.IO) {
-                            PoiLibrary.addPoiWithResult(
+                            if (saveInTrack.isChecked) {
+                                val poi = PoiEntry(buildPoiId(timestampMillis, latitude, longitude), timestampMillis, latitude, longitude, doseRate, counts, seconds, description.ifBlank { "POI" })
+                                val ok = TrackPoiStorage.addPoi(applicationContext, TrackCatalog.currentTrackId(), poi)
+                                PoiLibrary.SaveResult(ok, error = if (ok) null else "No track is being recorded")
+                            } else PoiLibrary.addPoiWithResult(
                                 context = applicationContext,
                                 description = description,
                                 timestampMillis = timestampMillis,
@@ -942,7 +955,7 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
                         if (saveResult.success) {
-                            Toast.makeText(this@MainActivity, getString(R.string.poi_saved), Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, getString(if (saveInTrack.isChecked) R.string.poi_saved_to_track else R.string.poi_saved), Toast.LENGTH_SHORT).show()
                             saveResult.warning?.let { warning ->
                                 Toast.makeText(this@MainActivity, warning, Toast.LENGTH_LONG).show()
                             }

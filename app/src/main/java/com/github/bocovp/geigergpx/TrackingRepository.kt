@@ -55,6 +55,12 @@ class TrackingRepository {
 
     private val _activeTrackPoints = MutableStateFlow<List<TrackPoint>>(emptyList())
     val activeTrackPoints: StateFlow<List<TrackPoint>> = _activeTrackPoints.asStateFlow()
+    private val _activeTrackPois = MutableStateFlow<List<PoiEntry>>(emptyList())
+    val activeTrackPois: StateFlow<List<PoiEntry>> = _activeTrackPois.asStateFlow()
+    private val activeTrackLock = Any()
+    private var acceptingTrackPois = false
+
+    data class TrackSnapshot(val points: List<TrackPoint>, val pois: List<PoiEntry>)
 
     private val _cpsUpdate = MutableStateFlow(CpsUpdate())
     val cpsUpdate: StateFlow<CpsUpdate> = _cpsUpdate.asStateFlow()
@@ -122,7 +128,8 @@ class TrackingRepository {
         _trackDurationSeconds.value = trackDurationSeconds
     }
 
-    fun updateTrackingState(tracking: Boolean, gpsStatus: String) {
+    fun updateTrackingState(tracking: Boolean, gpsStatus: String) = synchronized(activeTrackLock) {
+        if (!tracking) acceptingTrackPois = false
         _isTracking.value = tracking
         _gpsStatus.value = gpsStatus
     }
@@ -131,14 +138,37 @@ class TrackingRepository {
         _cpsUpdate.value = CpsUpdate(snapshot = cpsSnapshot, onBeep = onBeep)
     }
 
-    fun beginNewTrack() {
+    fun beginNewTrack() = synchronized(activeTrackLock) {
         _countsAtTrackStart.value = totalCounter.get()
         _savedTrackCounts.value = null
         _activeTrackPoints.value = emptyList()
+        _activeTrackPois.value = emptyList()
+        acceptingTrackPois = true
     }
 
-    fun setActiveTrackPoints(points: List<TrackPoint>) {
+    fun setActiveTrackPoints(points: List<TrackPoint>) = synchronized(activeTrackLock) {
         _activeTrackPoints.value = points
+    }
+
+    fun addActiveTrackPoi(poi: PoiEntry): Boolean = synchronized(activeTrackLock) {
+        if (!_isTracking.value || !acceptingTrackPois) return@synchronized false
+        _activeTrackPois.value = _activeTrackPois.value + poi
+        true
+    }
+
+    fun activeTrackSnapshot(): TrackSnapshot = synchronized(activeTrackLock) {
+        TrackSnapshot(_activeTrackPoints.value, _activeTrackPois.value)
+    }
+
+    /** No POI can be accepted after this final snapshot has been taken. */
+    fun finishActiveTrack(points: List<TrackPoint>): TrackSnapshot = synchronized(activeTrackLock) {
+        acceptingTrackPois = false
+        _activeTrackPoints.value = points
+        TrackSnapshot(points, _activeTrackPois.value)
+    }
+
+    fun clearActiveTrackPois() = synchronized(activeTrackLock) {
+        _activeTrackPois.value = emptyList()
     }
 
     fun finalizeTrackCounts() {

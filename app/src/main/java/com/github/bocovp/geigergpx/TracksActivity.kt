@@ -675,7 +675,8 @@ class TracksActivity : AppCompatActivity() {
             val points = viewModel.activeTrackPoints.value.orEmpty().ifEmpty {
                 TrackingService.activeTrackPointsSnapshot()
             }
-            GpxWriter.saveBackup(this, points)
+            val pois = viewModel.activeTrackPois.value
+            GpxWriter.saveBackup(this, points, pois) ?: return null
             val backupUri = GpxWriter.backupUri(this) ?: return null
             if (backupUri.scheme == "file") {
                 val file = File(backupUri.path ?: return null)

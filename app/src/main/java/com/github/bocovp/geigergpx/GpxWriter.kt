@@ -55,20 +55,24 @@ object GpxWriter {
     }
 
     fun saveTrackWithResult(context: Context, points: List<TrackPoint>): SaveTrackResult? {
-        if (points.isEmpty()) return null
+        return saveTrackWithResult(context, points, emptyList())
+    }
+
+    fun saveTrackWithResult(context: Context, points: List<TrackPoint>, pois: List<PoiEntry>): SaveTrackResult? {
+        if (points.isEmpty() && pois.isEmpty()) return null
         val fileName = defaultTimestampFileName()
-        val result = writeTrackFile(context, points, fileName)
+        val result = writeTrackFile(context, points, fileName, pois = pois)
         if (result != null) {
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val deviceName = DeviceConfigManager.currentDeviceName(prefs)
-            TrackCatalog.onTrackSaved(context, fileName, points, deviceName)
+            TrackCatalog.onTrackSaved(context, fileName, points, deviceName, pois)
         }
         return result
     }
 
-    fun saveBackup(context: Context, points: List<TrackPoint>): String? {
-        if (points.isEmpty()) return null
-        return writeTrackFile(context, points, BACKUP_FILE_NAME, forceDefaultFolder = true)?.displayPath
+    fun saveBackup(context: Context, points: List<TrackPoint>, pois: List<PoiEntry> = emptyList()): String? {
+        if (points.isEmpty() && pois.isEmpty()) return null
+        return writeTrackFile(context, points, BACKUP_FILE_NAME, forceDefaultFolder = true, pois = pois)?.displayPath
     }
 
     fun backupUri(context: Context): Uri? {
@@ -116,7 +120,8 @@ object GpxWriter {
         saveDoseRateInEle: Boolean,
         sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY,
         deviceName: String? = null,
-        edited: Boolean = false
+        edited: Boolean = false,
+        pois: List<PoiEntry> = emptyList()
     ) {
         val metadata = computeTrackMetadata(points, sensitivity)
         writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
@@ -137,6 +142,7 @@ object GpxWriter {
         if (edited) writer.write("\t\t\t<rad:edited>true</rad:edited>\n")
         writer.write("\t\t</extensions>\n")
         writer.write("\t</metadata>\n")
+        writeWaypoints(writer, pois, includeDevice = false)
         writer.write("\t<trk>\n")
         writer.write("\t\t<trkseg>\n")
 
@@ -181,10 +187,10 @@ object GpxWriter {
         entries.sortedBy { it.timestampMillis }.forEach { poi ->
             val timeValue = if (poi.timestampMillis > 0) ISO_INSTANT_FORMATTER.format(Instant.ofEpochMilli(poi.timestampMillis)) else ""
             builder.append("\t<wpt lat=\"${"%.8f".format(Locale.US, poi.latitude)}\" lon=\"${"%.8f".format(Locale.US, poi.longitude)}\">\n")
-            builder.append("\t\t<name>${escapeXml(poi.description)}</name>\n")
             if (timeValue.isNotBlank()) {
                 builder.append("\t\t<time>${escapeXml(timeValue)}</time>\n")
             }
+            builder.append("\t\t<name>${escapeXml(poi.description)}</name>\n")
             builder.append("\t\t<extensions>\n")
             builder.append("\t\t\t<rad:doserate>${"%.5f".format(Locale.US, poi.doseRate)}</rad:doserate>\n")
             builder.append("\t\t\t<rad:counts>${poi.counts}</rad:counts>\n")
@@ -198,6 +204,21 @@ object GpxWriter {
 
         builder.append("</gpx>\n")
         return builder.toString()
+    }
+
+    private fun writeWaypoints(writer: java.io.Writer, entries: List<PoiEntry>, includeDevice: Boolean) {
+        entries.sortedBy { it.timestampMillis }.forEach { poi ->
+            val time = poi.timestampMillis.takeIf { it > 0 }?.let { ISO_INSTANT_FORMATTER.format(Instant.ofEpochMilli(it)) }
+            writer.write("\t<wpt lat=\"${"%.8f".format(Locale.US, poi.latitude)}\" lon=\"${"%.8f".format(Locale.US, poi.longitude)}\">\n")
+            time?.let { writer.write("\t\t<time>$it</time>\n") }
+            writer.write("\t\t<name>${escapeXml(poi.description.ifBlank { "POI" })}</name>\n")
+            writer.write("\t\t<extensions>\n")
+            writer.write("\t\t\t<rad:doserate>${"%.5f".format(Locale.US, poi.doseRate)}</rad:doserate>\n")
+            writer.write("\t\t\t<rad:counts>${poi.counts}</rad:counts>\n")
+            writer.write("\t\t\t<rad:seconds>${"%.3f".format(Locale.US, poi.seconds)}</rad:seconds>\n")
+            if (includeDevice) poi.deviceName?.takeIf { it.isNotBlank() }?.let { writer.write("\t\t\t<rad:device>${escapeXml(it)}</rad:device>\n") }
+            writer.write("\t\t</extensions>\n\t</wpt>\n")
+        }
     }
 
     fun emptyPoiXml(): String {
@@ -220,7 +241,8 @@ object GpxWriter {
         context: Context,
         points: List<TrackPoint>,
         fileName: String,
-        forceDefaultFolder: Boolean = false
+        forceDefaultFolder: Boolean = false,
+        pois: List<PoiEntry> = emptyList()
     ): SaveTrackResult? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val saveDoseRateInEle = prefs.getBoolean("save_dose_rate_in_ele", false)
@@ -233,7 +255,7 @@ object GpxWriter {
             forceDefaultFolder = forceDefaultFolder
         ) { out ->
             out.bufferedWriter().use { writer ->
-                writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName = deviceName)
+                writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName = deviceName, pois = pois)
             }
         }
         if (primaryResult.succeeded) {
@@ -251,7 +273,7 @@ object GpxWriter {
             forceDefaultFolder = true
         ) { out ->
             out.bufferedWriter().use { writer ->
-                writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName = deviceName)
+                writeTrackXml(writer, points, saveDoseRateInEle, sensitivity, deviceName = deviceName, pois = pois)
             }
         }
         val fallbackUri = fallbackResult.uri ?: return null
