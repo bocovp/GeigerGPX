@@ -5,7 +5,8 @@ import kotlin.math.floor
 /**
  * Estimates the continuous dose rate via Epanechnikov kernel density estimation.
  *
- * Point events are handled by the original O(N + Q) sliding-window accumulator.
+ * Point events use a sliding-window accumulator with binary seeks to skip
+ * data outside the requested kernel windows.
  * Interval events are decomposed into pairs of weighted step events whose
  * convolution with the kernel is evaluated analytically — no discretisation.
  * See companion TeX document for the full mathematical derivation.
@@ -43,10 +44,16 @@ class KernelDensityEstimator(private var sensitivity: Double) {
     private var stepWs    = DoubleArray(0)   // weight [cps], positive or negative
     private var stepCount = 0
 
+    // Lazy cumulative step weights: prefix[k] = Σ stepWs[0..k]. A query can
+    // start in the middle of a long interval without visiting its earlier edge.
+    private var stepPrefix = DoubleArray(0)
+    private var stepPrefixValid = 0
+
     // Original intervals — retained separately because merged step events lose
     // the midpoint and pairing needed to assign one adaptive scale per interval.
     private data class SampleInterval(val start: Double, val end: Double, val density: Double)
     private val intervals = ArrayList<SampleInterval>()
+    private var intervalIndex: IntervalIndex? = null
 
     // Overall data extent — covers point events AND interval endpoints.
     private var dataTStart = Double.MAX_VALUE
@@ -76,7 +83,10 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         other.stepTs = stepTs.copyOf(stepCount)
         other.stepWs = stepWs.copyOf(stepCount)
         other.stepCount = stepCount
+        other.stepPrefix = stepPrefix.copyOf(stepPrefixValid)
+        other.stepPrefixValid = stepPrefixValid
         other.intervals.addAll(intervals)
+        other.intervalIndex = intervalIndex   // immutable; safe to share between snapshots
         other.dataTStart = dataTStart
         other.dataTEnd = dataTEnd
         other.timeout = timeout
@@ -92,7 +102,9 @@ class KernelDensityEstimator(private var sensitivity: Double) {
     fun clear() {
         size      = 0
         stepCount = 0
+        stepPrefixValid = 0
         intervals.clear()
+        intervalIndex = null
         dataTStart = Double.MAX_VALUE
         dataTEnd   = Double.NEGATIVE_INFINITY
     }
@@ -172,6 +184,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         val density     = counts.toDouble() / safeDuration   // [cps]
 
         intervals.add(SampleInterval(intervalStartSeconds, intervalEnd, density))
+        intervalIndex = null
         addStepEvent(intervalStartSeconds, +density)
         addStepEvent(intervalEnd,          -density)
 
@@ -354,8 +367,9 @@ class KernelDensityEstimator(private var sensitivity: Double) {
      * Beginning and ending times are sorted independently: variable bandwidths
      * can reverse either order relative to the original timestamps. Only active
      * sources are evaluated at a query, using local differences for stability.
-     * For S sources and Q queries, cost is O(S log S + Q + Σ active sources)
-     * after the fixed pilot pass. The fast fixed-bandwidth path is unchanged.
+     * Only sources intersecting the query range expanded by [scale] need pilot
+     * estimates. Long intervals keep their original midpoints, even when those
+     * lie far outside the query range; the pilot seeks to each required window.
      */
     private fun estimateAdaptiveDoseRateHelper(
         t2s: DoubleArray, scale: Double,
@@ -373,14 +387,25 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         val tEnd = if (tEndOverride != null) maxOf(dataTEnd, tEndOverride) else dataTEnd
         if (tEnd <= dataTStart) return
 
-        // --- First pass: evaluate the unchanged fixed KDE at all source centres ---
-        val sources = ArrayList<AdaptiveSample>(size + intervals.size)
-        for (i in 0 until size) {
+        // --- Candidate selection: no final bandwidth can exceed the slider scale ---
+        // Preserve the full data extent for both pilot and final boundary masses.
+        val rangeLo = t2s.first() - scale
+        val rangeHi = t2s.last() + scale
+        val pointFrom = lowerBound(ts, size, rangeLo)
+        val pointUntil = upperBound(ts, size, rangeHi)
+        val sources = ArrayList<AdaptiveSample>(pointUntil - pointFrom)
+        for (i in pointFrom until pointUntil) {
             sources.add(AdaptiveSample(ts[i], ts[i], ns[i].toDouble(), scale))
         }
-        for (interval in intervals) {
-            sources.add(AdaptiveSample(interval.start, interval.end, interval.density, scale))
+        if (intervals.isNotEmpty()) {
+            val index = intervalIndex ?: IntervalIndex(intervals).also { intervalIndex = it }
+            index.addOverlapping(rangeLo, rangeHi, scale, sources)
         }
+        if (sources.isEmpty()) return
+
+        // --- First pass: evaluate the fixed KDE only at candidate centres ---
+        // Point-only data needs at most a 2h_0 halo. Interval midpoints can be
+        // arbitrarily far away, so do not crop pilot inputs to that fixed halo.
         sources.sortBy { it.midpoint }
         val pilotTimes = DoubleArray(sources.size) { sources[it].midpoint }
         val pilotDoses = estimateDoseRate(pilotTimes, scale, tEndOverride)
@@ -392,6 +417,8 @@ class KernelDensityEstimator(private var sensitivity: Double) {
             } else scale
             sources[i] = sources[i].copy(scale = h)
         }
+        sources.removeAll { it.ending < t2s.first() || it.beginning > t2s.last() }
+        if (sources.isEmpty()) return
 
         // --- Second pass: independently ordered admission and eviction events ---
         val beginnings = sources.indices.sortedBy { sources[it].beginning }
@@ -467,17 +494,19 @@ class KernelDensityEstimator(private var sensitivity: Double) {
     }
 
     // -------------------------------------------------------------------------
-    // Core convolution — O(|t2s| + N + M) sliding window
-    // N = point events, M <= step events (= 2 × intervals), Q = query points.
+    // Core convolution — seek to the requested windows, then slide locally.
+    // Earlier completed steps are represented by their cumulative density.
     // -------------------------------------------------------------------------
 
     /**
      * Fills [outCps] with raw count rate [cps] and [outKernelMasses] with the
      * boundary-correction kernel mass at each query point.
      *
-     * Point-event contribution: three moment accumulators S0, S1, S2 (unchanged
-     * from original). Interval contribution: four moment accumulators Tk0–Tk3
+     * Point-event contribution: three moment accumulators S0, S1, S2.
+     * Interval contribution: four moment accumulators Tk0–Tk3
      * for transitioning step events, plus a scalar [stepDone] for completed ones.
+     * Binary searches skip points and step transitions outside the query windows;
+     * the original data extent still supplies the boundary correction.
      *
      * Requires [t2s] sorted ascending.
      */
@@ -486,6 +515,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         outCps: DoubleArray, outKernelMasses: DoubleArray,
         tEndOverride: Double? = null
     ) {
+        if (t2s.isEmpty()) return
         if (size == 0 && stepCount == 0) {
             outCps.fill(0.0, 0, t2s.size)
             outKernelMasses.fill(0.0, 0, t2s.size)
@@ -502,6 +532,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         // --- Point-event sliding window accumulators ---
         var lo = 0; var hi = 0
         var s0 = 0.0; var s1 = 0.0; var s2 = 0.0
+        var origin = t2s.first()    // local moment origin, independent of data bounds
 
         // --- Step-event sliding window accumulators ---
         // A step event at t_j passes through three phases as query t sweeps right:
@@ -518,41 +549,58 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         var tk0       = 0.0         // Σ w_j           for transitioning events
         var tk1       = 0.0         // Σ w_j · τ_j
         var tk2       = 0.0         // Σ w_j · τ_j²
-        var tk3       = 0.0         // Σ w_j · τ_j³    (τ_j = t_j − tStart)
+        var tk3       = 0.0         // Σ w_j · τ_j³    (τ_j = t_j − origin)
 
         for (j in t2s.indices) {
             val t     = t2s[j]
             val winLo = t - scale
             val winHi = t + scale
 
-            // --- Point events: evict left edge, admit right edge ---
-            while (lo < hi && ts[lo] < winLo) {
-                val w = ns[lo].toDouble(); val tx = ts[lo] - tStart
-                s0 -= w; s1 -= w * tx; s2 -= w * tx * tx
-                lo++
+            // Seek directly to the first window, or across a gap between windows.
+            // Periodic rebasing also keeps polynomial moments small on long plots.
+            // With 32h between rebases, each transition can straddle at most one.
+            if (j == 0 || t - t2s[j - 1] >= 2.0 * scale || t - origin > 32.0 * scale) {
+                lo = lowerBound(ts, size, winLo)
+                hi = lo
+                s0 = 0.0; s1 = 0.0; s2 = 0.0
+                origin = t
+                stepEvict = upperBound(stepTs, stepCount, winLo)
+                stepAdmit = stepEvict
+                stepDone = completedStepWeight(stepEvict)
+                tk0 = 0.0; tk1 = 0.0; tk2 = 0.0; tk3 = 0.0
             }
+
+            // --- Point events: ADMIT first, then EVICT ---
+            // This also excludes newly admitted old points after sparse queries.
             while (hi < size && ts[hi] <= winHi) {
-                val w = ns[hi].toDouble(); val tx = ts[hi] - tStart
+                val w = ns[hi].toDouble(); val tx = ts[hi] - origin
                 s0 += w; s1 += w * tx; s2 += w * tx * tx
                 hi++
             }
+            while (lo < hi && ts[lo] < winLo) {
+                val w = ns[lo].toDouble(); val tx = ts[lo] - origin
+                s0 -= w; s1 -= w * tx; s2 -= w * tx * tx
+                lo++
+            }
+            if (lo == hi) { s0 = 0.0; s1 = 0.0; s2 = 0.0 }
 
             // --- Step events: ADMIT first, then EVICT ---
             // Admit when t ≥ t_j − h  ↔  t_j − h ≤ t  ↔  t_j ≤ t + h
             while (stepAdmit < stepCount && stepTs[stepAdmit] - scale <= t) {
-                val w = stepWs[stepAdmit]; val tj = stepTs[stepAdmit] - tStart
+                val w = stepWs[stepAdmit]; val tj = stepTs[stepAdmit] - origin
                 tk0 += w; tk1 += w * tj; tk2 += w * tj * tj; tk3 += w * tj * tj * tj
                 stepAdmit++
             }
             // Evict when t ≥ t_j + h  ↔  t_j + h ≤ t
             while (stepEvict < stepAdmit && stepTs[stepEvict] + scale <= t) {
-                val w = stepWs[stepEvict]; val tj = stepTs[stepEvict] - tStart
+                val w = stepWs[stepEvict]; val tj = stepTs[stepEvict] - origin
                 stepDone += w
                 tk0 -= w; tk1 -= w * tj; tk2 -= w * tj * tj; tk3 -= w * tj * tj * tj
                 stepEvict++
             }
+            if (stepEvict == stepAdmit) { tk0 = 0.0; tk1 = 0.0; tk2 = 0.0; tk3 = 0.0 }
 
-            val tRel = t - tStart   // τ = t − tStart  (numerical stability offset)
+            val tRel = t - origin   // τ = t − origin  (numerical stability offset)
 
             // Point-event KDE numerator: (3/4h) · Σ n_i(1 − u_i²)
             // Expanded via S0, S1, S2 without an inner loop.
@@ -608,6 +656,82 @@ class KernelDensityEstimator(private var sensitivity: Double) {
     // Internal helpers — sorted insertion and dynamic growth
     // -------------------------------------------------------------------------
 
+    /** First index with value ≥ [time], within the occupied prefix of [times]. */
+    private fun lowerBound(times: DoubleArray, count: Int, time: Double): Int {
+        var lo = 0; var hi = count
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (times[mid] < time) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    /** First index with value > [time], within the occupied prefix of [times]. */
+    private fun upperBound(times: DoubleArray, count: Int, time: Double): Int {
+        var lo = 0; var hi = count
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (times[mid] <= time) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    /**
+     * Density contributed by the first [count] completed steps. Only the invalid
+     * suffix is rebuilt, and only as far as this query needs. Insertion, merging,
+     * and pruning invalidate the prefix from the earliest changed index onward.
+     */
+    private fun completedStepWeight(count: Int): Double {
+        if (count == 0) return 0.0
+        if (stepPrefix.size < stepCount) stepPrefix = stepPrefix.copyOf(stepTs.size)
+        while (stepPrefixValid < count) {
+            val i = stepPrefixValid
+            stepPrefix[i] = stepWs[i] + if (i > 0) stepPrefix[i - 1] else 0.0
+            stepPrefixValid++
+        }
+        return stepPrefix[count - 1]
+    }
+
+    /**
+     * Immutable interval-overlap index, built only when adaptive KDE needs it.
+     * Intervals are sorted by start; a segment tree stores the maximum end in
+     * each subtree. This finds spanning intervals even when both endpoints and
+     * their midpoint lie outside the requested range. Reused across plot pans.
+     */
+    private class IntervalIndex(intervals: List<SampleInterval>) {
+        private val samples = intervals.sortedBy { it.start }
+        private val leafCount: Int
+        private val maxEnds: DoubleArray
+
+        init {
+            var capacity = 1
+            while (capacity < samples.size) capacity *= 2
+            leafCount = capacity
+            maxEnds = DoubleArray(2 * capacity) { Double.NEGATIVE_INFINITY }
+            for (i in samples.indices) maxEnds[capacity + i] = samples[i].end
+            for (i in capacity - 1 downTo 1) maxEnds[i] = maxOf(maxEnds[2 * i], maxEnds[2 * i + 1])
+        }
+
+        fun addOverlapping(left: Double, right: Double, scale: Double, out: ArrayList<AdaptiveSample>) {
+            collect(1, 0, leafCount, left, right, scale, out)
+        }
+
+        private fun collect(
+            node: Int, from: Int, until: Int, left: Double, right: Double,
+            scale: Double, out: ArrayList<AdaptiveSample>
+        ) {
+            if (from >= samples.size || samples[from].start > right || maxEnds[node] < left) return
+            if (until - from == 1) {
+                val sample = samples[from]
+                out.add(AdaptiveSample(sample.start, sample.end, sample.density, scale))
+                return
+            }
+            val mid = (from + until) ushr 1
+            collect(2 * node, from, mid, left, right, scale, out)
+            collect(2 * node + 1, mid, until, left, right, scale, out)
+        }
+    }
+
     /**
      * Inserts a step event maintaining sorted order via bubble-back, then attempts
      * to merge it with an existing step event at the same timestamp.
@@ -633,6 +757,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
             val tmpW = stepWs[i - 1]; stepWs[i - 1] = stepWs[i]; stepWs[i] = tmpW
             i--
         }
+        stepPrefixValid = minOf(stepPrefixValid, i)
 
 // Merge with a coincident neighbour if timestamps are within STEP_MERGE_EPSILON.
 //
@@ -644,6 +769,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
 //   No left neighbour exists. The element now at index 1 is the former index-0
 //   element and may be within epsilon — check the RIGHT neighbour instead.
         if (i > 0 && stepTs[i] - stepTs[i - 1] <= STEP_MERGE_EPSILON) {
+            stepPrefixValid = minOf(stepPrefixValid, i - 1)
             stepWs[i - 1] += stepWs[i]
             removeStepAt(i)
             i--
@@ -664,6 +790,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
      * O(stepCount − index); O(1) for the common case where [index] is near the end.
      */
     private fun removeStepAt(index: Int) {
+        stepPrefixValid = minOf(stepPrefixValid, index)
         System.arraycopy(stepTs, index + 1, stepTs, index, stepCount - index - 1)
         System.arraycopy(stepWs, index + 1, stepWs, index, stepCount - index - 1)
         stepCount--
@@ -686,6 +813,8 @@ class KernelDensityEstimator(private var sensitivity: Double) {
             // A removable zero-sum prefix ends only after all its intervals close.
             val removedThrough = stepTs[stepKeepFrom - 1] + STEP_MERGE_EPSILON
             intervals.removeAll { it.end <= removedThrough }
+            intervalIndex = null
+            stepPrefixValid = 0
             System.arraycopy(stepTs, stepKeepFrom, stepTs, 0, stepCount - stepKeepFrom)
             System.arraycopy(stepWs, stepKeepFrom, stepWs, 0, stepCount - stepKeepFrom)
             stepCount -= stepKeepFrom

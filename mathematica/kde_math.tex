@@ -105,8 +105,8 @@ calibration factor $\alpha$ $[\mu\mathrm{Sv/h}/\mathrm{cps}]$ gives dose rate.
 
 \medskip\noindent
 For a query $t$, only events with $|t - t_i| \le \h$ contribute.  Introducing
-the numerical-stability offset $\tau = t - t_{\mathrm{start}}$ and
-$\tau_i = t_i - t_{\mathrm{start}}$, the point-event numerator of
+the numerical-stability offset $\tau = t - o$ and
+$\tau_i = t_i - o$, where $o$ is a nearby query time, the point-event numerator of
 \eqref{eq:kde} is
 \begin{align}
   \sum_{|t-t_i|\le\h} n_i K_\h(t-t_i)
@@ -119,7 +119,11 @@ where $S_k = \sum_{|t-t_i|\le\h} n_i\,\tau_i^k$ for $k=0,1,2$.
 
 As $t$ moves rightward over the sorted query array, the window $[t-\h, t+\h]$
 slides, and $S_0, S_1, S_2$ are updated in $O(1)$ per admitted or evicted
-event.  Total complexity is $O(N + Q)$ for $Q$ query points.
+event.  Binary searches skip data outside the query windows; the moment
+origin is reset on a seek and periodically during a long sweep.  This
+changes neither the kernel nor the observation bounds.  The arithmetic
+cost is linear in the query count and the entries actually visited;
+indexing costs are detailed in Section~\ref{sec:complexity}.
 
 % ---------------------------------------------------------------------------
 \section{Interval Events: Step Decomposition}
@@ -171,8 +175,9 @@ transitioning window.
 \subsection{Transitioning Accumulator Expansion}
 \label{sec:tkAccum}
 
-For transitioning events, introduce $\tau_j = t_j - t_{\mathrm{start}}$ and
-$\tau = t - t_{\mathrm{start}}$.  Substituting \eqref{eq:Fk} and expanding
+For transitioning events, introduce $\tau_j = t_j - o$ and
+$\tau = t - o$, using the same local origin as the point accumulators.
+Substituting \eqref{eq:Fk} and expanding
 $(t - t_j)^3 = (\tau - \tau_j)^3$:
 \begin{equation}
   w_j\,F_K(t-t_j)
@@ -209,8 +214,10 @@ $t_j + \h \le t$.  Admission is processed before eviction so that a step
 event whose entire kernel support has already passed is immediately routed to
 $\Sigma_{\mathrm{done}}$ without corrupting the $\tilde T_k$ accumulators.
 
-Overall complexity with $L$ intervals (i.e.\ $M = 2L$ step events) is
-$O(N + M + Q)$.
+Coincident step events can merge, so $M\le 2L$ for $L$ intervals.  The
+arithmetic work of a full sweep remains $O(N+M+Q)$; the range-selection
+and cache costs are described in Sections~\ref{sec:queryRange}
+and~\ref{sec:complexity}.
 
 % ---------------------------------------------------------------------------
 \section{Boundary Correction}
@@ -327,7 +334,7 @@ The dose-rate confidence bounds are
 The adaptive estimator uses the same Epanechnikov kernel
 \eqref{eq:kernel}, but assigns a separate bandwidth to each point event and
 each original sample interval.  The TimePlot scale slider supplies the
-initial bandwidth $h_0>0$ in seconds.  First, the unchanged fixed-bandwidth
+initial bandwidth $h_0>0$ in seconds.  First, the fixed-bandwidth
 estimator computes a pilot dose rate
 \begin{equation}
   D_0(x) = \alpha\,\hat\lambda_{h_0}(x),
@@ -358,10 +365,11 @@ the midpoint.  Original intervals are retained separately from the merged
 step events, since merging endpoints can discard the interval identities
 needed to select these bandwidths.
 
-All representative times are sorted for the pilot evaluation, and the
+The representative times of all candidate sources are sorted for the pilot evaluation, and the
 resulting bandwidths are held fixed during the second pass.  This is a
 sample-point adaptive KDE: the bandwidth belongs to the data source and
-does not change as the query time moves.
+does not change as the query time moves.  Candidate and pilot selection
+are described in Section~\ref{sec:queryRange}.
 
 \subsection{Estimate and Boundary Correction}
 
@@ -411,8 +419,8 @@ remaining active sources.  Admission precedes removal so that a query
 jump over an entire support cannot leave that source active.
 
 The adaptive path evaluates kernels and interval integrals only for this
-active set, using local differences such as $t-t_i$.  It does not alter the
-moment accumulators or computational cost of the fixed-bandwidth path.
+active set, using local differences such as $t-t_i$.  This accumulation
+remains separate from the fixed-bandwidth moment accumulators.
 
 \subsection{Variance and Effective-Count Confidence Intervals}
 
@@ -527,34 +535,136 @@ coverage guarantee of a Garwood interval for an unsmoothed integer Poisson
 count.
 
 % ---------------------------------------------------------------------------
-\section{Summary of Complexity}
+\section{Exact Query-Range Selection}
+\label{sec:queryRange}
 
-\begin{center}
-\begin{tabular}{lll}
-\hline
-Operation & Per-call cost & Amortised total \\
-\hline
-\texttt{addPoint} & $O(1)$ & $O(N)$ \\
-\texttt{addSampleInterval} & $O(1)$ & $O(L)$ \\
-\texttt{estimateDoseRateHelper} & $O(N + M + Q)$ & --- \\
-\texttt{getConfidenceIntervals} & $O(N + M + Q)$ & --- \\
-\hline
-\end{tabular}
-\end{center}
-$N$ = number of point events, $L$ = number of intervals,
-$M = 2L$ = number of step events, $Q$ = number of query points.
+Let the sorted requested query times lie in $[x_L,x_R]$.  Compact support
+allows the convolution to skip most of a long track without changing its
+mathematical result.  The original observation extent $[A,B]$ must still
+be used in all boundary masses and confidence exposures: selecting
+sources for computation does not shorten the measurement.
 
-For either adaptive API, let $S=N+L$ be the number of original sources and
-$A_q$ the number of sources active at query $q$.  Sorting representative
-times and support boundaries costs $O(S\log S)$, the fixed-bandwidth pilot
-costs $O(N+M+S)$, and the second pass costs
-$O(S+Q+\sum_q A_q)$.  Total adaptive cost is therefore
+\subsection{Fixed Bandwidth}
+
+For bandwidth $h_0$, a point can contribute only if
 \begin{equation}
-  O\!\left(N+M+S\log S+Q+\sum_{q=1}^Q A_q\right),
+  t_i\in[x_L-h_0,x_R+h_0].
 \end{equation}
-with $O(S+Q)$ temporary storage.  In the worst case all sources are active
-at all queries and the second pass costs $O(SQ)$.  This extra work is
-confined to adaptive mode; the original linear-time estimator remains
-available unchanged.
+An interval $[a,b]$ can contribute only if it intersects that expanded
+range, equivalently $a\le x_R+h_0$ and $b\ge x_L-h_0$.  An interval is
+retained with its original density and endpoints; filtering solely by its
+midpoint or requiring both endpoints inside the range would be incorrect.
+Thus $\delta=h_0$ is sufficient for fixed KDE, with interval selection
+understood as an intersection test.
+
+The implementation binary-searches the first point in the initial kernel
+window.  For the merged step representation it also preserves the
+completed-step density
+\begin{equation}
+  P(x_L-h_0)=\sum_{t_j\le x_L-h_0}w_j.
+\end{equation}
+This initializes $\Sigma_{\mathrm{done}}$, while only later step transitions
+need to enter the polynomial accumulators.  Dropping all earlier step
+events without retaining this sum would lose the contribution of a long
+interval spanning the window.  Cumulative step weights are cached lazily
+and invalidated from the earliest modified entry on insertion, merging,
+or pruning.
+
+Disjoint successive query windows cause another binary seek, so data
+between these windows need not enter the convolution.  The local moment
+origin is also reset after a sweep of more than $32h_0$ to avoid large
+powers of elapsed track time.  Admission precedes eviction, and empty
+accumulators are reset to zero; a sparse query cannot accidentally retain
+already-expired point kernels.
+
+\subsection{Adaptive Candidates and Pilot Dependencies}
+
+Since every adaptive bandwidth satisfies $h_i\le h_0$, the same expanded
+range identifies all possible final contributors.  Point candidates are
+selected by binary search.  Interval candidates are selected by a cached
+interval-overlap index: intervals are sorted by start, and a segment tree
+stores the largest end in each subtree.  This permits skipping entire
+subtrees while retaining long spanning intervals.
+
+Only these candidates need pilot estimates.  Let $C$ be their point
+timestamps and original interval midpoints.  The pilot requires point
+inputs in
+\begin{equation}
+  U=\bigcup_{c\in C}[c-h_0,c+h_0],
+\end{equation}
+and interval inputs intersecting $U$.  The optimized fixed estimator
+evaluates these sorted centers directly, seeking across gaps in $U$ and
+preserving the completed-step density and original observation extent.
+There is no recursive pilot calculation for the pilot inputs themselves.
+After selecting bandwidths, candidates whose actual support misses the
+query range are also removed before support-boundary sorting.
+
+For point-only data, every candidate center is within
+$[x_L-h_0,x_R+h_0]$, so
+\begin{equation}
+  U\subseteq[x_L-2h_0,x_R+2h_0].
+\end{equation}
+Thus $\delta=2h_0$ is sufficient for both adaptive passes together and
+is needed in the worst case.  A point nearly $h_0$ beyond a query edge
+can have its bandwidth changed by another point almost a further $h_0$
+away, changing whether its final kernel reaches that edge.
+
+For arbitrary-length intervals, there is no universal finite $\delta$
+depending only on $h_0$.  A retained interval's midpoint can lie far
+outside the displayed range.  For example, take $x_L=x_R=0$, $h_0=1$,
+sensitivity $100\,\mathrm{cps}/(\mu\mathrm{Sv/h})$, an interval
+$[0.5,100.5]$ with 100 counts, and an anchor point at $-10$ fixing the
+left observation boundary.  Its midpoint pilot dose is initially
+$0.01\,\mu\mathrm{Sv/h}$, giving $h=1$ and a contribution of
+$0.15625\,\mathrm{cps}$ at zero.  Adding 100 point counts at midpoint
+$50.5$ raises the pilot dose to $0.76\,\mu\mathrm{Sv/h}$ and shrinks
+$h$ to approximately $0.13158$, making the interval contribution at zero
+vanish.  Those extra counts lie outside the proposed $2h_0$ margin.
+
+A safe single pilot-input hull for any candidate set is
+$[\min(C)-h_0,\max(C)+h_0]$, but the union $U$ avoids unnecessary gaps.
+Filtering affects computation only: an empty candidate set within a
+nonempty measurement still receives the zero-count confidence limit
+defined by the full observation extent.
+
+% ---------------------------------------------------------------------------
+\section{Summary of Complexity}
+\label{sec:complexity}
+
+Let $N$ be the number of point events, $L$ the number of original
+intervals, $M\le2L$ the number of merged step events, and $Q$ the number
+of queries.  For the fixed estimator, let $N_w$ and $M_w$ count entries
+actually visited by the local accumulators, $J$ be the number of seeks
+including numerical rebases, and $B_P$ be the work to allocate or extend
+the cumulative step-weight cache.  The query cost is
+\begin{equation}
+  O\!\left(Q+N_w+M_w+J\log(N+1)+J\log(M+1)+B_P\right).
+\end{equation}
+The cache requires at most $O(M)$ initial work and storage; repeated
+queries without data changes reuse its valid prefix.  Full-range sweeps
+retain the original polynomial accumulation; narrow or disjoint ranges
+skip unrelated entries.
+
+For adaptive queries, let $S_c$ be the candidate count, $L_c$ its interval
+portion, $V_I$ the number of interval-index nodes visited, $C_P$ the cost
+of the fixed pilot pass at candidate centers, and $A_q$ the active source
+count at final query $q$.  With a prepared interval index, total cost is
+\begin{equation}
+  O\!\left(\log(N+1)+V_I+S_c\log(S_c+1)+C_P+Q+
+                  \sum_{q=1}^{Q}A_q\right).
+\end{equation}
+The overlap search has the conservative bound
+$V_I=O((L_c+1)\log(L+1))$.  Building the immutable interval index initially
+costs $O(L\log(L+1))$ time and $O(L)$ space; it is reused across plot
+queries until interval insertion, pruning, or clearing invalidates it.
+Adaptive temporary storage is $O(S_c+Q)$ beyond these caches.  If every
+source overlaps every query, the final pass still costs $O((N+L)Q)$.
+
+Snapshots share an already-built immutable interval index and copy the
+valid step-weight prefix.  They do not build either cache on the source
+estimator: repeated fresh snapshots of an uncached source still pay the
+initial cache-building costs.  Copying the underlying data remains
+$O(N+M+L)$; this optimization accelerates convolution and source selection,
+not ingestion or full-dataset snapshot creation.
 
 \end{document}

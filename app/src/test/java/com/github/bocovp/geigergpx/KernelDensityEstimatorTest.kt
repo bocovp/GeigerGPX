@@ -45,11 +45,30 @@ class KernelDensityEstimatorTest {
         return (primitive(hi) - primitive(lo)).coerceAtLeast(0.0)
     }
 
+    /** Direct convolution over the original records, including the global extent. */
+    private fun fixedReference(
+        samples: List<Sample>, sensitivity: Double, queries: DoubleArray,
+        scale: Double, endOverride: Double? = null
+    ): DoubleArray {
+        val first = samples.minOf { it.start }
+        val last = max(samples.maxOf { it.end }, endOverride ?: Double.NEGATIVE_INFINITY)
+        return DoubleArray(queries.size) { index ->
+            val t = queries[index]
+            val boundaryT = t.coerceIn(first, last)
+            val boundaryMass = mass((boundaryT - last) / scale, (boundaryT - first) / scale)
+            val sum = samples.sumOf { sample ->
+                if (sample.duration == 0.0) sample.counts * kernel(t - sample.start, scale)
+                else sample.counts / sample.duration * mass((t - sample.end) / scale, (t - sample.start) / scale)
+            }
+            if (boundaryMass > 1e-9) sum / boundaryMass / sensitivity else 0.0
+        }
+    }
+
     private fun scales(
         samples: List<Sample>, sensitivity: Double, scale: Double, endOverride: Double? = null
     ): List<Double> {
         val sortedCenters = samples.map { it.center }.sorted().toDoubleArray()
-        val pilot = estimator(samples, sensitivity).estimateDoseRate(sortedCenters, scale, endOverride)
+        val pilot = fixedReference(samples, sensitivity, sortedCenters, scale, endOverride)
         val byCenter = sortedCenters.indices.associate { sortedCenters[it] to pilot[it] }
         return samples.map { (scale * 0.1 / byCenter.getValue(it.center)).coerceIn(scale / 10.0, scale) }
     }
@@ -323,6 +342,161 @@ class KernelDensityEstimatorTest {
         kde.updateSensitivity(20.0)
         val queries = DoubleArray(81) { it * 0.5 }
         assertCurvesEqual(reference(samples, 20.0, queries, 10.0), kde.getAdaptiveConfidenceIntervals(queries, 10.0))
+    }
+
+    @Test
+    fun fixedSparseQueriesExcludeSkippedPointSupports() {
+        val samples = listOf(
+            Sample(0.0, 0.0, 1), Sample(1.0, 0.0, 4), Sample(1000.0, 0.0, 8),
+            Sample(1001.0, 0.0, 2), Sample(5000.0, 0.0, 5), Sample(5001.0, 0.0, 1)
+        )
+        val queries = doubleArrayOf(-100.0, 0.0, 1.0, 500.0, 1000.0, 1001.0, 4500.0, 5000.0, 5010.0, 6000.0)
+        val kde = estimator(samples, 3.0)
+        val expected = fixedReference(samples, 3.0, queries, 10.0)
+        assertArrayEquals(expected, kde.estimateDoseRate(queries, 10.0), 1e-8)
+        for (i in queries.indices) {
+            assertEquals("independent query at ${queries[i]}", expected[i],
+                kde.estimateDoseRate(doubleArrayOf(queries[i]), 10.0).single(), 1e-8)
+        }
+    }
+
+    @Test
+    fun fixedRangeKeepsDensityOfStepsFarBeforeTheQuery() {
+        val samples = listOf(
+            Sample(0.0, 20000.0, 10000), Sample(1000.0, 5000.0, 1000),
+            Sample(4000.0, 8000.0, 1600), Sample(4995.0, 20.0, 12)
+        )
+        val queries = DoubleArray(101) { 4980.0 + it * 0.5 }
+        val expected = fixedReference(samples, 4.0, queries, 10.0)
+        val kde = estimator(samples, 4.0)
+        assertArrayEquals(expected, kde.estimateDoseRate(queries, 10.0), 1e-8)
+        assertArrayEquals(expected, kde.getConfidenceIntervals(queries, 10.0).first, 1e-8)
+        assertCurvesEqual(reference(samples, 4.0, queries, 10.0), kde.getAdaptiveConfidenceIntervals(queries, 10.0), 1e-7)
+    }
+
+    @Test
+    fun longIntervalUsesDistantMidpointAndAllPilotContributors() {
+        val samples = listOf(
+            Sample(-1000.0, 0.0, 1), Sample(0.0, 10000.0, 1000),
+            Sample(5000.0, 0.0, 1000), Sample(15000.0, 0.0, 1)
+        )
+        val queries = doubleArrayOf(-3.0, -1.0, 0.0, 1.0, 3.0, 6.0)
+        val expected = reference(samples, 1.0, queries, 20.0)
+        val withoutRemotePoint = reference(samples.filter { it.start != 5000.0 }, 1.0, queries, 20.0)
+        assertTrue("remote midpoint event must affect the visible interval edge",
+            abs(expected.first[3] - withoutRemotePoint.first[3]) > 0.01)
+        assertCurvesEqual(expected, estimator(samples, 1.0).getAdaptiveConfidenceIntervals(queries, 20.0), 1e-7)
+    }
+
+    @Test
+    fun adaptivePointPilotIncludesSourcesOutsideFinalCandidateWindow() {
+        val samples = listOf(
+            Sample(-100.0, 0.0, 1), Sample(8.0, 0.0, 1),
+            Sample(17.0, 0.0, 100), Sample(100.0, 0.0, 1)
+        )
+        val queries = doubleArrayOf(-1.0, 0.0, 1.0)
+        val expected = reference(samples, 5.0, queries, 10.0)
+        val missingPilotNeighbor = reference(samples.filter { it.start != 17.0 }, 5.0, queries, 10.0)
+        assertEquals(0.0, expected.first[1], 0.0)
+        assertTrue(missingPilotNeighbor.first[1] > 0.0)
+        assertCurvesEqual(expected, estimator(samples, 5.0).getAdaptiveConfidenceIntervals(queries, 10.0))
+    }
+
+    @Test
+    fun croppedQueryRetainsGlobalMeasurementBoundsAndEndOverride() {
+        val samples = listOf(
+            Sample(-1000.0, 0.0, 1), Sample(0.0, 0.0, 3), Sample(3.0, 0.0, 2), Sample(1000.0, 0.0, 1)
+        )
+        val kde = estimator(samples, 100.0)
+        val queries = doubleArrayOf(-1.0, 0.0, 1.0, 3.0, 4.0)
+        assertArrayEquals(fixedReference(samples, 100.0, queries, 10.0), kde.estimateDoseRate(queries, 10.0), 1e-10)
+        assertCurvesEqual(reference(samples, 100.0, queries, 10.0), kde.getAdaptiveConfidenceIntervals(queries, 10.0))
+        val endQueries = doubleArrayOf(999.0, 1000.0, 1001.0, 1008.0)
+        assertArrayEquals(fixedReference(samples, 100.0, endQueries, 10.0, 1010.0),
+            kde.estimateDoseRate(endQueries, 10.0, 1010.0), 1e-10)
+        assertCurvesEqual(reference(samples, 100.0, endQueries, 10.0, 1010.0),
+            kde.getAdaptiveConfidenceIntervals(endQueries, 10.0, 1010.0))
+    }
+
+    @Test
+    fun rangeWithNoCandidateSourcesStillHasZeroCountConfidenceLimit() {
+        val samples = listOf(Sample(-1000.0, 0.0, 1), Sample(1000.0, 0.0, 1))
+        val queries = doubleArrayOf(-1.0, 0.0, 1.0)
+        val kde = estimator(samples, 1.0)
+        assertArrayEquals(DoubleArray(3), kde.estimateDoseRate(queries, 10.0), 0.0)
+        val actual = kde.getAdaptiveConfidenceIntervals(queries, 10.0)
+        assertCurvesEqual(reference(samples, 1.0, queries, 10.0), actual)
+        assertTrue(actual.third.all { it > 0.0 })
+    }
+
+    @Test
+    fun rangeIndexesRefreshAfterInsertionCopyClearAndPruning() {
+        val samples = mutableListOf(Sample(0.0, 3000.0, 3000), Sample(900.0, 30.0, 30), Sample(950.0, 0.0, 3))
+        val kde = estimator(samples, 5.0)
+        val queries = DoubleArray(61) { 935.0 + it * 0.5 }
+        // Warm both paths before mutating the step-prefix and interval indexes.
+        kde.getConfidenceIntervals(queries, 10.0)
+        kde.getAdaptiveConfidenceIntervals(queries, 10.0)
+        val inserted = listOf(Sample(500.0, 2000.0, 1000), Sample(940.0, 20.0, 20))
+        for (sample in inserted) kde.addSampleInterval(sample.start, sample.duration, sample.counts)
+        samples.addAll(inserted)
+        assertArrayEquals(fixedReference(samples, 5.0, queries, 10.0), kde.estimateDoseRate(queries, 10.0), 1e-8)
+        assertCurvesEqual(reference(samples, 5.0, queries, 10.0), kde.getAdaptiveConfidenceIntervals(queries, 10.0), 1e-7)
+
+        val copy = kde.copy()
+        kde.clear()
+        val replacement = listOf(Sample(900.0, 100.0, 5))
+        kde.addSampleInterval(900.0, 100.0, 5)
+        assertArrayEquals(fixedReference(replacement, 5.0, queries, 10.0), kde.estimateDoseRate(queries, 10.0), 1e-8)
+        assertCurvesEqual(reference(replacement, 5.0, queries, 10.0), kde.getAdaptiveConfidenceIntervals(queries, 10.0), 1e-7)
+        assertCurvesEqual(reference(samples, 5.0, queries, 10.0), copy.getAdaptiveConfidenceIntervals(queries, 10.0), 1e-7)
+        assertArrayEquals(fixedReference(samples, 5.0, queries, 10.0), copy.estimateDoseRate(queries, 10.0), 1e-8)
+
+        copy.timeout = 30.0
+        copy.addSampleInterval(4000.0, 20.0, 4)
+        val prunedSamples = listOf(Sample(4000.0, 20.0, 4))
+        val prunedQueries = DoubleArray(41) { 4000.0 + it * 0.5 }
+        assertEquals(4000.0 to 4020.0, copy.timestampBounds())
+        assertArrayEquals(fixedReference(prunedSamples, 5.0, prunedQueries, 10.0),
+            copy.estimateDoseRate(prunedQueries, 10.0), 1e-8)
+        assertCurvesEqual(reference(prunedSamples, 5.0, prunedQueries, 10.0),
+            copy.getAdaptiveConfidenceIntervals(prunedQueries, 10.0), 1e-7)
+    }
+
+    @Test
+    fun cachedStepPrefixRefreshesWhenTouchingIntervalsMerge() {
+        val samples = mutableListOf(Sample(0.0, 10.0, 10), Sample(20.0, 10.0, 10))
+        val kde = estimator(samples, 10.0)
+        val queries = doubleArrayOf(5.0, 15.0, 25.0)
+        kde.estimateDoseRate(queries, 2.0)
+        kde.estimateAdaptiveDoseRate(queries, 2.0)
+        // Filling the gap cancels two previously cached step entries.
+        samples.add(Sample(10.0, 10.0, 10))
+        kde.addSampleInterval(10.0, 10.0, 10)
+        assertArrayEquals(fixedReference(samples, 10.0, queries, 2.0),
+            kde.estimateDoseRate(queries, 2.0), 1e-10)
+        assertCurvesEqual(reference(samples, 10.0, queries, 2.0),
+            kde.getAdaptiveConfidenceIntervals(queries, 2.0))
+        // An out-of-order interval also moves the earliest retained step.
+        samples.add(Sample(-10.0, 10.0, 10))
+        kde.addSampleInterval(-10.0, 10.0, 10)
+        assertArrayEquals(fixedReference(samples, 10.0, queries, 2.0),
+            kde.estimateDoseRate(queries, 2.0), 1e-10)
+        assertCurvesEqual(reference(samples, 10.0, queries, 2.0),
+            kde.getAdaptiveConfidenceIntervals(queries, 2.0))
+    }
+
+    @Test
+    fun longDenseQuerySweepRemainsAccurateAcrossMomentRebases() {
+        val samples = (0 until 500).flatMap { i ->
+            listOf(Sample(i.toDouble(), 0.8, 1 + i % 3), Sample(i + 0.4, 0.0, 1))
+        }
+        val queries = DoubleArray(2001) { it * 0.25 }
+        val kde = estimator(samples, 10.0)
+        assertArrayEquals(fixedReference(samples, 10.0, queries, 3.0),
+            kde.estimateDoseRate(queries, 3.0), 1e-7)
+        assertCurvesEqual(reference(samples, 10.0, queries, 3.0),
+            kde.getAdaptiveConfidenceIntervals(queries, 3.0), 1e-7)
     }
 
     @Test(expected = IllegalArgumentException::class)
