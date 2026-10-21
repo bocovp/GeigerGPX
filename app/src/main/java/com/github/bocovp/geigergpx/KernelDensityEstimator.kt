@@ -23,6 +23,8 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         private const val STEP_MERGE_EPSILON  = 1e-6
         /** A merged step weight below this [cps] is treated as zero and the entry is dropped. */
         private const val STEP_WEIGHT_EPSILON = 1e-12
+        /** Dose rate [µSv/h] at which the adaptive bandwidth equals the slider scale. */
+        private const val ADAPTIVE_BACKGROUND_DOSE = 0.1
     }
 
     // -------------------------------------------------------------------------
@@ -40,6 +42,11 @@ class KernelDensityEstimator(private var sensitivity: Double) {
     private var stepTs    = DoubleArray(0)
     private var stepWs    = DoubleArray(0)   // weight [cps], positive or negative
     private var stepCount = 0
+
+    // Original intervals — retained separately because merged step events lose
+    // the midpoint and pairing needed to assign one adaptive scale per interval.
+    private data class SampleInterval(val start: Double, val end: Double, val density: Double)
+    private val intervals = ArrayList<SampleInterval>()
 
     // Overall data extent — covers point events AND interval endpoints.
     private var dataTStart = Double.MAX_VALUE
@@ -69,6 +76,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         other.stepTs = stepTs.copyOf(stepCount)
         other.stepWs = stepWs.copyOf(stepCount)
         other.stepCount = stepCount
+        other.intervals.addAll(intervals)
         other.dataTStart = dataTStart
         other.dataTEnd = dataTEnd
         other.timeout = timeout
@@ -84,6 +92,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
     fun clear() {
         size      = 0
         stepCount = 0
+        intervals.clear()
         dataTStart = Double.MAX_VALUE
         dataTEnd   = Double.NEGATIVE_INFINITY
     }
@@ -162,6 +171,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         val intervalEnd = intervalStartSeconds + safeDuration
         val density     = counts.toDouble() / safeDuration   // [cps]
 
+        intervals.add(SampleInterval(intervalStartSeconds, intervalEnd, density))
         addStepEvent(intervalStartSeconds, +density)
         addStepEvent(intervalEnd,          -density)
 
@@ -249,6 +259,211 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         }
 
         return Triple(bufMean, bufLow, bufHigh)
+    }
+
+    // -------------------------------------------------------------------------
+    // Adaptive KDE — fixed-bandwidth pilot, then one bandwidth per source.
+    // Kept separate from the original sliding-window convolution below.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Estimates adaptive dose rate in µSv/h at sorted query points [t2s].
+     *
+     * The fixed KDE at [scale] supplies the pilot dose at each point event or
+     * interval midpoint. Each source then uses h_i = scale · 0.1 / pilotDose,
+     * clamped to [scale / 10, scale]. Interval counts remain uniformly spread
+     * over their original window; only bandwidth selection uses the midpoint.
+     */
+    fun estimateAdaptiveDoseRate(t2s: DoubleArray,
+                                 scale: Double,
+                                 tEndOverride: Double? = null): DoubleArray {
+        val bufCps = DoubleArray(t2s.size)
+        estimateAdaptiveDoseRateHelper(t2s, scale, bufCps, null, tEndOverride)
+        for (i in bufCps.indices) bufCps[i] *= inverseSensitivity
+        return bufCps
+    }
+
+    /**
+     * Estimates adaptive dose rate and approximate 95% Poisson confidence bounds.
+     *
+     * With the pilot bandwidths held fixed, A = Σ n_i q_i and V = Σ n_i q_i²
+     * give the empirical exposure A/V. For uniform intervals the sums become
+     * integrals of q and q², respectively — not the square of the interval mean.
+     * T_eff is capped at the background-scale exposure to avoid false precision
+     * in sparse tails; n_eff = A · T_eff then supplies the effective count.
+     * The effective count uses the same chi² interpolation as the fixed KDE.
+     * These plug-in bounds do not include uncertainty in the pilot bandwidths.
+     *
+     * @return Triple(doseRate [µSv/h], lowerBound [µSv/h], upperBound [µSv/h])
+     */
+    fun getAdaptiveConfidenceIntervals(t2s: DoubleArray,
+                                       scale: Double,
+                                       tEndOverride: Double? = null): Triple<DoubleArray, DoubleArray, DoubleArray> {
+        val bufCps = DoubleArray(t2s.size)
+        val bufVariance = DoubleArray(t2s.size)
+        val bufMean = DoubleArray(t2s.size)
+        val bufLow = DoubleArray(t2s.size)
+        val bufHigh = DoubleArray(t2s.size)
+        estimateAdaptiveDoseRateHelper(t2s, scale, bufCps, bufVariance, tEndOverride)
+
+        if (size == 0 && intervals.isEmpty()) return Triple(bufMean, bufLow, bufHigh)
+        val tEnd = if (tEndOverride != null) maxOf(dataTEnd, tEndOverride) else dataTEnd
+        if (tEnd <= dataTStart) return Triple(bufMean, bufLow, bufHigh)
+
+        for (i in t2s.indices) {
+            val cps = bufCps[i]
+            val variance = bufVariance[i]
+            // Maximum exposure: the background scale also supplies a continuous,
+            // positive zero-count upper bound when the last contribution fades.
+            val tClamped = t2s[i].coerceIn(dataTStart, tEnd)
+            val uLo = maxOf(-1.0, (tClamped - tEnd) / scale)
+            val uHi = minOf( 1.0, (tClamped - dataTStart) / scale)
+            val km = epanechnikovIntegral(uLo, uHi)
+            val k2 = epanechnikovSquaredIntegral(uLo, uHi)
+            val backgroundExposure = if (km > 1e-9 && k2 > 1e-12) scale * km * km / k2 else 0.0
+            val tEff = if (cps > 0.0 && variance > 0.0) {
+                minOf(cps / variance, backgroundExposure)
+            } else backgroundExposure
+            val nEff = (cps * tEff).coerceAtLeast(0.0)
+            val nF = floor(nEff).toInt()
+            val nC = nF + 1
+            val frac = nEff - nF
+            val chiL = ci.chi2L(nF) + frac * (ci.chi2L(nC) - ci.chi2L(nF))
+            val chiR = ci.chi2R(nF + 1) + frac * (ci.chi2R(nC + 1) - ci.chi2R(nF + 1))
+            val scale2usvh = if (tEff > 0.0) 0.5 / tEff * inverseSensitivity else 0.0
+
+            bufMean[i] = cps * inverseSensitivity
+            bufLow[i]  = chiL * scale2usvh
+            bufHigh[i] = chiR * scale2usvh
+        }
+        return Triple(bufMean, bufLow, bufHigh)
+    }
+
+    /** A point (start == end, weight = counts) or interval (weight = density [cps]). */
+    private data class AdaptiveSample(
+        val start: Double, val end: Double, val weight: Double, val scale: Double
+    ) {
+        val midpoint = start + (end - start) / 2.0
+        val beginning = start - scale
+        val ending = end + scale
+    }
+
+    /**
+     * Fills the adaptive rate [outCps] and, optionally, its Poisson [outVariance].
+     *
+     * Beginning and ending times are sorted independently: variable bandwidths
+     * can reverse either order relative to the original timestamps. Only active
+     * sources are evaluated at a query, using local differences for stability.
+     * For S sources and Q queries, cost is O(S log S + Q + Σ active sources)
+     * after the fixed pilot pass. The fast fixed-bandwidth path is unchanged.
+     */
+    private fun estimateAdaptiveDoseRateHelper(
+        t2s: DoubleArray, scale: Double,
+        outCps: DoubleArray, outVariance: DoubleArray?,
+        tEndOverride: Double? = null
+    ) {
+        require(scale.isFinite() && scale > 0.0) { "Scale must be finite and positive" }
+        require(tEndOverride == null || tEndOverride.isFinite()) { "End time must be finite" }
+        for (i in t2s.indices) {
+            require(t2s[i].isFinite() && (i == 0 || t2s[i] >= t2s[i - 1])) {
+                "Query times must be finite and sorted ascending"
+            }
+        }
+        if (t2s.isEmpty() || (size == 0 && intervals.isEmpty())) return
+        val tEnd = if (tEndOverride != null) maxOf(dataTEnd, tEndOverride) else dataTEnd
+        if (tEnd <= dataTStart) return
+
+        // --- First pass: evaluate the unchanged fixed KDE at all source centres ---
+        val sources = ArrayList<AdaptiveSample>(size + intervals.size)
+        for (i in 0 until size) {
+            sources.add(AdaptiveSample(ts[i], ts[i], ns[i].toDouble(), scale))
+        }
+        for (interval in intervals) {
+            sources.add(AdaptiveSample(interval.start, interval.end, interval.density, scale))
+        }
+        sources.sortBy { it.midpoint }
+        val pilotTimes = DoubleArray(sources.size) { sources[it].midpoint }
+        val pilotDoses = estimateDoseRate(pilotTimes, scale, tEndOverride)
+        for (i in sources.indices) {
+            // A zero pilot dose keeps the maximum (background) bandwidth.
+            val dose = pilotDoses[i]
+            val h = if (dose > 0.0) {
+                (scale * ADAPTIVE_BACKGROUND_DOSE / dose).coerceIn(scale / 10.0, scale)
+            } else scale
+            sources[i] = sources[i].copy(scale = h)
+        }
+
+        // --- Second pass: independently ordered admission and eviction events ---
+        val beginnings = sources.indices.sortedBy { sources[it].beginning }
+        val endings = sources.indices.sortedBy { sources[it].ending }
+        val active = LinkedHashSet<Int>()
+        var admit = 0
+        var evict = 0
+        for (j in t2s.indices) {
+            val t = t2s[j]
+            // Admit before evicting so a sparse query can skip an entire support.
+            while (admit < sources.size && sources[beginnings[admit]].beginning <= t) {
+                active.add(beginnings[admit++])
+            }
+            while (evict < sources.size && sources[endings[evict]].ending <= t) {
+                active.remove(endings[evict++])
+            }
+
+            val tClamped = t.coerceIn(dataTStart, tEnd)
+            var cps = 0.0
+            var variance = 0.0
+            for (index in active) {
+                val source = sources[index]
+                val invScale = 1.0 / source.scale
+                // Each source uses its own boundary mass. Outside the measured
+                // extent, keep the mass at the boundary as in the fixed KDE.
+                val massLo = maxOf(-1.0, (tClamped - tEnd) * invScale)
+                val massHi = minOf( 1.0, (tClamped - dataTStart) * invScale)
+                val km = epanechnikovIntegral(massLo, massHi)
+                if (km <= 1e-9) continue
+
+                if (source.start == source.end) {
+                    val u = (t - source.start) * invScale
+                    val q = 0.75 * invScale * (1.0 - u * u).coerceAtLeast(0.0) / km
+                    cps += source.weight * q
+                    if (outVariance != null) variance += source.weight * q * q
+                } else {
+                    val uLo = maxOf(-1.0, (t - source.end) * invScale)
+                    val uHi = minOf( 1.0, (t - source.start) * invScale)
+                    if (uHi <= uLo) continue
+                    val mass = adaptiveKernelIntegral(uLo, uHi)
+                    cps += source.weight * mass / km
+                    if (outVariance != null) {
+                        val k2 = adaptiveSquaredKernelIntegral(uLo, uHi)
+                        variance += source.weight * invScale * k2 / (km * km)
+                    }
+                }
+            }
+            outCps[j] = cps
+            if (outVariance != null) outVariance[j] = variance
+        }
+    }
+
+    /**
+     * Definite kernel integrals for short overlaps near the support edges.
+     * Expanding around the overlap midpoint avoids subtracting almost equal
+     * primitives; in particular, the squared-kernel mass can be very small.
+     * The original fixed-bandwidth integral helpers remain unchanged.
+     */
+    private fun adaptiveKernelIntegral(uLo: Double, uHi: Double): Double {
+        val width = uHi - uLo
+        val mid = (uLo + uHi) / 2.0
+        val shape = (1.0 - mid) * (1.0 + mid)
+        return (0.75 * width * (shape - width * width / 12.0)).coerceAtLeast(0.0)
+    }
+
+    private fun adaptiveSquaredKernelIntegral(uLo: Double, uHi: Double): Double {
+        val width = uHi - uLo
+        val mid = (uLo + uHi) / 2.0
+        val width2 = width * width
+        val shape = (1.0 - mid) * (1.0 + mid)
+        return (0.5625 * width * (shape * shape +
+            (3.0 * mid * mid - 1.0) * width2 / 6.0 + width2 * width2 / 80.0)).coerceAtLeast(0.0)
     }
 
     // -------------------------------------------------------------------------
@@ -467,6 +682,10 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         }
         val stepKeepFrom = removableTimedOutStepPrefix(minTime)
         if (stepKeepFrom > 0) {
+            // Keep adaptive intervals consistent with the retained step signal.
+            // A removable zero-sum prefix ends only after all its intervals close.
+            val removedThrough = stepTs[stepKeepFrom - 1] + STEP_MERGE_EPSILON
+            intervals.removeAll { it.end <= removedThrough }
             System.arraycopy(stepTs, stepKeepFrom, stepTs, 0, stepCount - stepKeepFrom)
             System.arraycopy(stepWs, stepKeepFrom, stepWs, 0, stepCount - stepKeepFrom)
             stepCount -= stepKeepFrom

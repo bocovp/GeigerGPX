@@ -44,6 +44,7 @@ class TimePlotActivity : AppCompatActivity() {
         val points: List<TrackPoint>,
         val scaleSeconds: Double,
         val sensitivity: Double,
+        val useAdaptiveKde: Boolean,
         val isCurrentTrack: Boolean,
         val visibleRange: TimePlotView.VisibleRange,
         val trackTitle: String,
@@ -68,6 +69,7 @@ class TimePlotActivity : AppCompatActivity() {
     private lateinit var binding: ActivityTimePlotBinding
     private val viewModel: TrackingViewModel by lazy { ViewModelProvider(this)[TrackingViewModel::class.java] }
     private var sensitivity: Double = RadiationCalibration.DEFAULT_SENSITIVITY
+    private var useAdaptiveKde: Boolean = false
     private var currentPoints: List<TrackPoint> = emptyList()
     private var currentPois: List<PoiEntry> = emptyList()
    // private var activeTrackObserverAttached = false
@@ -101,6 +103,8 @@ class TimePlotActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        useAdaptiveKde = PreferenceManager.getDefaultSharedPreferences(this)
+            .getBoolean(SettingsKeys.KEY_USE_ADAPTIVE_KDE, false)
         if (savedInstanceState != null) {
             keepScreenOnEnabled = savedInstanceState.getBoolean("keep_screen_on", false)
         }
@@ -222,6 +226,7 @@ class TimePlotActivity : AppCompatActivity() {
                                 points = request.points,
                                 scaleSeconds = request.scaleSeconds,
                                 sensitivity = request.sensitivity,
+                                useAdaptiveKde = request.useAdaptiveKde,
                                 visibleRange = request.visibleRange,
                                 keepEndVisible = request.keepEndVisible
                             )
@@ -307,6 +312,12 @@ class TimePlotActivity : AppCompatActivity() {
         super.onResume()
         syncBottomNavigationSelection()
         applyKeepScreenOnFlag()
+        val adaptiveKde = PreferenceManager.getDefaultSharedPreferences(this)
+            .getBoolean(SettingsKeys.KEY_USE_ADAPTIVE_KDE, false)
+        if (useAdaptiveKde != adaptiveKde) {
+            useAdaptiveKde = adaptiveKde
+            updatePlot(recalculateVerticalAxis = true)
+        }
     }
 
     override fun onPause() {
@@ -922,6 +933,7 @@ class TimePlotActivity : AppCompatActivity() {
             points = currentPoints,
             scaleSeconds = scaleSeconds,
             sensitivity = sensitivity,
+            useAdaptiveKde = useAdaptiveKde,
             isCurrentTrack = isCurrentTrack,
             visibleRange = visibleRange,
             trackTitle = binding.trackNameField.text?.toString().orEmpty(),
@@ -950,6 +962,7 @@ class TimePlotActivity : AppCompatActivity() {
         points: List<TrackPoint>,
         scaleSeconds: Double,
         sensitivity: Double,
+        useAdaptiveKde: Boolean,
         visibleRange: TimePlotView.VisibleRange,
         keepEndVisible: Boolean
     ): PlotResult.Kde? {
@@ -975,7 +988,9 @@ class TimePlotActivity : AppCompatActivity() {
             }
 
             val ts2 = buildTs2(rangeStart, rangeEnd)
-            val ci = TrackingService.activeKdeConfidenceIntervals(ts2, minScale, tEndOverride = nowSeconds) ?: return null
+            val ci = TrackingService.activeKdeConfidenceIntervals(
+                ts2, minScale, tEndOverride = nowSeconds, useAdaptiveKde = useAdaptiveKde
+            ) ?: return null
             val totalDuration = nowSeconds - liveBounds.first
             return PlotResult.Kde(ts2, liveBounds.first, ci.first, ci.second, ci.third, totalDuration, keepEndVisible)
         }
@@ -1013,7 +1028,11 @@ class TimePlotActivity : AppCompatActivity() {
 
         val ts2 = buildTs2(rangeStart, rangeEnd)
         yield()
-        val ci = estimator.getConfidenceIntervals(ts2, minScale, null)
+        val ci = if (useAdaptiveKde) {
+            estimator.getAdaptiveConfidenceIntervals(ts2, minScale, null)
+        } else {
+            estimator.getConfidenceIntervals(ts2, minScale, null)
+        }
         return PlotResult.Kde(ts2, firstTimestamp, ci.first, ci.second, ci.third, totalDuration, keepEndVisible)
     }
 
