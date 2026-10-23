@@ -364,9 +364,10 @@ class KernelDensityEstimator(private var sensitivity: Double) {
     /**
      * Fills the adaptive rate [outCps] and, optionally, its Poisson [outVariance].
      *
-     * Beginning and ending times are sorted independently: variable bandwidths
-     * can reverse either order relative to the original timestamps. Only active
-     * sources are evaluated at a query, using local differences for stability.
+     * Polynomial-piece boundaries are sorted independently: variable bandwidths
+     * can reverse their order relative to the original timestamps. Accumulated
+     * cubic means and quintic variances replace per-query source evaluation;
+     * boundary normalization is applied per distinct bandwidth where necessary.
      * Only sources intersecting the query range expanded by [scale] need pilot
      * estimates. Long intervals keep their original midpoints, even when those
      * lie far outside the query range; the pilot seeks to each required window.
@@ -420,55 +421,422 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         sources.removeAll { it.ending < t2s.first() || it.beginning > t2s.last() }
         if (sources.isEmpty()) return
 
-        // --- Second pass: independently ordered admission and eviction events ---
-        val beginnings = sources.indices.sortedBy { sources[it].beginning }
-        val endings = sources.indices.sortedBy { sources[it].ending }
-        val active = LinkedHashSet<Int>()
+        // --- Second pass: sweep independently sorted polynomial-piece boundaries ---
+        // A source is represented by at most three non-negative pieces. Keeping
+        // a short interval as one middle polynomial avoids cancellation between
+        // two almost coincident step primitives.
+        val withVariance = outVariance != null
+        val raw = AdaptiveAccumulator(withVariance)
+        val outside = if (t2s.first() <= dataTStart || t2s.last() >= tEnd) {
+            AdaptiveAccumulator(withVariance)
+        } else null
+        val needGroups = t2s.any { t ->
+            t > dataTStart && t < tEnd &&
+                (t - dataTStart < scale || tEnd - t < scale)
+        }
+        val groups = HashMap<Double, AdaptiveGroup>()
+        val pieces = ArrayList<AdaptivePiece>()
+        for (i in sources.indices) {
+            val source = sources[i]
+            // Intersect the original support lifecycle with the clipped kernel
+            // predicates. A rounded beginning can otherwise admit a negative
+            // point polynomial just before u = -1, hidden by other sources.
+            val beginning = maxOf(source.beginning,
+                adaptiveClipBoundary(source.start, source.scale, -1.0, t2s))
+            val ending = minOf(source.ending,
+                adaptiveClipBoundary(source.end, source.scale, 1.0, t2s))
+            if (ending <= beginning) continue
+            val group = if (needGroups) groups.getOrPut(source.scale) {
+                AdaptiveGroup(source.scale, withVariance)
+            } else null
+            val edgeMass = epanechnikovIntegral(maxOf(-1.0, (dataTStart - tEnd) / source.scale), 0.0)
+            val edgeFactor = if (edgeMass > 1e-9) 1.0 / edgeMass else 0.0
+            fun piece(beginning: Double, ending: Double, kind: AdaptivePieceKind) {
+                if (ending > beginning && ending > t2s.first() && beginning <= t2s.last()) {
+                    pieces.add(AdaptivePiece(i, beginning, ending, kind, group, edgeFactor, withVariance))
+                }
+            }
+            if (source.start == source.end) {
+                piece(beginning, ending, AdaptivePieceKind.POINT)
+            } else {
+                val leftTransition = adaptiveClipBoundary(source.start, source.scale, 1.0, t2s)
+                    .coerceIn(beginning, ending)
+                val rightTransition = adaptiveClipBoundary(source.end, source.scale, -1.0, t2s)
+                    .coerceIn(beginning, ending)
+                val riseEnd = minOf(leftTransition, rightTransition)
+                val fallStart = maxOf(leftTransition, rightTransition)
+                piece(beginning, riseEnd, AdaptivePieceKind.RISING)
+                piece(riseEnd, fallStart, if (leftTransition <= rightTransition) {
+                    AdaptivePieceKind.PLATEAU
+                } else AdaptivePieceKind.MIDDLE)
+                piece(fallStart, ending, AdaptivePieceKind.FALLING)
+            }
+        }
+        val beginnings = pieces.sortedBy { it.beginning }
+        val endings = pieces.sortedBy { it.ending }
+        val activeDynamic = LinkedHashSet<AdaptivePiece>()
+        val activeSources = LinkedHashSet<Int>()
+        val activeGroups = LinkedHashSet<AdaptiveGroup>()
+        var origin = t2s.first()
         var admit = 0
         var evict = 0
+
+        fun accumulate(piece: AdaptivePiece, sign: Double) {
+            raw.add(piece, sign)
+            outside?.add(piece, sign, piece.edgeFactor)
+            piece.group?.accumulator?.add(piece, sign)
+        }
+
         for (j in t2s.indices) {
             val t = t2s[j]
-            // Admit before evicting so a sparse query can skip an entire support.
-            while (admit < sources.size && sources[beginnings[admit]].beginning <= t) {
-                active.add(beginnings[admit++])
-            }
-            while (evict < sources.size && sources[endings[evict]].ending <= t) {
-                active.remove(endings[evict++])
+            // Remove first: an interval has just one active piece at each query.
+            // Pieces wholly between sparse queries are skipped on admission.
+            while (evict < endings.size && endings[evict].ending <= t) {
+                val piece = endings[evict++]
+                if (!piece.active) continue
+                accumulate(piece, -1.0)
+                piece.active = false
+                activeDynamic.remove(piece)
+                activeSources.remove(piece.sourceIndex)
+                piece.group?.let { group ->
+                    if (--group.activeCount == 0) activeGroups.remove(group)
+                }
             }
 
-            val tClamped = t.coerceIn(dataTStart, tEnd)
-            var cps = 0.0
-            var variance = 0.0
-            for (index in active) {
-                val source = sources[index]
-                val invScale = 1.0 / source.scale
-                // Each source uses its own boundary mass. Outside the measured
-                // extent, keep the mass at the boundary as in the fixed KDE.
-                val massLo = maxOf(-1.0, (tClamped - tEnd) * invScale)
-                val massHi = minOf( 1.0, (tClamped - dataTStart) * invScale)
-                val km = epanechnikovIntegral(massLo, massHi)
-                if (km <= 1e-9) continue
+            // Rebuild only nonconstant pieces in a nearby coordinate system.
+            // A nonconstant regime spans at most 2h_0 of active query times,
+            // crossing at most 21 rebases spaced h_min = h_0/10 apart.
+            // Long plateaus need no rebuilding.
+            if (t - origin >= scale / 10.0) {
+                origin = t
+                raw.clearDynamic()
+                outside?.clearDynamic()
+                for (piece in activeDynamic) piece.group?.accumulator?.clearDynamic()
+                for (piece in activeDynamic) {
+                    piece.calculate(sources[piece.sourceIndex], origin)
+                    accumulate(piece, 1.0)
+                }
+            }
+            while (admit < beginnings.size && beginnings[admit].beginning <= t) {
+                val piece = beginnings[admit++]
+                if (piece.ending <= t) continue
+                piece.calculate(sources[piece.sourceIndex], origin)
+                accumulate(piece, 1.0)
+                piece.active = true
+                if (piece.kind != AdaptivePieceKind.PLATEAU) activeDynamic.add(piece)
+                activeSources.add(piece.sourceIndex)
+                piece.group?.let { group ->
+                    if (group.activeCount++ == 0) activeGroups.add(group)
+                }
+            }
+            if (activeSources.isEmpty()) continue
 
-                if (source.start == source.end) {
-                    val u = (t - source.start) * invScale
-                    val q = 0.75 * invScale * (1.0 - u * u).coerceAtLeast(0.0) / km
-                    cps += source.weight * q
-                    if (outVariance != null) variance += source.weight * q * q
-                } else {
-                    val uLo = maxOf(-1.0, (t - source.end) * invScale)
-                    val uHi = minOf( 1.0, (t - source.start) * invScale)
-                    if (uHi <= uLo) continue
-                    val mass = adaptiveKernelIntegral(uLo, uHi)
-                    cps += source.weight * mass / km
-                    if (outVariance != null) {
-                        val k2 = adaptiveSquaredKernelIntegral(uLo, uHi)
-                        variance += source.weight * invScale * k2 / (km * km)
+            val x = t - origin
+            var cps: Double
+            var variance: Double
+            var cpsError: Double
+            var varianceError: Double
+            if (t <= dataTStart || t >= tEnd ||
+                (t - dataTStart >= scale && tEnd - t >= scale)) {
+                // In the interior all boundary masses are one. Outside the
+                // extent they are constant; symmetry gives the same mass at
+                // either endpoint, so one preweighted aggregate serves both.
+                val accumulator = if (t <= dataTStart || t >= tEnd) outside!! else raw
+                accumulator.evaluate(x)
+                cps = accumulator.mean.value
+                cpsError = accumulator.mean.error
+                variance = accumulator.variance?.value ?: 0.0
+                varianceError = accumulator.variance?.error ?: 0.0
+            } else {
+                // Near a measurement boundary the normalization is a cubic
+                // function of t and h. Its reciprocal is not polynomial. Sum
+                // one rational contribution per EXACT bandwidth, preserving
+                // the existing estimator without quantizing adaptive scales.
+                cps = 0.0; variance = 0.0; cpsError = 0.0; varianceError = 0.0
+                var minMass = Double.POSITIVE_INFINITY
+                for (group in activeGroups) {
+                    val km = epanechnikovIntegral(
+                        maxOf(-1.0, (t - tEnd) / group.scale),
+                        minOf(1.0, (t - dataTStart) / group.scale))
+                    if (km <= 1e-9) continue
+                    minMass = minOf(minMass, km)
+                    val accumulator = group.accumulator
+                    accumulator.mean.evaluateValue(x)
+                    accumulator.variance?.evaluateValue(x)
+                    cps += accumulator.mean.value / km
+                    if (withVariance) {
+                        variance += accumulator.variance!!.value / (km * km)
                     }
                 }
+                if (minMass.isFinite()) {
+                    // Global absolute update histories dominate the sum of
+                    // group histories and coefficient magnitudes. Twice their
+                    // error bound, divided by the smallest accepted mass,
+                    // conservatively covers all group evaluations together.
+                    // Compute it once, rather than alongside every polynomial.
+                    raw.evaluate(x)
+                    val sumRoundoff = 8e-16 * activeGroups.size   // final, uncompensated group sums
+                    cpsError = 2.0 * raw.mean.error / minMass + sumRoundoff * kotlin.math.abs(cps)
+                    varianceError = 2.0 * (raw.variance?.error ?: 0.0) / (minMass * minMass) +
+                        sumRoundoff * kotlin.math.abs(variance)
+                }
+            }
+
+            // Power-basis evaluation loses relative precision in vanishing
+            // tails. Use the stable original integrals only when accumulated
+            // rounding bounds indicate cancellation, not for ordinary queries.
+            if (!cps.isFinite() || cps < 0.0 || (cpsError > 0.0 && cps <= 1e7 * cpsError) ||
+                (withVariance && (!variance.isFinite() || variance < 0.0 ||
+                    (varianceError > 0.0 && variance <= 1e7 * varianceError)))) {
+                val direct = evaluateAdaptiveSourcesDirect(t, tEnd, sources, activeSources, withVariance)
+                cps = direct.first
+                variance = direct.second
             }
             outCps[j] = cps
             if (outVariance != null) outVariance[j] = variance
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Adaptive polynomial pieces — coefficients in powers of (t − origin).
+    // -------------------------------------------------------------------------
+
+    private enum class AdaptivePieceKind { POINT, RISING, MIDDLE, PLATEAU, FALLING }
+
+    /**
+     * First requested query where the original clipped integral changes regime.
+     * At epoch timestamps, rounding endpoint ± h can select the wrong piece.
+     * Search the queries using the original predicate; walking neighbouring
+     * doubles can take arbitrarily long when subtraction rounds them alike.
+     */
+    private fun adaptiveClipBoundary(
+        endpoint: Double, scale: Double, limit: Double, queries: DoubleArray
+    ): Double {
+        val inverseScale = 1.0 / scale
+        var lo = 0
+        var hi = queries.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if ((queries[mid] - endpoint) * inverseScale >= limit) hi = mid else lo = mid + 1
+        }
+        return if (lo < queries.size) queries[lo] else Double.POSITIVE_INFINITY
+    }
+
+    private class AdaptiveGroup(val scale: Double, withVariance: Boolean) {
+        val accumulator = AdaptiveAccumulator(withVariance)
+        var activeCount = 0
+    }
+
+    private class AdaptivePiece(
+        val sourceIndex: Int, val beginning: Double, val ending: Double,
+        val kind: AdaptivePieceKind, val group: AdaptiveGroup?, val edgeFactor: Double,
+        withVariance: Boolean
+    ) {
+        val mean = DoubleArray(4)
+        val variance = if (withVariance) DoubleArray(6) else null
+        val meanDegree = when (kind) {
+            AdaptivePieceKind.PLATEAU -> 0
+            AdaptivePieceKind.RISING, AdaptivePieceKind.FALLING -> 3
+            else -> 2
+        }
+        val varianceDegree = if (meanDegree == 3) 5 else 2 * meanDegree
+        var meanMagnitude = 0.0
+        var varianceMagnitude = 0.0
+        var active = false
+
+        fun calculate(source: AdaptiveSample, origin: Double) {
+            val h = source.scale
+            val w = source.weight
+            if (kind == AdaptivePieceKind.PLATEAU) {
+                mean[0] = w
+                variance?.set(0, 0.6 * w / h)
+                meanMagnitude = w
+                varianceMagnitude = 0.6 * w / h
+                return
+            }
+            if (kind == AdaptivePieceKind.POINT || kind == AdaptivePieceKind.MIDDLE) {
+                // A full short interval has the same quadratic mean as a point,
+                // with the exact finite-width corrections in its coefficients.
+                val d = if (kind == AdaptivePieceKind.POINT) 0.0 else (source.end - source.start) / h
+                val u = if (kind == AdaptivePieceKind.POINT) (origin - source.start) / h else
+                    ((origin - source.start) / h + (origin - source.end) / h) / 2.0
+                val shape = (1.0 - u) * (1.0 + u)
+                val f = if (kind == AdaptivePieceKind.POINT) 0.75 * w / h else 0.75 * w * d
+                meanMagnitude = f
+                mean[0] = f * (shape - d * d / 12.0)
+                mean[1] = -2.0 * f * u
+                mean[2] = -f
+                variance?.let { v ->
+                    val g = if (kind == AdaptivePieceKind.POINT) 0.5625 * w / (h * h) else 0.5625 * w * d / h
+                    varianceMagnitude = g
+                    val b = -2.0 + d * d / 2.0
+                    v[0] = g * (shape * shape + (3.0 * u * u - 1.0) * d * d / 6.0 + d * d * d * d / 80.0)
+                    v[1] = g * (4.0 * u * u * u + 2.0 * b * u)
+                    v[2] = g * (6.0 * u * u + b)
+                    v[3] = 4.0 * g * u
+                    v[4] = g
+                }
+            } else {
+                // Integrals over a growing tail of normalized width delta:
+                //   mean/w = delta²(3 − delta)/4
+                //   variance·h/w = 3delta³(20 − 15delta + 3delta²)/80.
+                // Differentiate these polynomials to obtain local coefficients.
+                // Use the original endpoints, not rounded support boundaries.
+                val falling = kind == AdaptivePieceKind.FALLING
+                val delta = if (falling) 1.0 - (origin - source.end) / h else 1.0 + (origin - source.start) / h
+                meanMagnitude = w
+                mean[0] = w * delta * delta * (3.0 - delta) / 4.0
+                mean[1] = w * 0.75 * delta * (2.0 - delta)
+                mean[2] = w * 0.75 * (1.0 - delta)
+                mean[3] = -0.25 * w
+                variance?.let { v ->
+                    val g = w / h
+                    varianceMagnitude = g
+                    v[0] = g * 3.0 * delta * delta * delta * (20.0 - 15.0 * delta + 3.0 * delta * delta) / 80.0
+                    v[1] = g * 0.5625 * delta * delta * (2.0 - delta) * (2.0 - delta)
+                    v[2] = g * 1.125 * delta * (delta - 1.0) * (delta - 2.0)
+                    v[3] = g * (0.75 - 2.25 * delta + 1.125 * delta * delta)
+                    v[4] = g * 0.5625 * (delta - 1.0)
+                    v[5] = g * 0.1125
+                }
+                if (falling) {
+                    mean[1] = -mean[1]; mean[3] = -mean[3]
+                    variance?.let { v -> v[1] = -v[1]; v[3] = -v[3]; v[5] = -v[5] }
+                }
+            }
+            var inversePower = 1.0
+            for (k in 1..meanDegree) {
+                inversePower /= h
+                mean[k] *= inversePower
+            }
+            variance?.let { v ->
+                inversePower = 1.0
+                for (k in 1..varianceDegree) {
+                    inversePower /= h
+                    v[k] *= inversePower
+                }
+            }
+        }
+    }
+
+    private class AdaptiveAccumulator(withVariance: Boolean) {
+        val mean = AdaptivePolynomial(3)
+        val variance = if (withVariance) AdaptivePolynomial(5) else null
+
+        fun add(piece: AdaptivePiece, sign: Double, factor: Double = 1.0) {
+            val constant = piece.kind == AdaptivePieceKind.PLATEAU
+            mean.add(piece.mean, piece.meanDegree, sign, factor, constant, piece.meanMagnitude)
+            variance?.add(piece.variance!!, piece.varianceDegree, sign, factor * factor, constant, piece.varianceMagnitude)
+        }
+
+        fun clearDynamic() { mean.clearDynamic(); variance?.clearDynamic() }
+        fun evaluate(x: Double) { mean.evaluate(x); variance?.evaluate(x) }
+    }
+
+    /**
+     * Compensated coefficient sums, with an absolute rounding-error estimate.
+     * Plateaus are separate so rebasing never revisits long constant pieces.
+     * Each degree is cleared when its last contributing piece leaves; otherwise
+     * a residual cubic/quintic could grow while only lower-degree pieces remain.
+     */
+    private class AdaptivePolynomial(degree: Int) {
+        private val sums = DoubleArray(degree + 2)
+        private val corrections = DoubleArray(degree + 2)
+        private val errors = DoubleArray(degree + 2)
+        private val counts = IntArray(degree + 2)
+        private val constantIndex = degree + 1
+        var value = 0.0
+            private set
+        var error = 0.0
+            private set
+
+        fun add(coefficients: DoubleArray, degree: Int, sign: Double, factor: Double,
+                constant: Boolean, magnitude: Double) {
+            for (k in 0..degree) {
+                val index = if (constant) constantIndex else k
+                counts[index] += if (sign > 0.0) 1 else -1
+                if (counts[index] == 0) {
+                    sums[index] = 0.0; corrections[index] = 0.0; errors[index] = 0.0
+                    continue
+                }
+                val term = sign * factor * coefficients[k]
+                val sum = sums[index]
+                val next = sum + term
+                corrections[index] += if (kotlin.math.abs(sum) >= kotlin.math.abs(term)) {
+                    (sum - next) + term
+                } else (term - next) + sum
+                sums[index] = next
+                // Include the history of removals as well as current values.
+                errors[index] += 8e-15 * kotlin.math.abs(term)
+                // Coefficient construction can itself cancel near a support
+                // edge, even when x = 0 makes Horner evaluation exact.
+                if (k == 0) errors[index] += 8e-15 * factor * magnitude
+            }
+        }
+
+        fun clearDynamic() {
+            sums.fill(0.0, 0, constantIndex)
+            corrections.fill(0.0, 0, constantIndex)
+            errors.fill(0.0, 0, constantIndex)
+            counts.fill(0, 0, constantIndex)
+        }
+
+        fun evaluate(x: Double) {
+            var result = 0.0
+            var bound = 0.0
+            for (k in constantIndex - 1 downTo 0) {
+                val coefficient = sums[k] + corrections[k]
+                result = result * x + coefficient
+                bound = bound * kotlin.math.abs(x) + errors[k] + 8e-15 * kotlin.math.abs(coefficient)
+            }
+            val constant = sums[constantIndex] + corrections[constantIndex]
+            value = result + constant
+            error = bound + errors[constantIndex] + 8e-15 * kotlin.math.abs(constant)
+        }
+
+        /** Boundary groups share the global error bound; only their values vary. */
+        fun evaluateValue(x: Double) {
+            var result = 0.0
+            for (k in constantIndex - 1 downTo 0) result = result * x + (sums[k] + corrections[k])
+            value = result + (sums[constantIndex] + corrections[constantIndex])
+        }
+    }
+
+    /** Stable fallback for an ill-conditioned polynomial evaluation near zero. */
+    private fun evaluateAdaptiveSourcesDirect(
+        t: Double, tEnd: Double, sources: List<AdaptiveSample>, active: Set<Int>, withVariance: Boolean
+    ): Pair<Double, Double> {
+        val tClamped = t.coerceIn(dataTStart, tEnd)
+        var cps = 0.0
+        var variance = 0.0
+        for (index in active) {
+            val source = sources[index]
+            val invScale = 1.0 / source.scale
+            // Each source uses its own boundary mass. Outside the measured
+            // extent, keep the mass at the boundary as in the fixed KDE.
+            val massLo = maxOf(-1.0, (tClamped - tEnd) * invScale)
+            val massHi = minOf( 1.0, (tClamped - dataTStart) * invScale)
+            val km = epanechnikovIntegral(massLo, massHi)
+            if (km <= 1e-9) continue
+
+            if (source.start == source.end) {
+                val u = (t - source.start) * invScale
+                val q = 0.75 * invScale * (1.0 - u * u).coerceAtLeast(0.0) / km
+                cps += source.weight * q
+                if (withVariance) variance += source.weight * q * q
+            } else {
+                val uLo = maxOf(-1.0, (t - source.end) * invScale)
+                val uHi = minOf( 1.0, (t - source.start) * invScale)
+                if (uHi <= uLo) continue
+                val mass = adaptiveKernelIntegral(uLo, uHi)
+                cps += source.weight * mass / km
+                if (withVariance) {
+                    val k2 = adaptiveSquaredKernelIntegral(uLo, uHi)
+                    variance += source.weight * invScale * k2 / (km * km)
+                }
+            }
+        }
+        return Pair(cps, variance)
     }
 
     /**

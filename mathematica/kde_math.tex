@@ -407,20 +407,192 @@ mean.  For varying bandwidths this is a per-source boundary correction;
 there is no single common kernel mass to divide out.  It is not a claim of
 unbiasedness for arbitrary nonconstant intensity or bandwidth fields.
 
-\subsection{Sorted Support Boundaries}
+\subsection{Piecewise Polynomial Accumulation}
+\label{sec:adaptivePolynomials}
 
-A point contributes on $[t_i-h_i,t_i+h_i]$, and an interval contributes on
-$[a_\ell-h_\ell,b_\ell+h_\ell]$.  Bandwidth variation means neither support
-start order nor support end order follows the original event order.
-Both boundary arrays are therefore precalculated and sorted independently.
-For ascending queries, a sweep admits every source whose support has begun
-and removes every source whose support has ended before evaluating the
-remaining active sources.  Admission precedes removal so that a query
-jump over an entire support cannot leave that source active.
+The second pass evaluates the same mean and variance as
+\eqref{eq:adaptiveMean} and \eqref{eq:adaptiveVariance}, using polynomial
+accumulators in place of a loop over all contributing sources at every
+query.  The pilot, bandwidth limits, boundary correction, and confidence
+construction are unchanged.  In this subsection $P$ and $V$ denote raw
+mean and variance contributions before boundary normalisation.
 
-The adaptive path evaluates kernels and interval integrals only for this
-active set, using local differences such as $t-t_i$.  This accumulation
-remains separate from the fixed-bandwidth moment accumulators.
+\paragraph{Point events.}
+A point with count $n$, timestamp $c$, and bandwidth $h$ contributes one
+polynomial piece on $[c-h,c+h]$.  With $u=(t-c)/h$,
+\begin{equation}
+  P(t)=\frac{3n}{4h}(1-u^2),\qquad
+  V(t)=\frac{9n}{16h^2}(1-2u^2+u^4).
+\end{equation}
+The variance weight is $n$, not $n^2$; variances of independent counts
+add without cross terms.
+
+\paragraph{Interval events.}
+An interval $[a,b]$ of density $w$ and bandwidth $h$ is decomposed into
+three positive pieces, separated at
+\begin{equation}
+  r=\min(a+h,b-h),\qquad s=\max(a+h,b-h).
+\end{equation}
+Its rising piece lies on $[a-h,r]$, its middle piece on $[r,s]$, and its
+falling piece on $[s,b+h]$.  Zero-length pieces can be omitted.  Define
+\begin{equation}
+  E(z)=\frac{z^2(3-z)}{4},\qquad
+  H(z)=\frac{3z^3(20-15z+3z^2)}{80}.
+\end{equation}
+On the rising piece use $z=(t-a+h)/h$; on the falling piece use
+$z=(b+h-t)/h$.  In both cases,
+\begin{equation}
+  P(t)=wE(z),\qquad V(t)=\frac{w}{h}H(z).
+\end{equation}
+These are the integrated kernel and integrated squared kernel measured
+from a support edge.  The factorisations retain the small quadratic and
+cubic masses near that edge without subtracting nearly equal CDF values.
+
+For a long interval, $b-a\ge2h$, the middle is the constant plateau
+\begin{equation}
+  P(t)=w,\qquad V(t)=\frac{3w}{5h}.
+\end{equation}
+For a short interval let $d=(b-a)/h<2$ and
+$q=(t-(b-h))/h\in[0,2-d]$.  Both kernel limits lie inside the support,
+and the middle contribution is
+\begin{align}
+  P(t)&=w\left[\frac{d^2(3-d)}4
+                +\frac{3d(2-d)}4q-\frac{3d}4q^2\right],\\
+  V(t)&=\frac{w}{h}\sum_{k=0}^4 v_k q^k,
+\end{align}
+where
+\begin{align}
+  v_0&=\frac{3d^3(20-15d+3d^2)}{80}, &
+  v_1&=\frac{9d^2(2-d)^2}{16},\\
+  v_2&=\frac{9d(1-d)(2-d)}8, &
+  v_3&=-\frac{9d(2-d)}8, &
+  v_4&=\frac{9d}{16}.
+\end{align}
+These factored coefficients are exactly $E(q+d)-E(q)$ and
+$H(q+d)-H(q)$, respectively.  The mirrored coordinate
+$(a+h-t)/h$ describes the same middle piece.  Consequently degree three
+for mean and degree five for variance suffice for every piece, without
+interval discretisation.
+
+\paragraph{Sorted piece events.}
+Varying bandwidths reorder both support beginnings and endings relative
+to the original timestamps.  Piece starts and ends are precalculated and
+sorted independently.  At each ascending query, the sweep removes ended
+pieces, then admits newly started pieces whose ends have not already
+passed.  Skipping such expired pieces handles a query jump across a
+complete support without inserting it into the accumulators.
+
+In floating-point arithmetic, events are scheduled at the first requested
+query satisfying the original clipping predicate.  The effective outer
+support intersects the original admission/eviction interval $[a-h,b+h)$
+with $(t-a)(1/h)\ge-1$ and $(t-b)(1/h)<1$; for a point use $a=b=c$.
+This excludes a rounded support beginning at which a point's quadratic
+would still be negative, and excludes interval tails with no kernel
+overlap.  Internal transitions use $(t-a)(1/h)\ge1$ for $a+h$ and
+$(t-b)(1/h)\ge-1$ for $b-h$, then are clipped to that effective support.
+Each monotone predicate is binary-searched over the sorted query array.
+Delaying an event until its first applicable query changes no sampled
+value: every earlier query still uses the preceding regime.  This also
+handles repeated query timestamps and jumps over entire pieces, while
+preserving the original zero contribution after outer-support eviction.
+
+Each admitted or removed piece adds or subtracts a fixed-size coefficient
+vector.  Coefficients use a common nearby origin $o$, so a polynomial is
+$\sum_{k=0}^d a_k(t-o)^k$.  Translating to $o'=o+\Delta$ gives
+\begin{equation}
+  a'_k=\sum_{j=k}^d\binom{j}{k}a_j\Delta^{j-k}.
+\end{equation}
+The initial origin is the first query time.  Periodic rebasing after
+$h_{\min}=h_0/10$ rebuilds the coefficients from active nonconstant
+pieces, keeping powers of elapsed time bounded.  Queries evaluating a
+nonconstant piece span at most $2h_0$ (up to timestamp rounding), so it
+participates in a bounded number of rebuilds, at most 21 in exact
+arithmetic.  Scheduling an internal event at the next requested query
+does not introduce extra evaluations in the intervening gap.  Long
+constant plateaus are stored separately and incur no
+repeated polynomial work as their duration grows.
+
+\subsection{Exact Boundary Grouping}
+\label{sec:adaptiveGroups}
+
+The polynomial optimisation must retain each source's own boundary mass
+from \eqref{eq:adaptiveMass}.  Inside a boundary strip that mass depends
+on $t$: it is piecewise cubic, or quadratic when both observation edges
+truncate the kernel.  A normalised contribution is therefore rational,
+not polynomial.  Distinct bandwidths generally give distinct
+denominators, so a single fixed-degree polynomial cannot represent their
+normalised sum exactly.
+
+Sources are grouped only when their computed bandwidths are exactly
+equal; there is no rounding or quantisation of bandwidths.  Let $P_h(t)$
+and $V_h(t)$ be a group's polynomial sums, and let $G(t)$ contain the
+groups active at $t$.  Boundary-strip queries use
+\begin{equation}
+  \hat\lambda_{\mathrm{ad}}(t)=\sum_{h\in G(t)}\frac{P_h(t)}{m_h(t)},
+  \qquad
+  \widehat V(t)=\sum_{h\in G(t)}\frac{V_h(t)}{m_h(t)^2}.
+  \label{eq:adaptiveGrouped}
+\end{equation}
+The group variance is the sum of source variance contributions, never
+the square of the group mean.  Groups with negligible boundary mass are
+omitted just as in the direct evaluation.
+
+For $A+h_0\le t\le B-h_0$, all masses are one, and a global raw polynomial
+sum supplies both results in constant time.  If the observation extent is
+shorter than $2h_0$, this interior region is empty.  Outside $[A,B]$, the
+clamped query makes each mass constant.  Kernel symmetry gives
+\begin{equation}
+  m_h(A)=m_h(B)=m_h^{\partial}.
+\end{equation}
+A second global accumulator, weighted by $1/m_h^{\partial}$ for mean and
+$1/(m_h^{\partial})^2$ for variance, therefore serves both exterior
+regions in constant time.  Only the interior boundary strips require
+per-group evaluation.  This is an algebraic regrouping of the original
+per-source correction, not a common-bandwidth approximation.
+
+\subsection{Numerical Stability and Direct Fallback}
+
+Coefficient additions use compensated summation and retain an estimate
+of accumulated rounding error, including the history of additions and
+removals.  A nominal source-amplitude term also accounts for cancellation
+while constructing the constant coefficient, even when evaluation at the
+current origin involves no further arithmetic.  Separating constant plateaus permits
+nonconstant coefficients to reset to zero when no such pieces remain;
+otherwise a tiny residual high-order coefficient could grow across a
+long empty gap or plateau.  Periodic rebasing further limits drift.
+
+Boundary groups share one error diagnostic, rather than recomputing it
+beside every polynomial value.  For each coefficient, the global
+absolute update history dominates both the sum of group histories and
+the sum of absolute current group coefficients.  Twice the global
+diagnostic therefore covers their separate evaluation estimates, even
+when group coefficients cancel in the global sum.  Divide this estimate
+by the smallest accepted boundary mass for the mean, or its square for
+variance, and include an allowance for the final summation across groups.
+These are conservative numerical diagnostics, not certified
+floating-point error bounds; the polynomial values and boundary masses
+are unchanged by sharing the diagnostic.
+
+Large absolute timestamps need care at piece boundaries as well as in
+polynomial powers.  Rounding $a\pm h$ or $b\pm h$ can select a regime one
+query too early, particularly for intervals only a few timestamp ulps long.
+The query-array searches above preserve the clipping predicates used by
+the direct integrals.  Searching adjacent representable timestamps
+instead would have no useful iteration bound: subtraction can round a
+very large run of neighbouring query values to the same difference near
+zero.  Tail coefficients use differences from the original interval
+endpoints, rather than treating rounded support boundaries as exact roots.
+
+Even a positive polynomial result may have poor relative accuracy when
+an extremely small tail is obtained by cancellation.  When the result is
+near the tracked error floor, the implementation reevaluates the active
+original sources using the stable point and interval formulas.  This is
+a numerical fallback, not the normal per-query path.  It preserves tiny
+positive variance contributions needed by the confidence construction.
+The piecewise calculation and fallback implement the same exact
+convolutions; different floating-point operation order can change the
+last bits, so agreement is assessed with numerical tolerances rather
+than bit-for-bit identity.
 
 \subsection{Variance and Effective-Count Confidence Intervals}
 
@@ -647,18 +819,36 @@ skip unrelated entries.
 
 For adaptive queries, let $S_c$ be the candidate count, $L_c$ its interval
 portion, $V_I$ the number of interval-index nodes visited, $C_P$ the cost
-of the fixed pilot pass at candidate centers, and $A_q$ the active source
-count at final query $q$.  With a prepared interval index, total cost is
+of the fixed pilot pass at candidate centers, and $G_q$ the number of
+active exact-bandwidth groups at final query $q$.  Let $\mathcal B$ contain
+the queries inside observation-boundary strips and $\mathcal F$ the
+queries requiring direct numerical fallback; $F_q$ counts the sources
+reevaluated by that fallback.  With a prepared interval index, total cost is
 \begin{equation}
-  O\!\left(\log(N+1)+V_I+S_c\log(S_c+1)+C_P+Q+
-                  \sum_{q=1}^{Q}A_q\right).
+  O\!\left(\log(N+1)+V_I+S_c\log(S_c+1)+C_P+Q
+       +\sum_{q\in\mathcal B}G_q+\sum_{q\in\mathcal F}F_q\right).
 \end{equation}
+Each source generates a constant number of polynomial pieces and hence
+$O(S_c)$ start/end events.  Sorting them costs $O(S_c\log(S_c+1))$; their
+fixed-degree updates and the bounded periodic rebuilds cost $O(S_c)$.
+Outer-boundary searches for every source and internal-boundary searches
+for intervals cost $O(S_c\log(Q+1))$.  This is already absorbed by the
+displayed bound, since
+$S_c\log(Q+1)=O(S_c\log(S_c+1)+Q)$: for $Q>S_c$, use
+$\log(Q/S_c)\le Q/S_c$; otherwise $\log(Q+1)\le\log(S_c+1)$.
+The ordinary interior and exterior query paths cost $O(1)$ per query.
+Thus their sweep is linear after boundary searches and sorting, independently of the
+number of simultaneously overlapping sources.  This does not imply an
+unconditional $O(S_c+Q)$ bound: boundary strips can contain many distinct
+bandwidth groups, and fallback evaluates contributing sources directly.
+
 The overlap search has the conservative bound
 $V_I=O((L_c+1)\log(L+1))$.  Building the immutable interval index initially
 costs $O(L\log(L+1))$ time and $O(L)$ space; it is reused across plot
 queries until interval insertion, pruning, or clearing invalidates it.
-Adaptive temporary storage is $O(S_c+Q)$ beyond these caches.  If every
-source overlaps every query, the final pass still costs $O((N+L)Q)$.
+Adaptive temporary storage is $O(S_c+Q)$ beyond these caches.  In the
+worst case, boundary queries with one bandwidth per active source or
+repeated fallback can still cost $O(S_cQ)$.
 
 Snapshots share an already-built immutable interval index and copy the
 valid step-weight prefix.  They do not build either cache on the source
