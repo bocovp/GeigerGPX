@@ -198,6 +198,7 @@ class SettingsActivity : ComponentActivity() {
         val btThresholdSubtitleVal = remember(refresh) { thresholdSubtitle(true) }
         val useBtMic = remember(refresh) { prefs.getBoolean(SettingsKeys.KEY_USE_BLUETOOTH_MIC_IF_AVAILABLE, false) }
         val doseRateAvg = remember(refresh) { prefs.getString("dose_rate_avg_timestamps_n", "10") ?: "10" }
+        val useAdaptiveKde = remember(refresh) { prefs.getBoolean(SettingsKeys.KEY_USE_ADAPTIVE_KDE, false) }
         val relativeErr = remember(refresh) { getRelativeErrString(prefs)}
         val sensitivity = remember(refresh) { RadiationCalibration.sensitivityFromPrefs(prefs) }
         val doseRateDimension = remember(refresh, sensitivity) { DoseRateDimension.fromPrefs(prefs, sensitivity) }
@@ -293,6 +294,16 @@ class SettingsActivity : ComponentActivity() {
                     val selected = DoseRateDimension.fromLabel(it) ?: doseRateDimension
                     val normalized = if (dimensionLockedToCps) DoseRateDimension.CPS else selected
                     prefs.edit { putString(SettingsKeys.KEY_DOSE_RATE_DIMENSION, normalized.preferenceLabel) }
+                    onRefresh()
+                }
+
+                SwitchRow(
+                    "Use adaptive KDE",
+                    useAdaptiveKde,
+                    subtitle = "Adjust smoothing to dose rate in the time plot",
+                    shape = MiddleItemShape
+                ) {
+                    prefs.edit { putBoolean(SettingsKeys.KEY_USE_ADAPTIVE_KDE, it) }
                     onRefresh()
                 }
 

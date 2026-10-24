@@ -5,7 +5,8 @@ import kotlin.math.floor
 /**
  * Estimates the continuous dose rate via Epanechnikov kernel density estimation.
  *
- * Point events are handled by the original O(N + Q) sliding-window accumulator.
+ * Point events use a sliding-window accumulator with binary seeks to skip
+ * data outside the requested kernel windows.
  * Interval events are decomposed into pairs of weighted step events whose
  * convolution with the kernel is evaluated analytically — no discretisation.
  * See companion TeX document for the full mathematical derivation.
@@ -23,6 +24,8 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         private const val STEP_MERGE_EPSILON  = 1e-6
         /** A merged step weight below this [cps] is treated as zero and the entry is dropped. */
         private const val STEP_WEIGHT_EPSILON = 1e-12
+        /** Dose rate [µSv/h] at which the adaptive bandwidth equals the slider scale. */
+        private const val ADAPTIVE_BACKGROUND_DOSE = 0.1
     }
 
     // -------------------------------------------------------------------------
@@ -40,6 +43,17 @@ class KernelDensityEstimator(private var sensitivity: Double) {
     private var stepTs    = DoubleArray(0)
     private var stepWs    = DoubleArray(0)   // weight [cps], positive or negative
     private var stepCount = 0
+
+    // Lazy cumulative step weights: prefix[k] = Σ stepWs[0..k]. A query can
+    // start in the middle of a long interval without visiting its earlier edge.
+    private var stepPrefix = DoubleArray(0)
+    private var stepPrefixValid = 0
+
+    // Original intervals — retained separately because merged step events lose
+    // the midpoint and pairing needed to assign one adaptive scale per interval.
+    private data class SampleInterval(val start: Double, val end: Double, val density: Double)
+    private val intervals = ArrayList<SampleInterval>()
+    private var intervalIndex: IntervalIndex? = null
 
     // Overall data extent — covers point events AND interval endpoints.
     private var dataTStart = Double.MAX_VALUE
@@ -69,6 +83,10 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         other.stepTs = stepTs.copyOf(stepCount)
         other.stepWs = stepWs.copyOf(stepCount)
         other.stepCount = stepCount
+        other.stepPrefix = stepPrefix.copyOf(stepPrefixValid)
+        other.stepPrefixValid = stepPrefixValid
+        other.intervals.addAll(intervals)
+        other.intervalIndex = intervalIndex   // immutable; safe to share between snapshots
         other.dataTStart = dataTStart
         other.dataTEnd = dataTEnd
         other.timeout = timeout
@@ -84,6 +102,9 @@ class KernelDensityEstimator(private var sensitivity: Double) {
     fun clear() {
         size      = 0
         stepCount = 0
+        stepPrefixValid = 0
+        intervals.clear()
+        intervalIndex = null
         dataTStart = Double.MAX_VALUE
         dataTEnd   = Double.NEGATIVE_INFINITY
     }
@@ -162,6 +183,8 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         val intervalEnd = intervalStartSeconds + safeDuration
         val density     = counts.toDouble() / safeDuration   // [cps]
 
+        intervals.add(SampleInterval(intervalStartSeconds, intervalEnd, density))
+        intervalIndex = null
         addStepEvent(intervalStartSeconds, +density)
         addStepEvent(intervalEnd,          -density)
 
@@ -252,17 +275,577 @@ class KernelDensityEstimator(private var sensitivity: Double) {
     }
 
     // -------------------------------------------------------------------------
-    // Core convolution — O(|t2s| + N + M) sliding window
-    // N = point events, M <= step events (= 2 × intervals), Q = query points.
+    // Adaptive KDE — fixed-bandwidth pilot, then one bandwidth per source.
+    // Kept separate from the original sliding-window convolution below.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Estimates adaptive dose rate in µSv/h at sorted query points [t2s].
+     *
+     * The fixed KDE at [scale] supplies the pilot dose at each point event or
+     * interval midpoint. Each source then uses h_i = scale · 0.1 / pilotDose,
+     * clamped to [scale / 10, scale]. Interval counts remain uniformly spread
+     * over their original window; only bandwidth selection uses the midpoint.
+     */
+    fun estimateAdaptiveDoseRate(t2s: DoubleArray,
+                                 scale: Double,
+                                 tEndOverride: Double? = null): DoubleArray {
+        val bufCps = DoubleArray(t2s.size)
+        estimateAdaptiveDoseRateHelper(t2s, scale, bufCps, null, tEndOverride)
+        for (i in bufCps.indices) bufCps[i] *= inverseSensitivity
+        return bufCps
+    }
+
+    /**
+     * Estimates adaptive dose rate and approximate 95% Poisson confidence bounds.
+     *
+     * With the pilot bandwidths held fixed, A = Σ n_i q_i and V = Σ n_i q_i²
+     * give the empirical exposure A/V. For uniform intervals the sums become
+     * integrals of q and q², respectively — not the square of the interval mean.
+     * T_eff is capped at the background-scale exposure to avoid false precision
+     * in sparse tails; n_eff = A · T_eff then supplies the effective count.
+     * The effective count uses the same chi² interpolation as the fixed KDE.
+     * These plug-in bounds do not include uncertainty in the pilot bandwidths.
+     *
+     * @return Triple(doseRate [µSv/h], lowerBound [µSv/h], upperBound [µSv/h])
+     */
+    fun getAdaptiveConfidenceIntervals(t2s: DoubleArray,
+                                       scale: Double,
+                                       tEndOverride: Double? = null): Triple<DoubleArray, DoubleArray, DoubleArray> {
+        val bufCps = DoubleArray(t2s.size)
+        val bufVariance = DoubleArray(t2s.size)
+        val bufMean = DoubleArray(t2s.size)
+        val bufLow = DoubleArray(t2s.size)
+        val bufHigh = DoubleArray(t2s.size)
+        estimateAdaptiveDoseRateHelper(t2s, scale, bufCps, bufVariance, tEndOverride)
+
+        if (size == 0 && intervals.isEmpty()) return Triple(bufMean, bufLow, bufHigh)
+        val tEnd = if (tEndOverride != null) maxOf(dataTEnd, tEndOverride) else dataTEnd
+        if (tEnd <= dataTStart) return Triple(bufMean, bufLow, bufHigh)
+
+        for (i in t2s.indices) {
+            val cps = bufCps[i]
+            val variance = bufVariance[i]
+            // Maximum exposure: the background scale also supplies a continuous,
+            // positive zero-count upper bound when the last contribution fades.
+            val tClamped = t2s[i].coerceIn(dataTStart, tEnd)
+            val uLo = maxOf(-1.0, (tClamped - tEnd) / scale)
+            val uHi = minOf( 1.0, (tClamped - dataTStart) / scale)
+            val km = epanechnikovIntegral(uLo, uHi)
+            val k2 = epanechnikovSquaredIntegral(uLo, uHi)
+            val backgroundExposure = if (km > 1e-9 && k2 > 1e-12) scale * km * km / k2 else 0.0
+            val tEff = if (cps > 0.0 && variance > 0.0) {
+                minOf(cps / variance, backgroundExposure)
+            } else backgroundExposure
+            val nEff = (cps * tEff).coerceAtLeast(0.0)
+            val nF = floor(nEff).toInt()
+            val nC = nF + 1
+            val frac = nEff - nF
+            val chiL = ci.chi2L(nF) + frac * (ci.chi2L(nC) - ci.chi2L(nF))
+            val chiR = ci.chi2R(nF + 1) + frac * (ci.chi2R(nC + 1) - ci.chi2R(nF + 1))
+            val scale2usvh = if (tEff > 0.0) 0.5 / tEff * inverseSensitivity else 0.0
+
+            bufMean[i] = cps * inverseSensitivity
+            bufLow[i]  = chiL * scale2usvh
+            bufHigh[i] = chiR * scale2usvh
+        }
+        return Triple(bufMean, bufLow, bufHigh)
+    }
+
+    /** A point (start == end, weight = counts) or interval (weight = density [cps]). */
+    private data class AdaptiveSample(
+        val start: Double, val end: Double, val weight: Double, val scale: Double
+    ) {
+        val midpoint = start + (end - start) / 2.0
+        val beginning = start - scale
+        val ending = end + scale
+    }
+
+    /**
+     * Fills the adaptive rate [outCps] and, optionally, its Poisson [outVariance].
+     *
+     * Polynomial-piece boundaries are sorted independently: variable bandwidths
+     * can reverse their order relative to the original timestamps. Accumulated
+     * cubic means and quintic variances serve the full-support interior. Near
+     * observation boundaries, direct evaluation preserves each source's mass.
+     * Only sources intersecting the query range expanded by [scale] need pilot
+     * estimates. Long intervals keep their original midpoints, even when those
+     * lie far outside the query range; the pilot seeks to each required window.
+     */
+    private fun estimateAdaptiveDoseRateHelper(
+        t2s: DoubleArray, scale: Double,
+        outCps: DoubleArray, outVariance: DoubleArray?,
+        tEndOverride: Double? = null
+    ) {
+        require(scale.isFinite() && scale > 0.0) { "Scale must be finite and positive" }
+        require(tEndOverride == null || tEndOverride.isFinite()) { "End time must be finite" }
+        for (i in t2s.indices) {
+            require(t2s[i].isFinite() && (i == 0 || t2s[i] >= t2s[i - 1])) {
+                "Query times must be finite and sorted ascending"
+            }
+        }
+        if (t2s.isEmpty() || (size == 0 && intervals.isEmpty())) return
+        val tEnd = if (tEndOverride != null) maxOf(dataTEnd, tEndOverride) else dataTEnd
+        if (tEnd <= dataTStart) return
+
+        // --- Candidate selection: no final bandwidth can exceed the slider scale ---
+        // Preserve the full data extent for both pilot and final boundary masses.
+        val rangeLo = t2s.first() - scale
+        val rangeHi = t2s.last() + scale
+        val pointFrom = lowerBound(ts, size, rangeLo)
+        val pointUntil = upperBound(ts, size, rangeHi)
+        val sources = ArrayList<AdaptiveSample>(pointUntil - pointFrom)
+        for (i in pointFrom until pointUntil) {
+            sources.add(AdaptiveSample(ts[i], ts[i], ns[i].toDouble(), scale))
+        }
+        if (intervals.isNotEmpty()) {
+            val index = intervalIndex ?: IntervalIndex(intervals).also { intervalIndex = it }
+            index.addOverlapping(rangeLo, rangeHi, scale, sources)
+        }
+        if (sources.isEmpty()) return
+
+        // --- First pass: evaluate the fixed KDE only at candidate centres ---
+        // Point-only data needs at most a 2h_0 halo. Interval midpoints can be
+        // arbitrarily far away, so do not crop pilot inputs to that fixed halo.
+        sources.sortBy { it.midpoint }
+        val pilotTimes = DoubleArray(sources.size) { sources[it].midpoint }
+        val pilotDoses = estimateDoseRate(pilotTimes, scale, tEndOverride)
+        for (i in sources.indices) {
+            // A zero pilot dose keeps the maximum (background) bandwidth.
+            val dose = pilotDoses[i]
+            val h = if (dose > 0.0) {
+                (scale * ADAPTIVE_BACKGROUND_DOSE / dose).coerceIn(scale / 10.0, scale)
+            } else scale
+            sources[i] = sources[i].copy(scale = h)
+        }
+        sources.removeAll { it.ending < t2s.first() || it.beginning > t2s.last() }
+        if (sources.isEmpty()) return
+
+        // --- Second pass: polynomial interior, direct evaluation at the edges ---
+        // Use subtraction predicates: rounding tStart + scale or tEnd - scale
+        // can misclassify a query at an epoch timestamp. Since h_i <= scale,
+        // every source's boundary mass is one throughout the interior range.
+        var interiorFrom = 0
+        while (interiorFrom < t2s.size && t2s[interiorFrom] - dataTStart < scale) interiorFrom++
+        var interiorUntil = interiorFrom
+        while (interiorUntil < t2s.size && tEnd - t2s[interiorUntil] >= scale) interiorUntil++
+        if (interiorFrom == interiorUntil) {
+            estimateAdaptiveDirect(t2s, 0, t2s.size, sources, outCps, outVariance, tEnd)
+            return
+        }
+        estimateAdaptiveDirect(t2s, 0, interiorFrom, sources, outCps, outVariance, tEnd)
+        estimateAdaptiveInterior(t2s, interiorFrom, interiorUntil, scale, sources, outCps, outVariance, tEnd)
+        estimateAdaptiveDirect(t2s, interiorUntil, t2s.size, sources, outCps, outVariance, tEnd)
+    }
+
+    /**
+     * Original adaptive source sweep for a boundary query range. These queries
+     * use bandwidth-dependent normalization, so evaluating each active source
+     * directly is simpler than accumulating separately normalized polynomials.
+     * Boundary-only requests never allocate polynomial pieces or accumulators.
+     */
+    private fun estimateAdaptiveDirect(
+        t2s: DoubleArray, queryFrom: Int, queryUntil: Int,
+        sources: List<AdaptiveSample>, outCps: DoubleArray, outVariance: DoubleArray?, tEnd: Double
+    ) {
+        if (queryFrom == queryUntil) return
+        val candidates = sources.indices.filter {
+            sources[it].ending > t2s[queryFrom] && sources[it].beginning <= t2s[queryUntil - 1]
+        }
+        val beginnings = candidates.sortedBy { sources[it].beginning }
+        val endings = candidates.sortedBy { sources[it].ending }
+        val active = LinkedHashSet<Int>()
+        var admit = 0
+        var evict = 0
+        for (j in queryFrom until queryUntil) {
+            val t = t2s[j]
+            // Admit before evicting so a sparse query can skip an entire support.
+            while (admit < beginnings.size && sources[beginnings[admit]].beginning <= t) {
+                active.add(beginnings[admit++])
+            }
+            while (evict < endings.size && sources[endings[evict]].ending <= t) {
+                active.remove(endings[evict++])
+            }
+            val (cps, variance) = evaluateAdaptiveSourcesDirect(t, tEnd, sources, active, outVariance != null)
+            outCps[j] = cps
+            if (outVariance != null) outVariance[j] = variance
+        }
+    }
+
+    /** Accumulates unnormalized polynomials only where every boundary mass is one. */
+    private fun estimateAdaptiveInterior(
+        t2s: DoubleArray, queryFrom: Int, queryUntil: Int, scale: Double,
+        sources: List<AdaptiveSample>, outCps: DoubleArray, outVariance: DoubleArray?, tEnd: Double
+    ) {
+        // --- Sweep independently sorted polynomial-piece boundaries ---
+        // A source is represented by at most three non-negative pieces. Keeping
+        // a short interval as one middle polynomial avoids cancellation between
+        // two almost coincident step primitives.
+        val withVariance = outVariance != null
+        val raw = AdaptiveAccumulator(withVariance)
+        val pieces = ArrayList<AdaptivePiece>()
+        for (i in sources.indices) {
+            val source = sources[i]
+            if (source.ending <= t2s[queryFrom] || source.beginning > t2s[queryUntil - 1]) continue
+            // Intersect the original support lifecycle with the clipped kernel
+            // predicates. A rounded beginning can otherwise admit a negative
+            // point polynomial just before u = -1, hidden by other sources.
+            val beginning = maxOf(source.beginning,
+                adaptiveClipBoundary(source.start, source.scale, -1.0, t2s, queryFrom, queryUntil))
+            val ending = minOf(source.ending,
+                adaptiveClipBoundary(source.end, source.scale, 1.0, t2s, queryFrom, queryUntil))
+            if (ending <= beginning) continue
+            fun piece(beginning: Double, ending: Double, kind: AdaptivePieceKind) {
+                if (ending > beginning && ending > t2s[queryFrom] && beginning <= t2s[queryUntil - 1]) {
+                    pieces.add(AdaptivePiece(i, beginning, ending, kind, withVariance))
+                }
+            }
+            if (source.start == source.end) {
+                piece(beginning, ending, AdaptivePieceKind.POINT)
+            } else {
+                val leftTransition = adaptiveClipBoundary(source.start, source.scale, 1.0, t2s, queryFrom, queryUntil)
+                    .coerceIn(beginning, ending)
+                val rightTransition = adaptiveClipBoundary(source.end, source.scale, -1.0, t2s, queryFrom, queryUntil)
+                    .coerceIn(beginning, ending)
+                val riseEnd = minOf(leftTransition, rightTransition)
+                val fallStart = maxOf(leftTransition, rightTransition)
+                piece(beginning, riseEnd, AdaptivePieceKind.RISING)
+                piece(riseEnd, fallStart, if (leftTransition <= rightTransition) {
+                    AdaptivePieceKind.PLATEAU
+                } else AdaptivePieceKind.MIDDLE)
+                piece(fallStart, ending, AdaptivePieceKind.FALLING)
+            }
+        }
+        val beginnings = pieces.sortedBy { it.beginning }
+        val endings = pieces.sortedBy { it.ending }
+        val activeDynamic = LinkedHashSet<AdaptivePiece>()
+        val activeSources = LinkedHashSet<Int>()
+        var origin = t2s[queryFrom]
+        var admit = 0
+        var evict = 0
+
+        for (j in queryFrom until queryUntil) {
+            val t = t2s[j]
+            // Remove first: an interval has just one active piece at each query.
+            // Pieces wholly between sparse queries are skipped on admission.
+            while (evict < endings.size && endings[evict].ending <= t) {
+                val piece = endings[evict++]
+                if (!piece.active) continue
+                raw.add(piece, -1.0)
+                piece.active = false
+                activeDynamic.remove(piece)
+                activeSources.remove(piece.sourceIndex)
+            }
+
+            // Rebuild only nonconstant pieces in a nearby coordinate system.
+            // A nonconstant regime spans at most 2h_0 of active query times,
+            // crossing at most 21 rebases spaced h_min = h_0/10 apart.
+            // Long plateaus need no rebuilding.
+            if (t - origin >= scale / 10.0) {
+                origin = t
+                raw.clearDynamic()
+                for (piece in activeDynamic) {
+                    piece.calculate(sources[piece.sourceIndex], origin)
+                    raw.add(piece, 1.0)
+                }
+            }
+            while (admit < beginnings.size && beginnings[admit].beginning <= t) {
+                val piece = beginnings[admit++]
+                if (piece.ending <= t) continue
+                piece.calculate(sources[piece.sourceIndex], origin)
+                raw.add(piece, 1.0)
+                piece.active = true
+                if (piece.kind != AdaptivePieceKind.PLATEAU) activeDynamic.add(piece)
+                activeSources.add(piece.sourceIndex)
+            }
+            if (activeSources.isEmpty()) continue
+
+            raw.evaluate(t - origin)
+            var cps = raw.mean.value
+            var variance = raw.variance?.value ?: 0.0
+            val cpsError = raw.mean.error
+            val varianceError = raw.variance?.error ?: 0.0
+
+            // Power-basis evaluation loses relative precision in vanishing
+            // tails. Use the stable original integrals only when accumulated
+            // rounding bounds indicate cancellation, not for ordinary queries.
+            if (!cps.isFinite() || cps < 0.0 || (cpsError > 0.0 && cps <= 1e7 * cpsError) ||
+                (withVariance && (!variance.isFinite() || variance < 0.0 ||
+                    (varianceError > 0.0 && variance <= 1e7 * varianceError)))) {
+                val direct = evaluateAdaptiveSourcesDirect(t, tEnd, sources, activeSources, withVariance)
+                cps = direct.first
+                variance = direct.second
+            }
+            outCps[j] = cps
+            if (outVariance != null) outVariance[j] = variance
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Adaptive polynomial pieces — coefficients in powers of (t − origin).
+    // -------------------------------------------------------------------------
+
+    private enum class AdaptivePieceKind { POINT, RISING, MIDDLE, PLATEAU, FALLING }
+
+    /**
+     * First requested query where the original clipped integral changes regime.
+     * At epoch timestamps, rounding endpoint ± h can select the wrong piece.
+     * Search the queries using the original predicate; walking neighbouring
+     * doubles can take arbitrarily long when subtraction rounds them alike.
+     */
+    private fun adaptiveClipBoundary(
+        endpoint: Double, scale: Double, limit: Double, queries: DoubleArray,
+        queryFrom: Int, queryUntil: Int
+    ): Double {
+        val inverseScale = 1.0 / scale
+        var lo = queryFrom
+        var hi = queryUntil
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if ((queries[mid] - endpoint) * inverseScale >= limit) hi = mid else lo = mid + 1
+        }
+        return if (lo < queryUntil) queries[lo] else Double.POSITIVE_INFINITY
+    }
+
+    private class AdaptivePiece(
+        val sourceIndex: Int, val beginning: Double, val ending: Double,
+        val kind: AdaptivePieceKind, withVariance: Boolean
+    ) {
+        val mean = DoubleArray(4)
+        val variance = if (withVariance) DoubleArray(6) else null
+        val meanDegree = when (kind) {
+            AdaptivePieceKind.PLATEAU -> 0
+            AdaptivePieceKind.RISING, AdaptivePieceKind.FALLING -> 3
+            else -> 2
+        }
+        val varianceDegree = if (meanDegree == 3) 5 else 2 * meanDegree
+        var meanMagnitude = 0.0
+        var varianceMagnitude = 0.0
+        var active = false
+
+        fun calculate(source: AdaptiveSample, origin: Double) {
+            val h = source.scale
+            val w = source.weight
+            if (kind == AdaptivePieceKind.PLATEAU) {
+                mean[0] = w
+                variance?.set(0, 0.6 * w / h)
+                meanMagnitude = w
+                varianceMagnitude = 0.6 * w / h
+                return
+            }
+            if (kind == AdaptivePieceKind.POINT || kind == AdaptivePieceKind.MIDDLE) {
+                // A full short interval has the same quadratic mean as a point,
+                // with the exact finite-width corrections in its coefficients.
+                val d = if (kind == AdaptivePieceKind.POINT) 0.0 else (source.end - source.start) / h
+                val u = if (kind == AdaptivePieceKind.POINT) (origin - source.start) / h else
+                    ((origin - source.start) / h + (origin - source.end) / h) / 2.0
+                val shape = (1.0 - u) * (1.0 + u)
+                val f = if (kind == AdaptivePieceKind.POINT) 0.75 * w / h else 0.75 * w * d
+                meanMagnitude = f
+                mean[0] = f * (shape - d * d / 12.0)
+                mean[1] = -2.0 * f * u
+                mean[2] = -f
+                variance?.let { v ->
+                    val g = if (kind == AdaptivePieceKind.POINT) 0.5625 * w / (h * h) else 0.5625 * w * d / h
+                    varianceMagnitude = g
+                    val b = -2.0 + d * d / 2.0
+                    v[0] = g * (shape * shape + (3.0 * u * u - 1.0) * d * d / 6.0 + d * d * d * d / 80.0)
+                    v[1] = g * (4.0 * u * u * u + 2.0 * b * u)
+                    v[2] = g * (6.0 * u * u + b)
+                    v[3] = 4.0 * g * u
+                    v[4] = g
+                }
+            } else {
+                // Integrals over a growing tail of normalized width delta:
+                //   mean/w = delta²(3 − delta)/4
+                //   variance·h/w = 3delta³(20 − 15delta + 3delta²)/80.
+                // Differentiate these polynomials to obtain local coefficients.
+                // Use the original endpoints, not rounded support boundaries.
+                val falling = kind == AdaptivePieceKind.FALLING
+                val delta = if (falling) 1.0 - (origin - source.end) / h else 1.0 + (origin - source.start) / h
+                meanMagnitude = w
+                mean[0] = w * delta * delta * (3.0 - delta) / 4.0
+                mean[1] = w * 0.75 * delta * (2.0 - delta)
+                mean[2] = w * 0.75 * (1.0 - delta)
+                mean[3] = -0.25 * w
+                variance?.let { v ->
+                    val g = w / h
+                    varianceMagnitude = g
+                    v[0] = g * 3.0 * delta * delta * delta * (20.0 - 15.0 * delta + 3.0 * delta * delta) / 80.0
+                    v[1] = g * 0.5625 * delta * delta * (2.0 - delta) * (2.0 - delta)
+                    v[2] = g * 1.125 * delta * (delta - 1.0) * (delta - 2.0)
+                    v[3] = g * (0.75 - 2.25 * delta + 1.125 * delta * delta)
+                    v[4] = g * 0.5625 * (delta - 1.0)
+                    v[5] = g * 0.1125
+                }
+                if (falling) {
+                    mean[1] = -mean[1]; mean[3] = -mean[3]
+                    variance?.let { v -> v[1] = -v[1]; v[3] = -v[3]; v[5] = -v[5] }
+                }
+            }
+            var inversePower = 1.0
+            for (k in 1..meanDegree) {
+                inversePower /= h
+                mean[k] *= inversePower
+            }
+            variance?.let { v ->
+                inversePower = 1.0
+                for (k in 1..varianceDegree) {
+                    inversePower /= h
+                    v[k] *= inversePower
+                }
+            }
+        }
+    }
+
+    private class AdaptiveAccumulator(withVariance: Boolean) {
+        val mean = AdaptivePolynomial(3)
+        val variance = if (withVariance) AdaptivePolynomial(5) else null
+
+        fun add(piece: AdaptivePiece, sign: Double) {
+            val constant = piece.kind == AdaptivePieceKind.PLATEAU
+            mean.add(piece.mean, piece.meanDegree, sign, constant, piece.meanMagnitude)
+            variance?.add(piece.variance!!, piece.varianceDegree, sign, constant, piece.varianceMagnitude)
+        }
+
+        fun clearDynamic() { mean.clearDynamic(); variance?.clearDynamic() }
+        fun evaluate(x: Double) { mean.evaluate(x); variance?.evaluate(x) }
+    }
+
+    /**
+     * Compensated coefficient sums, with an absolute rounding-error estimate.
+     * Plateaus are separate so rebasing never revisits long constant pieces.
+     * Each degree is cleared when its last contributing piece leaves; otherwise
+     * a residual cubic/quintic could grow while only lower-degree pieces remain.
+     */
+    private class AdaptivePolynomial(degree: Int) {
+        private val sums = DoubleArray(degree + 2)
+        private val corrections = DoubleArray(degree + 2)
+        private val errors = DoubleArray(degree + 2)
+        private val counts = IntArray(degree + 2)
+        private val constantIndex = degree + 1
+        var value = 0.0
+            private set
+        var error = 0.0
+            private set
+
+        fun add(coefficients: DoubleArray, degree: Int, sign: Double, constant: Boolean, magnitude: Double) {
+            for (k in 0..degree) {
+                val index = if (constant) constantIndex else k
+                counts[index] += if (sign > 0.0) 1 else -1
+                if (counts[index] == 0) {
+                    sums[index] = 0.0; corrections[index] = 0.0; errors[index] = 0.0
+                    continue
+                }
+                val term = sign * coefficients[k]
+                val sum = sums[index]
+                val next = sum + term
+                corrections[index] += if (kotlin.math.abs(sum) >= kotlin.math.abs(term)) {
+                    (sum - next) + term
+                } else (term - next) + sum
+                sums[index] = next
+                // Include the history of removals as well as current values.
+                errors[index] += 8e-15 * kotlin.math.abs(term)
+                // Coefficient construction can itself cancel near a support
+                // edge, even when x = 0 makes Horner evaluation exact.
+                if (k == 0) errors[index] += 8e-15 * magnitude
+            }
+        }
+
+        fun clearDynamic() {
+            sums.fill(0.0, 0, constantIndex)
+            corrections.fill(0.0, 0, constantIndex)
+            errors.fill(0.0, 0, constantIndex)
+            counts.fill(0, 0, constantIndex)
+        }
+
+        fun evaluate(x: Double) {
+            var result = 0.0
+            var bound = 0.0
+            for (k in constantIndex - 1 downTo 0) {
+                val coefficient = sums[k] + corrections[k]
+                result = result * x + coefficient
+                bound = bound * kotlin.math.abs(x) + errors[k] + 8e-15 * kotlin.math.abs(coefficient)
+            }
+            val constant = sums[constantIndex] + corrections[constantIndex]
+            value = result + constant
+            error = bound + errors[constantIndex] + 8e-15 * kotlin.math.abs(constant)
+        }
+    }
+
+    /** Direct boundary evaluation, also used for ill-conditioned interior polynomials. */
+    private fun evaluateAdaptiveSourcesDirect(
+        t: Double, tEnd: Double, sources: List<AdaptiveSample>, active: Set<Int>, withVariance: Boolean
+    ): Pair<Double, Double> {
+        val tClamped = t.coerceIn(dataTStart, tEnd)
+        var cps = 0.0
+        var variance = 0.0
+        for (index in active) {
+            val source = sources[index]
+            val invScale = 1.0 / source.scale
+            // Each source uses its own boundary mass. Outside the measured
+            // extent, keep the mass at the boundary as in the fixed KDE.
+            val massLo = maxOf(-1.0, (tClamped - tEnd) * invScale)
+            val massHi = minOf( 1.0, (tClamped - dataTStart) * invScale)
+            val km = epanechnikovIntegral(massLo, massHi)
+            if (km <= 1e-9) continue
+
+            if (source.start == source.end) {
+                val u = (t - source.start) * invScale
+                val q = 0.75 * invScale * (1.0 - u * u).coerceAtLeast(0.0) / km
+                cps += source.weight * q
+                if (withVariance) variance += source.weight * q * q
+            } else {
+                val uLo = maxOf(-1.0, (t - source.end) * invScale)
+                val uHi = minOf( 1.0, (t - source.start) * invScale)
+                if (uHi <= uLo) continue
+                val mass = adaptiveKernelIntegral(uLo, uHi)
+                cps += source.weight * mass / km
+                if (withVariance) {
+                    val k2 = adaptiveSquaredKernelIntegral(uLo, uHi)
+                    variance += source.weight * invScale * k2 / (km * km)
+                }
+            }
+        }
+        return Pair(cps, variance)
+    }
+
+    /**
+     * Definite kernel integrals for short overlaps near the support edges.
+     * Expanding around the overlap midpoint avoids subtracting almost equal
+     * primitives; in particular, the squared-kernel mass can be very small.
+     * The original fixed-bandwidth integral helpers remain unchanged.
+     */
+    private fun adaptiveKernelIntegral(uLo: Double, uHi: Double): Double {
+        val width = uHi - uLo
+        val mid = (uLo + uHi) / 2.0
+        val shape = (1.0 - mid) * (1.0 + mid)
+        return (0.75 * width * (shape - width * width / 12.0)).coerceAtLeast(0.0)
+    }
+
+    private fun adaptiveSquaredKernelIntegral(uLo: Double, uHi: Double): Double {
+        val width = uHi - uLo
+        val mid = (uLo + uHi) / 2.0
+        val width2 = width * width
+        val shape = (1.0 - mid) * (1.0 + mid)
+        return (0.5625 * width * (shape * shape +
+            (3.0 * mid * mid - 1.0) * width2 / 6.0 + width2 * width2 / 80.0)).coerceAtLeast(0.0)
+    }
+
+    // -------------------------------------------------------------------------
+    // Core convolution — seek to the requested windows, then slide locally.
+    // Earlier completed steps are represented by their cumulative density.
     // -------------------------------------------------------------------------
 
     /**
      * Fills [outCps] with raw count rate [cps] and [outKernelMasses] with the
      * boundary-correction kernel mass at each query point.
      *
-     * Point-event contribution: three moment accumulators S0, S1, S2 (unchanged
-     * from original). Interval contribution: four moment accumulators Tk0–Tk3
+     * Point-event contribution: three moment accumulators S0, S1, S2.
+     * Interval contribution: four moment accumulators Tk0–Tk3
      * for transitioning step events, plus a scalar [stepDone] for completed ones.
+     * Binary searches skip points and step transitions outside the query windows;
+     * the original data extent still supplies the boundary correction.
      *
      * Requires [t2s] sorted ascending.
      */
@@ -271,6 +854,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         outCps: DoubleArray, outKernelMasses: DoubleArray,
         tEndOverride: Double? = null
     ) {
+        if (t2s.isEmpty()) return
         if (size == 0 && stepCount == 0) {
             outCps.fill(0.0, 0, t2s.size)
             outKernelMasses.fill(0.0, 0, t2s.size)
@@ -287,6 +871,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         // --- Point-event sliding window accumulators ---
         var lo = 0; var hi = 0
         var s0 = 0.0; var s1 = 0.0; var s2 = 0.0
+        var origin = t2s.first()    // local moment origin, independent of data bounds
 
         // --- Step-event sliding window accumulators ---
         // A step event at t_j passes through three phases as query t sweeps right:
@@ -303,41 +888,58 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         var tk0       = 0.0         // Σ w_j           for transitioning events
         var tk1       = 0.0         // Σ w_j · τ_j
         var tk2       = 0.0         // Σ w_j · τ_j²
-        var tk3       = 0.0         // Σ w_j · τ_j³    (τ_j = t_j − tStart)
+        var tk3       = 0.0         // Σ w_j · τ_j³    (τ_j = t_j − origin)
 
         for (j in t2s.indices) {
             val t     = t2s[j]
             val winLo = t - scale
             val winHi = t + scale
 
-            // --- Point events: evict left edge, admit right edge ---
-            while (lo < hi && ts[lo] < winLo) {
-                val w = ns[lo].toDouble(); val tx = ts[lo] - tStart
-                s0 -= w; s1 -= w * tx; s2 -= w * tx * tx
-                lo++
+            // Seek directly to the first window, or across a gap between windows.
+            // Periodic rebasing also keeps polynomial moments small on long plots.
+            // With 32h between rebases, each transition can straddle at most one.
+            if (j == 0 || t - t2s[j - 1] >= 2.0 * scale || t - origin > 32.0 * scale) {
+                lo = lowerBound(ts, size, winLo)
+                hi = lo
+                s0 = 0.0; s1 = 0.0; s2 = 0.0
+                origin = t
+                stepEvict = upperBound(stepTs, stepCount, winLo)
+                stepAdmit = stepEvict
+                stepDone = completedStepWeight(stepEvict)
+                tk0 = 0.0; tk1 = 0.0; tk2 = 0.0; tk3 = 0.0
             }
+
+            // --- Point events: ADMIT first, then EVICT ---
+            // This also excludes newly admitted old points after sparse queries.
             while (hi < size && ts[hi] <= winHi) {
-                val w = ns[hi].toDouble(); val tx = ts[hi] - tStart
+                val w = ns[hi].toDouble(); val tx = ts[hi] - origin
                 s0 += w; s1 += w * tx; s2 += w * tx * tx
                 hi++
             }
+            while (lo < hi && ts[lo] < winLo) {
+                val w = ns[lo].toDouble(); val tx = ts[lo] - origin
+                s0 -= w; s1 -= w * tx; s2 -= w * tx * tx
+                lo++
+            }
+            if (lo == hi) { s0 = 0.0; s1 = 0.0; s2 = 0.0 }
 
             // --- Step events: ADMIT first, then EVICT ---
             // Admit when t ≥ t_j − h  ↔  t_j − h ≤ t  ↔  t_j ≤ t + h
             while (stepAdmit < stepCount && stepTs[stepAdmit] - scale <= t) {
-                val w = stepWs[stepAdmit]; val tj = stepTs[stepAdmit] - tStart
+                val w = stepWs[stepAdmit]; val tj = stepTs[stepAdmit] - origin
                 tk0 += w; tk1 += w * tj; tk2 += w * tj * tj; tk3 += w * tj * tj * tj
                 stepAdmit++
             }
             // Evict when t ≥ t_j + h  ↔  t_j + h ≤ t
             while (stepEvict < stepAdmit && stepTs[stepEvict] + scale <= t) {
-                val w = stepWs[stepEvict]; val tj = stepTs[stepEvict] - tStart
+                val w = stepWs[stepEvict]; val tj = stepTs[stepEvict] - origin
                 stepDone += w
                 tk0 -= w; tk1 -= w * tj; tk2 -= w * tj * tj; tk3 -= w * tj * tj * tj
                 stepEvict++
             }
+            if (stepEvict == stepAdmit) { tk0 = 0.0; tk1 = 0.0; tk2 = 0.0; tk3 = 0.0 }
 
-            val tRel = t - tStart   // τ = t − tStart  (numerical stability offset)
+            val tRel = t - origin   // τ = t − origin  (numerical stability offset)
 
             // Point-event KDE numerator: (3/4h) · Σ n_i(1 − u_i²)
             // Expanded via S0, S1, S2 without an inner loop.
@@ -393,6 +995,82 @@ class KernelDensityEstimator(private var sensitivity: Double) {
     // Internal helpers — sorted insertion and dynamic growth
     // -------------------------------------------------------------------------
 
+    /** First index with value ≥ [time], within the occupied prefix of [times]. */
+    private fun lowerBound(times: DoubleArray, count: Int, time: Double): Int {
+        var lo = 0; var hi = count
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (times[mid] < time) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    /** First index with value > [time], within the occupied prefix of [times]. */
+    private fun upperBound(times: DoubleArray, count: Int, time: Double): Int {
+        var lo = 0; var hi = count
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (times[mid] <= time) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    /**
+     * Density contributed by the first [count] completed steps. Only the invalid
+     * suffix is rebuilt, and only as far as this query needs. Insertion, merging,
+     * and pruning invalidate the prefix from the earliest changed index onward.
+     */
+    private fun completedStepWeight(count: Int): Double {
+        if (count == 0) return 0.0
+        if (stepPrefix.size < stepCount) stepPrefix = stepPrefix.copyOf(stepTs.size)
+        while (stepPrefixValid < count) {
+            val i = stepPrefixValid
+            stepPrefix[i] = stepWs[i] + if (i > 0) stepPrefix[i - 1] else 0.0
+            stepPrefixValid++
+        }
+        return stepPrefix[count - 1]
+    }
+
+    /**
+     * Immutable interval-overlap index, built only when adaptive KDE needs it.
+     * Intervals are sorted by start; a segment tree stores the maximum end in
+     * each subtree. This finds spanning intervals even when both endpoints and
+     * their midpoint lie outside the requested range. Reused across plot pans.
+     */
+    private class IntervalIndex(intervals: List<SampleInterval>) {
+        private val samples = intervals.sortedBy { it.start }
+        private val leafCount: Int
+        private val maxEnds: DoubleArray
+
+        init {
+            var capacity = 1
+            while (capacity < samples.size) capacity *= 2
+            leafCount = capacity
+            maxEnds = DoubleArray(2 * capacity) { Double.NEGATIVE_INFINITY }
+            for (i in samples.indices) maxEnds[capacity + i] = samples[i].end
+            for (i in capacity - 1 downTo 1) maxEnds[i] = maxOf(maxEnds[2 * i], maxEnds[2 * i + 1])
+        }
+
+        fun addOverlapping(left: Double, right: Double, scale: Double, out: ArrayList<AdaptiveSample>) {
+            collect(1, 0, leafCount, left, right, scale, out)
+        }
+
+        private fun collect(
+            node: Int, from: Int, until: Int, left: Double, right: Double,
+            scale: Double, out: ArrayList<AdaptiveSample>
+        ) {
+            if (from >= samples.size || samples[from].start > right || maxEnds[node] < left) return
+            if (until - from == 1) {
+                val sample = samples[from]
+                out.add(AdaptiveSample(sample.start, sample.end, sample.density, scale))
+                return
+            }
+            val mid = (from + until) ushr 1
+            collect(2 * node, from, mid, left, right, scale, out)
+            collect(2 * node + 1, mid, until, left, right, scale, out)
+        }
+    }
+
     /**
      * Inserts a step event maintaining sorted order via bubble-back, then attempts
      * to merge it with an existing step event at the same timestamp.
@@ -418,6 +1096,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
             val tmpW = stepWs[i - 1]; stepWs[i - 1] = stepWs[i]; stepWs[i] = tmpW
             i--
         }
+        stepPrefixValid = minOf(stepPrefixValid, i)
 
 // Merge with a coincident neighbour if timestamps are within STEP_MERGE_EPSILON.
 //
@@ -429,6 +1108,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
 //   No left neighbour exists. The element now at index 1 is the former index-0
 //   element and may be within epsilon — check the RIGHT neighbour instead.
         if (i > 0 && stepTs[i] - stepTs[i - 1] <= STEP_MERGE_EPSILON) {
+            stepPrefixValid = minOf(stepPrefixValid, i - 1)
             stepWs[i - 1] += stepWs[i]
             removeStepAt(i)
             i--
@@ -449,6 +1129,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
      * O(stepCount − index); O(1) for the common case where [index] is near the end.
      */
     private fun removeStepAt(index: Int) {
+        stepPrefixValid = minOf(stepPrefixValid, index)
         System.arraycopy(stepTs, index + 1, stepTs, index, stepCount - index - 1)
         System.arraycopy(stepWs, index + 1, stepWs, index, stepCount - index - 1)
         stepCount--
@@ -467,6 +1148,12 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         }
         val stepKeepFrom = removableTimedOutStepPrefix(minTime)
         if (stepKeepFrom > 0) {
+            // Keep adaptive intervals consistent with the retained step signal.
+            // A removable zero-sum prefix ends only after all its intervals close.
+            val removedThrough = stepTs[stepKeepFrom - 1] + STEP_MERGE_EPSILON
+            intervals.removeAll { it.end <= removedThrough }
+            intervalIndex = null
+            stepPrefixValid = 0
             System.arraycopy(stepTs, stepKeepFrom, stepTs, 0, stepCount - stepKeepFrom)
             System.arraycopy(stepWs, stepKeepFrom, stepWs, 0, stepCount - stepKeepFrom)
             stepCount -= stepKeepFrom
