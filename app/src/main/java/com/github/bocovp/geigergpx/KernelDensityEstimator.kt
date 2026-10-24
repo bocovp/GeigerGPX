@@ -366,8 +366,8 @@ class KernelDensityEstimator(private var sensitivity: Double) {
      *
      * Polynomial-piece boundaries are sorted independently: variable bandwidths
      * can reverse their order relative to the original timestamps. Accumulated
-     * cubic means and quintic variances replace per-query source evaluation;
-     * boundary normalization is applied per distinct bandwidth where necessary.
+     * cubic means and quintic variances serve the full-support interior. Near
+     * observation boundaries, direct evaluation preserves each source's mass.
      * Only sources intersecting the query range expanded by [scale] need pilot
      * estimates. Long intervals keep their original midpoints, even when those
      * lie far outside the query range; the pilot seeks to each required window.
@@ -421,47 +421,91 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         sources.removeAll { it.ending < t2s.first() || it.beginning > t2s.last() }
         if (sources.isEmpty()) return
 
-        // --- Second pass: sweep independently sorted polynomial-piece boundaries ---
+        // --- Second pass: polynomial interior, direct evaluation at the edges ---
+        // Use subtraction predicates: rounding tStart + scale or tEnd - scale
+        // can misclassify a query at an epoch timestamp. Since h_i <= scale,
+        // every source's boundary mass is one throughout the interior range.
+        var interiorFrom = 0
+        while (interiorFrom < t2s.size && t2s[interiorFrom] - dataTStart < scale) interiorFrom++
+        var interiorUntil = interiorFrom
+        while (interiorUntil < t2s.size && tEnd - t2s[interiorUntil] >= scale) interiorUntil++
+        if (interiorFrom == interiorUntil) {
+            estimateAdaptiveDirect(t2s, 0, t2s.size, sources, outCps, outVariance, tEnd)
+            return
+        }
+        estimateAdaptiveDirect(t2s, 0, interiorFrom, sources, outCps, outVariance, tEnd)
+        estimateAdaptiveInterior(t2s, interiorFrom, interiorUntil, scale, sources, outCps, outVariance, tEnd)
+        estimateAdaptiveDirect(t2s, interiorUntil, t2s.size, sources, outCps, outVariance, tEnd)
+    }
+
+    /**
+     * Original adaptive source sweep for a boundary query range. These queries
+     * use bandwidth-dependent normalization, so evaluating each active source
+     * directly is simpler than accumulating separately normalized polynomials.
+     * Boundary-only requests never allocate polynomial pieces or accumulators.
+     */
+    private fun estimateAdaptiveDirect(
+        t2s: DoubleArray, queryFrom: Int, queryUntil: Int,
+        sources: List<AdaptiveSample>, outCps: DoubleArray, outVariance: DoubleArray?, tEnd: Double
+    ) {
+        if (queryFrom == queryUntil) return
+        val candidates = sources.indices.filter {
+            sources[it].ending > t2s[queryFrom] && sources[it].beginning <= t2s[queryUntil - 1]
+        }
+        val beginnings = candidates.sortedBy { sources[it].beginning }
+        val endings = candidates.sortedBy { sources[it].ending }
+        val active = LinkedHashSet<Int>()
+        var admit = 0
+        var evict = 0
+        for (j in queryFrom until queryUntil) {
+            val t = t2s[j]
+            // Admit before evicting so a sparse query can skip an entire support.
+            while (admit < beginnings.size && sources[beginnings[admit]].beginning <= t) {
+                active.add(beginnings[admit++])
+            }
+            while (evict < endings.size && sources[endings[evict]].ending <= t) {
+                active.remove(endings[evict++])
+            }
+            val (cps, variance) = evaluateAdaptiveSourcesDirect(t, tEnd, sources, active, outVariance != null)
+            outCps[j] = cps
+            if (outVariance != null) outVariance[j] = variance
+        }
+    }
+
+    /** Accumulates unnormalized polynomials only where every boundary mass is one. */
+    private fun estimateAdaptiveInterior(
+        t2s: DoubleArray, queryFrom: Int, queryUntil: Int, scale: Double,
+        sources: List<AdaptiveSample>, outCps: DoubleArray, outVariance: DoubleArray?, tEnd: Double
+    ) {
+        // --- Sweep independently sorted polynomial-piece boundaries ---
         // A source is represented by at most three non-negative pieces. Keeping
         // a short interval as one middle polynomial avoids cancellation between
         // two almost coincident step primitives.
         val withVariance = outVariance != null
         val raw = AdaptiveAccumulator(withVariance)
-        val outside = if (t2s.first() <= dataTStart || t2s.last() >= tEnd) {
-            AdaptiveAccumulator(withVariance)
-        } else null
-        val needGroups = t2s.any { t ->
-            t > dataTStart && t < tEnd &&
-                (t - dataTStart < scale || tEnd - t < scale)
-        }
-        val groups = HashMap<Double, AdaptiveGroup>()
         val pieces = ArrayList<AdaptivePiece>()
         for (i in sources.indices) {
             val source = sources[i]
+            if (source.ending <= t2s[queryFrom] || source.beginning > t2s[queryUntil - 1]) continue
             // Intersect the original support lifecycle with the clipped kernel
             // predicates. A rounded beginning can otherwise admit a negative
             // point polynomial just before u = -1, hidden by other sources.
             val beginning = maxOf(source.beginning,
-                adaptiveClipBoundary(source.start, source.scale, -1.0, t2s))
+                adaptiveClipBoundary(source.start, source.scale, -1.0, t2s, queryFrom, queryUntil))
             val ending = minOf(source.ending,
-                adaptiveClipBoundary(source.end, source.scale, 1.0, t2s))
+                adaptiveClipBoundary(source.end, source.scale, 1.0, t2s, queryFrom, queryUntil))
             if (ending <= beginning) continue
-            val group = if (needGroups) groups.getOrPut(source.scale) {
-                AdaptiveGroup(source.scale, withVariance)
-            } else null
-            val edgeMass = epanechnikovIntegral(maxOf(-1.0, (dataTStart - tEnd) / source.scale), 0.0)
-            val edgeFactor = if (edgeMass > 1e-9) 1.0 / edgeMass else 0.0
             fun piece(beginning: Double, ending: Double, kind: AdaptivePieceKind) {
-                if (ending > beginning && ending > t2s.first() && beginning <= t2s.last()) {
-                    pieces.add(AdaptivePiece(i, beginning, ending, kind, group, edgeFactor, withVariance))
+                if (ending > beginning && ending > t2s[queryFrom] && beginning <= t2s[queryUntil - 1]) {
+                    pieces.add(AdaptivePiece(i, beginning, ending, kind, withVariance))
                 }
             }
             if (source.start == source.end) {
                 piece(beginning, ending, AdaptivePieceKind.POINT)
             } else {
-                val leftTransition = adaptiveClipBoundary(source.start, source.scale, 1.0, t2s)
+                val leftTransition = adaptiveClipBoundary(source.start, source.scale, 1.0, t2s, queryFrom, queryUntil)
                     .coerceIn(beginning, ending)
-                val rightTransition = adaptiveClipBoundary(source.end, source.scale, -1.0, t2s)
+                val rightTransition = adaptiveClipBoundary(source.end, source.scale, -1.0, t2s, queryFrom, queryUntil)
                     .coerceIn(beginning, ending)
                 val riseEnd = minOf(leftTransition, rightTransition)
                 val fallStart = maxOf(leftTransition, rightTransition)
@@ -476,31 +520,21 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         val endings = pieces.sortedBy { it.ending }
         val activeDynamic = LinkedHashSet<AdaptivePiece>()
         val activeSources = LinkedHashSet<Int>()
-        val activeGroups = LinkedHashSet<AdaptiveGroup>()
-        var origin = t2s.first()
+        var origin = t2s[queryFrom]
         var admit = 0
         var evict = 0
 
-        fun accumulate(piece: AdaptivePiece, sign: Double) {
-            raw.add(piece, sign)
-            outside?.add(piece, sign, piece.edgeFactor)
-            piece.group?.accumulator?.add(piece, sign)
-        }
-
-        for (j in t2s.indices) {
+        for (j in queryFrom until queryUntil) {
             val t = t2s[j]
             // Remove first: an interval has just one active piece at each query.
             // Pieces wholly between sparse queries are skipped on admission.
             while (evict < endings.size && endings[evict].ending <= t) {
                 val piece = endings[evict++]
                 if (!piece.active) continue
-                accumulate(piece, -1.0)
+                raw.add(piece, -1.0)
                 piece.active = false
                 activeDynamic.remove(piece)
                 activeSources.remove(piece.sourceIndex)
-                piece.group?.let { group ->
-                    if (--group.activeCount == 0) activeGroups.remove(group)
-                }
             }
 
             // Rebuild only nonconstant pieces in a nearby coordinate system.
@@ -510,77 +544,27 @@ class KernelDensityEstimator(private var sensitivity: Double) {
             if (t - origin >= scale / 10.0) {
                 origin = t
                 raw.clearDynamic()
-                outside?.clearDynamic()
-                for (piece in activeDynamic) piece.group?.accumulator?.clearDynamic()
                 for (piece in activeDynamic) {
                     piece.calculate(sources[piece.sourceIndex], origin)
-                    accumulate(piece, 1.0)
+                    raw.add(piece, 1.0)
                 }
             }
             while (admit < beginnings.size && beginnings[admit].beginning <= t) {
                 val piece = beginnings[admit++]
                 if (piece.ending <= t) continue
                 piece.calculate(sources[piece.sourceIndex], origin)
-                accumulate(piece, 1.0)
+                raw.add(piece, 1.0)
                 piece.active = true
                 if (piece.kind != AdaptivePieceKind.PLATEAU) activeDynamic.add(piece)
                 activeSources.add(piece.sourceIndex)
-                piece.group?.let { group ->
-                    if (group.activeCount++ == 0) activeGroups.add(group)
-                }
             }
             if (activeSources.isEmpty()) continue
 
-            val x = t - origin
-            var cps: Double
-            var variance: Double
-            var cpsError: Double
-            var varianceError: Double
-            if (t <= dataTStart || t >= tEnd ||
-                (t - dataTStart >= scale && tEnd - t >= scale)) {
-                // In the interior all boundary masses are one. Outside the
-                // extent they are constant; symmetry gives the same mass at
-                // either endpoint, so one preweighted aggregate serves both.
-                val accumulator = if (t <= dataTStart || t >= tEnd) outside!! else raw
-                accumulator.evaluate(x)
-                cps = accumulator.mean.value
-                cpsError = accumulator.mean.error
-                variance = accumulator.variance?.value ?: 0.0
-                varianceError = accumulator.variance?.error ?: 0.0
-            } else {
-                // Near a measurement boundary the normalization is a cubic
-                // function of t and h. Its reciprocal is not polynomial. Sum
-                // one rational contribution per EXACT bandwidth, preserving
-                // the existing estimator without quantizing adaptive scales.
-                cps = 0.0; variance = 0.0; cpsError = 0.0; varianceError = 0.0
-                var minMass = Double.POSITIVE_INFINITY
-                for (group in activeGroups) {
-                    val km = epanechnikovIntegral(
-                        maxOf(-1.0, (t - tEnd) / group.scale),
-                        minOf(1.0, (t - dataTStart) / group.scale))
-                    if (km <= 1e-9) continue
-                    minMass = minOf(minMass, km)
-                    val accumulator = group.accumulator
-                    accumulator.mean.evaluateValue(x)
-                    accumulator.variance?.evaluateValue(x)
-                    cps += accumulator.mean.value / km
-                    if (withVariance) {
-                        variance += accumulator.variance!!.value / (km * km)
-                    }
-                }
-                if (minMass.isFinite()) {
-                    // Global absolute update histories dominate the sum of
-                    // group histories and coefficient magnitudes. Twice their
-                    // error bound, divided by the smallest accepted mass,
-                    // conservatively covers all group evaluations together.
-                    // Compute it once, rather than alongside every polynomial.
-                    raw.evaluate(x)
-                    val sumRoundoff = 8e-16 * activeGroups.size   // final, uncompensated group sums
-                    cpsError = 2.0 * raw.mean.error / minMass + sumRoundoff * kotlin.math.abs(cps)
-                    varianceError = 2.0 * (raw.variance?.error ?: 0.0) / (minMass * minMass) +
-                        sumRoundoff * kotlin.math.abs(variance)
-                }
-            }
+            raw.evaluate(t - origin)
+            var cps = raw.mean.value
+            var variance = raw.variance?.value ?: 0.0
+            val cpsError = raw.mean.error
+            val varianceError = raw.variance?.error ?: 0.0
 
             // Power-basis evaluation loses relative precision in vanishing
             // tails. Use the stable original integrals only when accumulated
@@ -610,27 +594,22 @@ class KernelDensityEstimator(private var sensitivity: Double) {
      * doubles can take arbitrarily long when subtraction rounds them alike.
      */
     private fun adaptiveClipBoundary(
-        endpoint: Double, scale: Double, limit: Double, queries: DoubleArray
+        endpoint: Double, scale: Double, limit: Double, queries: DoubleArray,
+        queryFrom: Int, queryUntil: Int
     ): Double {
         val inverseScale = 1.0 / scale
-        var lo = 0
-        var hi = queries.size
+        var lo = queryFrom
+        var hi = queryUntil
         while (lo < hi) {
             val mid = (lo + hi) ushr 1
             if ((queries[mid] - endpoint) * inverseScale >= limit) hi = mid else lo = mid + 1
         }
-        return if (lo < queries.size) queries[lo] else Double.POSITIVE_INFINITY
-    }
-
-    private class AdaptiveGroup(val scale: Double, withVariance: Boolean) {
-        val accumulator = AdaptiveAccumulator(withVariance)
-        var activeCount = 0
+        return if (lo < queryUntil) queries[lo] else Double.POSITIVE_INFINITY
     }
 
     private class AdaptivePiece(
         val sourceIndex: Int, val beginning: Double, val ending: Double,
-        val kind: AdaptivePieceKind, val group: AdaptiveGroup?, val edgeFactor: Double,
-        withVariance: Boolean
+        val kind: AdaptivePieceKind, withVariance: Boolean
     ) {
         val mean = DoubleArray(4)
         val variance = if (withVariance) DoubleArray(6) else null
@@ -723,10 +702,10 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         val mean = AdaptivePolynomial(3)
         val variance = if (withVariance) AdaptivePolynomial(5) else null
 
-        fun add(piece: AdaptivePiece, sign: Double, factor: Double = 1.0) {
+        fun add(piece: AdaptivePiece, sign: Double) {
             val constant = piece.kind == AdaptivePieceKind.PLATEAU
-            mean.add(piece.mean, piece.meanDegree, sign, factor, constant, piece.meanMagnitude)
-            variance?.add(piece.variance!!, piece.varianceDegree, sign, factor * factor, constant, piece.varianceMagnitude)
+            mean.add(piece.mean, piece.meanDegree, sign, constant, piece.meanMagnitude)
+            variance?.add(piece.variance!!, piece.varianceDegree, sign, constant, piece.varianceMagnitude)
         }
 
         fun clearDynamic() { mean.clearDynamic(); variance?.clearDynamic() }
@@ -750,8 +729,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
         var error = 0.0
             private set
 
-        fun add(coefficients: DoubleArray, degree: Int, sign: Double, factor: Double,
-                constant: Boolean, magnitude: Double) {
+        fun add(coefficients: DoubleArray, degree: Int, sign: Double, constant: Boolean, magnitude: Double) {
             for (k in 0..degree) {
                 val index = if (constant) constantIndex else k
                 counts[index] += if (sign > 0.0) 1 else -1
@@ -759,7 +737,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
                     sums[index] = 0.0; corrections[index] = 0.0; errors[index] = 0.0
                     continue
                 }
-                val term = sign * factor * coefficients[k]
+                val term = sign * coefficients[k]
                 val sum = sums[index]
                 val next = sum + term
                 corrections[index] += if (kotlin.math.abs(sum) >= kotlin.math.abs(term)) {
@@ -770,7 +748,7 @@ class KernelDensityEstimator(private var sensitivity: Double) {
                 errors[index] += 8e-15 * kotlin.math.abs(term)
                 // Coefficient construction can itself cancel near a support
                 // edge, even when x = 0 makes Horner evaluation exact.
-                if (k == 0) errors[index] += 8e-15 * factor * magnitude
+                if (k == 0) errors[index] += 8e-15 * magnitude
             }
         }
 
@@ -793,16 +771,9 @@ class KernelDensityEstimator(private var sensitivity: Double) {
             value = result + constant
             error = bound + errors[constantIndex] + 8e-15 * kotlin.math.abs(constant)
         }
-
-        /** Boundary groups share the global error bound; only their values vary. */
-        fun evaluateValue(x: Double) {
-            var result = 0.0
-            for (k in constantIndex - 1 downTo 0) result = result * x + (sums[k] + corrections[k])
-            value = result + (sums[constantIndex] + corrections[constantIndex])
-        }
     }
 
-    /** Stable fallback for an ill-conditioned polynomial evaluation near zero. */
+    /** Direct boundary evaluation, also used for ill-conditioned interior polynomials. */
     private fun evaluateAdaptiveSourcesDirect(
         t: Double, tEnd: Double, sources: List<AdaptiveSample>, active: Set<Int>, withVariance: Boolean
     ): Pair<Double, Double> {

@@ -603,6 +603,43 @@ class KernelDensityEstimatorTest {
     }
 
     @Test
+    fun adaptiveDirectAndPolynomialRangesAgreeAtRepeatedTransitionQueries() {
+        val baseSamples = listOf(
+            Sample(0.0, 100.0, 80), Sample(0.0, 0.0, 1), Sample(100.0, 0.0, 1),
+            Sample(17.5, 12.0, 30), Sample(20.0, 0.0, 12),
+            Sample(72.0, 18.0, 20), Sample(80.0, 0.0, 8)
+        )
+        for (offset in doubleArrayOf(0.0, 1_800_000_000.0)) {
+            val samples = baseSamples.map { it.copy(start = it.start + offset) }
+            val kde = estimator(samples, 5.0)
+            for (scale in doubleArrayOf(20.0, 60.0)) {
+                for (endOverride in listOf(null, offset + 115.0)) {
+                    val end = endOverride ?: offset + 100.0
+                    val queryList = mutableListOf(offset - scale, offset, offset + 50.0, end, end + scale)
+                    for (seam in doubleArrayOf(offset + scale, end - scale)) {
+                        queryList.addAll(listOf(Math.nextDown(seam), seam, seam, Math.nextUp(seam)))
+                    }
+                    val queries = queryList.sorted().toDoubleArray()
+                    val expectedRaw = rawReference(samples, 5.0, queries, scale, endOverride)
+                    val actualRaw = adaptiveRaw(kde, queries, scale, endOverride)
+                    assertArrayEquals("raw mean across evaluation ranges", expectedRaw.first, actualRaw.first, 1e-8)
+                    assertArrayEquals("raw variance across evaluation ranges", expectedRaw.second, actualRaw.second, 1e-8)
+                    assertCurvesEqual(reference(samples, 5.0, queries, scale, endOverride),
+                        kde.getAdaptiveConfidenceIntervals(queries, scale, endOverride), 1e-7)
+                    val meanOnly = kde.estimateAdaptiveDoseRate(queries, scale, endOverride)
+                    for (i in queries.indices) {
+                        assertEquals(expectedRaw.first[i] / 5.0, meanOnly[i], 1e-8)
+                        // Batch partitioning must agree with a boundary-only or
+                        // interior-only request at the same repeated timestamp.
+                        assertEquals(meanOnly[i], kde.estimateAdaptiveDoseRate(
+                            doubleArrayOf(queries[i]), scale, endOverride).single(), 1e-8)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     fun adaptiveLongIntervalPlateausAndSparseQueriesDoNotRetainTransitionPolynomials() {
         val samples = listOf(
             Sample(-1000.0, 0.0, 1), Sample(0.0, 10000.0, 2000),
@@ -719,10 +756,15 @@ class KernelDensityEstimatorTest {
             Sample(0.017623398201851992, 0.0714206739085058, 48), Sample(2.5, 0.0, 1)
         )
         val queries = doubleArrayOf(-8.7197, -4.980067732954356)
-        val expected = rawReference(samples, 1.0, queries, 50.0)
-        val actual = adaptiveRaw(estimator(samples, 1.0), queries, 50.0)
-        assertTrue(expected.second[1] > 0.0)
-        assertEquals(expected.second[1], actual.second[1], 2e-8 * expected.second[1])
+        // Distant anchors put the same tail in the polynomial interior; the
+        // unanchored data exercises the direct path for a short measurement.
+        val anchored = samples + listOf(Sample(-1000.0, 0.0, 1), Sample(1000.0, 0.0, 1))
+        for (fixture in listOf(samples, anchored)) {
+            val expected = rawReference(fixture, 0.1, queries, 50.0)
+            val actual = adaptiveRaw(estimator(fixture, 0.1), queries, 50.0)
+            assertTrue(expected.second[1] > 0.0)
+            assertEquals(expected.second[1], actual.second[1], 2e-8 * expected.second[1])
+        }
     }
 
     @Test(expected = IllegalArgumentException::class)
