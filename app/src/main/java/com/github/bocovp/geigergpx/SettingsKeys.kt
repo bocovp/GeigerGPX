@@ -8,4 +8,5 @@ object SettingsKeys {
     const val KEY_DOSE_RATE_FORMATTING = "dose_rate_formatting"
     const val KEY_DOSE_RATE_DIMENSION = "dose_rate_dimension"
     const val KEY_DOSE_RATE_ERROR_FORMAT = "dose_rate_error_format"
+    const val KEY_USE_ADAPTIVE_KDE = "use_adaptive_kde"
 }
