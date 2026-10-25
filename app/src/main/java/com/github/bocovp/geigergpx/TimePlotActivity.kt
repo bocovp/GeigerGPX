@@ -1003,13 +1003,11 @@ class TimePlotActivity : AppCompatActivity() {
             estimator = cache.estimator
         } else {
             var totalDuration = 0.0
-            var hasData = false
             for (p in points) {
                 yield()
                 totalDuration += p.seconds.coerceAtLeast(0.0)
-                if (p.counts > 0) hasData = true
             }
-            if (!hasData || totalDuration <= 0.0) return null
+            if (totalDuration <= 0.0) return null
 
             estimator = KernelDensityEstimator(sensitivity)
             var accumulatedSeconds = 0.0

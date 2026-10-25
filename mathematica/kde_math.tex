@@ -82,7 +82,12 @@ Let the data consist of $N$ point events at times $t_i$ with counts $n_i$,
 and independently of $L$ uniformly distributed sample intervals
 $[a_\ell, b_\ell]$ with counts $c_\ell$ (Section~\ref{sec:intervals}).
 Let $t_{\mathrm{start}}$ and $t_{\mathrm{end}}$ be the overall data
-extents, covering both point events and interval endpoints.
+extents, covering both point events and interval endpoints.  A recorded
+zero-count interval extends this observation range without adding count
+density.  This preserves leading and trailing zero-count exposure and
+allows a positive upper confidence limit for an entirely zero-count
+recording.  Point-only input still needs explicit observation information
+to distinguish recording time from the first and last detected event.
 
 The boundary-corrected KDE estimate at query time $t$ is
 \begin{equation}
@@ -323,395 +328,235 @@ The dose-rate confidence bounds are
 \end{equation}
 
 % ---------------------------------------------------------------------------
-\section{Adaptive Bandwidth}
+\section{Adaptive Bandwidth with Reflection}
 \label{sec:adaptive}
 
 \noindent\textit{Implemented in \texttt{estimateAdaptiveDoseRate} and
 \texttt{getAdaptiveConfidenceIntervals}.}
 
+\subsection{Reflected Kernel}
+
+Let $A$ and $B$ be the observation bounds, including any supplied
+\texttt{tEndOverride}, and let $D=B-A>0$.  The adaptive estimator uses
+reflection in both its pilot and final pass.  This is a separate boundary
+policy from the fixed estimator's kernel-mass division.
+
+Use coordinates $u=t-A$ and $v=s-A$ in $[0,D]$.  Define the periodised
+Epanechnikov kernel and its reflected counterpart by
+\begin{align}
+  P_h(z)&=\sum_{k\in\mathbb Z}K_h(z+2kD),\\
+  Q_h(t,s)&=P_h(u-v)+P_h(u+v).
+  \label{eq:reflectedKernel}
+\end{align}
+The first term contains translated original sources; the second contains
+translated mirror images.  Every sum is finite because $K_h$ has compact
+support.  When $h\le D$, ordinary reflections at the two endpoints suffice.
+When $h>D$, the same formula includes all repeated reflections; merely
+adding one image at each endpoint would miss contributions.
+
+For a common prescribed bandwidth,
+\begin{equation}
+  \int_A^B Q_h(t,s)\,ds=1,
+  \qquad
+  \int_A^B Q_h(t,s)\,dt=1.
+  \label{eq:reflectionMass}
+\end{equation}
+Thus reflection preserves a constant rate in expectation on a fixed,
+fully observed range and preserves the integrated mass of each source.
+There is no kernel-mass denominator.  It does not remove ordinary
+smoothing bias, and it imposes a horizontal tangent at each endpoint.
+Data-dependent or source-dependent bandwidths do not inherit a general
+unbiasedness guarantee from \eqref{eq:reflectionMass}.
+
+The adaptive estimator is defined on $[A,B]$.  Queries outside that range
+return zero means and bounds; reflected copies do not represent additional
+observation time or an indefinitely repeated signal outside the recording.
+A nonpositive observation duration also gives zero outputs.
+
 \subsection{Pilot Estimate and Per-Sample Scale}
 
-The adaptive estimator uses the same Epanechnikov kernel
-\eqref{eq:kernel}, but assigns a separate bandwidth to each point event and
-each original sample interval.  The TimePlot scale slider supplies the
-initial bandwidth $h_0>0$ in seconds.  First, the fixed-bandwidth
-estimator computes a pilot dose rate
+The TimePlot scale slider supplies $h_0>0$.  First, evaluate a
+fixed-bandwidth \emph{reflected} pilot at the original source times:
 \begin{equation}
-  D_0(x) = \alpha\,\hat\lambda_{h_0}(x),
-  \qquad D_{\mathrm{bg}}=0.1\,\mu\mathrm{Sv/h},
+  D_0(x)=\alpha\left[
+      \sum_i n_i Q_{h_0}(x,t_i)
+      +\sum_\ell w_\ell\int_{a_\ell}^{b_\ell}Q_{h_0}(x,s)\,ds
+    \right],
+  \qquad w_\ell=\frac{c_\ell}{b_\ell-a_\ell}.
+  \label{eq:reflectedPilot}
 \end{equation}
-where $\alpha$ is the inverse detector sensitivity and the pilot includes
-the existing boundary correction.  The bandwidth assigned to a source at
-representative time $x$ is
+Here $\alpha$ is inverse detector sensitivity.  The source bandwidth is
 \begin{equation}
-  h(x) = \min\!\left(h_0,\;
-             \max\!\left(\frac{h_0}{10},\;
-                         h_0\frac{D_{\mathrm{bg}}}{D_0(x)}\right)\right).
+  h(x)=\min\!\left(h_0,
+       \max\!\left(\frac{h_0}{10},
+              h_0\frac{0.1\,\mu\mathrm{Sv/h}}{D_0(x)}\right)\right).
   \label{eq:adaptiveScale}
 \end{equation}
-A zero pilot dose uses $h_0$.  Thus $h_0$ is the bandwidth at background
-dose and the maximum permitted bandwidth; dose rates at or above
-$1\,\mu\mathrm{Sv/h}$ use the minimum $h_0/10$.
+A zero pilot dose selects $h_0$.  Point events use $x=t_i$; an interval
+uses its original midpoint $x=(a_\ell+b_\ell)/2$.  The midpoint selects
+only the bandwidth: interval counts remain uniformly spread over their
+original interval and are integrated analytically.  Every reflected copy
+inherits its original source's bandwidth.  It is not a new observation
+and does not receive an independently selected bandwidth.
 
-For point event $i$, the representative time is $x_i=t_i$ and its bandwidth
-is $h_i=h(t_i)$.  For interval $\ell$, the pilot is evaluated only at its
-midpoint:
-\begin{equation}
-  x_\ell=\frac{a_\ell+b_\ell}{2},\qquad h_\ell=h(x_\ell).
-\end{equation}
-This one bandwidth applies to the whole interval; its counts continue to be
-convolved analytically over $[a_\ell,b_\ell]$, rather than concentrated at
-the midpoint.  Original intervals are retained separately from the merged
-step events, since merging endpoints can discard the interval identities
-needed to select these bandwidths.
-
-The representative times of all candidate sources are sorted for the pilot evaluation, and the
-resulting bandwidths are held fixed during the second pass.  This is a
-sample-point adaptive KDE: the bandwidth belongs to the data source and
-does not change as the query time moves.  Candidate and pilot selection
-are described in Section~\ref{sec:queryRange}.
-
-\subsection{Estimate and Boundary Correction}
-
-Write $A=t_{\mathrm{start}}$, $B=t_{\mathrm{end}}$, with $B$ extended to
-\texttt{tEndOverride} when that is later than the last recorded event.
-As in the fixed-bandwidth implementation, boundary correction uses the
-clamped query $\bar t=\min(B,\max(A,t))$.  For any bandwidth $h$, define
-\begin{equation}
-  m_h(t)=\int_A^B K_h(\bar t-s)\,ds
-    =\texttt{epanechnikovIntegral}\!\left(
-         \max\!\left(-1,\frac{\bar t-B}{h}\right),
-         \min\!\left(1,\frac{\bar t-A}{h}\right)\right).
-  \label{eq:adaptiveMass}
-\end{equation}
-Each source is divided by the boundary mass for its own bandwidth.  The
-adaptive count-rate estimate is
+The final rate is
 \begin{equation}
   \hat\lambda_{\mathrm{ad}}(t)
-    =\sum_{i=1}^N\frac{n_i K_{h_i}(t-t_i)}{m_{h_i}(t)}
-     +\sum_{\ell=1}^L\frac{w_\ell}{m_{h_\ell}(t)}
-          \bigl[F_{h_\ell}(t-a_\ell)-F_{h_\ell}(t-b_\ell)\bigr],
-  \qquad w_\ell=\frac{c_\ell}{b_\ell-a_\ell}.
+  =\sum_i n_i Q_{h_i}(t,t_i)
+    +\sum_\ell w_\ell\int_{a_\ell}^{b_\ell}Q_{h_\ell}(t,s)\,ds.
   \label{eq:adaptiveMean}
 \end{equation}
-Here $F_h$ denotes \eqref{eq:Fk} with bandwidth $h$.  In particular, the
-$1/h_i$ kernel normalisation is retained for every point.  Multiplication
-by $\alpha$ gives dose rate.  A negligible boundary mass contributes zero,
-as in the fixed-bandwidth path.
+Multiplication by $\alpha$ converts cps to dose rate.  Original interval
+identities are retained separately from merged step events so their
+midpoints and selected bandwidths remain available.
 
-The numerator uses the actual query $t$ even outside the recorded extent;
-only the correction mass uses $\bar t$.  This prevents division by a
-vanishing boundary mass outside the observation range.  If all bandwidths
-coincide, \eqref{eq:adaptiveMean} reduces to the existing fixed-bandwidth
-mean.  For varying bandwidths this is a per-source boundary correction;
-there is no single common kernel mass to divide out.  It is not a claim of
-unbiasedness for arbitrary nonconstant intensity or bandwidth fields.
-
-\subsection{Piecewise Polynomial Accumulation}
+\subsection{A Bounded Number of Quadratic Kernel Pieces}
 \label{sec:adaptivePolynomials}
 
-The second pass evaluates the same mean and variance as
-\eqref{eq:adaptiveMean} and \eqref{eq:adaptiveVariance}.  Queries with
-full support for every bandwidth use polynomial accumulators in place of
-a loop over all contributing sources.  Queries near or outside the
-observation boundaries use the direct source sums, as described in
-Section~\ref{sec:adaptiveDispatch}.  The pilot, bandwidth limits, boundary
-correction, and confidence construction are unchanged.  In this
-subsection $P$ and $V$ denote raw mean and variance contributions before
-boundary normalisation.
+Explicitly allocating every repeated image would cost $O(h/D)$ for short
+recordings.  Instead, $P_h(z)$ is represented by a few quadratic pieces
+on $z\in[-D,2D]$, which covers both arguments in
+\eqref{eq:reflectedKernel}.  Its only internal breakpoints are
+$z=\pm h-2kD$.  These form two arithmetic progressions of period $2D$,
+so the number of breakpoints on this range is bounded independently of
+$h/D$.
 
-\paragraph{Point events.}
-A point with count $n$, timestamp $c$, and bandwidth $h$ contributes one
-polynomial piece on $[c-h,c+h]$.  With $u=(t-c)/h$,
+Within one piece, choose a reference offset $z_0$.  The active image
+indices are consecutive integers:
 \begin{equation}
-  P(t)=\frac{3n}{4h}(1-u^2),\qquad
-  V(t)=\frac{9n}{16h^2}(1-2u^2+u^4).
+  k_- =\left\lceil\frac{-h-z_0}{2D}\right\rceil,
+  \qquad
+  k_+ =\left\lfloor\frac{h-z_0}{2D}\right\rfloor.
 \end{equation}
-The variance weight is $n$, not $n^2$; variances of independent counts
-add without cross terms.
-
-\paragraph{Interval events.}
-An interval $[a,b]$ of density $w$ and bandwidth $h$ is decomposed into
-three positive pieces, separated at
+For $n=k_+-k_-+1>0$, set
 \begin{equation}
-  r=\min(a+h,b-h),\qquad s=\max(a+h,b-h).
+  \bar k=\frac{k_-+k_+}{2},\quad
+  z_c=\frac{z_0+2D\bar k}{h},\quad
+  d=\frac{2D}{h},\quad f=\frac{3n}{4h}.
 \end{equation}
-Its rising piece lies on $[a-h,r]$, its middle piece on $[r,s]$, and its
-falling piece on $[s,b+h]$.  Zero-length pieces can be omitted.  Define
+Using the centred integer moment
+$\sum_{k=k_-}^{k_+}(k-\bar k)^2=n(n^2-1)/12$ gives
 \begin{equation}
-  E(z)=\frac{z^2(3-z)}{4},\qquad
-  H(z)=\frac{3z^3(20-15z+3z^2)}{80}.
+  P_h(z_0+x)
+   =f\left[1-z_c^2-\frac{(nd)^2-d^2}{12}
+              -\frac{2z_c}{h}x-\frac{x^2}{h^2}\right].
+  \label{eq:periodicCoefficients}
 \end{equation}
-On the rising piece use $z=(t-a+h)/h$; on the falling piece use
-$z=(b+h-t)/h$.  In both cases,
+An empty index range contributes zero.  This centred expression avoids
+subtracting large uncentred sums of image-index powers.  In particular,
+the product $nd$ is formed before squaring.  No loop over all images is
+needed, even when the bandwidth greatly exceeds the observation duration.
+
+\subsection{Exact Interval Integration and Scalar Coefficients}
+
+For a point source, $Q_h(t,t_i)$ is piecewise quadratic and its square is
+piecewise quartic.  For an interval, split the source-coordinate integral
+where either argument of $P_h$ crosses a kernel-piece boundary $c$:
 \begin{equation}
-  P(t)=wE(z),\qquad V(t)=\frac{w}{h}H(z).
+  v=u-c,\qquad v=c-u.
 \end{equation}
-These are the integrated kernel and integrated squared kernel measured
-from a support edge.  The factorisations retain the small quadratic and
-cubic masses near that edge without subtracting nearly equal CDF values.
+Together with the original interval endpoints, these are affine functions
+of query time.  Their ordering changes only when an endpoint is crossed
+or two such lines intersect.  Split the query range at those crossings.
+On each resulting query piece, all integration limits are affine and each
+kernel expression has a fixed quadratic form.
 
-For a long interval, $b-a\ge2h$, the middle is the constant plateau
+Three-point Gauss--Legendre integration on every source-coordinate cell
+is exact here: the mean integrand has degree two and the variance
+integrand has degree four.  The nodes and weights are
 \begin{equation}
-  P(t)=w,\qquad V(t)=\frac{3w}{5h}.
+  \xi_j\in\{-\sqrt{3/5},0,\sqrt{3/5}\},
+  \qquad \omega_j\in\{5/9,8/9,5/9\}.
 \end{equation}
-For a short interval let $d=(b-a)/h<2$ and
-$q=(t-(b-h))/h\in[0,2-d]$.  Both kernel limits lie inside the support,
-and the middle contribution is
-\begin{align}
-  P(t)&=w\left[\frac{d^2(3-d)}4
-                +\frac{3d(2-d)}4q-\frac{3d}4q^2\right],\\
-  V(t)&=\frac{w}{h}\sum_{k=0}^4 v_k q^k,
-\end{align}
-where
-\begin{align}
-  v_0&=\frac{3d^3(20-15d+3d^2)}{80}, &
-  v_1&=\frac{9d^2(2-d)^2}{16},\\
-  v_2&=\frac{9d(1-d)(2-d)}8, &
-  v_3&=-\frac{9d(2-d)}8, &
-  v_4&=\frac{9d}{16}.
-\end{align}
-These factored coefficients are exactly $E(q+d)-E(q)$ and
-$H(q+d)-H(q)$, respectively.  The mirrored coordinate
-$(a+h-t)/h$ describes the same middle piece.  Consequently degree three
-for mean and degree five for variance suffice for every piece, without
-interval discretisation.
+This is an algebraic integration identity, not discretisation of the
+recorded counts.
 
-\paragraph{Sorted piece events.}
-Varying bandwidths reorder both support beginnings and endings relative
-to the original timestamps.  Piece starts and ends are precalculated and
-sorted independently.  At each ascending query, the sweep removes ended
-pieces, then admits newly started pieces whose ends have not already
-passed.  Skipping such expired pieces handles a query jump across a
-complete support without inserting it into the accumulators.
-
-In floating-point arithmetic, events are scheduled at the first requested
-query satisfying the original clipping predicate.  The effective outer
-support intersects the original admission/eviction interval $[a-h,b+h)$
-with $(t-a)(1/h)\ge-1$ and $(t-b)(1/h)<1$; for a point use $a=b=c$.
-This excludes a rounded support beginning at which a point's quadratic
-would still be negative, and excludes interval tails with no kernel
-overlap.  Internal transitions use $(t-a)(1/h)\ge1$ for $a+h$ and
-$(t-b)(1/h)\ge-1$ for $b-h$, then are clipped to that effective support.
-Each monotone predicate is binary-searched over the interior query range.
-Delaying an event until its first applicable query changes no sampled
-value: every earlier query still uses the preceding regime.  This also
-handles repeated query timestamps and jumps over entire pieces, while
-preserving the original zero contribution after outer-support eviction.
-
-Each admitted or removed piece adds or subtracts a fixed-size coefficient
-vector.  Coefficients use a common nearby origin $o$, so a polynomial is
-$\sum_{k=0}^d a_k(t-o)^k$.  Translating to $o'=o+\Delta$ gives
+To construct coefficients around a nearby query origin, write $x=t-o$.
+A cell's half-width is $H(x)=H_0+H_1x$, and each transformed quadrature
+node is affine in $x$.  The \emph{sum} of the two reflected kernel terms at
+that node is therefore
 \begin{equation}
-  a'_k=\sum_{j=k}^d\binom{j}{k}a_j\Delta^{j-k}.
+  p(x)=p_0+p_1x+p_2x^2.
 \end{equation}
-The initial origin is the first interior query time.  Periodic rebasing after
-$h_{\min}=h_0/10$ rebuilds the coefficients from active nonconstant
-pieces, keeping powers of elapsed time bounded.  Queries evaluating a
-nonconstant piece span at most $2h_0$ (up to timestamp rounding), so it
-participates in a bounded number of rebuilds, at most 21 in exact
-arithmetic.  Scheduling an internal event at the next requested query
-does not introduce extra evaluations in the intervening gap.  Long
-constant plateaus are stored separately and incur no
-repeated polynomial work as their duration grows.
-
-\subsection{Interior Accumulation and Direct Boundary Evaluation}
-\label{sec:adaptiveDispatch}
-
-The polynomial optimisation must retain each source's own boundary mass
-from \eqref{eq:adaptiveMass}.  Inside a boundary strip that mass depends
-on $t$: it is piecewise cubic, or quadratic when both observation edges
-truncate the kernel.  A normalised contribution is therefore rational,
-not polynomial.  Distinct bandwidths generally give distinct
-denominators, so a single fixed-degree polynomial cannot represent their
-normalised sum exactly.
-
-Since $h_i\le h_0$ for every source, the full-support interior is
+After multiplying by the cell half-width, quadrature weight, and interval
+density, its mean contribution has coefficients proportional to
 \begin{equation}
-  \mathcal I=\{t:t-A\ge h_0\ \text{and}\ B-t\ge h_0\}.
+  (H_0p_0,\quad H_0p_1+H_1p_0,\quad
+    H_0p_2+H_1p_1,\quad H_1p_2).
 \end{equation}
-Here every $m_{h_i}(t)=1$, so one raw polynomial accumulator for the mean
-and one for the variance supply the results in constant time.  The code
-uses the subtraction predicates written above: forming rounded values
-$A+h_0$ and $B-h_0$ first can classify an epoch timestamp differently.
-The sorted queries in $\mathcal I$ form one contiguous range, including
-any repeated timestamps at its endpoints.  When $B-A=2h_0$, even a single
-interior query (or repeated copies of it) can use the polynomial path.
-
-The prefix and suffix outside $\mathcal I$ use the original direct
-source evaluation of \eqref{eq:adaptiveMean} and
-\eqref{eq:adaptiveVariance}.  This includes both boundary strips inside
-$[A,B]$ and all exterior queries.  Each source retains its own exact
-bandwidth and boundary mass, with the existing clamped-query convention;
-neither bandwidth grouping nor a preweighted exterior accumulator is
-needed.  A negligible boundary mass still contributes zero.
-
-For each direct query range, source beginnings and endings are sorted
-independently.  The sweep admits sources whose support has begun, then
-evicts those whose support has ended, before evaluating the active set.
-Admitting before eviction also skips supports wholly between sparse
-queries.  Only sources whose original support intersects that direct
-query range need to enter its sweep.  This is the same source-wise
-calculation as the earlier adaptive implementation, including its
-half-open support lifecycle.
-
-If the requested queries contain no full-support interior, the direct
-sweep handles the whole array once and no polynomial pieces or
-accumulators are constructed.  This always applies when $B-A<2h_0$.
-When an interior range exists, the direct prefix, polynomial interior,
-and direct suffix share the pilot-selected bandwidths and global
-observation extent.  Splitting the evaluation changes the calculation
-method, not the estimator or confidence model.
-
-\subsection{Numerical Stability and Direct Fallback}
-
-Coefficient additions use compensated summation and retain an estimate
-of accumulated rounding error, including the history of additions and
-removals.  A nominal source-amplitude term also accounts for cancellation
-while constructing the constant coefficient, even when evaluation at the
-current origin involves no further arithmetic.  Separating constant plateaus permits
-nonconstant coefficients to reset to zero when no such pieces remain;
-otherwise a tiny residual high-order coefficient could grow across a
-long empty gap or plateau.  Periodic rebasing further limits drift.
-
-These error estimates are numerical diagnostics, not certified
-floating-point error bounds.  They are needed only by the polynomial
-interior path; direct boundary queries do not construct polynomial
-coefficients or their error estimates.
-
-Large absolute timestamps need care at piece boundaries as well as in
-polynomial powers.  Rounding $a\pm h$ or $b\pm h$ can select a regime one
-query too early, particularly for intervals only a few timestamp ulps long.
-The query-array searches above preserve the clipping predicates used by
-the direct integrals.  Searching adjacent representable timestamps
-instead would have no useful iteration bound: subtraction can round a
-very large run of neighbouring query values to the same difference near
-zero.  Tail coefficients use differences from the original interval
-endpoints, rather than treating rounded support boundaries as exact roots.
-
-Even a positive polynomial result may have poor relative accuracy when
-an extremely small tail is obtained by cancellation.  When the result is
-near the tracked error floor, the implementation reevaluates the active
-original sources using the stable point and interval formulas.  This is
-a numerical fallback for an interior query.  Boundary queries use those
-same stable formulas directly.  The fallback preserves tiny
-positive variance contributions needed by the confidence construction.
-The piecewise calculation and fallback implement the same exact
-convolutions; different floating-point operation order can change the
-last bits, so agreement is assessed with numerical tolerances rather
-than bit-for-bit identity.
-
-\subsection{Variance and Effective-Count Confidence Intervals}
-
-For the second pass, regard the pilot-selected bandwidths as fixed.  Under
-the same independent Poisson count model as the original estimator, a
-plug-in estimate of the adaptive rate variance is
+For variance first square $p(x)$:
 \begin{equation}
-  \widehat V(t)
-    =\sum_{i=1}^N
-        \frac{n_i K_{h_i}(t-t_i)^2}{m_{h_i}(t)^2}
-     +\sum_{\ell=1}^L
-        \frac{w_\ell}{m_{h_\ell}(t)^2}
-             \int_{a_\ell}^{b_\ell}K_{h_\ell}(t-s)^2\,ds.
+  (a_0,a_1,a_2,a_3,a_4)
+  =(p_0^2,2p_0p_1,p_1^2+2p_0p_2,2p_1p_2,p_2^2).
+\end{equation}
+The variance coefficients are then proportional to
+\begin{equation}
+ (H_0a_0,\ H_0a_1+H_1a_0,\ H_0a_2+H_1a_1,\
+ H_0a_3+H_1a_2,\ H_0a_4+H_1a_3,\ H_1a_4).
+\end{equation}
+Thus interval means are at most cubic and variances at most quintic.
+Named scalar coefficients suffice; no general polynomial-expression
+framework is needed.
+
+Each source's piece beginnings and endings are sorted independently.
+The sweep adds and removes the corresponding coefficients, and evaluates
+the accumulated mean and variance with Horner's rule.  Boundary queries
+use the same polynomial mechanism as interior queries.  Local coordinates
+and rebasing control floating-point cancellation; numerical safeguards do
+not alter the mathematical estimator.
+
+\subsection{Variance and Confidence Intervals}
+
+Mirrors are perfectly linked to their original source.  They must be
+summed \emph{before} squaring.  With selected bandwidths treated as fixed,
+the local Poisson-event variance estimate is
+\begin{equation}
+  \widehat V(t)=\sum_i n_i Q_{h_i}(t,t_i)^2
+      +\sum_\ell w_\ell\int_{a_\ell}^{b_\ell}Q_{h_\ell}(t,s)^2\,ds.
   \label{eq:adaptiveVariance}
 \end{equation}
-The units are $\mathrm{cps}^2$.  A point holding $n_i$ counts represents
-$n_i$ independent counts, so its variance weight is $n_i$, not $n_i^2$.
-For an interval, the uniform count density is integrated against the
-\emph{squared kernel}.  Squaring the interval's integrated mean would
-instead treat the whole interval as one weighted event and would not give
-the Poisson variance of the uniform count-density model used here.
+For one original and one image this includes
+$2K_{\mathrm{original}}K_{\mathrm{image}}$.  Treating their counts as
+independent would omit that cross term.  At an isolated endpoint the two
+kernels coincide, so omitting it underestimates variance by a factor of
+two.  Squaring the complete node value in the coefficient construction
+above includes every image cross term, also for repeated reflections.
 
-The interval term is the same exact squared-kernel integral used in the
-fixed-bandwidth derivation:
-\begin{align}
-  v_\ell^-&=\max\!\left(-1,\frac{t-b_\ell}{h_\ell}\right), &
-  v_\ell^+&=\min\!\left(1,\frac{t-a_\ell}{h_\ell}\right),\\
-  \int_{a_\ell}^{b_\ell}K_{h_\ell}(t-s)^2\,ds
-    &=\frac{1}{h_\ell}\,
-       \texttt{epanechnikovSquaredIntegral}(v_\ell^-,v_\ell^+).
-\end{align}
-The integral is zero when $v_\ell^-\ge v_\ell^+$.  Neither the variance
-nor the mean is approximated by interval discretisation.
-
-For a short overlap close to $-1$ or $+1$, subtracting two nearly equal
-antiderivative values can lose the small squared-kernel mass to rounding.
-
-The adaptive-only integral helpers therefore evaluate equivalent exact
-polynomials around the overlap midpoint.  With
-$d=v_\ell^+-v_\ell^-$, $z=(v_\ell^-+v_\ell^+)/2$, and
-$p=(1-z)(1+z)=1-z^2$, these are
-\begin{align}
-  \int_{v_\ell^-}^{v_\ell^+}K(u)\,du
-    &=\frac{3d}{4}\left(p-\frac{d^2}{12}\right),\\
-  \int_{v_\ell^-}^{v_\ell^+}K(u)^2\,du
-    &=\frac{9d}{16}\left(p^2+\frac{(3z^2-1)d^2}{6}
-                              +\frac{d^4}{80}\right).
-\end{align}
-The latter is multiplied by $1/h_\ell$ for the dimensional squared-kernel
-integral.  This avoids cancellation without changing the original
-fixed-bandwidth integral helpers.
-
-For positive mean and variance, variance matching first gives the
-empirical equivalent exposure
+The maximum-bandwidth reference exposure is
 \begin{equation}
-  \widetilde T(t)=\frac{\hat\lambda_{\mathrm{ad}}(t)}{\widehat V(t)}.
+  T_0(t)=\left[\int_A^B Q_{h_0}(t,s)^2\,ds\right]^{-1}.
+  \label{eq:reflectedExposure}
 \end{equation}
-In a sparse tail, a vanishing kernel weight can make this ratio diverge,
-even though the data do not justify an arbitrarily long observation time.
-The implementation therefore caps the exposure using the background
-bandwidth:
-\begin{equation}
-  T_0(t)=\frac{m_{h_0}(t)^2}
-                   {\displaystyle\int_A^B K_{h_0}(\bar t-s)^2\,ds}.
-\end{equation}
-This is the existing fixed-bandwidth exposure \eqref{eq:teffCode} at
-$h_0$ and the clamped query.  The effective exposure and count used for
-confidence intervals are
+The same exact interval integration evaluates this integral.  It gives
+$5h_0/3$ in a full-support interior and $5h_0/6$ at an isolated boundary.
+For $h_0\gg D$, the reflected kernel approaches $1/D$, and $T_0$
+approaches the actual observation duration $D$.
+
+For positive mean and variance, use
 \begin{equation}
   T_{\mathrm{eff,ad}}(t)
-     =\min\!\left(\widetilde T(t),T_0(t)\right),
-  \qquad
-  n_{\mathrm{eff,ad}}(t)
-     =\hat\lambda_{\mathrm{ad}}(t)\,T_{\mathrm{eff,ad}}(t).
+    =\min\!\left(\frac{\hat\lambda_{\mathrm{ad}}(t)}{\widehat V(t)},T_0(t)\right),
+  \qquad n_{\mathrm{eff,ad}}(t)=\hat\lambda_{\mathrm{ad}}(t)T_{\mathrm{eff,ad}}(t).
   \label{eq:adaptiveEffective}
 \end{equation}
-Equivalently, the variance used for matching is increased to
-$\max(\widehat V,\hat\lambda_{\mathrm{ad}}/T_0)$.  This is a conservative
-exposure regularisation based on the maximum smoothing scale, rather than
-a claim that $T_0$ bounds every possible adaptive weighting model.
-Use these quantities in the same interpolated Garwood construction
-\eqref{eq:chiInterp}--\eqref{eq:ciBounds}.  The calibration factor is applied
-only after constructing the rate bounds; equivalently, dose variance is
-$\alpha^2$ times the variance used for matching.
+For zero mean or variance use $T_0$.  The cap regularises sparse tails;
+it is not a proof of confidence coverage.  At an in-range query with zero
+local counts and positive observation duration, the lower bound is zero
+and the upper bound is approximately $3.68888\alpha/T_0$.
+Use the same asymmetric, interpolated chi-square construction as
+\eqref{eq:chiInterp}.  The chi-square utility uses tabulated low-count
+quantiles and the Wilson--Hilferty approximation above its table.
 
-At a query with no nonzero contribution, use $T_{\mathrm{eff,ad}}=T_0$
-and zero effective count.  The cap makes the confidence bounds approach
-these zero-count bounds continuously as the final overlapping kernel
-vanishes.  A positive zero-count upper bound is retained wherever the
-observation extent gives positive exposure.  Empty datasets or a degenerate
-observation extent have no exposure and return zero estimates and bounds.
-
-For a constant Poisson intensity represented by uniform intervals covering
-the observation extent, and a common bandwidth $h$, the variance becomes
-\begin{equation}
-  \widehat V(t)=\frac{\hat\lambda(t)}{m_h(t)^2}
-                      \int_A^B K_h(t-s)^2\,ds,
-  \qquad t\in[A,B].
-\end{equation}
-Thus \eqref{eq:adaptiveEffective} reproduces the original effective
-exposure, including $5h/3$ for full support.  For discrete point data,
-\eqref{eq:adaptiveVariance} is an empirical squared-weight estimate,
-whereas the original implementation substitutes a locally homogeneous
-intensity into the kernel integral.  Their confidence widths need not
-coincide on a finite dataset even when their mean estimates do.
-
-These adaptive intervals are plug-in, effective-count intervals.  They
-account for the different bandwidths and boundary weights, but do not
-propagate uncertainty from estimating the pilot or selecting bandwidths,
-and do not correct smoothing bias.  Therefore they do not have the exact
-coverage guarantee of a Garwood interval for an unsmoothed integer Poisson
-count.
+These are approximate effective-count intervals.  Their calculation does
+not propagate pilot or bandwidth-selection uncertainty and does not
+correct smoothing bias.  Moreover, for an aggregated interval count
+$c_\ell$, the implemented local-event variance
+$w_\ell\int Q^2$ is not the bin-count sampling variance
+$c_\ell[(b_\ell-a_\ell)^{-1}\int Q]^2$.  The former retains uncertainty
+from unresolved event positions and is at least as large for prescribed
+weights.  Neither this modelling choice nor the fractional-count
+interpolation provides the exact coverage guarantee of a Garwood interval
+for a directly observed integer Poisson count.
 
 % ---------------------------------------------------------------------------
 \section{Exact Query-Range Selection}
@@ -720,7 +565,7 @@ count.
 Let the sorted requested query times lie in $[x_L,x_R]$.  Compact support
 allows the convolution to skip most of a long track without changing its
 mathematical result.  The original observation extent $[A,B]$ must still
-be used in all boundary masses and confidence exposures: selecting
+be used in all boundary treatments and confidence exposures: selecting
 sources for computation does not shorten the measurement.
 
 \subsection{Fixed Bandwidth}
@@ -758,53 +603,29 @@ already-expired point kernels.
 
 \subsection{Adaptive Candidates and Pilot Dependencies}
 
-Since every adaptive bandwidth satisfies $h_i\le h_0$, the same expanded
-range identifies all possible final contributors.  Point candidates are
-selected by binary search.  Interval candidates are selected by a cached
-interval-overlap index: intervals are sorted by start, and a segment tree
-stores the largest end in each subtree.  This permits skipping entire
-subtrees while retaining long spanning intervals.
+Reflection does not invalidate compact-support source selection inside
+the observation range.  For $t,s\in[A,B]$, every reflected path has length
+at least $|t-s|$.  Therefore a source can contribute only when its
+\emph{original} position is within its bandwidth of a requested query.
+Since $h_i\le h_0$, the same $h_0$-expanded query hull is sufficient.
+Intervals are retained by overlap, with their original endpoints and
+density.  A cached interval-overlap index finds long spanning intervals
+without scanning every interval.
 
-Only these candidates need pilot estimates.  Let $C$ be their point
-timestamps and original interval midpoints.  The pilot requires point
-inputs in
-\begin{equation}
-  U=\bigcup_{c\in C}[c-h_0,c+h_0],
-\end{equation}
-and interval inputs intersecting $U$.  The optimized fixed estimator
-evaluates these sorted centers directly, seeking across gaps in $U$ and
-preserving the completed-step density and original observation extent.
-There is no recursive pilot calculation for the pilot inputs themselves.
-After selecting bandwidths, candidates whose actual support misses the
-query range are also removed before support-boundary sorting.
+Only final candidates need pilot bandwidths.  Their representative times
+are point timestamps and original interval midpoints.  The reflected
+pilot at each such time $c$ requires original point inputs in
+$[c-h_0,c+h_0]$ and interval inputs overlapping that window.  Those pilot
+inputs do not themselves require another pilot.  All reflection and
+exposure calculations continue to use the complete observation bounds;
+filtering inputs for a query never shortens the recording.
 
-For point-only data, every candidate center is within
-$[x_L-h_0,x_R+h_0]$, so
-\begin{equation}
-  U\subseteq[x_L-2h_0,x_R+2h_0].
-\end{equation}
-Thus $\delta=2h_0$ is sufficient for both adaptive passes together and
-is needed in the worst case.  A point nearly $h_0$ beyond a query edge
-can have its bandwidth changed by another point almost a further $h_0$
-away, changing whether its final kernel reaches that edge.
-
-For arbitrary-length intervals, there is no universal finite $\delta$
-depending only on $h_0$.  A retained interval's midpoint can lie far
-outside the displayed range.  For example, take $x_L=x_R=0$, $h_0=1$,
-sensitivity $100\,\mathrm{cps}/(\mu\mathrm{Sv/h})$, an interval
-$[0.5,100.5]$ with 100 counts, and an anchor point at $-10$ fixing the
-left observation boundary.  Its midpoint pilot dose is initially
-$0.01\,\mu\mathrm{Sv/h}$, giving $h=1$ and a contribution of
-$0.15625\,\mathrm{cps}$ at zero.  Adding 100 point counts at midpoint
-$50.5$ raises the pilot dose to $0.76\,\mu\mathrm{Sv/h}$ and shrinks
-$h$ to approximately $0.13158$, making the interval contribution at zero
-vanish.  Those extra counts lie outside the proposed $2h_0$ margin.
-
-A safe single pilot-input hull for any candidate set is
-$[\min(C)-h_0,\max(C)+h_0]$, but the union $U$ avoids unnecessary gaps.
-Filtering affects computation only: an empty candidate set within a
-nonempty measurement still receives the zero-count confidence limit
-defined by the full observation extent.
+For point-only data a $2h_0$ expansion of the requested query hull covers
+both passes.  For arbitrary-length intervals there is no universal finite
+expansion depending only on $h_0$: a contributing interval's original
+midpoint can be arbitrarily far from the query, and its pilot depends on
+data near that midpoint.  A safe pilot-input hull spans the smallest and
+largest candidate representative times, expanded by $h_0$.
 
 % ---------------------------------------------------------------------------
 \section{Summary of Complexity}
@@ -824,47 +645,31 @@ queries without data changes reuse its valid prefix.  Full-range sweeps
 retain the original polynomial accumulation; narrow or disjoint ranges
 skip unrelated entries.
 
-For adaptive queries, let $S_c$ be the candidate count, $L_c$ its interval
-portion, $V_I$ the number of interval-index nodes visited, $C_P$ the cost
-of the fixed pilot pass at candidate centers, and $A_q$ the number of
-active sources at final query $q$.  Let $\mathcal B$ contain all queries
-outside the full-support interior, including exterior queries, and let
-$\mathcal F$ contain interior queries requiring direct numerical
-fallback; $F_q$ counts the sources reevaluated by that fallback.  With a
-prepared interval index, total cost is
+For an adaptive reflected pass, let $S$ be the number of selected
+sources and $Q$ the number of requested queries.  The periodised kernel
+has a bounded number of pieces independent of $h/D$.  Consequently each
+source produces a bounded number of mean/variance pieces, including
+interval endpoint crossings and reflected cross terms.  Piece construction
+is $O(S)$, sorting support events is $O(S\log(S+1))$, and a polynomial sweep
+costs $O(S+Q)$ apart from numerical rebasing or exceptional fallback.
+There is no routine per-active-source loop at boundary queries.
+
+The complete adaptive calculation also pays for its reflected pilot and
+source selection.  With $S_c$ final candidates, pilot cost $C_P$, and
+$V_I$ visited interval-index nodes, the ordinary cost is
 \begin{equation}
-  O\!\left(\log(N+1)+V_I+S_c\log(S_c+1)+C_P+Q
-       +\sum_{q\in\mathcal B}A_q+\sum_{q\in\mathcal F}F_q\right).
+ O\!\left(\log(N+1)+V_I+C_P+S_c\log(S_c+1)+Q\right),
 \end{equation}
-Partitioning the sorted query array into direct and polynomial ranges
-costs $O(Q)$.  The direct prefix and suffix each select overlapping
-sources in $O(S_c)$, then sort and sweep their support events.  Their
-combined setup is bounded by $O(S_c\log(S_c+1))$; evaluating their active
-sources accounts for the first sum above.
+plus any numerical safeguard work.  Repeated reflections in a short
+recording do not introduce a factor $h_0/D$: their contributions are
+summed through the centred integer moments in
+\eqref{eq:periodicCoefficients}.  Final-pass temporary storage is
+$O(S_c+Q)$, in addition to pilot storage and the reusable indexes.
 
-If there are interior queries, each source generates at most a constant
-number of polynomial pieces and hence $O(S_c)$ start/end events.
-Sorting them costs $O(S_c\log(S_c+1))$; their fixed-degree updates and
-bounded periodic rebuilds cost $O(S_c)$.  Outer-boundary searches for
-points and intervals, and internal-boundary searches for intervals, are
-limited to the interior query range and cost at most
-$O(S_c\log(Q+1))$.  This is already absorbed by the displayed bound, since
-$S_c\log(Q+1)=O(S_c\log(S_c+1)+Q)$: for $Q>S_c$, use
-$\log(Q/S_c)\le Q/S_c$; otherwise $\log(Q+1)\le\log(S_c+1)$.
-Ordinary interior queries cost $O(1)$ each, independently of the number
-of overlapping sources.  If the interior query range is empty, all
-polynomial setup is omitted and one direct sweep covers the whole query
-array.  There is no unconditional $O(S_c+Q)$ bound: boundary and exterior
-queries, as well as numerical fallback, evaluate contributing sources
-directly.
-
-The overlap search has the conservative bound
-$V_I=O((L_c+1)\log(L+1))$.  Building the immutable interval index initially
-costs $O(L\log(L+1))$ time and $O(L)$ space; it is reused across plot
-queries until interval insertion, pruning, or clearing invalidates it.
-Adaptive temporary storage is $O(S_c+Q)$ beyond these caches.  In the
-worst case, direct queries or repeated numerical fallback can still cost
-$O(S_cQ)$.
+Building the interval index initially costs $O(L\log(L+1))$ time and
+$O(L)$ space; it is reused until interval insertion, pruning, or clearing
+invalidates it.  Its overlap search has conservative bound
+$V_I=O((L_c+1)\log(L+1))$, where $L_c$ is the number of reported intervals.
 
 Snapshots share an already-built immutable interval index and copy the
 valid step-weight prefix.  They do not build either cache on the source

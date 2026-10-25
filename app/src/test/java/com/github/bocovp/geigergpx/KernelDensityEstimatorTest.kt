@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
 import kotlin.math.floor
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -77,16 +78,70 @@ class KernelDensityEstimatorTest {
         }
     }
 
+    private data class Image(val direction: Double, val offset: Double)
+
+    /** Explicit reflected images, independent of the production lattice sums. */
+    private fun reflectedMoments(
+        t: Double, start: Double, end: Double, scale: Double, length: Double
+    ): Pair<Double, Double> {
+        val period = 2.0 * length
+        val images = ArrayList<Image>()
+        for (direction in doubleArrayOf(1.0, -1.0)) {
+            val imageLo = min(direction * start, direction * end)
+            val imageHi = max(direction * start, direction * end)
+            val first = ceil((t - scale - imageHi) / period).toInt()
+            val last = floor((t + scale - imageLo) / period).toInt()
+            for (k in first..last) images.add(Image(direction, k * period))
+        }
+        fun weight(s: Double): Double = images.sumOf { kernel(t - it.direction * s - it.offset, scale) }
+        if (start == end) {
+            val q = weight(start)
+            return q to q * q
+        }
+        val cuts = mutableListOf(start, end)
+        for (image in images) {
+            for (edge in doubleArrayOf(-scale, scale)) {
+                val s = (t - image.offset + edge) / image.direction
+                if (s > start && s < end) cuts.add(s)
+            }
+        }
+        cuts.sort()
+        var mean = 0.0
+        var variance = 0.0
+        for (i in 1 until cuts.size) {
+            val half = (cuts[i] - cuts[i - 1]) / 2.0
+            if (half == 0.0) continue
+            val midpoint = cuts[i - 1] + half
+            val offset = half * sqrt(3.0 / 5.0)
+            val q1 = weight(midpoint - offset)
+            val q2 = weight(midpoint)
+            val q3 = weight(midpoint + offset)
+            // On each support segment q is quadratic and q² is quartic.
+            mean += half * (5.0 * (q1 + q3) + 8.0 * q2) / 9.0
+            variance += half * (5.0 * (q1 * q1 + q3 * q3) + 8.0 * q2 * q2) / 9.0
+        }
+        return mean to variance
+    }
+
     private fun scales(
         samples: List<Sample>, sensitivity: Double, scale: Double, endOverride: Double? = null
     ): List<Double> {
-        val sortedCenters = samples.map { it.center }.sorted().toDoubleArray()
-        val pilot = fixedReference(samples, sensitivity, sortedCenters, scale, endOverride)
-        val byCenter = sortedCenters.indices.associate { sortedCenters[it] to pilot[it] }
-        return samples.map { (scale * 0.1 / byCenter.getValue(it.center)).coerceIn(scale / 10.0, scale) }
+        val first = samples.minOf { it.start }
+        val last = max(samples.maxOf { it.end }, endOverride ?: Double.NEGATIVE_INFINITY)
+        val length = last - first
+        return samples.map { target ->
+            val pilot = samples.sumOf { sample ->
+                if (sample.counts == 0) 0.0 else {
+                    val contribution = reflectedMoments(target.center - first, sample.start - first,
+                        sample.end - first, scale, length).first
+                    contribution * sample.counts / if (sample.duration > 0.0) sample.duration else 1.0
+                }
+            } / sensitivity
+            if (pilot > 0.0) (scale * 0.1 / pilot).coerceIn(scale / 10.0, scale) else scale
+        }
     }
 
-    /** Direct O(NQ) mean/variance sums, independent of polynomial accumulation. */
+    /** Direct reflected source sums; mirrors share their original event count. */
     private fun rawReference(
         samples: List<Sample>, sensitivity: Double, queries: DoubleArray,
         scale: Double, endOverride: Double? = null
@@ -97,25 +152,14 @@ class KernelDensityEstimatorTest {
         val rates = DoubleArray(queries.size)
         val variances = DoubleArray(queries.size)
         for ((index, t) in queries.withIndex()) {
-            val boundaryT = t.coerceIn(first, last)
+            if (t < first || t > last) continue
             for ((sampleIndex, sample) in samples.withIndex()) {
-                val h = widths[sampleIndex]
-                // Preserve admission/eviction at represented support endpoints,
-                // including epoch rounding of the outer source boundaries.
-                if (t < sample.start - h || t >= sample.end + h) continue
-                val boundaryMass = mass((boundaryT - last) / h, (boundaryT - first) / h)
-                if (boundaryMass <= 1e-9) continue
-                if (sample.duration == 0.0) {
-                    val k = kernel(t - sample.start, h) / boundaryMass
-                    rates[index] += sample.counts * k
-                    variances[index] += sample.counts * k * k
-                } else {
-                    val lo = (t - sample.end) / h
-                    val hi = (t - sample.start) / h
-                    val density = sample.counts / sample.duration
-                    rates[index] += density * mass(lo, hi) / boundaryMass
-                    variances[index] += density * squaredMass(lo, hi) / h / (boundaryMass * boundaryMass)
-                }
+                if (sample.counts == 0) continue
+                val (mean, variance) = reflectedMoments(t - first, sample.start - first,
+                    sample.end - first, widths[sampleIndex], last - first)
+                val weight = sample.counts / if (sample.duration > 0.0) sample.duration else 1.0
+                rates[index] += weight * mean
+                variances[index] += weight * variance
             }
         }
         return rates to variances
@@ -148,16 +192,11 @@ class KernelDensityEstimatorTest {
         val lows = DoubleArray(queries.size)
         val highs = DoubleArray(queries.size)
         for ((index, t) in queries.withIndex()) {
-            val boundaryT = t.coerceIn(first, last)
+            if (t < first || t > last) continue
             val rate = rates[index]
             val variance = variances[index]
-            val backgroundLo = (boundaryT - last) / scale
-            val backgroundHi = (boundaryT - first) / scale
-            val backgroundMass = mass(backgroundLo, backgroundHi)
-            val backgroundSquaredMass = squaredMass(backgroundLo, backgroundHi)
-            val backgroundExposure = if (backgroundSquaredMass > 1e-12) {
-                scale * backgroundMass * backgroundMass / backgroundSquaredMass
-            } else 0.0
+            val backgroundVariance = reflectedMoments(t - first, 0.0, last - first, scale, last - first).second
+            val backgroundExposure = if (backgroundVariance > 0.0) 1.0 / backgroundVariance else 0.0
             val exposure = if (variance > 0.0 && rate > 0.0) {
                 min(rate / variance, backgroundExposure)
             } else backgroundExposure
@@ -191,12 +230,13 @@ class KernelDensityEstimatorTest {
     }
 
     @Test
-    fun backgroundDoseKeepsMaximumScaleAndFixedIntervalResults() {
+    fun backgroundDoseKeepsMaximumScaleAndConstantRate() {
         val samples = listOf(Sample(0.0, 100.0, 10))
         val kde = estimator(samples, 2.0)
         val queries = DoubleArray(101) { it.toDouble() }
         assertEquals(listOf(10.0), scales(samples, 2.0, 10.0))
-        assertCurvesEqual(kde.getConfidenceIntervals(queries, 10.0), kde.getAdaptiveConfidenceIntervals(queries, 10.0))
+        assertCurvesEqual(reference(samples, 2.0, queries, 10.0), kde.getAdaptiveConfidenceIntervals(queries, 10.0))
+        assertArrayEquals(DoubleArray(queries.size) { 0.05 }, kde.estimateAdaptiveDoseRate(queries, 10.0), 1e-10)
     }
 
     @Test
@@ -205,7 +245,8 @@ class KernelDensityEstimatorTest {
         val kde = estimator(samples, 1.0)
         val queries = DoubleArray(201) { it * 0.5 }
         assertEquals(listOf(1.0), scales(samples, 1.0, 10.0))
-        assertCurvesEqual(kde.getConfidenceIntervals(queries, 1.0), kde.getAdaptiveConfidenceIntervals(queries, 10.0), 1e-6)
+        assertCurvesEqual(reference(samples, 1.0, queries, 10.0), kde.getAdaptiveConfidenceIntervals(queries, 10.0), 1e-6)
+        assertArrayEquals(DoubleArray(queries.size) { 100.0 }, kde.estimateAdaptiveDoseRate(queries, 10.0), 1e-8)
     }
 
     @Test
@@ -274,58 +315,6 @@ class KernelDensityEstimatorTest {
     }
 
     @Test
-    fun tinyIntervalTailKeepsSquaredKernelVarianceAccurate() {
-        val kde = estimator(listOf(Sample(0.0, 100.0, 10000)), 1.0)
-        val t = 100.999999
-        val delta = 1.0 - (t - 100.0)
-        // h = 1, boundary mass = 1/2. Integrate from u = 1 - delta to 1
-        // in powers of delta to avoid subtracting nearly equal primitives.
-        val mass = 0.75 * delta * delta * (1.0 - delta / 3.0)
-        val squareMass = 0.5625 * delta * delta * delta *
-            (4.0 / 3.0 - delta + delta * delta / 5.0)
-        val rate = 100.0 * mass / 0.5
-        val variance = 100.0 * squareMass / 0.25
-        val exposure = min(rate / variance, 5.0 * 10.0 / 6.0)
-        val effectiveCount = rate * exposure
-        val ci = ConfidenceInterval(0.0, 0.0, 0.0, 0.0, 0)
-        val expectedHigh = (ci.chi2R(1) + effectiveCount * (ci.chi2R(2) - ci.chi2R(1))) * 0.5 / exposure
-        val actual = kde.getAdaptiveConfidenceIntervals(doubleArrayOf(t), 10.0)
-        assertEquals(rate, actual.first.single(), rate * 1e-6)
-        assertEquals(expectedHigh, actual.third.single(), expectedHigh * 1e-6)
-    }
-
-    @Test
-    fun lastSupportEdgeHasContinuousPositiveUpperBound() {
-        val kde = estimator(listOf(Sample(0.0, 100.0, 10000)), 1.0)
-        val queries = doubleArrayOf(100.999999, 101.0, 101.000001)
-        val actual = kde.getAdaptiveConfidenceIntervals(queries, 10.0)
-        assertTrue(actual.first[0] > 0.0)
-        assertEquals(0.0, actual.first[1], 0.0)
-        assertEquals(0.0, actual.first[2], 0.0)
-        assertTrue(actual.third[1] > 0.0)
-        assertEquals(actual.third[1], actual.third[0], 1e-8)
-        assertEquals(actual.third[1], actual.third[2], 1e-12)
-    }
-
-    @Test
-    fun squaredKernelIntegralRemainsAccurateNearSupportEdge() {
-        // The confidence exposure cap can hide cancellation in a vanishing tail;
-        // check this numerical primitive directly against its endpoint expansion.
-        val kde = KernelDensityEstimator(1.0)
-        val integral = KernelDensityEstimator::class.java.getDeclaredMethod(
-            "adaptiveSquaredKernelIntegral", Double::class.javaPrimitiveType, Double::class.javaPrimitiveType
-        ).apply { isAccessible = true }
-        for (width in doubleArrayOf(1e-3, 1e-6, 1e-9)) {
-            val lo = 1.0 - width
-            val delta = 1.0 - lo
-            val expected = 0.5625 * delta * delta * delta *
-                (4.0 / 3.0 - delta + delta * delta / 5.0)
-            val actual = integral.invoke(kde, lo, 1.0) as Double
-            assertEquals(expected, actual, expected * 1e-6)
-        }
-    }
-
-    @Test
     fun epochTimestampsPreserveAdaptiveEstimate() {
         val samples = listOf(Sample(0.0, 4.0, 8), Sample(6.0, 0.0, 50), Sample(8.0, 5.0, 3), Sample(30.0, 8.0, 4))
         val queries = DoubleArray(101) { it * 0.5 - 5.0 }
@@ -363,9 +352,9 @@ class KernelDensityEstimatorTest {
         kde.addPoint(5.0, 10)
         kde.addSampleInterval(30.0, 5.0, 8)
         kde.addPoint(40.0, 2)
-        val remaining = listOf(Sample(30.0, 5.0, 8), Sample(40.0, 0.0, 2))
+        val remaining = listOf(Sample(25.0, 5.0, 0), Sample(30.0, 5.0, 8), Sample(40.0, 0.0, 2))
         val queries = DoubleArray(81) { it * 0.5 + 20.0 }
-        assertEquals(30.0 to 40.0, kde.timestampBounds())
+        assertEquals(25.0 to 40.0, kde.timestampBounds())
         assertCurvesEqual(reference(remaining, 3.0, queries, 10.0), kde.getAdaptiveConfidenceIntervals(queries, 10.0))
         assertCurvesEqual(kde.getAdaptiveConfidenceIntervals(queries, 10.0), kde.copy().getAdaptiveConfidenceIntervals(queries, 10.0))
     }
@@ -500,9 +489,9 @@ class KernelDensityEstimatorTest {
 
         copy.timeout = 30.0
         copy.addSampleInterval(4000.0, 20.0, 4)
-        val prunedSamples = listOf(Sample(4000.0, 20.0, 4))
+        val prunedSamples = listOf(Sample(3990.0, 10.0, 0), Sample(4000.0, 20.0, 4))
         val prunedQueries = DoubleArray(41) { 4000.0 + it * 0.5 }
-        assertEquals(4000.0 to 4020.0, copy.timestampBounds())
+        assertEquals(3990.0 to 4020.0, copy.timestampBounds())
         assertArrayEquals(fixedReference(prunedSamples, 5.0, prunedQueries, 10.0),
             copy.estimateDoseRate(prunedQueries, 10.0), 1e-8)
         assertCurvesEqual(reference(prunedSamples, 5.0, prunedQueries, 10.0),
@@ -576,7 +565,7 @@ class KernelDensityEstimatorTest {
     }
 
     @Test
-    fun adaptiveBoundaryNormalizationUsesEachSourceScaleOnBothEdges() {
+    fun adaptiveReflectionUsesEachSourceScaleOnBothEdges() {
         val samples = listOf(
             Sample(0.0, 0.0, 1), Sample(0.25, 0.0, 2), Sample(1.0, 4.0, 3),
             Sample(8.0, 0.0, 100), Sample(25.0, 20.0, 8), Sample(48.0, 1.0, 20), Sample(50.0, 0.0, 1)
@@ -589,7 +578,7 @@ class KernelDensityEstimatorTest {
     }
 
     @Test
-    fun adaptiveShortObservationExtentAndLiveOverrideKeepBothBoundaryMasses() {
+    fun adaptiveShortObservationExtentRepeatsReflectionsAndHonorsLiveOverride() {
         val samples = listOf(
             Sample(100.0, 0.1, 1), Sample(100.05, 0.1, 4),
             Sample(100.15, 0.0, 3), Sample(100.3, 0.0, 1)
@@ -603,7 +592,7 @@ class KernelDensityEstimatorTest {
     }
 
     @Test
-    fun adaptiveDirectAndPolynomialRangesAgreeAtRepeatedTransitionQueries() {
+    fun adaptiveBatchAndSingleQueriesAgreeAtRepeatedSupportTransitions() {
         val baseSamples = listOf(
             Sample(0.0, 100.0, 80), Sample(0.0, 0.0, 1), Sample(100.0, 0.0, 1),
             Sample(17.5, 12.0, 30), Sample(20.0, 0.0, 12),
@@ -629,8 +618,7 @@ class KernelDensityEstimatorTest {
                     val meanOnly = kde.estimateAdaptiveDoseRate(queries, scale, endOverride)
                     for (i in queries.indices) {
                         assertEquals(expectedRaw.first[i] / 5.0, meanOnly[i], 1e-8)
-                        // Batch partitioning must agree with a boundary-only or
-                        // interior-only request at the same repeated timestamp.
+                        // The sweep must agree with an isolated request at the same timestamp.
                         assertEquals(meanOnly[i], kde.estimateAdaptiveDoseRate(
                             doubleArrayOf(queries[i]), scale, endOverride).single(), 1e-8)
                     }
@@ -676,7 +664,7 @@ class KernelDensityEstimatorTest {
 
     @Test
     fun rawAdaptiveVarianceResolvesTinyRisingAndFallingIntervalTails() {
-        val samples = listOf(Sample(0.0, 100.0, 10000))
+        val samples = listOf(Sample(-100.0, 0.0, 1), Sample(0.0, 100.0, 10000), Sample(200.0, 0.0, 1))
         val queries = doubleArrayOf(-0.999999, 100.999999)
         val expected = rawReference(samples, 1.0, queries, 10.0)
         val actual = adaptiveRaw(estimator(samples, 1.0), queries, 10.0)
@@ -756,14 +744,167 @@ class KernelDensityEstimatorTest {
             Sample(0.017623398201851992, 0.0714206739085058, 48), Sample(2.5, 0.0, 1)
         )
         val queries = doubleArrayOf(-8.7197, -4.980067732954356)
-        // Distant anchors put the same tail in the polynomial interior; the
-        // unanchored data exercises the direct path for a short measurement.
         val anchored = samples + listOf(Sample(-1000.0, 0.0, 1), Sample(1000.0, 0.0, 1))
-        for (fixture in listOf(samples, anchored)) {
+        for (fixture in listOf(anchored)) {
             val expected = rawReference(fixture, 0.1, queries, 50.0)
             val actual = adaptiveRaw(estimator(fixture, 0.1), queries, 50.0)
             assertTrue(expected.second[1] > 0.0)
             assertEquals(expected.second[1], actual.second[1], 2e-8 * expected.second[1])
+        }
+    }
+
+    @Test
+    fun reflectedCopiesUseTheirOriginalCountsForVariance() {
+        val samples = listOf(Sample(0.0, 0.0, 4), Sample(100.0, 0.0, 1))
+        val kde = estimator(samples, 1000.0)
+        val actual = adaptiveRaw(kde, doubleArrayOf(0.0), 10.0)
+        val q = 2.0 * kernel(0.0, 10.0)
+        assertEquals(4.0 * q, actual.first.single(), 1e-12)
+        assertEquals(4.0 * q * q, actual.second.single(), 1e-12)
+        // Counting the reflection as independent would incorrectly halve this variance.
+        assertTrue(actual.second.single() > 4.0 * 2.0 * kernel(0.0, 10.0) * kernel(0.0, 10.0) * 1.99)
+    }
+
+    @Test
+    fun pilotUsesReflectionBeforeSelectingBandwidths() {
+        val samples = listOf(Sample(0.0, 0.0, 1), Sample(2.0, 0.0, 20),
+            Sample(5.0, 0.0, 1), Sample(100.0, 0.0, 1))
+        val widths = scales(samples, 10.0, 10.0)
+        val oldPilot = fixedReference(samples, 10.0, doubleArrayOf(2.0), 10.0).single()
+        val oldWidth = (1.0 / oldPilot).coerceIn(1.0, 10.0)
+        assertTrue("fixture distinguishes reflected and mass-normalized pilots", abs(widths[1] - oldWidth) > 0.5)
+        val queries = DoubleArray(81) { it * 0.125 }
+        assertCurvesEqual(reference(samples, 10.0, queries, 10.0),
+            estimator(samples, 10.0).getAdaptiveConfidenceIntervals(queries, 10.0), 1e-8)
+    }
+
+    @Test
+    fun manyReflectionsPreserveUniformRateOnShortRecordings() {
+        val samples = listOf(Sample(0.0, 0.2, 2))
+        val queries = DoubleArray(21) { it * 0.01 }
+        val kde = estimator(samples, 1000.0)
+        for (scale in doubleArrayOf(1.0, 10.0, 100.0)) {
+            assertArrayEquals(DoubleArray(queries.size) { 0.01 },
+                kde.estimateAdaptiveDoseRate(queries, scale), 1e-10)
+            assertCurvesEqual(reference(samples, 1000.0, queries, scale),
+                kde.getAdaptiveConfidenceIntervals(queries, scale), 1e-8)
+        }
+    }
+
+    @Test(timeout = 3000)
+    fun enormousBandwidthDoesNotMaterializeTrillionsOfMirrors() {
+        val kde = estimator(listOf(Sample(0.0, 0.25, 5)), 1000.0)
+        val queries = DoubleArray(101) { it * 0.0025 }
+        val actual = adaptiveRaw(kde, queries, 1e12)
+        assertArrayEquals(DoubleArray(queries.size) { 20.0 }, actual.first, 1e-10)
+        // The reflected kernel tends to the uniform weight 1 / duration.
+        assertArrayEquals(DoubleArray(queries.size) { 80.0 }, actual.second, 1e-9)
+    }
+
+    @Test
+    fun reflectedAdaptiveCurvePreservesTotalCounts() {
+        val samples = listOf(Sample(0.0, 0.0, 2), Sample(1.0, 3.0, 40),
+            Sample(6.0, 0.0, 7), Sample(10.0, 12.0, 9), Sample(40.0, 0.0, 1))
+        val sensitivity = 10.0
+        val scale = 10.0
+        val widths = scales(samples, sensitivity, scale)
+        val length = 40.0
+        val cuts = mutableListOf(0.0, length)
+        for ((i, sample) in samples.withIndex()) {
+            val h = widths[i]
+            for (direction in doubleArrayOf(1.0, -1.0)) {
+                val lo = min(direction * sample.start, direction * sample.end)
+                val hi = max(direction * sample.start, direction * sample.end)
+                val first = ceil((-h - hi) / (2.0 * length)).toInt()
+                val last = floor((length + h - lo) / (2.0 * length)).toInt()
+                for (k in first..last) {
+                    for (edge in doubleArrayOf(lo - h, lo + h, hi - h, hi + h)) {
+                        val t = edge + k * 2.0 * length
+                        if (t > 0.0 && t < length) cuts.add(t)
+                    }
+                }
+            }
+        }
+        cuts.sort()
+        val queries = ArrayList<Double>()
+        val weights = ArrayList<Double>()
+        for (i in 1 until cuts.size) {
+            val half = (cuts[i] - cuts[i - 1]) / 2.0
+            if (half == 0.0) continue
+            val midpoint = cuts[i - 1] + half
+            queries.add(midpoint - half / sqrt(3.0)); weights.add(half)
+            queries.add(midpoint + half / sqrt(3.0)); weights.add(half)
+        }
+        val rates = estimator(samples, sensitivity).estimateAdaptiveDoseRate(queries.toDoubleArray(), scale)
+        val counts = rates.indices.sumOf { rates[it] * sensitivity * weights[it] }
+        assertEquals(samples.sumOf { it.counts }.toDouble(), counts, 1e-7)
+    }
+
+    @Test
+    fun adaptiveEstimatesAreRestrictedToObservedTime() {
+        val samples = listOf(Sample(0.0, 10.0, 20))
+        val kde = estimator(samples, 1.0)
+        val queries = doubleArrayOf(-1.0, Math.nextDown(0.0), 0.0, 10.0, Math.nextUp(10.0), 11.0)
+        val actual = kde.getAdaptiveConfidenceIntervals(queries, 20.0)
+        for (i in listOf(0, 1, 4, 5)) {
+            assertEquals(0.0, actual.first[i], 0.0)
+            assertEquals(0.0, actual.second[i], 0.0)
+            assertEquals(0.0, actual.third[i], 0.0)
+        }
+        assertEquals(2.0, actual.first[2], 1e-10)
+        assertEquals(2.0, actual.first[3], 1e-10)
+    }
+
+    @Test
+    fun zeroCountIntervalsRetainTheCompleteObservationRange() {
+        val samples = listOf(Sample(0.0, 100.0, 0), Sample(100.0, 10.0, 10), Sample(110.0, 100.0, 0))
+        val queries = doubleArrayOf(100.0, 105.0, 110.0)
+        val kde = estimator(samples, 1.0)
+        assertEquals(0.0 to 210.0, kde.timestampBounds())
+        assertArrayEquals(doubleArrayOf(0.5, 0.6875, 0.5), kde.estimateDoseRate(queries, 10.0), 1e-12)
+        assertCurvesEqual(reference(samples, 1.0, queries, 10.0), kde.getAdaptiveConfidenceIntervals(queries, 10.0))
+    }
+
+    @Test
+    fun zeroCountExposureSurvivesCopyAndTimeoutButNotClear() {
+        val kde = KernelDensityEstimator(1.0)
+        kde.addSampleInterval(0.0, 100.0, 0)
+        val queries = doubleArrayOf(0.0, 50.0, 100.0)
+        val fixed = kde.getConfidenceIntervals(queries, 10.0)
+        val adaptive = kde.getAdaptiveConfidenceIntervals(queries, 10.0)
+        for (curve in listOf(fixed, adaptive)) {
+            assertArrayEquals(DoubleArray(3), curve.first, 0.0)
+            assertArrayEquals(DoubleArray(3), curve.second, 0.0)
+            assertTrue(curve.third.all { it > 0.0 && it.isFinite() })
+        }
+        val copy = kde.copy()
+        kde.clear()
+        assertEquals(null, kde.timestampBounds())
+        assertCurvesEqual(adaptive, copy.getAdaptiveConfidenceIntervals(queries, 10.0))
+        copy.timeout = 20.0
+        copy.addSampleInterval(100.0, 10.0, 0)
+        assertEquals(90.0 to 110.0, copy.timestampBounds())
+        val retained = listOf(Sample(90.0, 20.0, 0))
+        assertCurvesEqual(reference(retained, 1.0, doubleArrayOf(90.0, 100.0, 110.0), 10.0),
+            copy.getAdaptiveConfidenceIntervals(doubleArrayOf(90.0, 100.0, 110.0), 10.0))
+    }
+
+    @Test
+    fun weakSourcesRemainAccurateAfterLargeContributionsLeaveTheSweep() {
+        val queries = doubleArrayOf(7.9, 8.5, 9.0, 9.5, 10.0, 10.5, 10.999, 11.0, 11.0000001, 11.5, 13.0, 15.0)
+        for (large in listOf(Sample(10.0, 0.0, 2_000_000_000), Sample(0.0, 10.0, 2_000_000_000))) {
+            val samples = listOf(Sample(0.0, 0.0, 1), large, Sample(10.75, 0.0, 1),
+                Sample(9.9, 3.0, 1), Sample(0.0, 30.0, 1), Sample(30.0, 0.0, 1))
+            val expected = rawReference(samples, 1000.0, queries, 10.0)
+            val kde = estimator(samples, 1000.0)
+            val actual = adaptiveRaw(kde, queries, 10.0)
+            val meanOnly = kde.estimateAdaptiveDoseRate(queries, 10.0)
+            for (i in queries.indices) {
+                if (queries[i] < 11.0) continue
+                assertEquals("mean after large source at ${queries[i]}", expected.first[i], actual.first[i], 1e-10)
+                assertEquals("variance after large source at ${queries[i]}", expected.second[i], actual.second[i], 1e-10)
+                assertEquals("mean-only after large source at ${queries[i]}", expected.first[i] / 1000.0, meanOnly[i], 1e-12)
+            }
         }
     }
 
